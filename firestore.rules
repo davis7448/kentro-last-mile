@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() ? request.auth.token.role : null;
+    }
+
+    function isAdmin() {
+      return role() == "admin";
+    }
+
+    function isSeller(sellerId) {
+      return role() == "seller" && request.auth.token.sellerId == sellerId;
+    }
+
+    function isDriver(driverId) {
+      return role() == "driver" && request.auth.token.driverId == driverId;
+    }
+
+    function sellerOrderCreate() {
+      return isSeller(request.resource.data.sellerId)
+        && request.resource.data.driverId == null
+        && request.resource.data.status in ["ready_to_assign", "address_risk"]
+        && request.resource.data.evidence.size() == 0;
+    }
+
+    function sellerOrderNoopUpdate() {
+      return isSeller(resource.data.sellerId)
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([]);
+    }
+
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /cities/{cityId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /zones/{zoneId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /sellers/{sellerId} {
+      allow read: if isAdmin() || isSeller(sellerId);
+      allow write: if isAdmin();
+    }
+
+    match /drivers/{driverId} {
+      allow read: if isAdmin() || isDriver(driverId);
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+        || isSeller(resource.data.sellerId)
+        || isDriver(resource.data.driverId)
+        || (role() == "driver" && resource.data.driverId == null);
+      allow create: if isAdmin() || sellerOrderCreate();
+      allow update: if isAdmin()
+        || isDriver(resource.data.driverId)
+        || (
+          role() == "driver"
+          && resource.data.driverId == null
+          && request.resource.data.driverId == request.auth.token.driverId
+        )
+        || sellerOrderNoopUpdate();
+      allow delete: if isAdmin();
+    }
+
+    match /inventory/{itemId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if isAdmin();
+    }
+
+    match /walletEntries/{entryId} {
+      allow read: if isAdmin()
+        || (resource.data.ownerType == "seller" && isSeller(resource.data.ownerId))
+        || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId));
+      allow write: if isAdmin();
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow create: if isAdmin() || isSeller(request.resource.data.sellerId);
+      allow update: if isAdmin() || isSeller(resource.data.sellerId);
+      allow delete: if isAdmin();
+    }
+
+    match /auditEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /shopifyStores/{storeId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if isAdmin() || isSeller(request.resource.data.sellerId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
