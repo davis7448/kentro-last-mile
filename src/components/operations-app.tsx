@@ -8,6 +8,7 @@ import {
   ClipboardList,
   CreditCard,
   ExternalLink,
+  FileDown,
   Image as ImageIcon,
   LogOut,
   MapPin,
@@ -64,7 +65,7 @@ type LocalAccount = {
   profileId: string;
 };
 type Session = Omit<LocalAccount, "password">;
-type AppView = "operations" | "wallet";
+type AppView = "operations" | "wallet" | "liquidations";
 
 function readAccounts(): LocalAccount[] {
   if (typeof window === "undefined") return [];
@@ -447,7 +448,7 @@ function Header({ session, remoteEnabled, onSignOut }: { session: Session; remot
   );
 }
 
-function ViewTabs({ activeView, onChange }: { activeView: AppView; onChange: (view: AppView) => void }) {
+function ViewTabs({ activeView, onChange, role }: { activeView: AppView; onChange: (view: AppView) => void; role: Role }) {
   return (
     <nav className="border-b border-black/10 bg-white">
       <div className="mx-auto flex max-w-7xl gap-2 px-4 py-2">
@@ -465,6 +466,15 @@ function ViewTabs({ activeView, onChange }: { activeView: AppView; onChange: (vi
         >
           Wallet
         </button>
+        {role === "admin" && (
+          <button
+            className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${activeView === "liquidations" ? "bg-ink text-white" : "hover:bg-field"}`}
+            type="button"
+            onClick={() => onChange("liquidations")}
+          >
+            Liquidaciones
+          </button>
+        )}
       </div>
     </nav>
   );
@@ -1467,6 +1477,205 @@ function WalletPage({ state, session }: { state: AppState; session: Session }) {
   );
 }
 
+type LiquidationRow = {
+  id: string;
+  name: string;
+  role: "seller" | "driver";
+  orders: number;
+  codCop: number;
+  feesCop: number;
+  earningsCop: number;
+  netCop: number;
+  status: "pendiente" | "conciliada";
+};
+
+function dateValue(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function isEntryInRange(entry: WalletEntry, startDate: string, endDate: string) {
+  const entryDate = entry.createdAt.slice(0, 10);
+  return (!startDate || entryDate >= startDate) && (!endDate || entryDate <= endDate);
+}
+
+function uniqueOrderCount(entries: WalletEntry[]) {
+  return new Set(entries.map((entry) => entry.orderId).filter(Boolean)).size;
+}
+
+function buildLiquidationRows(state: AppState, entries: WalletEntry[]): LiquidationRow[] {
+  const sellerRows = state.sellers.map((seller) => {
+    const ownEntries = entries.filter((entry) => entry.ownerType === "seller" && entry.ownerId === seller.id);
+    const codCop = ownEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + entry.amountCop, 0);
+    const feesCop = Math.abs(ownEntries.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0));
+    const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
+    return {
+      id: seller.id,
+      name: seller.name,
+      role: "seller" as const,
+      orders: uniqueOrderCount(ownEntries),
+      codCop,
+      feesCop,
+      earningsCop: 0,
+      netCop,
+      status: netCop === 0 ? "conciliada" as const : "pendiente" as const
+    };
+  });
+
+  const driverRows = state.drivers.map((driver) => {
+    const ownEntries = entries.filter((entry) => entry.ownerType === "driver" && entry.ownerId === driver.id);
+    const earningsCop = ownEntries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + entry.amountCop, 0);
+    const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
+    return {
+      id: driver.id,
+      name: driver.name,
+      role: "driver" as const,
+      orders: uniqueOrderCount(ownEntries),
+      codCop: 0,
+      feesCop: 0,
+      earningsCop,
+      netCop,
+      status: netCop === 0 ? "conciliada" as const : "pendiente" as const
+    };
+  });
+
+  return [...sellerRows, ...driverRows].filter((row) => row.orders > 0 || row.netCop !== 0);
+}
+
+function csvValue(value: string | number) {
+  const text = String(value);
+  return `"${text.replaceAll("\"", "\"\"")}"`;
+}
+
+function downloadLiquidationsCsv(rows: LiquidationRow[], startDate: string, endDate: string) {
+  const header = ["tipo", "nombre", "ordenes", "cod", "fees", "ganancias", "neto", "estado"];
+  const body = rows.map((row) => [
+    row.role === "seller" ? "vendedor" : "transportista",
+    row.name,
+    row.orders,
+    row.codCop,
+    row.feesCop,
+    row.earningsCop,
+    row.netCop,
+    row.status
+  ]);
+  const csv = [header, ...body].map((line) => line.map(csvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `liquidaciones-${startDate || "inicio"}-${endDate || "hoy"}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function LiquidationsPage({ state }: { state: AppState }) {
+  const today = dateValue(new Date());
+  const weekAgo = dateValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+  const [startDate, setStartDate] = useState(weekAgo);
+  const [endDate, setEndDate] = useState(today);
+  const entries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
+  const rows = buildLiquidationRows(state, entries);
+  const sellerRows = rows.filter((row) => row.role === "seller");
+  const driverRows = rows.filter((row) => row.role === "driver");
+  const totalCod = sellerRows.reduce((sum, row) => sum + row.codCop, 0);
+  const totalSellerFees = sellerRows.reduce((sum, row) => sum + row.feesCop, 0);
+  const totalDriverPay = driverRows.reduce((sum, row) => sum + row.earningsCop, 0);
+  const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
+
+  return (
+    <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Liquidaciones</h2>
+          <p className="text-sm text-black/60">Cierre financiero por rango de fechas basado en movimientos de wallet.</p>
+        </div>
+        <button
+          className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          type="button"
+          disabled={rows.length === 0}
+          onClick={() => downloadLiquidationsCsv(rows, startDate, endDate)}
+        >
+          <FileDown size={16} />
+          Exportar CSV
+        </button>
+      </div>
+
+      <Card>
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Desde
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Hasta
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </label>
+          <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={() => { setStartDate(""); setEndDate(today); }}>
+            Ver todo
+          </button>
+        </div>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric icon={<CreditCard size={20} />} label="COD recibido" value={formatCop(totalCod)} />
+        <Metric icon={<Wallet size={20} />} label="Fees vendedores" value={formatCop(totalSellerFees)} />
+        <Metric icon={<Truck size={20} />} label="Pago transportistas" value={formatCop(totalDriverPay)} />
+        <Metric icon={<AlertTriangle size={20} />} label="Pendiente por conciliar" value={formatCop(totalPending)} />
+      </div>
+
+      <LiquidationTable title="Vendedores" rows={sellerRows} emptyMessage="No hay movimientos de vendedores en este rango." />
+      <LiquidationTable title="Transportistas" rows={driverRows} emptyMessage="No hay movimientos de transportistas en este rango." />
+    </main>
+  );
+}
+
+function LiquidationTable({ title, rows, emptyMessage }: { title: string; rows: LiquidationRow[]; emptyMessage: string }) {
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="font-bold">{title}</h2>
+        <span className="text-sm text-black/60">{rows.length} cuentas</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-black/60">{emptyMessage}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
+                <th className="py-2 pr-3 font-semibold">Cuenta</th>
+                <th className="py-2 pr-3 font-semibold">Ordenes</th>
+                <th className="py-2 pr-3 font-semibold">COD</th>
+                <th className="py-2 pr-3 font-semibold">Fees</th>
+                <th className="py-2 pr-3 font-semibold">Ganancias</th>
+                <th className="py-2 pr-3 font-semibold">Neto</th>
+                <th className="py-2 font-semibold">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.role}-${row.id}`} className="border-b border-black/5 last:border-0">
+                  <td className="py-3 pr-3 font-semibold">{row.name}</td>
+                  <td className="py-3 pr-3">{row.orders}</td>
+                  <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(row.feesCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(row.earningsCop)}</td>
+                  <td className={`py-3 pr-3 font-bold ${row.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.netCop)}</td>
+                  <td className="py-3">
+                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "pendiente" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function EmptyRoleState({ title, message }: { title: string; message: string }) {
   return (
     <Card>
@@ -1734,6 +1943,7 @@ export function OperationsApp() {
   const view = useMemo(() => {
     if (!session) return null;
     if (activeView === "wallet") return <WalletPage state={state} session={session} />;
+    if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} />;
     if (session.role === "seller") return <SellerView state={state} setState={setState} session={session} />;
     if (session.role === "driver") return <DriverView state={state} setState={setState} session={session} />;
     return <AdminView state={state} setState={setState} />;
@@ -1744,7 +1954,7 @@ export function OperationsApp() {
   return (
     <div className="min-h-screen">
       <Header session={session} remoteEnabled={remoteEnabled} onSignOut={signOut} />
-      <ViewTabs activeView={activeView} onChange={setActiveView} />
+      <ViewTabs activeView={activeView} onChange={setActiveView} role={session.role} />
       {view}
       <AuditBar state={state} />
     </div>
