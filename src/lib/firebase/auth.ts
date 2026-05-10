@@ -113,7 +113,8 @@ export async function closeFirebaseOrder(input: {
   if (!client) throw new Error("Firebase no esta configurado.");
   const functions = getFunctions(client.app, "us-central1");
   const callable = httpsCallable(functions, "closeOrder");
-  const result = await callable(input);
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
   return result.data as { order: Order; walletEntries: WalletEntry[] };
 }
 

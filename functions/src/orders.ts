@@ -18,16 +18,19 @@ const manualOrderSchema = z.object({
   addressRisk: z.enum(["accepted", "review"])
 });
 
+const optionalString = z.preprocess((value) => (value === null ? undefined : value), z.string().min(1).optional());
+const optionalUrl = z.preprocess((value) => (value === null ? undefined : value), z.string().url().optional());
+
 const closeOrderSchema = z.object({
   orderId: z.string().min(1),
   outcome: z.enum(["delivered", "failed"]),
   note: z.string().min(1),
   photoLabel: z.string().min(1),
-  photoUrl: z.string().url().optional(),
-  storagePath: z.string().min(1).optional(),
-  reason: z.string().optional(),
-  scheduledDate: z.string().optional(),
-  scheduledWindow: z.string().optional()
+  photoUrl: optionalUrl,
+  storagePath: optionalString,
+  reason: optionalString,
+  scheduledDate: optionalString,
+  scheduledWindow: optionalString
 });
 
 const defaultSettings = {
