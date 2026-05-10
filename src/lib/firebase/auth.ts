@@ -2,7 +2,7 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import type { AddressRisk, FulfillmentMode, Order, PaymentMethod, Role, WalletEntry } from "@/lib/types";
+import type { AddressRisk, FulfillmentMode, Order, PaymentMethod, Role, Settlement, WalletEntry } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 export type FirebaseSessionClaims = {
@@ -116,6 +116,36 @@ export async function closeFirebaseOrder(input: {
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { order: Order; walletEntries: WalletEntry[] };
+}
+
+export async function createFirebaseSettlement(input: {
+  kind: "seller" | "driver";
+  ownerId: string;
+  startDate: string;
+  endDate: string;
+  note?: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "createSettlement");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { settlement: Settlement; walletEntries: WalletEntry[] };
+}
+
+export async function updateFirebaseSettlementStatus(input: {
+  settlementId: string;
+  status: "paid" | "reconciled";
+  note?: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "updateSettlementStatus");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { settlement: Settlement };
 }
 
 export async function setFirebaseUserRole(uid: string, role: Role, profileId?: string) {

@@ -88,6 +88,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /settlements/{settlementId} {
+      allow read: if isAdmin()
+        || (resource.data.kind == "seller" && isSeller(resource.data.ownerId))
+        || (resource.data.kind == "driver" && isDriver(resource.data.ownerId));
+      allow write: if isAdmin();
+    }
+
     match /payouts/{payoutId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
       allow create: if isAdmin() || isSeller(request.resource.data.sellerId);

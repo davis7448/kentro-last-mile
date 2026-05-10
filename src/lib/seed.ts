@@ -12,6 +12,7 @@ export function emptyState(): AppState {
     inventory: [],
     orders: [],
     wallet: [],
+    settlements: [],
     payouts: [],
     audit: [],
     settings: {
@@ -202,6 +203,7 @@ export function seedState(): AppState {
         createdAt: now
       }
     ],
+    settlements: [],
     payouts: [],
     audit: [
       {

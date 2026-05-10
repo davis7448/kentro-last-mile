@@ -89,6 +89,7 @@ export type WalletEntry = {
   ownerType: "seller" | "driver";
   ownerId: string;
   orderId?: string;
+  settlementId?: string;
   type:
     | "cod_revenue"
     | "delivery_fee"
@@ -100,6 +101,27 @@ export type WalletEntry = {
   amountCop: number;
   description: string;
   createdAt: string;
+};
+
+export type Settlement = {
+  id: string;
+  kind: "seller" | "driver";
+  ownerId: string;
+  ownerName: string;
+  startDate: string;
+  endDate: string;
+  walletEntryIds: string[];
+  orderIds: string[];
+  codCop: number;
+  feesCop: number;
+  driverPayCop: number;
+  platformMarginCop: number;
+  netCop: number;
+  status: "pending" | "paid" | "reconciled";
+  createdAt: string;
+  paidAt?: string;
+  reconciledAt?: string;
+  note?: string;
 };
 
 export type PayoutRequest = {
@@ -130,6 +152,7 @@ export type AppState = {
   inventory: InventoryItem[];
   orders: Order[];
   wallet: WalletEntry[];
+  settlements: Settlement[];
   payouts: PayoutRequest[];
   audit: AuditEvent[];
   settings: {

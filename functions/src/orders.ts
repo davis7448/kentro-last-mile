@@ -33,6 +33,20 @@ const closeOrderSchema = z.object({
   scheduledWindow: optionalString
 });
 
+const settlementSchema = z.object({
+  kind: z.enum(["seller", "driver"]),
+  ownerId: z.string().min(1),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  note: optionalString
+});
+
+const settlementStatusSchema = z.object({
+  settlementId: z.string().min(1),
+  status: z.enum(["paid", "reconciled"]),
+  note: optionalString
+});
+
 const defaultSettings = {
   sellerDeliveredFeeCop: 12000,
   sellerFailedFeeCop: 9000,
@@ -50,6 +64,28 @@ type WalletEntryDoc = {
   amountCop: number;
   description: string;
   createdAt: string;
+  settlementId?: string;
+};
+
+type SettlementDoc = {
+  id: string;
+  kind: "seller" | "driver";
+  ownerId: string;
+  ownerName: string;
+  startDate: string;
+  endDate: string;
+  walletEntryIds: string[];
+  orderIds: string[];
+  codCop: number;
+  feesCop: number;
+  driverPayCop: number;
+  platformMarginCop: number;
+  netCop: number;
+  status: "pending" | "paid" | "reconciled";
+  createdAt: string;
+  paidAt?: string;
+  reconciledAt?: string;
+  note?: string;
 };
 
 export const createManualOrder = onCall(async (request) => {
@@ -204,6 +240,184 @@ export const closeOrder = onCall(async (request) => {
     return { order: nextOrder, walletEntries };
   });
 });
+
+export const createSettlement = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can create settlements.");
+  }
+
+  const parsed = settlementSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Invalid settlement data.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  if (input.startDate > input.endDate) {
+    throw new HttpsError("invalid-argument", "startDate must be before endDate.");
+  }
+
+  const db = getFirestore();
+  const ownerRef = db.collection(input.kind === "seller" ? "sellers" : "drivers").doc(input.ownerId);
+  const entriesSnap = await db
+    .collection("walletEntries")
+    .where("ownerType", "==", input.kind)
+    .where("ownerId", "==", input.ownerId)
+    .get();
+  const candidateRefs = entriesSnap.docs
+    .filter((entry) => {
+      const data = entry.data();
+      const entryDate = String(data.createdAt ?? "").slice(0, 10);
+      return !data.settlementId && entryDate >= input.startDate && entryDate <= input.endDate;
+    })
+    .map((entry) => entry.ref);
+
+  if (candidateRefs.length === 0) {
+    throw new HttpsError("failed-precondition", "There are no unsettled wallet movements for this account and date range.");
+  }
+
+  const settlementRef = db.collection("settlements").doc(`stl-${Date.now()}-${input.kind}-${input.ownerId}`);
+  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const now = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const ownerSnap = await transaction.get(ownerRef);
+    if (!ownerSnap.exists) {
+      throw new HttpsError("not-found", "Settlement owner not found.");
+    }
+    const entrySnaps = await Promise.all(candidateRefs.map((ref) => transaction.get(ref)));
+    const unsettledSnaps = entrySnaps
+      .filter((snap) => snap.exists)
+      .filter((snap) => {
+        const entry = { id: snap.id, ...snap.data() } as WalletEntryDoc;
+        const entryDate = String(entry.createdAt ?? "").slice(0, 10);
+        return !entry.settlementId && entryDate >= input.startDate && entryDate <= input.endDate;
+      });
+    const entries = unsettledSnaps.map((snap) => ({ id: snap.id, ...snap.data() }) as WalletEntryDoc);
+
+    if (entries.length === 0) {
+      throw new HttpsError("failed-precondition", "The wallet movements were already settled.");
+    }
+
+    const settlement = buildSettlement(
+      settlementRef.id,
+      input.kind,
+      input.ownerId,
+      String(ownerSnap.data()?.name ?? input.ownerId),
+      input.startDate,
+      input.endDate,
+      entries,
+      now,
+      input.note
+    );
+
+    transaction.set(settlementRef, settlement);
+    for (const snap of unsettledSnaps) {
+      transaction.set(snap.ref, { settlementId: settlement.id }, { merge: true });
+    }
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: "settlement.created",
+      entity: "settlement",
+      entityId: settlement.id,
+      summary: `Liquidacion creada para ${settlement.ownerName}`,
+      createdAt: now
+    });
+
+    return { settlement, walletEntries: entries.map((entry) => ({ ...entry, settlementId: settlement.id })) };
+  });
+});
+
+export const updateSettlementStatus = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can update settlements.");
+  }
+
+  const parsed = settlementStatusSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Invalid settlement status data.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  const db = getFirestore();
+  const settlementRef = db.collection("settlements").doc(input.settlementId);
+  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const now = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const settlementSnap = await transaction.get(settlementRef);
+    if (!settlementSnap.exists) {
+      throw new HttpsError("not-found", "Settlement not found.");
+    }
+    const settlement = { id: settlementSnap.id, ...settlementSnap.data() } as SettlementDoc;
+    if (settlement.status === "reconciled") {
+      throw new HttpsError("failed-precondition", "Reconciled settlements cannot be changed.");
+    }
+    if (input.status === "reconciled" && settlement.status !== "paid") {
+      throw new HttpsError("failed-precondition", "Only paid settlements can be reconciled.");
+    }
+
+    const nextSettlement = stripUndefined({
+      ...settlement,
+      status: input.status,
+      paidAt: input.status === "paid" ? now : settlement.paidAt,
+      reconciledAt: input.status === "reconciled" ? now : settlement.reconciledAt,
+      note: input.note?.trim() || settlement.note
+    });
+
+    transaction.set(settlementRef, nextSettlement, { merge: true });
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: input.status === "paid" ? "settlement.paid" : "settlement.reconciled",
+      entity: "settlement",
+      entityId: settlement.id,
+      summary: input.status === "paid" ? `Liquidacion pagada ${settlement.ownerName}` : `Liquidacion conciliada ${settlement.ownerName}`,
+      createdAt: now
+    });
+
+    return { settlement: nextSettlement };
+  });
+});
+
+function buildSettlement(
+  id: string,
+  kind: "seller" | "driver",
+  ownerId: string,
+  ownerName: string,
+  startDate: string,
+  endDate: string,
+  entries: WalletEntryDoc[],
+  now: string,
+  note?: string
+): SettlementDoc {
+  const codCop = entries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const feesCop = Math.abs(entries.filter((entry) => entry.ownerType === "seller" && entry.amountCop < 0).reduce((sum, entry) => sum + Number(entry.amountCop), 0));
+  const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const netCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  return stripUndefined({
+    id,
+    kind,
+    ownerId,
+    ownerName,
+    startDate,
+    endDate,
+    walletEntryIds: entries.map((entry) => entry.id),
+    orderIds: Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean))),
+    codCop,
+    feesCop,
+    driverPayCop,
+    platformMarginCop: kind === "seller" ? feesCop : -driverPayCop,
+    netCop,
+    status: "pending",
+    createdAt: now,
+    note: note?.trim() || undefined
+  });
+}
 
 function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {
   const values = { ...defaultSettings, ...settings };

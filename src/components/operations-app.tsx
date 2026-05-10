@@ -24,12 +24,14 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createManualFirebaseOrder,
+  createFirebaseSettlement,
   createManagedFirebaseUser,
   closeFirebaseOrder,
   getFirebaseBootstrapStatus,
   signInWithFirebaseEmail,
   signOutFirebase,
-  subscribeFirebaseUser
+  subscribeFirebaseUser,
+  updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { canUseFirestoreStore, loadFirestoreState, saveFirestoreOrder, saveFirestoreState, saveFirestoreWalletEntries, subscribeFirestoreState } from "@/lib/firebase/state-store";
@@ -50,7 +52,7 @@ import {
 import { entriesForClosedOrder, formatCop, sellerBalance, weeklyFailedRate } from "@/lib/finance";
 import { getSellerShopifyConnection } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, Evidence, Order, Role, Seller, WalletEntry } from "@/lib/types";
+import type { AppState, Evidence, Order, Role, Seller, Settlement, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -1491,6 +1493,7 @@ type LiquidationRow = {
   id: string;
   name: string;
   role: "seller" | "driver";
+  walletEntryIds: string[];
   orders: number;
   codCop: number;
   feesCop: number;
@@ -1522,6 +1525,7 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[]): Liquidat
       id: seller.id,
       name: seller.name,
       role: "seller" as const,
+      walletEntryIds: ownEntries.map((entry) => entry.id),
       orders: uniqueOrderCount(ownEntries),
       codCop,
       feesCop,
@@ -1539,6 +1543,7 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[]): Liquidat
       id: driver.id,
       name: driver.name,
       role: "driver" as const,
+      walletEntryIds: ownEntries.map((entry) => entry.id),
       orders: uniqueOrderCount(ownEntries),
       codCop: 0,
       feesCop: 0,
@@ -1585,20 +1590,60 @@ function downloadLiquidationsCsv(rows: LiquidationRow[], startDate: string, endD
   URL.revokeObjectURL(url);
 }
 
-function LiquidationsPage({ state }: { state: AppState }) {
+function LiquidationsPage({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
   const today = dateValue(new Date());
   const weekAgo = dateValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
-  const entries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const entries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate) && !entry.settlementId);
   const rows = buildLiquidationRows(state, entries);
   const sellerRows = rows.filter((row) => row.role === "seller");
   const driverRows = rows.filter((row) => row.role === "driver");
+  const closedSettlements = [...state.settlements].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const totalCod = sellerRows.reduce((sum, row) => sum + row.codCop, 0);
   const totalSellerFees = sellerRows.reduce((sum, row) => sum + row.feesCop, 0);
   const totalDriverPay = driverRows.reduce((sum, row) => sum + row.earningsCop, 0);
   const platformMargin = totalSellerFees - totalDriverPay;
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
+
+  const mergeSettlement = (settlement: Settlement, walletEntries: WalletEntry[]) => {
+    setState({
+      ...state,
+      settlements: [settlement, ...state.settlements.filter((item) => item.id !== settlement.id)],
+      wallet: state.wallet.map((entry) => walletEntries.find((item) => item.id === entry.id) ?? entry)
+    });
+  };
+
+  const updateSettlement = (settlement: Settlement) => {
+    setState({
+      ...state,
+      settlements: state.settlements.map((item) => item.id === settlement.id ? settlement : item)
+    });
+  };
+
+  const closeRow = (row: LiquidationRow) => {
+    if (!startDate || !endDate) {
+      setError("Selecciona un rango de fechas antes de cerrar la liquidacion.");
+      return;
+    }
+    setBusyId(`${row.role}-${row.id}`);
+    setError(null);
+    void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate, endDate })
+      .then(({ settlement, walletEntries }) => mergeSettlement(settlement, walletEntries))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo cerrar la liquidacion."))
+      .finally(() => setBusyId(null));
+  };
+
+  const changeStatus = (settlement: Settlement, status: "paid" | "reconciled") => {
+    setBusyId(`${settlement.id}-${status}`);
+    setError(null);
+    void updateFirebaseSettlementStatus({ settlementId: settlement.id, status })
+      .then(({ settlement: updatedSettlement }) => updateSettlement(updatedSettlement))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo actualizar la liquidacion."))
+      .finally(() => setBusyId(null));
+  };
 
   return (
     <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
@@ -1634,6 +1679,8 @@ function LiquidationsPage({ state }: { state: AppState }) {
         </div>
       </Card>
 
+      {error && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
+
       <div className="grid gap-3 md:grid-cols-4">
         <Metric icon={<CreditCard size={20} />} label="COD recibido" value={formatCop(totalCod)} />
         <Metric icon={<Wallet size={20} />} label="Fees vendedores" value={formatCop(totalSellerFees)} />
@@ -1651,13 +1698,26 @@ function LiquidationsPage({ state }: { state: AppState }) {
         </Card>
       </div>
 
-      <LiquidationTable title="Vendedores" rows={sellerRows} emptyMessage="No hay movimientos de vendedores en este rango." />
-      <LiquidationTable title="Transportistas" rows={driverRows} emptyMessage="No hay movimientos de transportistas en este rango." />
+      <LiquidationTable title="Vendedores pendientes" rows={sellerRows} emptyMessage="No hay movimientos de vendedores sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
+      <LiquidationTable title="Transportistas pendientes" rows={driverRows} emptyMessage="No hay movimientos de transportistas sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
+      <SettlementsTable settlements={closedSettlements} busyId={busyId} onChangeStatus={changeStatus} />
     </main>
   );
 }
 
-function LiquidationTable({ title, rows, emptyMessage }: { title: string; rows: LiquidationRow[]; emptyMessage: string }) {
+function LiquidationTable({
+  title,
+  rows,
+  emptyMessage,
+  busyId,
+  onClose
+}: {
+  title: string;
+  rows: LiquidationRow[];
+  emptyMessage: string;
+  busyId: string | null;
+  onClose: (row: LiquidationRow) => void;
+}) {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1678,6 +1738,7 @@ function LiquidationTable({ title, rows, emptyMessage }: { title: string; rows: 
                 <th className="py-2 pr-3 font-semibold">Ganancias</th>
                 <th className="py-2 pr-3 font-semibold">Neto</th>
                 <th className="py-2 font-semibold">Estado</th>
+                <th className="py-2 text-right font-semibold">Accion</th>
               </tr>
             </thead>
             <tbody>
@@ -1693,6 +1754,110 @@ function LiquidationTable({ title, rows, emptyMessage }: { title: string; rows: 
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "pendiente" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
                       {row.status}
                     </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                      type="button"
+                      disabled={busyId === `${row.role}-${row.id}`}
+                      onClick={() => onClose(row)}
+                    >
+                      {busyId === `${row.role}-${row.id}` ? "Cerrando..." : "Cerrar"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function settlementStatusLabel(status: Settlement["status"]) {
+  if (status === "paid") return "pagada";
+  if (status === "reconciled") return "conciliada";
+  return "pendiente";
+}
+
+function SettlementsTable({
+  settlements,
+  busyId,
+  onChangeStatus
+}: {
+  settlements: Settlement[];
+  busyId: string | null;
+  onChangeStatus: (settlement: Settlement, status: "paid" | "reconciled") => void;
+}) {
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-bold">Liquidaciones cerradas</h2>
+          <p className="text-sm text-black/60">Cortes guardados en Firestore con trazabilidad de estado.</p>
+        </div>
+        <span className="text-sm text-black/60">{settlements.length} cortes</span>
+      </div>
+      {settlements.length === 0 ? (
+        <p className="text-sm text-black/60">Todavia no hay liquidaciones cerradas.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
+                <th className="py-2 pr-3 font-semibold">Cuenta</th>
+                <th className="py-2 pr-3 font-semibold">Rango</th>
+                <th className="py-2 pr-3 font-semibold">Ordenes</th>
+                <th className="py-2 pr-3 font-semibold">COD</th>
+                <th className="py-2 pr-3 font-semibold">Fees</th>
+                <th className="py-2 pr-3 font-semibold">Pago driver</th>
+                <th className="py-2 pr-3 font-semibold">Neto</th>
+                <th className="py-2 pr-3 font-semibold">Estado</th>
+                <th className="py-2 text-right font-semibold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {settlements.map((settlement) => (
+                <tr key={settlement.id} className="border-b border-black/5 last:border-0">
+                  <td className="py-3 pr-3">
+                    <p className="font-semibold">{settlement.ownerName}</p>
+                    <p className="text-xs text-black/50">{settlement.kind === "seller" ? "Vendedor" : "Transportista"}</p>
+                  </td>
+                  <td className="py-3 pr-3">{settlement.startDate} a {settlement.endDate}</td>
+                  <td className="py-3 pr-3">{settlement.orderIds.length}</td>
+                  <td className="py-3 pr-3">{formatCop(settlement.codCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(settlement.feesCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(settlement.driverPayCop)}</td>
+                  <td className={`py-3 pr-3 font-bold ${settlement.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(settlement.netCop)}</td>
+                  <td className="py-3 pr-3">
+                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${settlement.status === "pending" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
+                      {settlementStatusLabel(settlement.status)}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      {settlement.status === "pending" && (
+                        <button
+                          className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          type="button"
+                          disabled={busyId === `${settlement.id}-paid`}
+                          onClick={() => onChangeStatus(settlement, "paid")}
+                        >
+                          {busyId === `${settlement.id}-paid` ? "Guardando..." : "Marcar pagada"}
+                        </button>
+                      )}
+                      {settlement.status === "paid" && (
+                        <button
+                          className="focus-ring rounded-md bg-mint px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          type="button"
+                          disabled={busyId === `${settlement.id}-reconciled`}
+                          onClick={() => onChangeStatus(settlement, "reconciled")}
+                        >
+                          {busyId === `${settlement.id}-reconciled` ? "Guardando..." : "Conciliar"}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1971,7 +2136,7 @@ export function OperationsApp() {
   const view = useMemo(() => {
     if (!session) return null;
     if (activeView === "wallet") return <WalletPage state={state} session={session} />;
-    if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} />;
+    if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} setState={setState} />;
     if (session.role === "seller") return <SellerView state={state} setState={setState} session={session} />;
     if (session.role === "driver") return <DriverView state={state} setState={setState} session={session} />;
     return <AdminView state={state} setState={setState} onNavigate={setActiveView} />;

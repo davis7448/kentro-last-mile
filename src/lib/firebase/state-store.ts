@@ -14,7 +14,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { emptyState } from "@/lib/seed";
-import type { AppState, AuditEvent, City, Driver, InventoryItem, Order, PayoutRequest, Role, Seller, WalletEntry, Zone } from "@/lib/types";
+import type { AppState, AuditEvent, City, Driver, InventoryItem, Order, PayoutRequest, Role, Seller, Settlement, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 const settingsPath = ["settings", "global"] as const;
@@ -26,6 +26,7 @@ const collectionNames = [
   "inventory",
   "orders",
   "walletEntries",
+  "settlements",
   "payouts",
   "auditEvents"
 ] as const;
@@ -44,7 +45,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
   if (!client) return null;
   const base = emptyState();
   const role = context?.role ?? "admin";
-  const [settingsSnapshot, cities, zones, sellers, drivers, inventory, orders, wallet, payouts, audit] = await Promise.all([
+  const [settingsSnapshot, cities, zones, sellers, drivers, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
@@ -53,6 +54,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
     role === "seller" && context ? getCollection<InventoryItem>("inventory", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<InventoryItem>("inventory") : Promise.resolve([]),
     getOrdersForContext(context),
     getWalletForContext(context),
+    getSettlementsForContext(context),
     role === "seller" && context ? getCollection<PayoutRequest>("payouts", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<PayoutRequest>("payouts") : Promise.resolve([]),
     role === "admin" ? getCollection<AuditEvent>("auditEvents", true) : Promise.resolve([])
   ]);
@@ -77,6 +79,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
     inventory,
     orders,
     wallet,
+    settlements,
     payouts,
     audit,
     settings: settingsSnapshot.exists() ? { ...base.settings, ...settingsSnapshot.data() } : base.settings
@@ -111,6 +114,7 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "inventory", state.inventory);
   writeEntities(batch, "orders", state.orders);
   writeEntities(batch, "walletEntries", state.wallet);
+  writeEntities(batch, "settlements", state.settlements);
   writeEntities(batch, "payouts", state.payouts);
   writeEntities(batch, "auditEvents", state.audit.slice(0, 100));
   await batch.commit();
@@ -133,13 +137,24 @@ export async function saveFirestoreWalletEntries(entries: WalletEntry[]): Promis
 export function subscribeFirestoreState(context: FirestoreStateContext | undefined, onState: (state: AppState) => void) {
   const client = getFirebaseClient();
   if (!client) return () => undefined;
-  const ref = collection(client.db, "orders");
+  const orderRef = collection(client.db, "orders");
+  const walletRef = collection(client.db, "walletEntries");
+  const settlementRef = collection(client.db, "settlements");
   const targets =
     context?.role === "seller"
-      ? [query(ref, where("sellerId", "==", context.profileId))]
+      ? [
+          query(orderRef, where("sellerId", "==", context.profileId)),
+          query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId)),
+          query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId))
+        ]
       : context?.role === "driver"
-        ? [query(ref, where("driverId", "==", context.profileId)), query(ref, where("driverId", "==", null))]
-        : [ref];
+        ? [
+            query(orderRef, where("driverId", "==", context.profileId)),
+            query(orderRef, where("driverId", "==", null)),
+            query(walletRef, where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId)),
+            query(settlementRef, where("kind", "==", "driver"), where("ownerId", "==", context.profileId))
+          ]
+        : [orderRef, walletRef, settlementRef];
   const reload = () => {
     void loadFirestoreState(context).then((state) => {
       if (state) onState(state);
@@ -195,6 +210,16 @@ async function getWalletForContext(context?: FirestoreStateContext): Promise<Wal
     return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId));
   }
   return getCollection<WalletEntry>("walletEntries");
+}
+
+async function getSettlementsForContext(context?: FirestoreStateContext): Promise<Settlement[]> {
+  if (context?.role === "seller") {
+    return getCollection<Settlement>("settlements", where("kind", "==", "seller"), where("ownerId", "==", context.profileId));
+  }
+  if (context?.role === "driver") {
+    return getCollection<Settlement>("settlements", where("kind", "==", "driver"), where("ownerId", "==", context.profileId));
+  }
+  return getCollection<Settlement>("settlements", true);
 }
 
 function writeEntities<T extends { id: string }>(
