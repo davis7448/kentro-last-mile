@@ -1557,6 +1557,9 @@ function csvValue(value: string | number) {
 }
 
 function downloadLiquidationsCsv(rows: LiquidationRow[], startDate: string, endDate: string) {
+  const totalSellerFees = rows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.feesCop, 0);
+  const totalDriverPay = rows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.earningsCop, 0);
+  const platformMargin = totalSellerFees - totalDriverPay;
   const header = ["tipo", "nombre", "ordenes", "cod", "fees", "ganancias", "neto", "estado"];
   const body = rows.map((row) => [
     row.role === "seller" ? "vendedor" : "transportista",
@@ -1568,7 +1571,11 @@ function downloadLiquidationsCsv(rows: LiquidationRow[], startDate: string, endD
     row.netCop,
     row.status
   ]);
-  const csv = [header, ...body].map((line) => line.map(csvValue).join(",")).join("\n");
+  const summary = [
+    [],
+    ["resumen", "margen plataforma estimado", "", "", totalSellerFees, totalDriverPay, platformMargin, ""]
+  ];
+  const csv = [header, ...body, ...summary].map((line) => line.map(csvValue).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -1590,6 +1597,7 @@ function LiquidationsPage({ state }: { state: AppState }) {
   const totalCod = sellerRows.reduce((sum, row) => sum + row.codCop, 0);
   const totalSellerFees = sellerRows.reduce((sum, row) => sum + row.feesCop, 0);
   const totalDriverPay = driverRows.reduce((sum, row) => sum + row.earningsCop, 0);
+  const platformMargin = totalSellerFees - totalDriverPay;
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
 
   return (
@@ -1630,7 +1638,17 @@ function LiquidationsPage({ state }: { state: AppState }) {
         <Metric icon={<CreditCard size={20} />} label="COD recibido" value={formatCop(totalCod)} />
         <Metric icon={<Wallet size={20} />} label="Fees vendedores" value={formatCop(totalSellerFees)} />
         <Metric icon={<Truck size={20} />} label="Pago transportistas" value={formatCop(totalDriverPay)} />
+        <Metric icon={<ShieldCheck size={20} />} label="Margen plataforma" value={formatCop(platformMargin)} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
         <Metric icon={<AlertTriangle size={20} />} label="Pendiente por conciliar" value={formatCop(totalPending)} />
+        <Card>
+          <h2 className="font-bold">Lectura del margen</h2>
+          <p className="mt-2 text-sm text-black/60">
+            Margen estimado = fees cobrados a vendedores menos pagos a transportistas. No incluye otros costos operativos externos.
+          </p>
+        </Card>
       </div>
 
       <LiquidationTable title="Vendedores" rows={sellerRows} emptyMessage="No hay movimientos de vendedores en este rango." />
