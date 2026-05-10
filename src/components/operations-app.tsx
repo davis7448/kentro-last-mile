@@ -1597,14 +1597,16 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const [endDate, setEndDate] = useState(today);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const entries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate) && !entry.settlementId);
+  const rangeEntries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
+  const entries = rangeEntries.filter((entry) => !entry.settlementId);
   const rows = buildLiquidationRows(state, entries);
+  const rangeRows = buildLiquidationRows(state, rangeEntries);
   const sellerRows = rows.filter((row) => row.role === "seller");
   const driverRows = rows.filter((row) => row.role === "driver");
   const closedSettlements = [...state.settlements].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const totalCod = sellerRows.reduce((sum, row) => sum + row.codCop, 0);
-  const totalSellerFees = sellerRows.reduce((sum, row) => sum + row.feesCop, 0);
-  const totalDriverPay = driverRows.reduce((sum, row) => sum + row.earningsCop, 0);
+  const totalCod = rangeRows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.codCop, 0);
+  const totalSellerFees = rangeRows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.feesCop, 0);
+  const totalDriverPay = rangeRows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.earningsCop, 0);
   const platformMargin = totalSellerFees - totalDriverPay;
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
 
@@ -1693,7 +1695,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
         <Card>
           <h2 className="font-bold">Lectura del margen</h2>
           <p className="mt-2 text-sm text-black/60">
-            Margen estimado = fees cobrados a vendedores menos pagos a transportistas. No incluye otros costos operativos externos.
+            Margen estimado del rango = fees cobrados a vendedores menos pagos a transportistas. Incluye movimientos pendientes y ya liquidados; no incluye otros costos operativos externos.
           </p>
         </Card>
       </div>
@@ -1736,6 +1738,7 @@ function LiquidationTable({
                 <th className="py-2 pr-3 font-semibold">COD</th>
                 <th className="py-2 pr-3 font-semibold">Fees</th>
                 <th className="py-2 pr-3 font-semibold">Ganancias</th>
+                <th className="py-2 pr-3 font-semibold">Margen</th>
                 <th className="py-2 pr-3 font-semibold">Neto</th>
                 <th className="py-2 font-semibold">Estado</th>
                 <th className="py-2 text-right font-semibold">Accion</th>
@@ -1829,6 +1832,7 @@ function SettlementsTable({
                   <td className="py-3 pr-3">{formatCop(settlement.codCop)}</td>
                   <td className="py-3 pr-3">{formatCop(settlement.feesCop)}</td>
                   <td className="py-3 pr-3">{formatCop(settlement.driverPayCop)}</td>
+                  <td className={`py-3 pr-3 font-bold ${settlement.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(settlement.platformMarginCop)}</td>
                   <td className={`py-3 pr-3 font-bold ${settlement.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(settlement.netCop)}</td>
                   <td className="py-3 pr-3">
                     <span className={`rounded-md px-2 py-1 text-xs font-semibold ${settlement.status === "pending" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
