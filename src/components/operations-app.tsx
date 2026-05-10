@@ -1003,7 +1003,7 @@ function getNextOrderStep(order: Order): { status: Order["status"]; label: strin
   return null;
 }
 
-function AdminView({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
+function AdminView({ state, setState, onNavigate }: { state: AppState; setState: (state: AppState) => void; onNavigate: (view: AppView) => void }) {
   const pending = state.orders.filter((order) => !["delivered", "failed", "cancelled"].includes(order.status));
   const failed = state.orders.filter((order) => order.status === "failed");
   const review = state.orders.filter((order) => order.addressRisk === "review");
@@ -1018,7 +1018,17 @@ function AdminView({ state, setState }: { state: AppState; setState: (state: App
 
   return (
     <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
-      <h2 className="text-xl font-bold">Dashboard administrador</h2>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-xl font-bold">Dashboard administrador</h2>
+        <button
+          className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white"
+          type="button"
+          onClick={() => onNavigate("liquidations")}
+        >
+          <CreditCard size={16} />
+          Ver liquidaciones
+        </button>
+      </div>
       <div className="grid gap-3 md:grid-cols-4">
         <Metric icon={<ClipboardList size={20} />} label="Pedidos activos" value={String(pending.length)} />
         <Metric icon={<AlertTriangle size={20} />} label="Alertas" value={String(alerts.length)} />
@@ -1946,7 +1956,7 @@ export function OperationsApp() {
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} />;
     if (session.role === "seller") return <SellerView state={state} setState={setState} session={session} />;
     if (session.role === "driver") return <DriverView state={state} setState={setState} session={session} />;
-    return <AdminView state={state} setState={setState} />;
+    return <AdminView state={state} setState={setState} onNavigate={setActiveView} />;
   }, [activeView, session, state, setState]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;
