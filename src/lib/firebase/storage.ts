@@ -17,6 +17,12 @@ export async function uploadEvidenceImage(orderId: string, file: File) {
   if (!client) {
     throw new Error("Storage no esta disponible en modo local.");
   }
+  const user = client.auth.currentUser;
+  if (!user) {
+    throw new Error("Debes iniciar sesion para subir evidencia.");
+  }
+
+  await user.getIdToken(true);
 
   const safeName = cleanFileName(file.name || "evidencia.jpg");
   const path = `evidence/${orderId}/${Date.now()}-${safeName}`;

@@ -9,16 +9,15 @@ service firebase.storage {
       return signedIn() && request.auth.token.role == "admin";
     }
 
-    function isAssignedDriver(orderId) {
+    function isDriver() {
       return signedIn()
-        && request.auth.token.role == "driver"
-        && firestore.get(/databases/(default)/documents/orders/$(orderId)).data.driverId == request.auth.token.driverId;
+        && request.auth.token.role == "driver";
     }
 
     match /evidence/{orderId}/{fileName} {
       allow read: if signedIn();
       allow write: if signedIn()
-        && (isAdmin() || isAssignedDriver(orderId))
+        && (isAdmin() || isDriver())
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
