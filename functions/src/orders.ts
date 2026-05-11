@@ -57,10 +57,10 @@ const defaultSettings = {
 
 type WalletEntryDoc = {
   id: string;
-  ownerType: "seller" | "driver";
+  ownerType: "seller" | "driver" | "admin";
   ownerId: string;
   orderId: string;
-  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "driver_earning";
+  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "driver_earning" | "platform_margin";
   amountCop: number;
   description: string;
   createdAt: string;
@@ -311,9 +311,14 @@ export const createSettlement = onCall(async (request) => {
       input.note
     );
 
+    const platformEntry = buildPlatformWalletEntry(settlement, now);
+
     transaction.set(settlementRef, settlement);
     for (const snap of unsettledSnaps) {
       transaction.set(snap.ref, { settlementId: settlement.id }, { merge: true });
+    }
+    if (platformEntry) {
+      transaction.set(db.collection("walletEntries").doc(platformEntry.id), platformEntry, { merge: true });
     }
     transaction.set(auditRef, {
       id: auditRef.id,
@@ -326,7 +331,7 @@ export const createSettlement = onCall(async (request) => {
       createdAt: now
     });
 
-    return { settlement, walletEntries: entries.map((entry) => ({ ...entry, settlementId: settlement.id })) };
+    return { settlement, walletEntries: [...entries.map((entry) => ({ ...entry, settlementId: settlement.id })), ...(platformEntry ? [platformEntry] : [])] };
   });
 });
 
@@ -417,6 +422,25 @@ function buildSettlement(
     createdAt: now,
     note: note?.trim() || undefined
   });
+}
+
+function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {
+  const amountCop = settlement.kind === "seller" ? settlement.feesCop : -settlement.driverPayCop;
+  if (amountCop === 0) return null;
+  return {
+    id: `we-${settlement.id}-platform-margin`,
+    ownerType: "admin",
+    ownerId: "platform",
+    orderId: settlement.id,
+    type: "platform_margin",
+    amountCop,
+    description:
+      settlement.kind === "seller"
+        ? `Ingreso plataforma por fees ${settlement.ownerName}`
+        : `Costo plataforma por pago transportista ${settlement.ownerName}`,
+    createdAt: now,
+    settlementId: settlement.id
+  };
 }
 
 function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {

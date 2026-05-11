@@ -86,7 +86,7 @@ export type Order = {
 
 export type WalletEntry = {
   id: string;
-  ownerType: "seller" | "driver";
+  ownerType: "seller" | "driver" | "admin";
   ownerId: string;
   orderId?: string;
   settlementId?: string;
@@ -96,6 +96,7 @@ export type WalletEntry = {
     | "failed_fee"
     | "fulfillment_fee"
     | "driver_earning"
+    | "platform_margin"
     | "cod_remittance"
     | "payout";
   amountCop: number;

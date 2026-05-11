@@ -1409,7 +1409,9 @@ function WalletEntryRow({ entry, state, showOwner }: { entry: WalletEntry; state
   const owner =
     entry.ownerType === "seller"
       ? state.sellers.find((seller) => seller.id === entry.ownerId)?.name
-      : state.drivers.find((driver) => driver.id === entry.ownerId)?.name;
+      : entry.ownerType === "driver"
+        ? state.drivers.find((driver) => driver.id === entry.ownerId)?.name
+        : "Plataforma";
   return (
     <div className="rounded-md border border-black/10 p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
@@ -1441,6 +1443,7 @@ function WalletPage({ state, session }: { state: AppState; session: Session }) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const balance = visibleEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
   const ownerOptions = [
+    { value: "admin:platform", label: "Admin · Plataforma" },
     ...state.sellers.map((seller) => ({ value: `seller:${seller.id}`, label: `Vendedor · ${seller.name}` })),
     ...state.drivers.map((driver) => ({ value: `driver:${driver.id}`, label: `Transportista · ${driver.name}` }))
   ];
@@ -1611,10 +1614,12 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
 
   const mergeSettlement = (settlement: Settlement, walletEntries: WalletEntry[]) => {
+    const knownIds = new Set(state.wallet.map((entry) => entry.id));
+    const newEntries = walletEntries.filter((entry) => !knownIds.has(entry.id));
     setState({
       ...state,
       settlements: [settlement, ...state.settlements.filter((item) => item.id !== settlement.id)],
-      wallet: state.wallet.map((entry) => walletEntries.find((item) => item.id === entry.id) ?? entry)
+      wallet: [...newEntries, ...state.wallet.map((entry) => walletEntries.find((item) => item.id === entry.id) ?? entry)]
     });
   };
 
