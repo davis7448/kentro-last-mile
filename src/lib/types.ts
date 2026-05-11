@@ -31,7 +31,18 @@ export type Evidence = {
 };
 
 export type City = { id: string; name: string; active: boolean };
-export type Zone = { id: string; cityId: string; name: string; polygonLabel: string };
+export type Zone = {
+  id: string;
+  cityId: string;
+  name: string;
+  polygonLabel: string;
+  active?: boolean;
+  sellerDeliveredFeeCop?: number;
+  sellerFailedFeeCop?: number;
+  fulfillmentFeeCop?: number;
+  driverDeliveredPayCop?: number;
+  driverFailedPayCop?: number;
+};
 export type Seller = {
   id: string;
   name: string;

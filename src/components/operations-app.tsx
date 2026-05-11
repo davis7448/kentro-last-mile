@@ -1087,6 +1087,7 @@ function AdminView({ state, setState, onNavigate }: { state: AppState; setState:
               })}
             </div>
           </Card>
+          <ZonesTariffsPanel state={state} setState={setState} />
           <WalletPanel state={state} setState={setState} />
           <AdminUsersPanel state={state} setState={setState} />
         </aside>
@@ -1127,7 +1128,8 @@ function ManualOrderPanel({
   }, [lockedSellerId, sellerId, state.sellers]);
 
   const selectedSeller = state.sellers.find((seller) => seller.id === sellerId);
-  const sellerZones = state.zones.filter((zone) => zone.cityId === (selectedSeller?.cityId ?? state.settings.activeCityId));
+  const sellerZones = state.zones.filter((zone) => zone.cityId === (selectedSeller?.cityId ?? state.settings.activeCityId) && zone.active !== false);
+  const selectedZone = sellerZones.find((zone) => zone.id === zoneId);
   const sellerInventory = state.inventory.filter((item) => item.sellerId === sellerId);
   const selectedProduct = sellerInventory.find((item) => item.id === productId);
 
@@ -1220,6 +1222,11 @@ function ManualOrderPanel({
             <option value="review">Revisar direccion</option>
           </select>
         </div>
+        {selectedZone && (
+          <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
+            Tarifa zona {selectedZone.name}: vendedor entregado {formatCop(selectedZone.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop)} · transportista entregado {formatCop(selectedZone.driverDeliveredPayCop || state.settings.driverDeliveredPayCop)}
+          </p>
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "cod" | "prepaid")}>
             <option value="cod">Contraentrega</option>
@@ -1320,6 +1327,118 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
           <div key={account.id} className="rounded-md border border-black/10 p-2 text-sm">
             <p className="font-semibold">{account.name}</p>
             <p className="text-black/60">{account.email} · {roleLabel(account.role)}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function copInputValue(value: number | undefined, fallback: number) {
+  return String(value ?? fallback);
+}
+
+function parseCopInput(value: string, fallback: number) {
+  const parsed = Number(value.replace(/[^\d]/g, ""));
+  return parsed > 0 ? parsed : fallback;
+}
+
+function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
+  const [name, setName] = useState("");
+  const [polygonLabel, setPolygonLabel] = useState("");
+  const [sellerDeliveredFeeCop, setSellerDeliveredFeeCop] = useState(String(state.settings.sellerDeliveredFeeCop));
+  const [sellerFailedFeeCop, setSellerFailedFeeCop] = useState(String(state.settings.sellerFailedFeeCop));
+  const [driverDeliveredPayCop, setDriverDeliveredPayCop] = useState(String(state.settings.driverDeliveredPayCop));
+  const [driverFailedPayCop, setDriverFailedPayCop] = useState(String(state.settings.driverFailedPayCop));
+  const [fulfillmentFeeCop, setFulfillmentFeeCop] = useState(String(state.settings.fulfillmentFeeCop));
+  const activeCity = state.cities.find((city) => city.id === state.settings.activeCityId) ?? state.cities[0];
+  const zones = state.zones.filter((zone) => zone.cityId === (activeCity?.id ?? state.settings.activeCityId));
+
+  const upsertZone = (zoneId?: string) => {
+    if (!name.trim() && !zoneId) return;
+    const existing = zoneId ? state.zones.find((zone) => zone.id === zoneId) : undefined;
+    const zone = {
+      id: existing?.id ?? `zone-${Date.now()}`,
+      cityId: existing?.cityId ?? activeCity?.id ?? state.settings.activeCityId,
+      name: (name.trim() || existing?.name || "Zona").trim(),
+      polygonLabel: (polygonLabel.trim() || existing?.polygonLabel || "Sin referencia").trim(),
+      active: existing?.active ?? true,
+      sellerDeliveredFeeCop: parseCopInput(sellerDeliveredFeeCop, state.settings.sellerDeliveredFeeCop),
+      sellerFailedFeeCop: parseCopInput(sellerFailedFeeCop, state.settings.sellerFailedFeeCop),
+      driverDeliveredPayCop: parseCopInput(driverDeliveredPayCop, state.settings.driverDeliveredPayCop),
+      driverFailedPayCop: parseCopInput(driverFailedPayCop, state.settings.driverFailedPayCop),
+      fulfillmentFeeCop: parseCopInput(fulfillmentFeeCop, state.settings.fulfillmentFeeCop)
+    };
+    setState({
+      ...state,
+      zones: existing ? state.zones.map((item) => item.id === existing.id ? zone : item) : [zone, ...state.zones]
+    });
+    setName("");
+    setPolygonLabel("");
+    setSellerDeliveredFeeCop(String(state.settings.sellerDeliveredFeeCop));
+    setSellerFailedFeeCop(String(state.settings.sellerFailedFeeCop));
+    setDriverDeliveredPayCop(String(state.settings.driverDeliveredPayCop));
+    setDriverFailedPayCop(String(state.settings.driverFailedPayCop));
+    setFulfillmentFeeCop(String(state.settings.fulfillmentFeeCop));
+  };
+
+  const loadZone = (zoneId: string) => {
+    const zone = state.zones.find((item) => item.id === zoneId);
+    if (!zone) return;
+    setName(zone.name);
+    setPolygonLabel(zone.polygonLabel);
+    setSellerDeliveredFeeCop(copInputValue(zone.sellerDeliveredFeeCop, state.settings.sellerDeliveredFeeCop));
+    setSellerFailedFeeCop(copInputValue(zone.sellerFailedFeeCop, state.settings.sellerFailedFeeCop));
+    setDriverDeliveredPayCop(copInputValue(zone.driverDeliveredPayCop, state.settings.driverDeliveredPayCop));
+    setDriverFailedPayCop(copInputValue(zone.driverFailedPayCop, state.settings.driverFailedPayCop));
+    setFulfillmentFeeCop(copInputValue(zone.fulfillmentFeeCop, state.settings.fulfillmentFeeCop));
+  };
+
+  const toggleZone = (zoneId: string) => {
+    setState({
+      ...state,
+      zones: state.zones.map((zone) => zone.id === zoneId ? { ...zone, active: zone.active === false } : zone)
+    });
+  };
+
+  return (
+    <Card>
+      <h2 className="mb-3 font-bold">Zonas y tarifas</h2>
+      <div className="grid gap-2">
+        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Nombre de zona" value={name} onChange={(event) => setName(event.target.value)} />
+        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Barrios o referencia" value={polygonLabel} onChange={(event) => setPolygonLabel(event.target.value)} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee vendedor entregado" inputMode="numeric" value={sellerDeliveredFeeCop} onChange={(event) => setSellerDeliveredFeeCop(event.target.value)} />
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee vendedor fallido" inputMode="numeric" value={sellerFailedFeeCop} onChange={(event) => setSellerFailedFeeCop(event.target.value)} />
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Pago driver entregado" inputMode="numeric" value={driverDeliveredPayCop} onChange={(event) => setDriverDeliveredPayCop(event.target.value)} />
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Pago driver fallido" inputMode="numeric" value={driverFailedPayCop} onChange={(event) => setDriverFailedPayCop(event.target.value)} />
+        </div>
+        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee fulfillment" inputMode="numeric" value={fulfillmentFeeCop} onChange={(event) => setFulfillmentFeeCop(event.target.value)} />
+        <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => upsertZone()}>
+          Crear zona
+        </button>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {zones.length === 0 && <p className="text-sm text-black/60">No hay zonas creadas.</p>}
+        {zones.map((zone) => (
+          <div key={zone.id} className="rounded-md border border-black/10 p-3 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">{zone.name}</p>
+                <p className="text-black/60">{zone.polygonLabel}</p>
+              </div>
+              <span className={`rounded-md px-2 py-1 text-xs font-semibold ${zone.active === false ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
+                {zone.active === false ? "inactiva" : "activa"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-black/60">
+              Vendedor {formatCop(zone.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop)} / {formatCop(zone.sellerFailedFeeCop || state.settings.sellerFailedFeeCop)} · Driver {formatCop(zone.driverDeliveredPayCop || state.settings.driverDeliveredPayCop)} / {formatCop(zone.driverFailedPayCop || state.settings.driverFailedPayCop)}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => loadZone(zone.id)}>Editar</button>
+              <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => upsertZone(zone.id)}>Guardar cambios</button>
+              <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => toggleZone(zone.id)}>{zone.active === false ? "Activar" : "Desactivar"}</button>
+            </div>
           </div>
         ))}
       </div>

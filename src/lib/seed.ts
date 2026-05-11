@@ -38,9 +38,9 @@ export function seedState(): AppState {
       { id: "city-med", name: "Medellin", active: false }
     ],
     zones: [
-      { id: "zone-north", cityId: "city-bog", name: "Norte", polygonLabel: "Usaquen, Suba, calle 100+" },
-      { id: "zone-center", cityId: "city-bog", name: "Centro", polygonLabel: "Chapinero, Teusaquillo, Santa Fe" },
-      { id: "zone-south", cityId: "city-bog", name: "Sur", polygonLabel: "Kennedy, Bosa, Tunjuelito" }
+      { id: "zone-north", cityId: "city-bog", name: "Norte", polygonLabel: "Usaquen, Suba, calle 100+", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
+      { id: "zone-center", cityId: "city-bog", name: "Centro", polygonLabel: "Chapinero, Teusaquillo, Santa Fe", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
+      { id: "zone-south", cityId: "city-bog", name: "Sur", polygonLabel: "Kennedy, Bosa, Tunjuelito", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 }
     ],
     sellers: [
       {

@@ -55,6 +55,14 @@ const defaultSettings = {
   driverFailedPayCop: 8000
 };
 
+const tariffFields = [
+  "sellerDeliveredFeeCop",
+  "sellerFailedFeeCop",
+  "fulfillmentFeeCop",
+  "driverDeliveredPayCop",
+  "driverFailedPayCop"
+] as const;
+
 type WalletEntryDoc = {
   id: string;
   ownerType: "seller" | "driver" | "admin";
@@ -221,7 +229,9 @@ export const closeOrder = onCall(async (request) => {
 
     transaction.set(orderRef, nextOrder, { merge: true });
 
-    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, settingsSnap.data() ?? {}, now);
+    const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
+    const zoneSnap = zoneId ? await transaction.get(db.collection("zones").doc(zoneId)) : null;
+    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now);
     for (const entry of walletEntries) {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
     }
@@ -441,6 +451,17 @@ function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): Walle
     createdAt: now,
     settlementId: settlement.id
   };
+}
+
+function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any>): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const field of tariffFields) {
+    const zoneValue = Number(zone?.[field]);
+    const settingValue = Number(settings[field]);
+    const fallbackValue = Number(defaultSettings[field]);
+    values[field] = Number.isFinite(zoneValue) && zoneValue > 0 ? zoneValue : Number.isFinite(settingValue) && settingValue > 0 ? settingValue : fallbackValue;
+  }
+  return values;
 }
 
 function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {

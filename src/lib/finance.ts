@@ -11,6 +11,14 @@ export function formatCop(value: number): string {
 export function entriesForClosedOrder(order: Order, state: AppState): WalletEntry[] {
   const now = new Date().toISOString();
   const entries: WalletEntry[] = [];
+  const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
+  const tariffs = {
+    sellerDeliveredFeeCop: zone?.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop,
+    sellerFailedFeeCop: zone?.sellerFailedFeeCop || state.settings.sellerFailedFeeCop,
+    fulfillmentFeeCop: zone?.fulfillmentFeeCop || state.settings.fulfillmentFeeCop,
+    driverDeliveredPayCop: zone?.driverDeliveredPayCop || state.settings.driverDeliveredPayCop,
+    driverFailedPayCop: zone?.driverFailedPayCop || state.settings.driverFailedPayCop
+  };
 
   if (order.status === "delivered" && order.paymentMethod === "cod") {
     entries.push({
@@ -32,7 +40,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       ownerId: order.sellerId,
       orderId: order.id,
       type: "delivery_fee",
-      amountCop: -state.settings.sellerDeliveredFeeCop,
+      amountCop: -tariffs.sellerDeliveredFeeCop,
       description: `Flete entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
@@ -42,7 +50,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       ownerId: order.driverId ?? "unassigned",
       orderId: order.id,
       type: "driver_earning",
-      amountCop: state.settings.driverDeliveredPayCop,
+      amountCop: tariffs.driverDeliveredPayCop,
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
@@ -55,7 +63,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       ownerId: order.sellerId,
       orderId: order.id,
       type: "failed_fee",
-      amountCop: -state.settings.sellerFailedFeeCop,
+      amountCop: -tariffs.sellerFailedFeeCop,
       description: `Cobro fallido ${order.shopifyOrderId}`,
       createdAt: now
     });
@@ -65,7 +73,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       ownerId: order.driverId ?? "unassigned",
       orderId: order.id,
       type: "driver_earning",
-      amountCop: state.settings.driverFailedPayCop,
+      amountCop: tariffs.driverFailedPayCop,
       description: `Pago transportista fallido ${order.shopifyOrderId}`,
       createdAt: now
     });
@@ -78,7 +86,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       ownerId: order.sellerId,
       orderId: order.id,
       type: "fulfillment_fee",
-      amountCop: -state.settings.fulfillmentFeeCop,
+      amountCop: -tariffs.fulfillmentFeeCop,
       description: `Fulfillment desde bodega ${order.shopifyOrderId}`,
       createdAt: now
     });
