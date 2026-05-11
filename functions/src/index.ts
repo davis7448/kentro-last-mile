@@ -44,7 +44,7 @@ export const shopifyWebhook = onRequest(async (request, response) => {
   const address = order.shipping_address;
   const city = address?.city ?? "";
 
-  if (city.toLowerCase() !== "bogota" && city.toLowerCase() !== "bogotá") {
+  if (city.toLowerCase() !== "cali") {
     response.status(202).json({ ok: true, ignored: true, reason: "outside_active_city" });
     return;
   }
@@ -73,7 +73,7 @@ export const shopifyWebhook = onRequest(async (request, response) => {
 
 export const normalizeAddress = onRequest(async (request, response) => {
   const address = String(request.body?.address ?? "");
-  const city = String(request.body?.city ?? "Bogota");
+  const city = String(request.body?.city ?? "Cali");
   const normalized = `${address.trim().replace(/\s+/g, " ")}, ${city}, Colombia`;
 
   response.json({

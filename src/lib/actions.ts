@@ -122,7 +122,7 @@ export function resolveAddress(state: AppState, orderId: string): AppState {
       addressRisk: "accepted",
       status: order.driverId ? "assigned" : "ready_to_assign",
       geoProvider: order.geoProvider ?? "mapbox",
-      normalizedAddress: order.normalizedAddress ?? `${order.addressRaw}, Bogota, Colombia`,
+      normalizedAddress: order.normalizedAddress ?? `${order.addressRaw}, Cali, Colombia`,
       updatedAt: new Date().toISOString()
     }),
     "Direccion aceptada desde cola de revision"
@@ -322,8 +322,8 @@ export function addShopifyOrder(state: AppState): AppState {
     zoneId: "zone-center",
     customerName: "Cliente sincronizado",
     customerPhone: "+57 300 000 0000",
-    addressRaw: "Cra 11 # 82-71, Bogota",
-    normalizedAddress: "Carrera 11 #82-71, Bogota, Colombia",
+    addressRaw: "Av 6N # 25N-18, Cali",
+    normalizedAddress: "Avenida 6N #25N-18, Cali, Colombia",
     geoProvider: "mapbox",
     addressRisk: "accepted",
     status: "ready_to_assign",

@@ -128,7 +128,7 @@ export const createManualOrder = onCall(async (request) => {
     id: orderId,
     shopifyOrderId: orderNumber.startsWith("#") || orderNumber.startsWith("MAN-") ? orderNumber : `#${orderNumber}`,
     sellerId: input.sellerId,
-    cityId: typeof sellerData.cityId === "string" ? sellerData.cityId : "city-bog",
+    cityId: typeof sellerData.cityId === "string" ? sellerData.cityId : "city-cali",
     zoneId: input.zoneId || undefined,
     driverId: null,
     customerName: input.customerName.trim(),

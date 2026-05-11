@@ -5,7 +5,7 @@ const now = new Date().toISOString();
 export function emptyState(): AppState {
   return {
     activeRole: "seller",
-    cities: [{ id: "city-bog", name: "Bogota", active: true }],
+    cities: [{ id: "city-cali", name: "Cali", active: true }],
     zones: [],
     sellers: [],
     drivers: [],
@@ -16,7 +16,7 @@ export function emptyState(): AppState {
     payouts: [],
     audit: [],
     settings: {
-      activeCityId: "city-bog",
+      activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,
       sellerFailedFeeCop: 9000,
       fulfillmentFeeCop: 2000,
@@ -34,27 +34,27 @@ export function seedState(): AppState {
   return {
     activeRole: "admin",
     cities: [
-      { id: "city-bog", name: "Bogota", active: true },
+      { id: "city-cali", name: "Cali", active: true },
       { id: "city-med", name: "Medellin", active: false }
     ],
     zones: [
-      { id: "zone-north", cityId: "city-bog", name: "Norte", polygonLabel: "Usaquen, Suba, calle 100+", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
-      { id: "zone-center", cityId: "city-bog", name: "Centro", polygonLabel: "Chapinero, Teusaquillo, Santa Fe", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
-      { id: "zone-south", cityId: "city-bog", name: "Sur", polygonLabel: "Kennedy, Bosa, Tunjuelito", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 }
+      { id: "zone-north", cityId: "city-cali", name: "Norte Cali", polygonLabel: "Sameco, La Flora, Chipichape", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
+      { id: "zone-center", cityId: "city-cali", name: "Centro Cali", polygonLabel: "Centro, San Nicolas, Alameda", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 },
+      { id: "zone-south", cityId: "city-cali", name: "Sur Cali", polygonLabel: "Ciudad Jardin, Valle del Lili, Caney", active: true, sellerDeliveredFeeCop: 13000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 8000 }
     ],
     sellers: [
       {
         id: "seller-1",
         name: "Tienda Aurora",
         shopDomain: "aurora-demo.myshopify.com",
-        cityId: "city-bog",
+        cityId: "city-cali",
         bankAccount: "Bancolombia *** 4401"
       },
       {
         id: "seller-2",
         name: "Casa Verde",
         shopDomain: "casa-verde-demo.myshopify.com",
-        cityId: "city-bog",
+        cityId: "city-cali",
         bankAccount: "Davivienda *** 8102",
         debtBlockedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
       }
@@ -74,12 +74,12 @@ export function seedState(): AppState {
         id: "ord-1",
         shopifyOrderId: "#1098",
         sellerId: "seller-1",
-        cityId: "city-bog",
+        cityId: "city-cali",
         zoneId: "zone-north",
         customerName: "Paula Gomez",
         customerPhone: "+57 300 123 4488",
-        addressRaw: "Cra 15 # 112-45 apto 402, Bogota",
-        normalizedAddress: "Carrera 15 #112-45 Apto 402, Bogota, Colombia",
+        addressRaw: "Av 6N # 24N-10 apto 402, Cali",
+        normalizedAddress: "Avenida 6N #24N-10 Apto 402, Cali, Colombia",
         geoProvider: "mapbox",
         lat: 4.6921,
         lng: -74.0432,
@@ -97,13 +97,13 @@ export function seedState(): AppState {
         id: "ord-2",
         shopifyOrderId: "#1099",
         sellerId: "seller-1",
-        cityId: "city-bog",
+        cityId: "city-cali",
         zoneId: "zone-center",
         driverId: "driver-1",
         customerName: "Andres Diaz",
         customerPhone: "+57 311 222 0099",
         addressRaw: "calle 63 con 7, confirmar edificio",
-        normalizedAddress: "Calle 63 #7, Chapinero, Bogota, Colombia",
+        normalizedAddress: "Calle 5 #38, San Fernando, Cali, Colombia",
         geoProvider: "google_address_validation",
         addressRisk: "review",
         status: "address_risk",
@@ -119,13 +119,13 @@ export function seedState(): AppState {
         id: "ord-3",
         shopifyOrderId: "#2101",
         sellerId: "seller-2",
-        cityId: "city-bog",
+        cityId: "city-cali",
         zoneId: "zone-south",
         driverId: "driver-2",
         customerName: "Martha Leon",
         customerPhone: "+57 320 889 2211",
         addressRaw: "Av Boyaca # 42 sur - 30",
-        normalizedAddress: "Avenida Boyaca #42 Sur-30, Bogota, Colombia",
+        normalizedAddress: "Carrera 100 #16, Ciudad Jardin, Cali, Colombia",
         geoProvider: "mapbox",
         addressRisk: "accepted",
         status: "scheduled",
@@ -141,13 +141,13 @@ export function seedState(): AppState {
         id: "ord-4",
         shopifyOrderId: "#2102",
         sellerId: "seller-2",
-        cityId: "city-bog",
+        cityId: "city-cali",
         zoneId: "zone-south",
         driverId: "driver-2",
         customerName: "Jorge Ruiz",
         customerPhone: "+57 315 700 8855",
         addressRaw: "Bosa centro diagonal a la iglesia",
-        normalizedAddress: "Bosa Centro, Bogota, Colombia",
+        normalizedAddress: "Valle del Lili, Cali, Colombia",
         geoProvider: "mapbox",
         addressRisk: "review",
         status: "failed",
@@ -218,7 +218,7 @@ export function seedState(): AppState {
       }
     ],
     settings: {
-      activeCityId: "city-bog",
+      activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,
       sellerFailedFeeCop: 9000,
       fulfillmentFeeCop: 2000,
