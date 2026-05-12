@@ -179,8 +179,8 @@ async function nextTrackingCode(transaction: Transaction) {
   const counterRef = getFirestore().doc("counters/orders");
   const counterSnap = await transaction.get(counterRef);
   const next = Number(counterSnap.data()?.next ?? 1);
-  transaction.set(counterRef, { next: next + 1, prefix: "KNT-CALI", updatedAt: new Date().toISOString() }, { merge: true });
-  return `KNT-CALI-${String(next).padStart(6, "0")}`;
+  transaction.set(counterRef, { next: next + 1, prefix: "KNT", updatedAt: new Date().toISOString() }, { merge: true });
+  return `KNT-${String(next).padStart(6, "0")}`;
 }
 
 export const closeOrder = onCall(async (request) => {
