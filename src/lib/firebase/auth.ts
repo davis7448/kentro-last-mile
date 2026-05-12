@@ -2,7 +2,7 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import type { AddressRisk, FulfillmentMode, Order, PaymentMethod, Role, Settlement, WalletEntry } from "@/lib/types";
+import type { AddressRisk, FulfillmentMode, InventoryItem, Order, PaymentMethod, Role, Settlement, WalletEntry } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 export type FirebaseSessionClaims = {
@@ -146,6 +146,15 @@ export async function updateFirebaseSettlementStatus(input: {
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { settlement: Settlement };
+}
+
+export async function reconcileFirebaseInventoryReservations() {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "reconcileInventoryReservations");
+  const result = await callable({});
+  return result.data as { inventory: InventoryItem[] };
 }
 
 export async function setFirebaseUserRole(uid: string, role: Role, profileId?: string) {

@@ -28,6 +28,7 @@ import {
   createManagedFirebaseUser,
   closeFirebaseOrder,
   getFirebaseBootstrapStatus,
+  reconcileFirebaseInventoryReservations,
   signInWithFirebaseEmail,
   signOutFirebase,
   subscribeFirebaseUser,
@@ -1662,17 +1663,59 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
   );
 }
 
+function reconcileInventoryReservationsLocal(state: AppState): AppState {
+  const closedStatuses = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+  const reservedByItem = new Map<string, number>();
+  state.orders.forEach((order) => {
+    if (!order.sku || closedStatuses.has(order.status)) return;
+    const key = `${order.sellerId}::${order.sku.trim().toUpperCase()}`;
+    reservedByItem.set(key, (reservedByItem.get(key) ?? 0) + 1);
+  });
+  return {
+    ...state,
+    inventory: state.inventory.map((item) => ({
+      ...item,
+      reserved: reservedByItem.get(`${item.sellerId}::${item.sku.trim().toUpperCase()}`) ?? 0
+    }))
+  };
+}
+
 function InventoryPage({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
   const totalAvailable = state.inventory.reduce((sum, item) => sum + item.available, 0);
   const totalReserved = state.inventory.reduce((sum, item) => sum + item.reserved, 0);
   const lowStock = state.inventory.filter((item) => item.available - item.reserved <= (item.minStock ?? 0)).length;
+  const [reconciling, setReconciling] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const reconcile = () => {
+    setReconciling(true);
+    if (firebaseEnabled()) {
+      void reconcileFirebaseInventoryReservations()
+        .then((result) => {
+          setState({ ...state, inventory: result.inventory });
+          setMessage("Reservas recalculadas desde los pedidos abiertos.");
+        })
+        .catch(() => setMessage("No se pudieron recalcular las reservas en Live."))
+        .finally(() => setReconciling(false));
+      return;
+    }
+    setState(reconcileInventoryReservationsLocal(state));
+    setMessage("Reservas recalculadas desde los pedidos abiertos.");
+    setReconciling(false);
+  };
 
   return (
     <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
-      <div>
-        <h2 className="text-xl font-bold">Inventario</h2>
-        <p className="text-sm text-black/60">Control de stock, reservas y ubicaciones de bodega.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Inventario</h2>
+          <p className="text-sm text-black/60">Control de stock, reservas y ubicaciones de bodega.</p>
+        </div>
+        <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field disabled:opacity-50" disabled={reconciling} type="button" onClick={reconcile}>
+          {reconciling ? "Recalculando..." : "Recalcular reservas"}
+        </button>
       </div>
+      {message && <p className="rounded-md bg-field px-3 py-2 text-sm text-black/70">{message}</p>}
       <div className="grid gap-3 md:grid-cols-3">
         <Metric icon={<Boxes size={20} />} label="Stock total" value={String(totalAvailable)} />
         <Metric icon={<ClipboardList size={20} />} label="Reservado" value={String(totalReserved)} />

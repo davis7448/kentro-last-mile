@@ -3,7 +3,7 @@ import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, setUserRole } from "./roles";
-export { closeOrder, createManualOrder, createSettlement, updateSettlementStatus } from "./orders";
+export { closeOrder, createManualOrder, createSettlement, reconcileInventoryReservations, updateSettlementStatus } from "./orders";
 export { shopifyOAuthCallback, shopifyOAuthStart } from "./shopify";
 
 initializeApp();

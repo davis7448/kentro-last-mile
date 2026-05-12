@@ -190,6 +190,45 @@ export const createManualOrder = onCall(async (request) => {
   return { order };
 });
 
+export const reconcileInventoryReservations = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can reconcile inventory reservations.");
+  }
+
+  const db = getFirestore();
+  const [inventorySnap, ordersSnap] = await Promise.all([
+    db.collection("inventory").get(),
+    db.collection("orders").get()
+  ]);
+  const closedStatuses = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+  const reservedByItem = new Map<string, number>();
+
+  ordersSnap.docs.forEach((doc) => {
+    const order = doc.data();
+    const sellerId = typeof order.sellerId === "string" ? order.sellerId : "";
+    const sku = typeof order.sku === "string" ? order.sku.trim().toUpperCase() : "";
+    const status = typeof order.status === "string" ? order.status : "";
+    if (!sellerId || !sku || closedStatuses.has(status)) return;
+    const key = `${sellerId}::${sku}`;
+    reservedByItem.set(key, (reservedByItem.get(key) ?? 0) + 1);
+  });
+
+  const now = new Date().toISOString();
+  const batch = db.batch();
+  const inventory = inventorySnap.docs.map((doc) => {
+    const item = doc.data();
+    const sellerId = typeof item.sellerId === "string" ? item.sellerId : "";
+    const sku = typeof item.sku === "string" ? item.sku.trim().toUpperCase() : "";
+    const reserved = reservedByItem.get(`${sellerId}::${sku}`) ?? 0;
+    batch.set(doc.ref, { reserved, updatedAt: now }, { merge: true });
+    return { id: doc.id, ...item, reserved };
+  });
+
+  await batch.commit();
+  return { inventory };
+});
+
 async function nextTrackingCode(transaction: Transaction) {
   const counterRef = getFirestore().doc("counters/orders");
   const counterSnap = await transaction.get(counterRef);
