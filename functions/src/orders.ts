@@ -132,12 +132,13 @@ export const createManualOrder = onCall(async (request) => {
   const now = new Date().toISOString();
   const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
   const order = await db.runTransaction(async (transaction) => {
-    const trackingCode = await nextTrackingCode(transaction);
-    const orderId = `ord-${trackingCode.toLowerCase()}`;
-    const orderNumber = formattedRequestedNumber || `MAN-${trackingCode}`;
     const inventorySnap = input.sku?.trim()
       ? await transaction.get(db.collection("inventory").where("sellerId", "==", input.sellerId).where("sku", "==", input.sku.trim()).limit(1))
       : null;
+    const nextTracking = await nextTrackingCode(transaction);
+    const trackingCode = nextTracking.code;
+    const orderId = `ord-${trackingCode.toLowerCase()}`;
+    const orderNumber = formattedRequestedNumber || `MAN-${trackingCode}`;
     const inventoryDoc = inventorySnap && !inventorySnap.empty ? inventorySnap.docs[0] : null;
     if (inventoryDoc) {
       const inventory = inventoryDoc.data();
@@ -148,6 +149,7 @@ export const createManualOrder = onCall(async (request) => {
       }
       transaction.set(inventoryDoc.ref, { reserved: reserved + 1, updatedAt: now }, { merge: true });
     }
+    transaction.set(nextTracking.ref, { next: nextTracking.next + 1, prefix: "KNT", updatedAt: now }, { merge: true });
     const orderDoc = stripUndefined({
       id: orderId,
       trackingCode,
@@ -192,8 +194,7 @@ async function nextTrackingCode(transaction: Transaction) {
   const counterRef = getFirestore().doc("counters/orders");
   const counterSnap = await transaction.get(counterRef);
   const next = Number(counterSnap.data()?.next ?? 1);
-  transaction.set(counterRef, { next: next + 1, prefix: "KNT", updatedAt: new Date().toISOString() }, { merge: true });
-  return `KNT-${String(next).padStart(6, "0")}`;
+  return { code: `KNT-${String(next).padStart(6, "0")}`, next, ref: counterRef };
 }
 
 export const closeOrder = onCall(async (request) => {

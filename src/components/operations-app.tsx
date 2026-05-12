@@ -1547,7 +1547,7 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
       return;
     }
     const currentAvailable = parseCopInput(available, 0);
-    const currentReserved = Math.max(0, Number(reserved.replace(/[^\d]/g, "")) || 0);
+    const currentReserved = editingId ? Math.max(0, Number(reserved.replace(/[^\d]/g, "")) || 0) : 0;
     const item: InventoryItem = {
       id: editingId ?? `inv-${Date.now()}`,
       sellerId,
@@ -1614,12 +1614,13 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
             <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label className="grid gap-1 text-xs font-semibold text-black/60">
-            Stock disponible
+            Stock fisico total
             <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={available} onChange={(event) => setAvailable(event.target.value)} />
           </label>
           <label className="grid gap-1 text-xs font-semibold text-black/60">
-            Reservado
-            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={reserved} onChange={(event) => setReserved(event.target.value)} />
+            Reservado por pedidos abiertos
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink disabled:bg-field disabled:text-black/50" disabled={!editingId} inputMode="numeric" value={editingId ? reserved : "0"} onChange={(event) => setReserved(event.target.value)} />
+            <span className="text-[11px] font-normal text-black/50">{editingId ? "Solo ajustar para corregir reservas reales." : "Al crear producto inicia en 0; los pedidos lo aumentan automaticamente."}</span>
           </label>
           <label className="grid gap-1 text-xs font-semibold text-black/60">
             Minimo alerta
@@ -1649,9 +1650,9 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
                   <p className="text-black/60">{item.sku} · {seller?.name ?? item.sellerId}</p>
                   {item.location && <p className="text-xs text-black/50">Ubicacion: {item.location}</p>}
                 </div>
-                <p className={`text-right font-bold ${free <= (item.minStock ?? 0) ? "text-rust" : "text-mint"}`}>{free} libres</p>
+                <p className={`text-right font-bold ${free <= (item.minStock ?? 0) ? "text-rust" : "text-mint"}`}>{free} disponibles</p>
               </div>
-              <p className="mt-2 text-xs text-black/60">Stock {item.available} · Reservado {item.reserved} · Minimo {item.minStock ?? 0}</p>
+              <p className="mt-2 text-xs text-black/60">Stock fisico {item.available} · Reservado por pedidos {item.reserved} · Minimo {item.minStock ?? 0}</p>
               <button className="focus-ring mt-2 rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => load(item)}>Editar</button>
             </div>
           );
