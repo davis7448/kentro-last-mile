@@ -30,6 +30,36 @@ function nextLocalTrackingCode(state: AppState) {
   return `KNT-${String(next).padStart(6, "0")}`;
 }
 
+function reserveInventoryForOrder(state: AppState, sellerId: string, sku?: string) {
+  if (!sku) return { state, ok: true };
+  const item = state.inventory.find((entry) => entry.sellerId === sellerId && entry.sku === sku);
+  if (!item) return { state, ok: true };
+  if (item.available - item.reserved <= 0) return { state, ok: false };
+  return {
+    ok: true,
+    state: {
+      ...state,
+      inventory: state.inventory.map((entry) => entry.id === item.id ? { ...entry, reserved: entry.reserved + 1 } : entry)
+    }
+  };
+}
+
+function settleInventoryForClosedOrder(state: AppState, order: Order, outcome: "delivered" | "failed", retry: boolean) {
+  if (!order.sku) return state;
+  const item = state.inventory.find((entry) => entry.sellerId === order.sellerId && entry.sku === order.sku);
+  if (!item) return state;
+  return {
+    ...state,
+    inventory: state.inventory.map((entry) => {
+      if (entry.id !== item.id) return entry;
+      if (outcome === "delivered") {
+        return { ...entry, available: Math.max(0, entry.available - 1), reserved: Math.max(0, entry.reserved - 1) };
+      }
+      return retry ? entry : { ...entry, reserved: Math.max(0, entry.reserved - 1) };
+    })
+  };
+}
+
 function mutateOrder(state: AppState, orderId: string, updater: (order: Order) => Order, summary: string): AppState {
   return {
     ...state,
@@ -163,10 +193,11 @@ export function closeDelivered(state: AppState, orderId: string, input: CloseEvi
   );
   const closed = nextOrders.find((order) => order.id === orderId);
   if (!closed) return state;
+  const inventoryState = settleInventoryForClosedOrder({ ...state, orders: nextOrders }, closed, "delivered", false);
   return {
-    ...state,
+    ...inventoryState,
     orders: nextOrders,
-    wallet: [...entriesForClosedOrder(closed, { ...state, orders: nextOrders }), ...state.wallet],
+    wallet: [...entriesForClosedOrder(closed, inventoryState), ...state.wallet],
     audit: [audit(state, "order.delivered", "order", orderId, "Pedido entregado y wallet actualizada"), ...state.audit]
   };
 }
@@ -204,10 +235,11 @@ export function closeFailed(state: AppState, orderId: string, input: FailedEvide
   );
   const closed = nextOrders.find((order) => order.id === orderId);
   if (!closed) return state;
+  const inventoryState = settleInventoryForClosedOrder({ ...state, orders: nextOrders }, closed, "failed", isVisitRescheduled);
   return {
-    ...state,
+    ...inventoryState,
     orders: nextOrders,
-    wallet: [...entriesForClosedOrder(closed, { ...state, orders: nextOrders }), ...state.wallet],
+    wallet: [...entriesForClosedOrder(closed, inventoryState), ...state.wallet],
     audit: [
       audit(
         state,
@@ -289,6 +321,9 @@ export function createManualOrder(
   const orderId = `ord-${Date.now()}`;
   const orderNumber = input.shopifyOrderId?.trim() || `MAN-${String(state.orders.length + 1).padStart(4, "0")}`;
   const addressRisk = input.addressRisk;
+  const selectedSku = input.sku?.trim() || undefined;
+  const reservation = reserveInventoryForOrder(state, seller.id, selectedSku);
+  if (!reservation.ok) return state;
   const order: Order = {
     id: orderId,
     trackingCode: nextLocalTrackingCode(state),
@@ -306,14 +341,14 @@ export function createManualOrder(
     fulfillmentMode: input.fulfillmentMode,
     totalCop: input.totalCop,
     productName: input.productName?.trim() || undefined,
-    sku: input.sku?.trim() || undefined,
+    sku: selectedSku,
     evidence: [],
     createdAt: now,
     updatedAt: now
   };
 
   return {
-    ...state,
+    ...reservation.state,
     orders: [order, ...state.orders],
     audit: [audit(state, "order.manual_created", "order", order.id, `Pedido manual ${order.shopifyOrderId} creado`), ...state.audit]
   };

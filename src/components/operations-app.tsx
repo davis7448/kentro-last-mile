@@ -52,7 +52,7 @@ import {
 import { entriesForClosedOrder, formatCop, sellerBalance, weeklyFailedRate } from "@/lib/finance";
 import { getSellerShopifyConnection } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, Evidence, Order, Role, Seller, Settlement, WalletEntry } from "@/lib/types";
+import type { AppState, Evidence, InventoryItem, Order, Role, Seller, Settlement, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -1088,6 +1088,7 @@ function AdminView({ state, setState, onNavigate }: { state: AppState; setState:
             </div>
           </Card>
           <ZonesTariffsPanel state={state} setState={setState} />
+          <AdminInventoryPanel state={state} setState={setState} />
           <WalletPanel state={state} setState={setState} />
           <AdminUsersPanel state={state} setState={setState} />
         </aside>
@@ -1131,6 +1132,7 @@ function ManualOrderPanel({
   const sellerZones = state.zones.filter((zone) => zone.cityId === (selectedSeller?.cityId ?? state.settings.activeCityId) && zone.active !== false);
   const selectedZone = sellerZones.find((zone) => zone.id === zoneId);
   const sellerInventory = state.inventory.filter((item) => item.sellerId === sellerId);
+  const availableSellerInventory = sellerInventory.filter((item) => item.available - item.reserved > 0);
   const selectedProduct = sellerInventory.find((item) => item.id === productId);
 
   return (
@@ -1246,8 +1248,8 @@ function ManualOrderPanel({
               onChange={(event) => setProductId(event.target.value)}
             >
               <option value="">Producto opcional</option>
-              {sellerInventory.map((item) => (
-                <option key={item.id} value={item.id}>{item.name} · {item.sku}</option>
+              {availableSellerInventory.map((item) => (
+                <option key={item.id} value={item.id}>{item.name} · {item.sku} · {item.available - item.reserved} libres</option>
               ))}
             </select>
           ) : (
@@ -1262,9 +1264,12 @@ function ManualOrderPanel({
         {sellerInventory.length === 0 && (
           <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="SKU opcional" value={sku} onChange={(event) => setSku(event.target.value)} />
         )}
+        {sellerInventory.length > 0 && availableSellerInventory.length === 0 && (
+          <p className="rounded-md bg-rust/10 px-3 py-2 text-xs text-rust">No hay productos con stock libre para este vendedor.</p>
+        )}
         {selectedProduct && (
           <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
-            Disponible: {selectedProduct.available} · Reservado: {selectedProduct.reserved}
+            Libre: {selectedProduct.available - selectedProduct.reserved} · Stock: {selectedProduct.available} · Reservado: {selectedProduct.reserved}
           </p>
         )}
         <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit" disabled={state.sellers.length === 0 || submittingOrder}>
@@ -1483,6 +1488,152 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
             </div>
           </div>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [sellerId, setSellerId] = useState(state.sellers[0]?.id ?? "");
+  const [sku, setSku] = useState("");
+  const [name, setName] = useState("");
+  const [available, setAvailable] = useState("");
+  const [reserved, setReserved] = useState("0");
+  const [minStock, setMinStock] = useState("0");
+  const [location, setLocation] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const lowStock = state.inventory.filter((item) => item.available - item.reserved <= (item.minStock ?? 0));
+
+  useEffect(() => {
+    if (!sellerId && state.sellers[0]) setSellerId(state.sellers[0].id);
+  }, [sellerId, state.sellers]);
+
+  const reset = () => {
+    setEditingId(null);
+    setSellerId(state.sellers[0]?.id ?? "");
+    setSku("");
+    setName("");
+    setAvailable("");
+    setReserved("0");
+    setMinStock("0");
+    setLocation("");
+  };
+
+  const load = (item: InventoryItem) => {
+    setEditingId(item.id);
+    setSellerId(item.sellerId);
+    setSku(item.sku);
+    setName(item.name);
+    setAvailable(String(item.available));
+    setReserved(String(item.reserved));
+    setMinStock(String(item.minStock ?? 0));
+    setLocation(item.location ?? "");
+    setMessage(`Editando ${item.name}.`);
+  };
+
+  const save = () => {
+    if (!sellerId || !sku.trim() || !name.trim()) {
+      setMessage("Selecciona vendedor, SKU y nombre.");
+      return;
+    }
+    const currentAvailable = parseCopInput(available, 0);
+    const currentReserved = Math.max(0, Number(reserved.replace(/[^\d]/g, "")) || 0);
+    const item: InventoryItem = {
+      id: editingId ?? `inv-${Date.now()}`,
+      sellerId,
+      sku: sku.trim().toUpperCase(),
+      name: name.trim(),
+      available: currentAvailable,
+      reserved: Math.min(currentReserved, currentAvailable),
+      minStock: Math.max(0, Number(minStock.replace(/[^\d]/g, "")) || 0),
+      location: location.trim() || undefined
+    };
+    const duplicate = state.inventory.find((entry) => entry.id !== item.id && entry.sellerId === item.sellerId && entry.sku === item.sku);
+    if (duplicate) {
+      setMessage("Ya existe ese SKU para el vendedor.");
+      return;
+    }
+    setState({
+      ...state,
+      inventory: editingId ? state.inventory.map((entry) => entry.id === editingId ? item : entry) : [item, ...state.inventory]
+    });
+    setMessage(editingId ? `${item.name} actualizado.` : `${item.name} creado.`);
+    reset();
+  };
+
+  return (
+    <Card>
+      <h2 className="mb-3 font-bold">Inventario admin</h2>
+      {lowStock.length > 0 && (
+        <div className="mb-3 grid gap-2">
+          {lowStock.map((item) => (
+            <p key={item.id} className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">
+              Bajo stock: {item.name} · {item.available - item.reserved} disponibles
+            </p>
+          ))}
+        </div>
+      )}
+      <div className="grid gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Vendedor
+          <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" value={sellerId} onChange={(event) => setSellerId(event.target.value)}>
+            <option value="">Seleccionar vendedor</option>
+            {state.sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}
+          </select>
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            SKU
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" value={sku} onChange={(event) => setSku(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Producto
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Stock disponible
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={available} onChange={(event) => setAvailable(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Reservado
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={reserved} onChange={(event) => setReserved(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Minimo alerta
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={minStock} onChange={(event) => setMinStock(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Ubicacion bodega
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" value={location} onChange={(event) => setLocation(event.target.value)} />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={save}>{editingId ? "Guardar producto" : "Crear producto"}</button>
+          {editingId && <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={reset}>Cancelar</button>}
+        </div>
+      </div>
+      {message && <p className="mt-2 rounded-md bg-field px-3 py-2 text-sm text-black/70">{message}</p>}
+      <div className="mt-4 grid gap-2">
+        {state.inventory.length === 0 && <p className="text-sm text-black/60">No hay productos registrados.</p>}
+        {state.inventory.map((item) => {
+          const seller = state.sellers.find((entry) => entry.id === item.sellerId);
+          const free = item.available - item.reserved;
+          return (
+            <div key={item.id} className="rounded-md border border-black/10 p-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{item.name}</p>
+                  <p className="text-black/60">{item.sku} · {seller?.name ?? item.sellerId}</p>
+                  {item.location && <p className="text-xs text-black/50">Ubicacion: {item.location}</p>}
+                </div>
+                <p className={`text-right font-bold ${free <= (item.minStock ?? 0) ? "text-rust" : "text-mint"}`}>{free} libres</p>
+              </div>
+              <p className="mt-2 text-xs text-black/60">Stock {item.available} · Reservado {item.reserved} · Minimo {item.minStock ?? 0}</p>
+              <button className="focus-ring mt-2 rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => load(item)}>Editar</button>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
@@ -2112,20 +2263,24 @@ function SellerView({ state, setState, session }: { state: AppState; setState: (
 }
 
 function InventoryPanel({ state, seller }: { state: AppState; seller: Seller }) {
+  const sellerInventory = state.inventory.filter((item) => item.sellerId === seller.id);
   return (
     <Card>
       <h2 className="mb-3 font-bold">Inventario en bodega</h2>
       <div className="grid gap-2">
-        {state.inventory.filter((item) => item.sellerId === seller.id).length === 0 && (
+        {sellerInventory.length === 0 && (
           <p className="text-sm text-black/60">No hay inventario en bodega registrado.</p>
         )}
-        {state.inventory.filter((item) => item.sellerId === seller.id).map((item) => (
+        {sellerInventory.map((item) => (
           <div key={item.id} className="flex items-center justify-between rounded-md border border-black/10 p-3">
             <div>
               <p className="font-semibold">{item.name}</p>
               <p className="text-sm text-black/60">{item.sku}</p>
+              {item.location && <p className="text-xs text-black/50">{item.location}</p>}
             </div>
-            <p className="text-right text-sm"><b>{item.available}</b> disp.<br />{item.reserved} res.</p>
+            <p className={`text-right text-sm ${item.available - item.reserved <= (item.minStock ?? 0) ? "text-rust" : ""}`}>
+              <b>{item.available - item.reserved}</b> libres<br />{item.reserved} res.
+            </p>
           </div>
         ))}
       </div>

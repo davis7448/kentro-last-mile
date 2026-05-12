@@ -138,12 +138,14 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
   const client = getFirebaseClient();
   if (!client) return () => undefined;
   const orderRef = collection(client.db, "orders");
+  const inventoryRef = collection(client.db, "inventory");
   const walletRef = collection(client.db, "walletEntries");
   const settlementRef = collection(client.db, "settlements");
   const targets =
     context?.role === "seller"
       ? [
           query(orderRef, where("sellerId", "==", context.profileId)),
+          query(inventoryRef, where("sellerId", "==", context.profileId)),
           query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId)),
           query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId))
         ]
@@ -154,7 +156,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
             query(walletRef, where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId)),
             query(settlementRef, where("kind", "==", "driver"), where("ownerId", "==", context.profileId))
           ]
-        : [orderRef, walletRef, settlementRef];
+        : [orderRef, inventoryRef, walletRef, settlementRef];
   const reload = () => {
     void loadFirestoreState(context).then((state) => {
       if (state) onState(state);

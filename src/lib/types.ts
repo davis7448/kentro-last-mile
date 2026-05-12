@@ -59,6 +59,8 @@ export type InventoryItem = {
   name: string;
   available: number;
   reserved: number;
+  minStock?: number;
+  location?: string;
 };
 
 export type Order = {

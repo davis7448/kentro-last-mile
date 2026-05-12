@@ -1,4 +1,4 @@
-import { getFirestore, type Transaction } from "firebase-admin/firestore";
+import { getFirestore, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 
@@ -135,6 +135,19 @@ export const createManualOrder = onCall(async (request) => {
     const trackingCode = await nextTrackingCode(transaction);
     const orderId = `ord-${trackingCode.toLowerCase()}`;
     const orderNumber = formattedRequestedNumber || `MAN-${trackingCode}`;
+    const inventorySnap = input.sku?.trim()
+      ? await transaction.get(db.collection("inventory").where("sellerId", "==", input.sellerId).where("sku", "==", input.sku.trim()).limit(1))
+      : null;
+    const inventoryDoc = inventorySnap && !inventorySnap.empty ? inventorySnap.docs[0] : null;
+    if (inventoryDoc) {
+      const inventory = inventoryDoc.data();
+      const available = Number(inventory.available) || 0;
+      const reserved = Number(inventory.reserved) || 0;
+      if (available - reserved <= 0) {
+        throw new HttpsError("failed-precondition", "Product is out of stock.");
+      }
+      transaction.set(inventoryDoc.ref, { reserved: reserved + 1, updatedAt: now }, { merge: true });
+    }
     const orderDoc = stripUndefined({
       id: orderId,
       trackingCode,
@@ -251,6 +264,7 @@ export const closeOrder = onCall(async (request) => {
 
     const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
     const zoneSnap = zoneId ? await transaction.get(db.collection("zones").doc(zoneId)) : null;
+    await settleInventoryForOrder(transaction, db, nextOrder, input.outcome, isVisitRescheduled, now);
     const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now);
     for (const entry of walletEntries) {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
@@ -482,6 +496,32 @@ function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any
     values[field] = Number.isFinite(zoneValue) && zoneValue > 0 ? zoneValue : Number.isFinite(settingValue) && settingValue > 0 ? settingValue : fallbackValue;
   }
   return values;
+}
+
+async function settleInventoryForOrder(
+  transaction: Transaction,
+  db: Firestore,
+  order: Record<string, any>,
+  outcome: "delivered" | "failed",
+  retry: boolean,
+  now: string
+) {
+  const sku = typeof order.sku === "string" ? order.sku : undefined;
+  const sellerId = typeof order.sellerId === "string" ? order.sellerId : undefined;
+  if (!sku || !sellerId) return;
+  const inventorySnap = await transaction.get(db.collection("inventory").where("sellerId", "==", sellerId).where("sku", "==", sku).limit(1));
+  if (inventorySnap.empty) return;
+  const inventoryDoc = inventorySnap.docs[0];
+  const inventory = inventoryDoc.data();
+  const available = Number(inventory.available) || 0;
+  const reserved = Number(inventory.reserved) || 0;
+  if (outcome === "delivered") {
+    transaction.set(inventoryDoc.ref, { available: Math.max(0, available - 1), reserved: Math.max(0, reserved - 1), updatedAt: now }, { merge: true });
+    return;
+  }
+  if (!retry) {
+    transaction.set(inventoryDoc.ref, { reserved: Math.max(0, reserved - 1), updatedAt: now }, { merge: true });
+  }
 }
 
 function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {
