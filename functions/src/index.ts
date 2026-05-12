@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, setUserRole } from "./roles";
@@ -50,10 +50,16 @@ export const shopifyWebhook = onRequest(async (request, response) => {
   }
 
   const docId = `shopify-${order.id}`;
-  await db.collection("orders").doc(docId).set(
-    {
+  const orderRef = db.collection("orders").doc(docId);
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(orderRef);
+    const trackingCode = typeof existing.data()?.trackingCode === "string" ? existing.data()?.trackingCode : await nextTrackingCode(transaction);
+    transaction.set(orderRef, {
+      id: docId,
+      trackingCode,
       shopifyOrderId: order.name,
       shopifyNumericId: order.id,
+      cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",
       customerPhone: address?.phone ?? "",
       addressRaw: [address?.address1, address?.address2, address?.city, address?.country].filter(Boolean).join(", "),
@@ -64,12 +70,19 @@ export const shopifyWebhook = onRequest(async (request, response) => {
       status: "address_risk",
       source: "shopify_webhook",
       updatedAt: new Date().toISOString()
-    },
-    { merge: true }
-  );
+    }, { merge: true });
+  });
 
   response.json({ ok: true, orderId: docId });
 });
+
+async function nextTrackingCode(transaction: Transaction) {
+  const counterRef = db.doc("counters/orders");
+  const counterSnap = await transaction.get(counterRef);
+  const next = Number(counterSnap.data()?.next ?? 1);
+  transaction.set(counterRef, { next: next + 1, prefix: "KNT-CALI", updatedAt: new Date().toISOString() }, { merge: true });
+  return `KNT-CALI-${String(next).padStart(6, "0")}`;
+}
 
 export const normalizeAddress = onRequest(async (request, response) => {
   const address = String(request.body?.address ?? "");

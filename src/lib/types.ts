@@ -63,6 +63,7 @@ export type InventoryItem = {
 
 export type Order = {
   id: string;
+  trackingCode?: string;
   shopifyOrderId: string;
   sellerId: string;
   cityId: string;

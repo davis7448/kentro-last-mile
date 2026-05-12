@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 
@@ -120,48 +120,68 @@ export const createManualOrder = onCall(async (request) => {
   }
 
   const sellerData = seller.data() ?? {};
-  const now = new Date().toISOString();
-  const orderId = `ord-${Date.now()}`;
   const requestedNumber = input.shopifyOrderId?.trim();
-  const orderNumber = requestedNumber || `MAN-${orderId.slice(-6)}`;
-  const order = stripUndefined({
-    id: orderId,
-    shopifyOrderId: orderNumber.startsWith("#") || orderNumber.startsWith("MAN-") ? orderNumber : `#${orderNumber}`,
-    sellerId: input.sellerId,
-    cityId: typeof sellerData.cityId === "string" ? sellerData.cityId : "city-cali",
-    zoneId: input.zoneId || undefined,
-    driverId: null,
-    customerName: input.customerName.trim(),
-    customerPhone: input.customerPhone.trim(),
-    addressRaw: input.addressRaw.trim(),
-    normalizedAddress: input.normalizedAddress?.trim() || undefined,
-    addressRisk: input.addressRisk,
-    status: input.addressRisk === "review" ? "address_risk" : "ready_to_assign",
-    paymentMethod: input.paymentMethod,
-    fulfillmentMode: input.fulfillmentMode,
-    totalCop: input.totalCop,
-    productName: input.productName?.trim() || undefined,
-    sku: input.sku?.trim() || undefined,
-    evidence: [],
-    createdAt: now,
-    updatedAt: now
-  });
+  const formattedRequestedNumber = requestedNumber && (requestedNumber.startsWith("#") || requestedNumber.startsWith("MAN-")) ? requestedNumber : requestedNumber ? `#${requestedNumber}` : undefined;
+  if (formattedRequestedNumber) {
+    const duplicate = await db.collection("orders").where("sellerId", "==", input.sellerId).where("shopifyOrderId", "==", formattedRequestedNumber).limit(1).get();
+    if (!duplicate.empty) {
+      throw new HttpsError("already-exists", "An order with this seller reference already exists.");
+    }
+  }
 
-  await db.collection("orders").doc(order.id).set(order);
-  const auditId = `audit-${Date.now()}`;
-  await db.collection("auditEvents").doc(auditId).set({
-    id: auditId,
-    actorId: request.auth.uid,
-    actorRole: role,
-    action: "order.manual_created",
-    entity: "order",
-    entityId: order.id,
-    summary: `Pedido manual ${order.shopifyOrderId} creado`,
-    createdAt: now
+  const now = new Date().toISOString();
+  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const order = await db.runTransaction(async (transaction) => {
+    const trackingCode = await nextTrackingCode(transaction);
+    const orderId = `ord-${trackingCode.toLowerCase()}`;
+    const orderNumber = formattedRequestedNumber || `MAN-${trackingCode}`;
+    const orderDoc = stripUndefined({
+      id: orderId,
+      trackingCode,
+      shopifyOrderId: orderNumber,
+      sellerId: input.sellerId,
+      cityId: typeof sellerData.cityId === "string" ? sellerData.cityId : "city-cali",
+      zoneId: input.zoneId || undefined,
+      driverId: null,
+      customerName: input.customerName.trim(),
+      customerPhone: input.customerPhone.trim(),
+      addressRaw: input.addressRaw.trim(),
+      normalizedAddress: input.normalizedAddress?.trim() || undefined,
+      addressRisk: input.addressRisk,
+      status: input.addressRisk === "review" ? "address_risk" : "ready_to_assign",
+      paymentMethod: input.paymentMethod,
+      fulfillmentMode: input.fulfillmentMode,
+      totalCop: input.totalCop,
+      productName: input.productName?.trim() || undefined,
+      sku: input.sku?.trim() || undefined,
+      evidence: [],
+      createdAt: now,
+      updatedAt: now
+    });
+    transaction.set(db.collection("orders").doc(orderDoc.id), orderDoc);
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: "order.manual_created",
+      entity: "order",
+      entityId: orderDoc.id,
+      summary: `Pedido manual ${orderDoc.trackingCode} creado`,
+      createdAt: now
+    });
+    return orderDoc;
   });
 
   return { order };
 });
+
+async function nextTrackingCode(transaction: Transaction) {
+  const counterRef = getFirestore().doc("counters/orders");
+  const counterSnap = await transaction.get(counterRef);
+  const next = Number(counterSnap.data()?.next ?? 1);
+  transaction.set(counterRef, { next: next + 1, prefix: "KNT-CALI", updatedAt: new Date().toISOString() }, { merge: true });
+  return `KNT-CALI-${String(next).padStart(6, "0")}`;
+}
 
 export const closeOrder = onCall(async (request) => {
   const role = request.auth?.token.role;

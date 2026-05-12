@@ -22,6 +22,14 @@ function audit(state: AppState, action: string, entity: string, entityId: string
   };
 }
 
+function nextLocalTrackingCode(state: AppState) {
+  const next = state.orders.reduce((max, order) => {
+    const match = order.trackingCode?.match(/KNT-CALI-(\d+)/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `KNT-CALI-${String(next).padStart(6, "0")}`;
+}
+
 function mutateOrder(state: AppState, orderId: string, updater: (order: Order) => Order, summary: string): AppState {
   return {
     ...state,
@@ -283,6 +291,7 @@ export function createManualOrder(
   const addressRisk = input.addressRisk;
   const order: Order = {
     id: orderId,
+    trackingCode: nextLocalTrackingCode(state),
     shopifyOrderId: orderNumber.startsWith("#") || orderNumber.startsWith("MAN-") ? orderNumber : `#${orderNumber}`,
     sellerId: seller.id,
     cityId: seller.cityId || state.settings.activeCityId,
@@ -316,6 +325,7 @@ export function addShopifyOrder(state: AppState): AppState {
   if (!seller) return state;
   const order: Order = {
     id: `ord-${Date.now()}`,
+    trackingCode: nextLocalTrackingCode(state),
     shopifyOrderId: `#${nextNumber}`,
     sellerId: seller.id,
     cityId: state.settings.activeCityId,

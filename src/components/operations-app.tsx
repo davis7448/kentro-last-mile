@@ -523,13 +523,13 @@ function OrderCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-bold">{order.shopifyOrderId}</h3>
+            <h3 className="font-bold">{order.trackingCode ?? order.shopifyOrderId}</h3>
             <span className={`rounded px-2 py-1 text-xs font-semibold ${statusTone(order)}`}>{statusLabel(order.status)}</span>
             {order.addressRisk === "review" && (
               <span className="rounded bg-rust/10 px-2 py-1 text-xs font-semibold text-rust">direccion en riesgo</span>
             )}
           </div>
-          <p className="truncate text-sm text-black/70">{seller?.name} · {order.customerName}</p>
+          <p className="truncate text-sm text-black/70">{seller?.name} · {order.customerName}{order.trackingCode ? ` · Ref ${order.shopifyOrderId}` : ""}</p>
         </div>
         <p className="shrink-0 text-right text-sm font-bold">{formatCop(order.totalCop)}</p>
       </div>
@@ -1418,15 +1418,37 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
     <Card>
       <h2 className="mb-3 font-bold">Zonas y tarifas</h2>
       <div className="grid gap-2">
-        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Nombre de zona" value={name} onChange={(event) => setName(event.target.value)} />
-        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Barrios o referencia" value={polygonLabel} onChange={(event) => setPolygonLabel(event.target.value)} />
+        {editingZoneId && <p className="rounded-md bg-field px-3 py-2 text-sm font-semibold">Editando zona seleccionada</p>}
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Nombre de zona
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" placeholder="Ej. Sur Cali" value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Barrios o referencia
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" placeholder="Ej. Ciudad Jardin, Valle del Lili, Caney" value={polygonLabel} onChange={(event) => setPolygonLabel(event.target.value)} />
+        </label>
         <div className="grid gap-2 sm:grid-cols-2">
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee vendedor entregado" inputMode="numeric" value={sellerDeliveredFeeCop} onChange={(event) => setSellerDeliveredFeeCop(event.target.value)} />
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee vendedor fallido" inputMode="numeric" value={sellerFailedFeeCop} onChange={(event) => setSellerFailedFeeCop(event.target.value)} />
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Pago driver entregado" inputMode="numeric" value={driverDeliveredPayCop} onChange={(event) => setDriverDeliveredPayCop(event.target.value)} />
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Pago driver fallido" inputMode="numeric" value={driverFailedPayCop} onChange={(event) => setDriverFailedPayCop(event.target.value)} />
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Cobro al vendedor por entrega
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={sellerDeliveredFeeCop} onChange={(event) => setSellerDeliveredFeeCop(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Cobro al vendedor por fallido
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={sellerFailedFeeCop} onChange={(event) => setSellerFailedFeeCop(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Pago al transportista por entrega
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={driverDeliveredPayCop} onChange={(event) => setDriverDeliveredPayCop(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-black/60">
+            Pago al transportista por fallido
+            <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={driverFailedPayCop} onChange={(event) => setDriverFailedPayCop(event.target.value)} />
+          </label>
         </div>
-        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee fulfillment" inputMode="numeric" value={fulfillmentFeeCop} onChange={(event) => setFulfillmentFeeCop(event.target.value)} />
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Cobro adicional por bodega / fulfillment
+          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink" inputMode="numeric" value={fulfillmentFeeCop} onChange={(event) => setFulfillmentFeeCop(event.target.value)} />
+        </label>
         <div className="flex flex-wrap gap-2">
           <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => upsertZone()}>
             {editingZoneId ? "Guardar cambios" : "Crear zona"}
