@@ -1344,6 +1344,7 @@ function parseCopInput(value: string, fallback: number) {
 }
 
 function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [polygonLabel, setPolygonLabel] = useState("");
   const [sellerDeliveredFeeCop, setSellerDeliveredFeeCop] = useState(String(state.settings.sellerDeliveredFeeCop));
@@ -1351,11 +1352,24 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
   const [driverDeliveredPayCop, setDriverDeliveredPayCop] = useState(String(state.settings.driverDeliveredPayCop));
   const [driverFailedPayCop, setDriverFailedPayCop] = useState(String(state.settings.driverFailedPayCop));
   const [fulfillmentFeeCop, setFulfillmentFeeCop] = useState(String(state.settings.fulfillmentFeeCop));
+  const [message, setMessage] = useState<string | null>(null);
   const activeCity = state.cities.find((city) => city.id === state.settings.activeCityId) ?? state.cities[0];
   const zones = state.zones.filter((zone) => zone.cityId === (activeCity?.id ?? state.settings.activeCityId));
 
-  const upsertZone = (zoneId?: string) => {
-    if (!name.trim() && !zoneId) return;
+  const resetForm = () => {
+    setEditingZoneId(null);
+    setName("");
+    setPolygonLabel("");
+    setSellerDeliveredFeeCop(String(state.settings.sellerDeliveredFeeCop));
+    setSellerFailedFeeCop(String(state.settings.sellerFailedFeeCop));
+    setDriverDeliveredPayCop(String(state.settings.driverDeliveredPayCop));
+    setDriverFailedPayCop(String(state.settings.driverFailedPayCop));
+    setFulfillmentFeeCop(String(state.settings.fulfillmentFeeCop));
+  };
+
+  const upsertZone = () => {
+    if (!name.trim() && !editingZoneId) return;
+    const zoneId = editingZoneId ?? undefined;
     const existing = zoneId ? state.zones.find((zone) => zone.id === zoneId) : undefined;
     const zone = {
       id: existing?.id ?? `zone-${Date.now()}`,
@@ -1373,18 +1387,14 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
       ...state,
       zones: existing ? state.zones.map((item) => item.id === existing.id ? zone : item) : [zone, ...state.zones]
     });
-    setName("");
-    setPolygonLabel("");
-    setSellerDeliveredFeeCop(String(state.settings.sellerDeliveredFeeCop));
-    setSellerFailedFeeCop(String(state.settings.sellerFailedFeeCop));
-    setDriverDeliveredPayCop(String(state.settings.driverDeliveredPayCop));
-    setDriverFailedPayCop(String(state.settings.driverFailedPayCop));
-    setFulfillmentFeeCop(String(state.settings.fulfillmentFeeCop));
+    setMessage(existing ? `Zona ${zone.name} actualizada.` : `Zona ${zone.name} creada.`);
+    resetForm();
   };
 
   const loadZone = (zoneId: string) => {
     const zone = state.zones.find((item) => item.id === zoneId);
     if (!zone) return;
+    setEditingZoneId(zone.id);
     setName(zone.name);
     setPolygonLabel(zone.polygonLabel);
     setSellerDeliveredFeeCop(copInputValue(zone.sellerDeliveredFeeCop, state.settings.sellerDeliveredFeeCop));
@@ -1392,13 +1402,16 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
     setDriverDeliveredPayCop(copInputValue(zone.driverDeliveredPayCop, state.settings.driverDeliveredPayCop));
     setDriverFailedPayCop(copInputValue(zone.driverFailedPayCop, state.settings.driverFailedPayCop));
     setFulfillmentFeeCop(copInputValue(zone.fulfillmentFeeCop, state.settings.fulfillmentFeeCop));
+    setMessage(`Editando ${zone.name}.`);
   };
 
   const toggleZone = (zoneId: string) => {
+    const zone = state.zones.find((item) => item.id === zoneId);
     setState({
       ...state,
       zones: state.zones.map((zone) => zone.id === zoneId ? { ...zone, active: zone.active === false } : zone)
     });
+    if (zone) setMessage(`${zone.name} ${zone.active === false ? "activada" : "desactivada"}.`);
   };
 
   return (
@@ -1414,10 +1427,18 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
           <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Pago driver fallido" inputMode="numeric" value={driverFailedPayCop} onChange={(event) => setDriverFailedPayCop(event.target.value)} />
         </div>
         <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Fee fulfillment" inputMode="numeric" value={fulfillmentFeeCop} onChange={(event) => setFulfillmentFeeCop(event.target.value)} />
-        <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => upsertZone()}>
-          Crear zona
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => upsertZone()}>
+            {editingZoneId ? "Guardar cambios" : "Crear zona"}
+          </button>
+          {editingZoneId && (
+            <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={resetForm}>
+              Cancelar
+            </button>
+          )}
+        </div>
       </div>
+      {message && <p className="mt-2 rounded-md bg-field px-3 py-2 text-sm text-black/70">{message}</p>}
       <div className="mt-4 grid gap-2">
         {zones.length === 0 && <p className="text-sm text-black/60">No hay zonas creadas.</p>}
         {zones.map((zone) => (
@@ -1436,7 +1457,6 @@ function ZonesTariffsPanel({ state, setState }: { state: AppState; setState: (st
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => loadZone(zone.id)}>Editar</button>
-              <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => upsertZone(zone.id)}>Guardar cambios</button>
               <button className="focus-ring rounded-md border border-black/10 px-3 py-1.5 text-xs font-semibold hover:bg-field" type="button" onClick={() => toggleZone(zone.id)}>{zone.active === false ? "Activar" : "Desactivar"}</button>
             </div>
           </div>
