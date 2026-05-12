@@ -67,7 +67,7 @@ type LocalAccount = {
   profileId: string;
 };
 type Session = Omit<LocalAccount, "password">;
-type AppView = "operations" | "wallet" | "liquidations";
+type AppView = "operations" | "wallet" | "liquidations" | "inventory";
 
 function readAccounts(): LocalAccount[] {
   if (typeof window === "undefined") return [];
@@ -468,6 +468,15 @@ function ViewTabs({ activeView, onChange, role }: { activeView: AppView; onChang
         >
           Wallet
         </button>
+        {role === "admin" && (
+          <button
+            className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${activeView === "inventory" ? "bg-ink text-white" : "hover:bg-field"}`}
+            type="button"
+            onClick={() => onChange("inventory")}
+          >
+            Inventario
+          </button>
+        )}
         {role === "admin" && (
           <button
             className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${activeView === "liquidations" ? "bg-ink text-white" : "hover:bg-field"}`}
@@ -1088,7 +1097,6 @@ function AdminView({ state, setState, onNavigate }: { state: AppState; setState:
             </div>
           </Card>
           <ZonesTariffsPanel state={state} setState={setState} />
-          <AdminInventoryPanel state={state} setState={setState} />
           <WalletPanel state={state} setState={setState} />
           <AdminUsersPanel state={state} setState={setState} />
         </aside>
@@ -1636,6 +1644,27 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
         })}
       </div>
     </Card>
+  );
+}
+
+function InventoryPage({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
+  const totalAvailable = state.inventory.reduce((sum, item) => sum + item.available, 0);
+  const totalReserved = state.inventory.reduce((sum, item) => sum + item.reserved, 0);
+  const lowStock = state.inventory.filter((item) => item.available - item.reserved <= (item.minStock ?? 0)).length;
+
+  return (
+    <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
+      <div>
+        <h2 className="text-xl font-bold">Inventario</h2>
+        <p className="text-sm text-black/60">Control de stock, reservas y ubicaciones de bodega.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Metric icon={<Boxes size={20} />} label="Stock total" value={String(totalAvailable)} />
+        <Metric icon={<ClipboardList size={20} />} label="Reservado" value={String(totalReserved)} />
+        <Metric icon={<AlertTriangle size={20} />} label="Bajo stock" value={String(lowStock)} />
+      </div>
+      <AdminInventoryPanel state={state} setState={setState} />
+    </main>
   );
 }
 
@@ -2462,6 +2491,7 @@ export function OperationsApp() {
     if (!session) return null;
     if (activeView === "wallet") return <WalletPage state={state} session={session} />;
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} setState={setState} />;
+    if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={state} setState={setState} />;
     if (session.role === "seller") return <SellerView state={state} setState={setState} session={session} />;
     if (session.role === "driver") return <DriverView state={state} setState={setState} session={session} />;
     return <AdminView state={state} setState={setState} onNavigate={setActiveView} />;
