@@ -34,7 +34,7 @@ import {
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { firebaseEnabled } from "@/lib/firebase/client";
-import { canUseFirestoreStore, loadFirestoreState, saveFirestoreOrder, saveFirestoreState, saveFirestoreWalletEntries, subscribeFirestoreState } from "@/lib/firebase/state-store";
+import { canUseFirestoreStore, loadFirestoreState, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreState, saveFirestoreWalletEntries, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import { uploadEvidenceImage } from "@/lib/firebase/storage";
 import {
   advanceOrder,
@@ -1511,6 +1511,7 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
   const [minStock, setMinStock] = useState("0");
   const [location, setLocation] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const lowStock = state.inventory.filter((item) => item.available - item.reserved <= (item.minStock ?? 0));
 
   useEffect(() => {
@@ -1562,12 +1563,25 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
       setMessage("Ya existe ese SKU para el vendedor.");
       return;
     }
-    setState({
+    setSaving(true);
+    const nextState = {
       ...state,
       inventory: editingId ? state.inventory.map((entry) => entry.id === editingId ? item : entry) : [item, ...state.inventory]
-    });
-    setMessage(editingId ? `${item.name} actualizado.` : `${item.name} creado.`);
-    reset();
+    };
+    const commit = () => {
+      setState(nextState);
+      setMessage(editingId ? `${item.name} actualizado.` : `${item.name} creado.`);
+      reset();
+    };
+    if (firebaseEnabled()) {
+      void saveFirestoreInventoryItem(item)
+        .then(commit)
+        .catch(() => setMessage("No se pudo guardar el producto en Live. Intenta nuevamente."))
+        .finally(() => setSaving(false));
+      return;
+    }
+    commit();
+    setSaving(false);
   };
 
   return (
@@ -1617,7 +1631,7 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white" type="button" onClick={save}>{editingId ? "Guardar producto" : "Crear producto"}</button>
+          <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={saving} onClick={save}>{saving ? "Guardando..." : editingId ? "Guardar producto" : "Crear producto"}</button>
           {editingId && <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={reset}>Cancelar</button>}
         </div>
       </div>

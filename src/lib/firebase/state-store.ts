@@ -134,6 +134,12 @@ export async function saveFirestoreWalletEntries(entries: WalletEntry[]): Promis
   await batch.commit();
 }
 
+export async function saveFirestoreInventoryItem(item: InventoryItem): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, "inventory", item.id), item, { merge: true });
+}
+
 export function subscribeFirestoreState(context: FirestoreStateContext | undefined, onState: (state: AppState) => void) {
   const client = getFirebaseClient();
   if (!client) return () => undefined;
