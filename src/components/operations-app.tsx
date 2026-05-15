@@ -671,6 +671,43 @@ const deliveryWindows = [
   "5:00 PM - 8:00 PM"
 ];
 
+function quickDate(offsetDays: number) {
+  return dateValue(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000));
+}
+
+function isDateInputComplete(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function DateChoiceField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold text-black/60">
+      {label}
+      <input
+        className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink"
+        inputMode="numeric"
+        pattern="\d{4}-\d{2}-\d{2}"
+        placeholder="AAAA-MM-DD"
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/[^\d-]/g, "").slice(0, 10))}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button className="focus-ring rounded-md border border-black/10 px-2 py-1 text-[11px] font-semibold hover:bg-field" type="button" onClick={() => onChange(quickDate(0))}>Hoy</button>
+        <button className="focus-ring rounded-md border border-black/10 px-2 py-1 text-[11px] font-semibold hover:bg-field" type="button" onClick={() => onChange(quickDate(1))}>Manana</button>
+        <button className="focus-ring rounded-md border border-black/10 px-2 py-1 text-[11px] font-semibold hover:bg-field" type="button" onClick={() => onChange(quickDate(2))}>Pasado manana</button>
+      </div>
+    </label>
+  );
+}
+
 function CloseOrderControls({
   state,
   order,
@@ -821,7 +858,7 @@ function FailedEvidenceForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isVisitRescheduled = reason === "Cliente reagenda visita";
-  const canSubmit = Boolean(file && note.trim() && reason && (!isVisitRescheduled || (scheduledDate && scheduledWindow)));
+  const canSubmit = Boolean(file && note.trim() && reason && (!isVisitRescheduled || (isDateInputComplete(scheduledDate) && scheduledWindow)));
 
   return (
     <form
@@ -871,10 +908,7 @@ function FailedEvidenceForm({
       {isVisitRescheduled && (
         <div className="grid gap-2 rounded-md bg-field p-3">
           <p className="text-xs font-semibold text-black/60">Nueva visita de entrega</p>
-          <label className="grid gap-1 text-xs font-semibold text-black/60">
-            Fecha de nueva visita
-            <input className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink" type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} required />
-          </label>
+          <DateChoiceField label="Fecha de nueva visita" value={scheduledDate} onChange={setScheduledDate} />
           <label className="grid gap-1 text-xs font-semibold text-black/60">
             Franja de nueva visita
             <select className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink" value={scheduledWindow} onChange={(event) => setScheduledWindow(event.target.value)} required>
@@ -915,6 +949,8 @@ function CallOutcomeControls({
   const [rescheduledDate, setRescheduledDate] = useState(order.rescheduledDate ?? "");
   const [rescheduledWindow, setRescheduledWindow] = useState(order.rescheduledWindow ?? "");
   const [mode, setMode] = useState<"confirm" | "reschedule" | null>(null);
+  const canConfirm = isDateInputComplete(scheduledDate) && Boolean(scheduledWindow);
+  const canReschedule = isDateInputComplete(rescheduledDate) && Boolean(rescheduledWindow);
   return (
     <div className="grid gap-2 rounded-md border border-black/10 bg-field p-3">
       <div className="grid gap-2 sm:grid-cols-2">
@@ -939,10 +975,7 @@ function CallOutcomeControls({
           <h3 className="text-sm font-bold">Cliente confirma entrega</h3>
           <p className="text-xs text-black/60">Usa estos campos cuando el cliente ya eligio cuando recibir el pedido.</p>
         </div>
-        <label className="grid gap-1 text-xs font-semibold text-black/60">
-          Fecha de entrega
-          <input className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink" type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} />
-        </label>
+        <DateChoiceField label="Fecha de entrega" value={scheduledDate} onChange={setScheduledDate} />
         <label className="grid gap-1 text-xs font-semibold text-black/60">
           Franja de entrega
           <select className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink" value={scheduledWindow} onChange={(event) => setScheduledWindow(event.target.value)}>
@@ -956,7 +989,7 @@ function CallOutcomeControls({
         <button
           className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
           type="button"
-          disabled={!scheduledDate || !scheduledWindow}
+          disabled={!canConfirm}
           onClick={() => onCommit(confirmDeliveryWindow(state, order.id, scheduledDate, scheduledWindow))}
         >
           Cliente confirma fecha y franja
@@ -969,15 +1002,7 @@ function CallOutcomeControls({
           <h3 className="text-sm font-bold text-rust">Reprogramar llamada</h3>
           <p className="text-xs text-black/60">Usa estos campos si no se pudo cerrar la entrega y hay que volver a llamar.</p>
         </div>
-        <label className="grid gap-1 text-xs font-semibold text-black/60">
-          Fecha para volver a llamar
-          <input
-            className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink"
-            type="date"
-            value={rescheduledDate}
-            onChange={(event) => setRescheduledDate(event.target.value)}
-          />
-        </label>
+        <DateChoiceField label="Fecha para volver a llamar" value={rescheduledDate} onChange={setRescheduledDate} />
         <label className="grid gap-1 text-xs font-semibold text-black/60">
           Franja para volver a llamar
           <select
@@ -995,7 +1020,7 @@ function CallOutcomeControls({
           <button
             className="focus-ring rounded-md border border-rust/30 bg-white px-3 py-2 text-sm font-semibold text-rust disabled:opacity-50"
             type="button"
-            disabled={!rescheduledDate || !rescheduledWindow}
+            disabled={!canReschedule}
             onClick={() => onCommit(rescheduleCustomerCall(state, order.id, rescheduledDate, rescheduledWindow))}
           >
             Reprogramar llamada

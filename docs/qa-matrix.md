@@ -72,6 +72,7 @@ Antes de probar, confirmar que existen:
 | BUG-002 | Crear pedido Live | Alta | `createManualOrder` fallaba por lecturas despues de escrituras en transaccion Firestore. | Corregido | `e4811e9` |
 | BUG-003 | Inventario desaparece | Alta | El producto se actualizaba localmente antes de persistir en Live. | Corregido | `e5d86da` |
 | BUG-004 | Reservas mezcladas | Media | Reservado podia quedar manualmente inconsistente tras pruebas. | Corregido con recalculo | `86322e6` |
+| BUG-005 | Llamada pendiente | Alta | Selector nativo `type=date` bloqueo ingreso de fecha/franja en confirmar entrega y reprogramar llamada. | Corregido | Pendiente commit |
 
 ## Pendiente Para Despues Del QA
 
