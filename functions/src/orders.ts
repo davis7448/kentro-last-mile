@@ -1,4 +1,4 @@
-import { getFirestore, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { getFirestore, type QuerySnapshot, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 
@@ -277,6 +277,15 @@ export const closeOrder = onCall(async (request) => {
       throw new HttpsError("invalid-argument", "Evidence storagePath does not match the order.");
     }
 
+    const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
+    const inventoryQuery = typeof order.sku === "string" && typeof order.sellerId === "string"
+      ? db.collection("inventory").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku).limit(1)
+      : null;
+    const [zoneSnap, inventorySnap] = await Promise.all([
+      zoneId ? transaction.get(db.collection("zones").doc(zoneId)) : Promise.resolve(null),
+      inventoryQuery ? transaction.get(inventoryQuery) : Promise.resolve(null)
+    ]);
+
     const nextStatus = input.outcome === "delivered" ? "delivered" : isVisitRescheduled ? "retry_pending" : "failed";
     const evidence = {
       id: `ev-${Date.now()}`,
@@ -302,9 +311,7 @@ export const closeOrder = onCall(async (request) => {
 
     transaction.set(orderRef, nextOrder, { merge: true });
 
-    const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
-    const zoneSnap = zoneId ? await transaction.get(db.collection("zones").doc(zoneId)) : null;
-    await settleInventoryForOrder(transaction, db, nextOrder, input.outcome, isVisitRescheduled, now);
+    settleInventoryForOrder(transaction, inventorySnap, input.outcome, isVisitRescheduled, now);
     const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now);
     for (const entry of walletEntries) {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
@@ -538,19 +545,14 @@ function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any
   return values;
 }
 
-async function settleInventoryForOrder(
+function settleInventoryForOrder(
   transaction: Transaction,
-  db: Firestore,
-  order: Record<string, any>,
+  inventorySnap: QuerySnapshot | null,
   outcome: "delivered" | "failed",
   retry: boolean,
   now: string
 ) {
-  const sku = typeof order.sku === "string" ? order.sku : undefined;
-  const sellerId = typeof order.sellerId === "string" ? order.sellerId : undefined;
-  if (!sku || !sellerId) return;
-  const inventorySnap = await transaction.get(db.collection("inventory").where("sellerId", "==", sellerId).where("sku", "==", sku).limit(1));
-  if (inventorySnap.empty) return;
+  if (!inventorySnap || inventorySnap.empty) return;
   const inventoryDoc = inventorySnap.docs[0];
   const inventory = inventoryDoc.data();
   const available = Number(inventory.available) || 0;

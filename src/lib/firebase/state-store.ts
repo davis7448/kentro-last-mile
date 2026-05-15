@@ -168,7 +168,11 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
       if (state) onState(state);
     });
   };
-  const unsubscribers = targets.map((target) => onSnapshot(target, reload));
+  const unsubscribers = targets.map((target) =>
+    onSnapshot(target, reload, (error) => {
+      console.warn("No se pudo sincronizar una coleccion de Live.", error.message);
+    })
+  );
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 
