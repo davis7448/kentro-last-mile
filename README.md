@@ -1,18 +1,20 @@
 # Kentro
 
-MVP funcional para una plataforma de ultima milla con vendedores Shopify, administradores y transportistas.
+MVP funcional para una plataforma de ultima milla con administradores, vendedores, transportistas, inventario, wallets y liquidaciones.
 
 ## Incluye
 
 - Next.js + Firebase Hosting/Functions/Firestore/Storage.
-- Roles simulados: admin, vendedor y transportista.
-- Sincronizacion Shopify simulada desde la UI y contrato de webhook en `functions/src/index.ts`.
-- Flujo operativo: direccion en riesgo, asignacion, pedidos libres, llamada, recogida, ruta, entregado, fallido y reintento.
-- Evidencia demo para entregas/fallidos.
-- Wallet de vendedor y transportista.
-- Liquidacion con saldo disponible, reserva de 9.000 COP por pendiente y solicitud automatica.
-- Inventario por SKU para bodega inicial.
-- Auditoria visible de acciones.
+- Roles reales por Firebase Auth custom claims: admin, vendedor y transportista.
+- Dashboards separados por rol.
+- Pedido manual con guia legible `KNT-000000`.
+- Flujo operativo: direccion en riesgo, asignacion, llamada, reprogramacion, recogida, ruta, entregado, fallido y reintento.
+- Evidencia real en Firebase Storage para entregas y fallidos.
+- Wallet de vendedor, transportista y margen de plataforma.
+- Liquidaciones persistentes por vendedor y transportista.
+- Inventario por SKU con reserva automatica y recalculo de reservas.
+- Zonas/tarifas configurables para operacion inicial en Cali.
+- Auditoria de acciones criticas.
 
 ## Comandos
 
@@ -28,14 +30,22 @@ npm run build
 
 - Project ID: `kentro-last-mile`
 - Hosting: https://kentro-last-mile.web.app
-- Firestore: creado en `nam5` con reglas desplegadas.
-- Storage: pendiente de inicializar bucket desde Firebase Console.
-- Functions: pendiente de activar Blaze porque requiere Cloud Build.
+- Firestore: activo con reglas por rol.
+- Storage: activo con reglas para evidencias.
+- Functions: activas en `us-central1`.
+- Plan: Blaze.
+
+## QA
+
+La matriz de pruebas esta en [`docs/qa-matrix.md`](docs/qa-matrix.md).
+
+Antes de avanzar a integraciones externas, todos los casos `P0` y `P1` deben quedar en `OK`.
 
 ## Siguientes integraciones reales
 
-- Reemplazar estado local por Firestore y reglas por rol con custom claims.
 - Completar OAuth Shopify y verificacion HMAC de webhooks.
 - Agregar Mapbox Permanent Geocoding y fallback Google Address Validation.
-- Subir evidencias reales a Firebase Storage.
+- Agregar notificaciones operativas.
+- Crear reportes gerenciales.
 - Crear jobs de conciliacion, bloqueo por deuda y alerta semanal de fallidos.
+- Actualizar runtime/dependencias de Functions antes de la decommission de Node.js 20.
