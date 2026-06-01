@@ -1,5 +1,26 @@
 import type { AppState, Order, WalletEntry } from "./types";
 
+const dandaSellerIds = new Set(["seller-1779315416119"]);
+
+type Tariffs = {
+  sellerDeliveredFeeCop: number;
+  sellerFailedFeeCop: number;
+  fulfillmentFeeCop: number;
+  driverDeliveredPayCop: number;
+  driverFailedPayCop: number;
+};
+
+function applySellerTariffOverrides(order: Order, tariffs: Tariffs): Tariffs {
+  if (!dandaSellerIds.has(order.sellerId)) return tariffs;
+  return {
+    ...tariffs,
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 0,
+    driverDeliveredPayCop: 10000,
+    driverFailedPayCop: 0
+  };
+}
+
 export function formatCop(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -12,13 +33,13 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
   const now = new Date().toISOString();
   const entries: WalletEntry[] = [];
   const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
-  const tariffs = {
+  const tariffs = applySellerTariffOverrides(order, {
     sellerDeliveredFeeCop: zone?.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop,
     sellerFailedFeeCop: zone?.sellerFailedFeeCop || state.settings.sellerFailedFeeCop,
     fulfillmentFeeCop: zone?.fulfillmentFeeCop || state.settings.fulfillmentFeeCop,
     driverDeliveredPayCop: zone?.driverDeliveredPayCop || state.settings.driverDeliveredPayCop,
     driverFailedPayCop: zone?.driverFailedPayCop || state.settings.driverFailedPayCop
-  };
+  });
 
   if (order.status === "delivered" && order.paymentMethod === "cod") {
     entries.push({
@@ -57,26 +78,30 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
   }
 
   if (order.status === "failed") {
-    entries.push({
-      id: `we-${order.id}-seller-failed-fee`,
-      ownerType: "seller",
-      ownerId: order.sellerId,
-      orderId: order.id,
-      type: "failed_fee",
-      amountCop: -tariffs.sellerFailedFeeCop,
-      description: `Cobro fallido ${order.shopifyOrderId}`,
-      createdAt: now
-    });
-    entries.push({
-      id: `we-${order.id}-driver-failed-pay`,
-      ownerType: "driver",
-      ownerId: order.driverId ?? "unassigned",
-      orderId: order.id,
-      type: "driver_earning",
-      amountCop: tariffs.driverFailedPayCop,
-      description: `Pago transportista fallido ${order.shopifyOrderId}`,
-      createdAt: now
-    });
+    if (tariffs.sellerFailedFeeCop > 0) {
+      entries.push({
+        id: `we-${order.id}-seller-failed-fee`,
+        ownerType: "seller",
+        ownerId: order.sellerId,
+        orderId: order.id,
+        type: "failed_fee",
+        amountCop: -tariffs.sellerFailedFeeCop,
+        description: `Cobro fallido ${order.shopifyOrderId}`,
+        createdAt: now
+      });
+    }
+    if (tariffs.driverFailedPayCop > 0) {
+      entries.push({
+        id: `we-${order.id}-driver-failed-pay`,
+        ownerType: "driver",
+        ownerId: order.driverId ?? "unassigned",
+        orderId: order.id,
+        type: "driver_earning",
+        amountCop: tariffs.driverFailedPayCop,
+        description: `Pago transportista fallido ${order.shopifyOrderId}`,
+        createdAt: now
+      });
+    }
   }
 
   if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || order.status === "failed")) {

@@ -1,4 +1,4 @@
-export type Role = "admin" | "seller" | "driver";
+export type Role = "admin" | "seller" | "driver" | "messenger";
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
@@ -49,9 +49,72 @@ export type Seller = {
   shopDomain: string;
   cityId: string;
   bankAccount: string;
+  pickupPointName?: string;
+  pickupAddress?: string;
+  pickupContactName?: string;
+  pickupContactPhone?: string;
+  pickupNotes?: string;
   debtBlockedAt?: string;
 };
+export type ShopifyStore = {
+  id: string;
+  sellerId: string;
+  shopDomain: string;
+  status: "connected" | "error";
+  scopes: string[];
+  connectedAt: string;
+  updatedAt: string;
+  lastWebhookAt?: string;
+  errorMessage?: string;
+};
+export type ShopifyInstallRequest = {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  shopDomain: string;
+  status: "requested" | "link_ready" | "installed" | "cancelled";
+  installLink?: string;
+  requestedAt: string;
+  updatedAt: string;
+  fulfilledAt?: string;
+};
+export type ShopifySyncIssue = {
+  id: string;
+  sellerId: string;
+  shopDomain: string;
+  reference: string;
+  status: "open" | "resolved";
+  reason: string;
+  detail?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  orderId?: string;
+};
 export type Driver = { id: string; name: string; phone: string; active: boolean };
+export type Messenger = {
+  id: string;
+  leaderDriverId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  authUid?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type PickupBatch = {
+  id: string;
+  driverId: string;
+  pickupPointKey: string;
+  pickupPointName: string;
+  pickupAddress: string;
+  orderIds: string[];
+  status: "open" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+};
 export type InventoryItem = {
   id: string;
   sellerId: string;
@@ -71,6 +134,11 @@ export type Order = {
   cityId: string;
   zoneId?: string;
   driverId?: string;
+  messengerId?: string;
+  pickupBatchId?: string;
+  pickupPointName?: string;
+  pickupAddress?: string;
+  pickedUpAt?: string;
   customerName: string;
   customerPhone: string;
   addressRaw: string;
@@ -85,6 +153,10 @@ export type Order = {
   totalCop: number;
   productName?: string;
   sku?: string;
+  quantity?: number;
+  labelPrintedAt?: string;
+  labelPrintedBy?: string;
+  labelPrintCount?: number;
   scheduledWindow?: string;
   scheduledDate?: string;
   callOutcome?: "pending" | "confirmed" | "rescheduled";
@@ -163,7 +235,12 @@ export type AppState = {
   cities: City[];
   zones: Zone[];
   sellers: Seller[];
+  shopifyStores: ShopifyStore[];
+  shopifyInstallRequests: ShopifyInstallRequest[];
+  shopifySyncIssues: ShopifySyncIssue[];
   drivers: Driver[];
+  messengers: Messenger[];
+  pickupBatches: PickupBatch[];
   inventory: InventoryItem[];
   orders: Order[];
   wallet: WalletEntry[];

@@ -1,0 +1,23 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "fa5179e4c01334c983307f354a192930"
+name = "Kentro Pilot"
+application_url = "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyPilotOAuthStart"
+embedded = false
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_fulfillments,read_orders,read_products"
+
+[auth]
+redirect_urls = [ "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyOAuthCallback" ]
+
+[webhooks]
+api_version = "2026-04"
+
+  [[webhooks.subscriptions]]
+  uri = "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyComplianceWebhook"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[build]
+automatically_update_urls_on_dev = true

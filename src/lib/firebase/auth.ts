@@ -2,13 +2,14 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import type { AddressRisk, FulfillmentMode, InventoryItem, Order, PaymentMethod, Role, Settlement, WalletEntry } from "@/lib/types";
+import type { AddressRisk, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, PickupBatch, Role, Settlement, WalletEntry } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 export type FirebaseSessionClaims = {
   role: Role | null;
   sellerId?: string;
   driverId?: string;
+  messengerId?: string;
 };
 
 export async function ensureFirebaseSession(): Promise<User | null> {
@@ -34,7 +35,8 @@ export function subscribeFirebaseUser(onUser: (user: User | null, claims: Fireba
     onUser(user, {
       role,
       sellerId: typeof token.claims.sellerId === "string" ? token.claims.sellerId : undefined,
-      driverId: typeof token.claims.driverId === "string" ? token.claims.driverId : undefined
+      driverId: typeof token.claims.driverId === "string" ? token.claims.driverId : undefined,
+      messengerId: typeof token.claims.messengerId === "string" ? token.claims.messengerId : undefined
     });
   });
 }
@@ -75,6 +77,15 @@ export async function getFirebaseBootstrapStatus() {
   return result.data as { needsBootstrap: boolean };
 }
 
+export async function repairFirebaseOwnDriverProfile() {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "repairOwnDriverProfile");
+  const result = await callable({});
+  return result.data as { driver: { id: string; name: string; phone: string; active: boolean } };
+}
+
 export async function createManualFirebaseOrder(input: {
   sellerId: string;
   shopifyOrderId?: string;
@@ -95,6 +106,101 @@ export async function createManualFirebaseOrder(input: {
   const functions = getFunctions(client.app, "us-central1");
   const callable = httpsCallable(functions, "createManualOrder");
   const result = await callable(input);
+  return result.data as { order: Order };
+}
+
+export async function confirmFirebaseImportedOrder(orderId: string) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "confirmImportedOrder");
+  const result = await callable({ orderId });
+  return result.data as { order: Order };
+}
+
+export async function confirmFirebaseRetryOrder(orderId: string) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "confirmRetryOrder");
+  const result = await callable({ orderId });
+  return result.data as { order: Order };
+}
+
+export async function updateFirebaseImportedOrder(input: {
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  addressRaw: string;
+  normalizedAddress?: string;
+  zoneId?: string;
+  paymentMethod: PaymentMethod;
+  fulfillmentMode: FulfillmentMode;
+  totalCop: number;
+  productName?: string;
+  sku?: string;
+  quantity?: number;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "updateImportedOrder");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { order: Order };
+}
+
+export async function updateFirebaseOrderAdjustments(input: {
+  orderId: string;
+  totalCop: number;
+  productName?: string;
+  sku?: string;
+  quantity?: number;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "updateOrderAdjustments");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { order: Order };
+}
+
+export async function createFirebaseMessengerProfile(input: { messengerId?: string; name: string; phone?: string; leaderDriverId?: string; email?: string; password?: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "createMessengerProfile");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { messenger: Messenger; authUid?: string; existingUser?: boolean };
+}
+
+export async function createFirebasePickupBatch(input: { orderIds: string[] }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "createOrUpdatePickupBatch");
+  const result = await callable(input);
+  return result.data as { pickupBatch: PickupBatch };
+}
+
+export async function assignFirebaseMessengerToOrders(input: { orderIds: string[]; messengerId: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "assignMessengerToOrders");
+  const result = await callable(input);
+  return result.data as { orders: Order[] };
+}
+
+export async function cancelFirebaseOrder(input: { orderId: string; reason?: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "cancelOrder");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
   return result.data as { order: Order };
 }
 
@@ -157,6 +263,26 @@ export async function reconcileFirebaseInventoryReservations() {
   return result.data as { inventory: InventoryItem[] };
 }
 
+export async function importFirebaseShopifyOrder(input: { shopDomain: string; reference: string; sellerId?: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "importShopifyOrder");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { order: Order };
+}
+
+export async function syncFirebaseShopifyHistoricalOrders(input: { shopDomain: string; sellerId?: string; startDate: string; endDate: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "syncShopifyHistoricalOrders");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { imported: number; existing: number; skippedOutsideCali: number; fetched: number; orders: Order[] };
+}
+
 export async function setFirebaseUserRole(uid: string, role: Role, profileId?: string) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
@@ -166,6 +292,7 @@ export async function setFirebaseUserRole(uid: string, role: Role, profileId?: s
     uid,
     role,
     sellerId: role === "seller" ? profileId : undefined,
-    driverId: role === "driver" ? profileId : undefined
+    driverId: role === "driver" ? profileId : undefined,
+    messengerId: role === "messenger" ? profileId : undefined
   });
 }

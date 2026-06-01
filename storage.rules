@@ -14,10 +14,15 @@ service firebase.storage {
         && request.auth.token.role == "driver";
     }
 
+    function isMessenger() {
+      return signedIn()
+        && request.auth.token.role == "messenger";
+    }
+
     match /evidence/{orderId}/{fileName} {
       allow read: if signedIn();
       allow write: if signedIn()
-        && (isAdmin() || isDriver())
+        && (isAdmin() || isDriver() || isMessenger())
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

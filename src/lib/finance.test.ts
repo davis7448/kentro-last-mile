@@ -25,4 +25,30 @@ describe("wallet calculations", () => {
     expect(entries.some((entry) => entry.type === "fulfillment_fee" && entry.amountCop === -2000)).toBe(true);
     expect(entries.some((entry) => entry.type === "driver_earning" && entry.amountCop === 8000)).toBe(true);
   });
+
+  it("uses the special DANDA delivered tariff without failed charges", () => {
+    const state = seedState();
+    const deliveredOrder = {
+      ...state.orders[0],
+      id: "ord-danda-delivered",
+      sellerId: "seller-1779315416119",
+      status: "delivered" as const,
+      paymentMethod: "prepaid" as const,
+      fulfillmentMode: "seller_pickup" as const,
+      driverId: "driver-1"
+    };
+    const failedOrder = {
+      ...deliveredOrder,
+      id: "ord-danda-failed",
+      status: "failed" as const
+    };
+
+    const deliveredEntries = entriesForClosedOrder(deliveredOrder, state);
+    const failedEntries = entriesForClosedOrder(failedOrder, state);
+
+    expect(deliveredEntries.some((entry) => entry.ownerType === "seller" && entry.type === "delivery_fee" && entry.amountCop === -12000)).toBe(true);
+    expect(deliveredEntries.some((entry) => entry.ownerType === "driver" && entry.type === "driver_earning" && entry.amountCop === 10000)).toBe(true);
+    expect(failedEntries.some((entry) => entry.type === "failed_fee")).toBe(false);
+    expect(failedEntries.some((entry) => entry.type === "driver_earning")).toBe(false);
+  });
 });

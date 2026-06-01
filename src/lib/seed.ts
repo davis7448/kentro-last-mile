@@ -8,7 +8,12 @@ export function emptyState(): AppState {
     cities: [{ id: "city-cali", name: "Cali", active: true }],
     zones: [],
     sellers: [],
+    shopifyStores: [],
+    shopifyInstallRequests: [],
+    shopifySyncIssues: [],
     drivers: [],
+    messengers: [],
+    pickupBatches: [],
     inventory: [],
     orders: [],
     wallet: [],
@@ -48,7 +53,11 @@ export function seedState(): AppState {
         name: "Tienda Aurora",
         shopDomain: "aurora-demo.myshopify.com",
         cityId: "city-cali",
-        bankAccount: "Bancolombia *** 4401"
+        bankAccount: "Bancolombia *** 4401",
+        pickupPointName: "Tienda Aurora",
+        pickupAddress: "Cali",
+        pickupContactName: "Operaciones Aurora",
+        pickupContactPhone: ""
       },
       {
         id: "seller-2",
@@ -56,14 +65,23 @@ export function seedState(): AppState {
         shopDomain: "casa-verde-demo.myshopify.com",
         cityId: "city-cali",
         bankAccount: "Davivienda *** 8102",
+        pickupPointName: "Casa Verde",
+        pickupAddress: "Cali",
+        pickupContactName: "Operaciones Casa Verde",
+        pickupContactPhone: "",
         debtBlockedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
       }
     ],
+    shopifyStores: [],
+    shopifyInstallRequests: [],
+    shopifySyncIssues: [],
     drivers: [
       { id: "driver-1", name: "Luis Rojas", phone: "+57 300 111 2233", active: true },
       { id: "driver-2", name: "Diana Perez", phone: "+57 301 555 7788", active: true },
       { id: "driver-3", name: "Mario Silva", phone: "+57 310 909 1122", active: true }
     ],
+    messengers: [],
+    pickupBatches: [],
     inventory: [
       { id: "inv-1", sellerId: "seller-1", sku: "AUR-CAFE-250", name: "Cafe premium 250g", available: 42, reserved: 3 },
       { id: "inv-2", sellerId: "seller-1", sku: "AUR-TERMO", name: "Termo acero", available: 18, reserved: 1 },

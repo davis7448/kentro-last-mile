@@ -6,7 +6,8 @@ import type { AddressRisk, AppState, AuditEvent, FulfillmentMode, Order, OrderSt
 const actorByRole: Record<Role, string> = {
   admin: "admin",
   seller: "seller",
-  driver: "driver"
+  driver: "driver",
+  messenger: "messenger"
 };
 
 function audit(state: AppState, action: string, entity: string, entityId: string, summary: string): AuditEvent {
@@ -342,6 +343,8 @@ export function createManualOrder(
     totalCop: input.totalCop,
     productName: input.productName?.trim() || undefined,
     sku: selectedSku,
+    pickupPointName: seller.pickupPointName || seller.name,
+    pickupAddress: seller.pickupAddress || "",
     evidence: [],
     createdAt: now,
     updatedAt: now

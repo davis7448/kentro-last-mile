@@ -21,6 +21,10 @@ service cloud.firestore {
       return role() == "driver" && request.auth.token.driverId == driverId;
     }
 
+    function isMessenger(messengerId) {
+      return role() == "messenger" && request.auth.token.messengerId == messengerId;
+    }
+
     function sellerOrderCreate() {
       return isSeller(request.resource.data.sellerId)
         && request.resource.data.driverId == null
@@ -32,6 +36,17 @@ service cloud.firestore {
       return isSeller(resource.data.sellerId)
         && request.resource.data.sellerId == resource.data.sellerId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([]);
+    }
+
+    function sellerOrderLabelUpdate() {
+      return isSeller(resource.data.sellerId)
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "labelPrintedAt",
+          "labelPrintedBy",
+          "labelPrintCount",
+          "updatedAt"
+        ]);
     }
 
     match /settings/{settingId} {
@@ -59,19 +74,38 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /messengers/{messengerId} {
+      allow read: if isAdmin()
+        || isMessenger(messengerId)
+        || (role() == "driver" && resource.data.leaderDriverId == request.auth.token.driverId);
+      allow create, update, delete: if isAdmin()
+        || (role() == "driver" && request.resource.data.leaderDriverId == request.auth.token.driverId);
+    }
+
+    match /pickupBatches/{batchId} {
+      allow read: if isAdmin()
+        || (role() == "driver" && resource.data.driverId == request.auth.token.driverId);
+      allow write: if isAdmin()
+        || (role() == "driver" && request.resource.data.driverId == request.auth.token.driverId);
+    }
+
     match /orders/{orderId} {
       allow read: if isAdmin()
         || isSeller(resource.data.sellerId)
         || isDriver(resource.data.driverId)
-        || (role() == "driver" && resource.data.driverId == null);
+        || isMessenger(resource.data.messengerId)
+        || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
       allow create: if isAdmin() || sellerOrderCreate();
       allow update: if isAdmin()
         || isDriver(resource.data.driverId)
+        || isMessenger(resource.data.messengerId)
         || (
           role() == "driver"
           && resource.data.driverId == null
           && request.resource.data.driverId == request.auth.token.driverId
+          && request.resource.data.status in ["picked_up", "assigned"]
         )
+        || sellerOrderLabelUpdate()
         || sellerOrderNoopUpdate();
       allow delete: if isAdmin();
     }
@@ -110,7 +144,36 @@ service cloud.firestore {
 
     match /shopifyStores/{storeId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
-      allow write: if isAdmin() || isSeller(request.resource.data.sellerId);
+      allow write: if isAdmin();
+    }
+
+    match /shopifyInstallRequests/{requestId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow create: if isSeller(request.resource.data.sellerId)
+        && request.resource.data.status == "requested"
+        && !("installLink" in request.resource.data);
+      allow update: if isAdmin()
+        || (
+          isSeller(resource.data.sellerId)
+          && resource.data.status == "requested"
+          && request.resource.data.sellerId == resource.data.sellerId
+          && request.resource.data.status == "requested"
+          && !("installLink" in request.resource.data)
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /shopifySyncIssues/{issueId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if false;
+    }
+
+    match /shopifyStoreSecrets/{storeId} {
+      allow read, write: if false;
+    }
+
+    match /shopifyOAuthStates/{stateId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
