@@ -106,8 +106,8 @@ const defaultSettings = {
   sellerDeliveredFeeCop: 12000,
   sellerFailedFeeCop: 9000,
   fulfillmentFeeCop: 2000,
-  driverDeliveredPayCop: 8000,
-  driverFailedPayCop: 8000
+  driverDeliveredPayCop: 9000,
+  driverFailedPayCop: 9000
 };
 
 const tariffFields = [
@@ -151,6 +151,10 @@ type SettlementDoc = {
   paidAt?: string;
   reconciledAt?: string;
   note?: string;
+};
+
+type SettlementOrderDoc = {
+  paymentMethod?: "cod" | "prepaid";
 };
 
 export const createManualOrder = onCall(async (request) => {
@@ -872,15 +876,46 @@ export const createSettlement = onCall(async (request) => {
     .where("ownerType", "==", input.kind)
     .where("ownerId", "==", input.ownerId)
     .get();
-  const candidateRefs = entriesSnap.docs
+  const unsettledEntryDocs = entriesSnap.docs
     .filter((entry) => {
       const data = entry.data();
       const entryDate = String(data.createdAt ?? "").slice(0, 10);
       return !data.settlementId && entryDate >= input.startDate && entryDate <= input.endDate;
-    })
-    .map((entry) => entry.ref);
+    });
+
+  let candidateDocs = unsettledEntryDocs;
+  if (input.kind === "seller") {
+    const paidDriverSettlementsSnap = await db
+      .collection("settlements")
+      .where("kind", "==", "driver")
+      .get();
+    const codReceivedOrderIds = new Set<string>();
+    for (const settlementDoc of paidDriverSettlementsSnap.docs) {
+      const settlement = settlementDoc.data() as SettlementDoc;
+      if (settlement.status !== "paid" && settlement.status !== "reconciled") continue;
+      for (const orderId of settlement.orderIds ?? []) {
+        codReceivedOrderIds.add(orderId);
+      }
+    }
+
+    const orderIds = Array.from(new Set(unsettledEntryDocs.map((entry) => String(entry.data().orderId ?? "")).filter(Boolean)));
+    const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
+    const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
+    candidateDocs = unsettledEntryDocs.filter((entry) => {
+      const orderId = String(entry.data().orderId ?? "");
+      const order = ordersById.get(orderId);
+      if (!order) return false;
+      if (order.paymentMethod === "prepaid") return true;
+      return order.paymentMethod === "cod" && codReceivedOrderIds.has(orderId);
+    });
+  }
+
+  const candidateRefs = candidateDocs.map((entry) => entry.ref);
 
   if (candidateRefs.length === 0) {
+    if (input.kind === "seller" && unsettledEntryDocs.length > 0) {
+      throw new HttpsError("failed-precondition", "No hay pedidos habilitados para pagar a esta tienda. Primero marca recibido el dinero del domiciliario.");
+    }
     throw new HttpsError("failed-precondition", "There are no unsettled wallet movements for this account and date range.");
   }
 
@@ -1009,7 +1044,9 @@ function buildSettlement(
   note?: string
 ): SettlementDoc {
   const codCop = entries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const feesCop = Math.abs(entries.filter((entry) => entry.ownerType === "seller" && entry.amountCop < 0).reduce((sum, entry) => sum + Number(entry.amountCop), 0));
+  const feesCop = Math.max(0, -entries
+    .filter((entry) => entry.ownerType === "seller" && ["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type))
+    .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
   const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
   const netCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
   return stripUndefined({

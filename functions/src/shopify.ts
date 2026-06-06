@@ -168,12 +168,17 @@ export const shopifyOAuthCallback = onRequest({ secrets: [shopifyApiKey, shopify
   const storeId = storeIdForShop(shop);
   const existingStore = await db.collection("shopifyStores").doc(storeId).get();
   const resolvedSellerId = sellerId === "unassigned" && typeof existingStore.data()?.sellerId === "string" ? String(existingStore.data()?.sellerId) : sellerId;
+  const requestSnap = resolvedSellerId !== "unassigned"
+    ? await db.collection("shopifyInstallRequests").where("sellerId", "==", resolvedSellerId).where("shopDomain", "==", shop).limit(1).get()
+    : null;
+  const orderSkuContains = normalizeSkuFilter(requestSnap?.docs[0]?.data()?.orderSkuContains);
   await db.collection("shopifyStores").doc(storeId).set({
     id: storeId,
     sellerId: resolvedSellerId,
     shopDomain: shop,
     status: "connected",
     scopes: tokenJson.scope ? tokenJson.scope.split(",").map((scope) => scope.trim()) : scopes,
+    ...(orderSkuContains ? { orderSkuContains } : {}),
     webhookId: webhook.id,
     connectedAt: now,
     updatedAt: now
@@ -187,8 +192,7 @@ export const shopifyOAuthCallback = onRequest({ secrets: [shopifyApiKey, shopify
   }, { merge: true });
   if (resolvedSellerId !== "unassigned") {
     await db.collection("sellers").doc(resolvedSellerId).set({ shopDomain: shop, updatedAt: now }, { merge: true });
-    const requestSnap = await db.collection("shopifyInstallRequests").where("sellerId", "==", resolvedSellerId).where("shopDomain", "==", shop).limit(1).get();
-    await Promise.all(requestSnap.docs.map((doc) => doc.ref.set({ status: "installed", updatedAt: now }, { merge: true })));
+    await Promise.all((requestSnap?.docs ?? []).map((doc) => doc.ref.set({ status: "installed", updatedAt: now }, { merge: true })));
   }
   await stateRef.delete();
 
@@ -399,6 +403,17 @@ export const importShopifyOrder = onCall(async (request) => {
     });
     throw new HttpsError("failed-precondition", "Este pedido no pertenece a Cali y no se importo a la operacion.");
   }
+  const orderSkuContains = normalizeSkuFilter(store.orderSkuContains);
+  if (!shopifyOrderMatchesSkuFilter(shopifyOrder, orderSkuContains)) {
+    await recordShopifySyncIssue(db, {
+      sellerId: targetSellerId,
+      shopDomain: shop,
+      reference: parsed.data.reference,
+      reason: `Pedido Shopify excluido por filtro de SKU.`,
+      detail: `La tienda solo sincroniza pedidos con al menos un SKU que contenga "${orderSkuContains}".`
+    });
+    throw new HttpsError("failed-precondition", `Este pedido no contiene "${orderSkuContains}" en ningún SKU y no se importó.`);
+  }
   const order = await upsertShopifyOrder(shopifyOrder, targetSellerId, shop);
   await resolveShopifySyncIssue(db, targetSellerId, shop, parsed.data.reference, order.id);
   await storeDoc.ref.set({ sellerId: targetSellerId, lastManualImportAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
@@ -443,11 +458,17 @@ export const syncShopifyHistoricalOrders = onCall(async (request) => {
   const fetched = await fetchShopifyOrdersByDateRange(shop, accessToken, startDate, endDate);
   let imported = 0;
   let skippedOutsideCali = 0;
+  let skippedSkuFilter = 0;
   let existing = 0;
+  const orderSkuContains = normalizeSkuFilter(store.orderSkuContains);
   const orders: Array<Record<string, unknown>> = [];
   for (const shopifyOrder of fetched) {
     if (!isCaliShopifyOrder(shopifyOrder)) {
       skippedOutsideCali++;
+      continue;
+    }
+    if (!shopifyOrderMatchesSkuFilter(shopifyOrder, orderSkuContains)) {
+      skippedSkuFilter++;
       continue;
     }
     const before = await db.collection("orders").doc(`shopify-${shopifyOrder.id}`).get();
@@ -457,7 +478,7 @@ export const syncShopifyHistoricalOrders = onCall(async (request) => {
     orders.push(order);
   }
   await storeDoc.ref.set({ sellerId: targetSellerId, lastHistoricalSyncAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
-  return { imported, existing, skippedOutsideCali, fetched: fetched.length, orders };
+  return { imported, existing, skippedOutsideCali, skippedSkuFilter, fetched: fetched.length, orders };
 });
 
 async function recordShopifySyncIssue(db: FirebaseFirestore.Firestore, input: { sellerId: string; shopDomain: string; reference: string; reason: string; detail?: string }) {
@@ -628,6 +649,17 @@ function isCaliShopifyOrder(order: z.infer<typeof shopifyOrderSchema>) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return /\bcali\b/.test(text) || text.includes("santiago de cali");
+}
+
+function normalizeSkuFilter(value: unknown) {
+  return typeof value === "string" ? value.trim().toUpperCase() : "";
+}
+
+function shopifyOrderMatchesSkuFilter(order: z.infer<typeof shopifyOrderSchema>, filter: string) {
+  if (!filter) return true;
+  return (order.line_items ?? []).some((item) =>
+    !isShippingLineItem(item) && (item.sku ?? "").toUpperCase().includes(filter)
+  );
 }
 
 function cleanShopifyOrderReference(reference: string) {

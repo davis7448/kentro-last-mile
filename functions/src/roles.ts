@@ -69,6 +69,49 @@ export const createManagedUser = onCall(async (request) => {
     messengerId: role === "messenger" ? profileId : undefined
   });
 
+  if (profileId) {
+    const now = new Date().toISOString();
+    const db = getFirestore();
+    if (role === "seller") {
+      const settingsSnap = await db.collection("settings").doc("app").get();
+      const activeCityId = String(settingsSnap.data()?.activeCityId ?? "city-cali");
+      await db.collection("sellers").doc(profileId).set({
+        id: profileId,
+        name: displayName,
+        shopDomain: "",
+        cityId: activeCityId,
+        bankAccount: "",
+        email,
+        updatedAt: now,
+        createdAt: now
+      }, { merge: true });
+    }
+    if (role === "driver") {
+      await db.collection("drivers").doc(profileId).set({
+        id: profileId,
+        name: displayName,
+        phone: "",
+        active: true,
+        email,
+        updatedAt: now,
+        createdAt: now
+      }, { merge: true });
+    }
+    if (role === "messenger") {
+      await db.collection("messengers").doc(profileId).set({
+        id: profileId,
+        leaderDriverId: String(request.data?.leaderDriverId ?? ""),
+        name: displayName,
+        phone: "",
+        email,
+        authUid: user.uid,
+        active: true,
+        updatedAt: now,
+        createdAt: now
+      }, { merge: true });
+    }
+  }
+
   return { uid: user.uid, existing };
 });
 

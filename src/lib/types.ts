@@ -62,6 +62,7 @@ export type ShopifyStore = {
   shopDomain: string;
   status: "connected" | "error";
   scopes: string[];
+  orderSkuContains?: string;
   connectedAt: string;
   updatedAt: string;
   lastWebhookAt?: string;
@@ -74,6 +75,8 @@ export type ShopifyInstallRequest = {
   shopDomain: string;
   status: "requested" | "link_ready" | "installed" | "cancelled";
   installLink?: string;
+  observation?: string;
+  orderSkuContains?: string;
   requestedAt: string;
   updatedAt: string;
   fulfilledAt?: string;

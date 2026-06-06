@@ -100,6 +100,16 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
   const order = parsed.data;
   const address = order.shipping_address;
   const addressRaw = [address?.address1, address?.address2, address?.city, address?.country].filter(Boolean).join(", ");
+  const orderSkuContains = normalizeSkuFilter(store.orderSkuContains);
+
+  if (!shopifyOrderMatchesSkuFilter(order, orderSkuContains)) {
+    await storeSnap.docs[0].ref.set({
+      lastWebhookAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    response.status(202).json({ ok: true, ignored: true, reason: "sku_filter" });
+    return;
+  }
 
   if (!isCaliAddress(address)) {
     await recordShopifySyncIssue({
@@ -162,6 +172,17 @@ function isCaliAddress(address?: { city?: string | null; address1?: string | nul
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return /\bcali\b/.test(text) || text.includes("santiago de cali");
+}
+
+function normalizeSkuFilter(value: unknown) {
+  return typeof value === "string" ? value.trim().toUpperCase() : "";
+}
+
+function shopifyOrderMatchesSkuFilter(order: z.infer<typeof shopifyWebhookSchema>, filter: string) {
+  if (!filter) return true;
+  return (order.line_items ?? []).some((item) =>
+    !isShippingLineItem(item) && (item.sku ?? "").toUpperCase().includes(filter)
+  );
 }
 
 async function recordShopifySyncIssue(input: { sellerId: string; shopDomain: string; reference: string; reason: string; detail: string }) {

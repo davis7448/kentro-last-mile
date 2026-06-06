@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import jsQR from "jsqr";
 import QRCode from "qrcode";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelFirebaseOrder,
   assignFirebaseMessengerToOrders,
@@ -296,7 +296,8 @@ async function createUserFromAdmin(
       password: account.password,
       name: account.name.trim(),
       role: account.role,
-      profileId: localResult.account.profileId
+      profileId: localResult.account.profileId,
+      leaderDriverId: account.leaderDriverId
     });
     const firebaseAccount = {
       ...localResult.account,
@@ -2417,6 +2418,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   const operationOrders = sellerFilteredOrders.filter((order) => order.status !== "failed");
   const tabOrders = adminOrderTab === "failed" ? failedOrders : operationOrders;
   const visibleOrders = filterOrdersByRangeStatus(tabOrders, startDate, endDate, statusFilter, orderSearch);
+  const exportableFailedOrders = filterOrdersByRangeStatus(failedOrders, startDate, endDate, statusFilter, orderSearch);
   const alerts = [
     ...review.map((order) => `Direccion en revision ${order.shopifyOrderId}`),
     ...failed.filter((order) => order.retryDecision === "pending").map((order) => `Reintento pendiente ${order.shopifyOrderId}`),
@@ -2479,20 +2481,31 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
             </button>
           </div>
           <OrderLookupBar value={orderSearch} onChange={onOrderSearchChange} />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${adminOrderTab === "operation" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+                type="button"
+                onClick={() => setAdminOrderTab("operation")}
+              >
+                Operacion ({operationOrders.length})
+              </button>
+              <button
+                className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${adminOrderTab === "failed" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+                type="button"
+                onClick={() => setAdminOrderTab("failed")}
+              >
+                Fallidos / reintento ({failedOrders.length})
+              </button>
+            </div>
             <button
-              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${adminOrderTab === "operation" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
               type="button"
-              onClick={() => setAdminOrderTab("operation")}
+              disabled={exportableFailedOrders.length === 0}
+              onClick={() => downloadFailedOrdersCsv(exportableFailedOrders, state, startDate, endDate, sellerFilter)}
             >
-              Operacion ({operationOrders.length})
-            </button>
-            <button
-              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${adminOrderTab === "failed" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
-              type="button"
-              onClick={() => setAdminOrderTab("failed")}
-            >
-              Fallidos / reintento ({failedOrders.length})
+              <FileDown size={16} />
+              Descargar fallidos ({exportableFailedOrders.length})
             </button>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} sellers={state.sellers} sellerFilter={sellerFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} onSeller={onSellerFilter} />
@@ -3503,15 +3516,52 @@ type LiquidationRow = {
   role: "seller" | "driver";
   walletEntryIds: string[];
   orderIds: string[];
+  orderDetails: LiquidationOrderAudit[];
   orders: number;
+  deliveredOrders: number;
+  failedOrders: number;
   codCop: number;
   feesCop: number;
+  deliveryFeeCop: number;
+  failedFeeCop: number;
+  fulfillmentCop: number;
   earningsCop: number;
+  deliveredPayCop: number;
+  failedPayCop: number;
   platformMarginCop: number;
   cashToReturnCop: number;
   receivableCop: number;
   netCop: number;
   status: "pendiente" | "conciliada";
+};
+
+type LiquidationOrderAudit = {
+  orderId: string;
+  trackingCode: string;
+  shopifyOrderId: string;
+  sellerId: string;
+  sellerName: string;
+  driverId: string;
+  driverName: string;
+  status: Order["status"];
+  paymentMethod: PaymentMethod;
+  codCop: number;
+  deliveryFeeCop: number;
+  failedFeeCop: number;
+  fulfillmentCop: number;
+  storeChargeCop: number;
+  driverDeliveredPayCop: number;
+  driverFailedPayCop: number;
+  driverPayCop: number;
+  platformMarginCop: number;
+  sellerNetCop: number;
+  sellerWalletEntryIds: string[];
+  driverWalletEntryIds: string[];
+  sellerSettlementIds: string[];
+  driverSettlementIds: string[];
+  codReceived: boolean;
+  sellerEligible: boolean;
+  reason: string;
 };
 
 function isEntryInRange(entry: WalletEntry, startDate: string, endDate: string) {
@@ -3523,17 +3573,127 @@ function uniqueOrderCount(entries: WalletEntry[]) {
   return new Set(entries.map((entry) => entry.orderId).filter(Boolean)).size;
 }
 
+function countClosedOrders(state: AppState, orderIds: string[]) {
+  const orderIdSet = new Set(orderIds);
+  const orders = state.orders.filter((order) => orderIdSet.has(order.id));
+  return {
+    delivered: orders.filter((order) => order.status === "delivered").length,
+    failed: orders.filter((order) => order.status === "failed").length
+  };
+}
+
 function getRelatedSellerEntries(wallet: WalletEntry[], orderIds: string[]) {
   const orderIdSet = new Set(orderIds);
   return wallet.filter((entry) => entry.ownerType === "seller" && entry.orderId && orderIdSet.has(entry.orderId));
 }
 
-function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWallet: WalletEntry[] = state.wallet): LiquidationRow[] {
+function getRelatedDriverEntries(wallet: WalletEntry[], orderIds: string[]) {
+  const orderIdSet = new Set(orderIds);
+  return wallet.filter((entry) => entry.ownerType === "driver" && entry.orderId && orderIdSet.has(entry.orderId));
+}
+
+function entriesForOrder(wallet: WalletEntry[], orderId: string) {
+  return wallet.filter((entry) => entry.orderId === orderId);
+}
+
+function netAmountCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
+  return entries.filter((entry) => types.includes(entry.type)).reduce((sum, entry) => sum + entry.amountCop, 0);
+}
+
+function netChargeCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
+  const net = entries.filter((entry) => types.includes(entry.type)).reduce((sum, entry) => sum + entry.amountCop, 0);
+  return Math.max(0, -net);
+}
+
+function receivedDriverOrderIds(settlements: Settlement[]) {
+  const orderIds = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver") continue;
+    if (settlement.status !== "paid" && settlement.status !== "reconciled") continue;
+    for (const orderId of settlement.orderIds) orderIds.add(orderId);
+  }
+  return orderIds;
+}
+
+function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = state.wallet): LiquidationOrderAudit[] {
+  const orderIds = new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]);
+  const codReceivedOrderIds = receivedDriverOrderIds(state.settlements);
+  return state.orders
+    .filter((order) => orderIds.has(order.id) && (order.status === "delivered" || order.status === "failed"))
+    .map((order) => {
+      const seller = state.sellers.find((item) => item.id === order.sellerId);
+      const driver = state.drivers.find((item) => item.id === order.driverId);
+      const allOrderEntries = entriesForOrder(entries, order.id);
+      const sellerEntries = allOrderEntries.filter((entry) => entry.ownerType === "seller");
+      const driverEntries = allOrderEntries.filter((entry) => entry.ownerType === "driver");
+      const codCop = netAmountCop(sellerEntries, ["cod_revenue"]);
+      const deliveryFeeCop = netChargeCop(sellerEntries, ["delivery_fee"]);
+      const failedFeeCop = netChargeCop(sellerEntries, ["failed_fee"]);
+      const fulfillmentCop = netChargeCop(sellerEntries, ["fulfillment_fee"]);
+      const storeChargeCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
+      const driverDeliveredPayCop = driverEntries
+        .filter((entry) => entry.type === "driver_earning" && entry.description.toLowerCase().includes("entregado"))
+        .reduce((sum, entry) => sum + entry.amountCop, 0);
+      const driverFailedPayCop = driverEntries
+        .filter((entry) => entry.type === "driver_earning" && entry.description.toLowerCase().includes("fallido"))
+        .reduce((sum, entry) => sum + entry.amountCop, 0);
+      const driverPayCop = netAmountCop(driverEntries, ["driver_earning"]);
+      const codReceived = order.paymentMethod === "prepaid" || codReceivedOrderIds.has(order.id);
+      const sellerEligible = order.paymentMethod === "prepaid" || codReceived;
+      return {
+        orderId: order.id,
+        trackingCode: order.trackingCode ?? order.id,
+        shopifyOrderId: order.shopifyOrderId,
+        sellerId: order.sellerId,
+        sellerName: seller?.name ?? order.sellerId,
+        driverId: order.driverId ?? "unassigned",
+        driverName: driver?.name ?? "Sin domiciliario",
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        codCop,
+        deliveryFeeCop,
+        failedFeeCop,
+        fulfillmentCop,
+        storeChargeCop,
+        driverDeliveredPayCop,
+        driverFailedPayCop,
+        driverPayCop,
+        platformMarginCop: storeChargeCop - driverPayCop,
+        sellerNetCop: codCop - storeChargeCop,
+        sellerWalletEntryIds: sellerEntries.map((entry) => entry.id),
+        driverWalletEntryIds: driverEntries.map((entry) => entry.id),
+        sellerSettlementIds: Array.from(new Set(sellerEntries.map((entry) => entry.settlementId).filter(Boolean) as string[])),
+        driverSettlementIds: Array.from(new Set(driverEntries.map((entry) => entry.settlementId).filter(Boolean) as string[])),
+        codReceived,
+        sellerEligible,
+        reason: sellerEligible ? "Habilitado para tienda" : "Pendiente marcar dinero recibido del domiciliario"
+      };
+    })
+    .sort((left, right) => left.sellerName.localeCompare(right.sellerName) || left.trackingCode.localeCompare(right.trackingCode));
+}
+
+function auditsForOrderIds(audits: LiquidationOrderAudit[], orderIds: string[]) {
+  const orderIdSet = new Set(orderIds);
+  return audits.filter((audit) => orderIdSet.has(audit.orderId));
+}
+
+function isSellerEntryEligible(entry: WalletEntry, auditByOrderId: Map<string, LiquidationOrderAudit>) {
+  if (entry.ownerType !== "seller") return true;
+  if (!entry.orderId) return false;
+  return auditByOrderId.get(entry.orderId)?.sellerEligible ?? false;
+}
+
+function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWallet: WalletEntry[] = state.wallet, audits: LiquidationOrderAudit[] = buildLiquidationOrderAudits(state, relatedWallet)): LiquidationRow[] {
   const sellerRows = state.sellers.map((seller) => {
     const ownEntries = entries.filter((entry) => entry.ownerType === "seller" && entry.ownerId === seller.id);
     const orderIds = Array.from(new Set(ownEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+    const orderDetails = auditsForOrderIds(audits, orderIds);
+    const closedCounts = countClosedOrders(state, orderIds);
     const codCop = ownEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + entry.amountCop, 0);
-    const feesCop = Math.abs(ownEntries.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0));
+    const deliveryFeeCop = netChargeCop(ownEntries, ["delivery_fee"]);
+    const failedFeeCop = netChargeCop(ownEntries, ["failed_fee"]);
+    const fulfillmentCop = netChargeCop(ownEntries, ["fulfillment_fee"]);
+    const feesCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
     const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
     return {
       id: seller.id,
@@ -3541,10 +3701,18 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       role: "seller" as const,
       walletEntryIds: ownEntries.map((entry) => entry.id),
       orderIds,
+      orderDetails,
       orders: uniqueOrderCount(ownEntries),
+      deliveredOrders: closedCounts.delivered,
+      failedOrders: closedCounts.failed,
       codCop,
       feesCop,
+      deliveryFeeCop,
+      failedFeeCop,
+      fulfillmentCop,
       earningsCop: 0,
+      deliveredPayCop: 0,
+      failedPayCop: 0,
       platformMarginCop: feesCop,
       cashToReturnCop: 0,
       receivableCop: Math.max(0, netCop),
@@ -3556,9 +3724,16 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
   const driverRows = state.drivers.map((driver) => {
     const ownEntries = entries.filter((entry) => entry.ownerType === "driver" && entry.ownerId === driver.id);
     const orderIds = Array.from(new Set(ownEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+    const orderDetails = auditsForOrderIds(audits, orderIds);
+    const closedCounts = countClosedOrders(state, orderIds);
     const relatedSellerEntries = getRelatedSellerEntries(relatedWallet, orderIds);
     const codCop = relatedSellerEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + entry.amountCop, 0);
-    const feesCop = Math.abs(relatedSellerEntries.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0));
+    const deliveryFeeCop = netChargeCop(relatedSellerEntries, ["delivery_fee"]);
+    const failedFeeCop = netChargeCop(relatedSellerEntries, ["failed_fee"]);
+    const fulfillmentCop = netChargeCop(relatedSellerEntries, ["fulfillment_fee"]);
+    const feesCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
+    const deliveredPayCop = ownEntries.filter((entry) => entry.description.toLowerCase().includes("entregado")).reduce((sum, entry) => sum + entry.amountCop, 0);
+    const failedPayCop = ownEntries.filter((entry) => entry.description.toLowerCase().includes("fallido")).reduce((sum, entry) => sum + entry.amountCop, 0);
     const earningsCop = ownEntries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + entry.amountCop, 0);
     const netCop = earningsCop - codCop;
     return {
@@ -3567,10 +3742,18 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       role: "driver" as const,
       walletEntryIds: ownEntries.map((entry) => entry.id),
       orderIds,
+      orderDetails,
       orders: uniqueOrderCount(ownEntries),
+      deliveredOrders: closedCounts.delivered,
+      failedOrders: closedCounts.failed,
       codCop,
       feesCop,
+      deliveryFeeCop,
+      failedFeeCop,
+      fulfillmentCop,
       earningsCop,
+      deliveredPayCop,
+      failedPayCop,
       platformMarginCop: feesCop - earningsCop,
       cashToReturnCop: Math.max(0, codCop - earningsCop),
       receivableCop: Math.max(0, earningsCop - codCop),
@@ -3587,8 +3770,11 @@ type StoreLiquidationRow = {
   sellerName: string;
   shopDomain: string;
   orders: number;
+  deliveredOrders: number;
+  failedOrders: number;
   codCop: number;
-  feeCop: number;
+  deliveryFeeCop: number;
+  failedFeeCop: number;
   fulfillmentCop: number;
   totalChargedCop: number;
   sellerBalanceCop: number;
@@ -3599,18 +3785,24 @@ function buildStoreLiquidationRows(state: AppState, entries: WalletEntry[]): Sto
   return state.sellers
     .map((seller) => {
       const ownEntries = entries.filter((entry) => entry.ownerType === "seller" && entry.ownerId === seller.id);
-      const deliveryFeeCop = Math.abs(ownEntries.filter((entry) => entry.type === "delivery_fee" || entry.type === "failed_fee").reduce((sum, entry) => sum + entry.amountCop, 0));
-      const fulfillmentCop = Math.abs(ownEntries.filter((entry) => entry.type === "fulfillment_fee").reduce((sum, entry) => sum + entry.amountCop, 0));
+      const orderIds = Array.from(new Set(ownEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+      const closedCounts = countClosedOrders(state, orderIds);
+      const deliveryFeeCop = netChargeCop(ownEntries, ["delivery_fee"]);
+      const failedFeeCop = netChargeCop(ownEntries, ["failed_fee"]);
+      const fulfillmentCop = netChargeCop(ownEntries, ["fulfillment_fee"]);
       const connectedStores = (state.shopifyStores ?? []).filter((store) => store.sellerId === seller.id).length;
       return {
         sellerId: seller.id,
         sellerName: seller.name,
         shopDomain: seller.shopDomain || (state.shopifyStores ?? []).find((store) => store.sellerId === seller.id)?.shopDomain || "Sin tienda conectada",
         orders: uniqueOrderCount(ownEntries),
+        deliveredOrders: closedCounts.delivered,
+        failedOrders: closedCounts.failed,
         codCop: ownEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + entry.amountCop, 0),
-        feeCop: deliveryFeeCop,
+        deliveryFeeCop,
+        failedFeeCop,
         fulfillmentCop,
-        totalChargedCop: deliveryFeeCop + fulfillmentCop,
+        totalChargedCop: deliveryFeeCop + failedFeeCop + fulfillmentCop,
         sellerBalanceCop: ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0),
         connectedStores
       };
@@ -3619,22 +3811,150 @@ function buildStoreLiquidationRows(state: AppState, entries: WalletEntry[]): Sto
     .sort((left, right) => right.orders - left.orders || left.sellerName.localeCompare(right.sellerName));
 }
 
-function csvValue(value: string | number) {
-  const text = String(value);
+function csvValue(value: unknown) {
+  const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replaceAll("\"", "\"\"")}"`;
 }
 
-function downloadLiquidationsCsv(rows: LiquidationRow[], storeRows: StoreLiquidationRow[], startDate: string, endDate: string) {
+function downloadFailedOrdersCsv(orders: Order[], state: AppState, startDate: string, endDate: string, sellerFilter: string) {
+  const header = [
+    "numero_guia",
+    "numero_shopify",
+    "id_pedido",
+    "vendedor",
+    "dominio_tienda",
+    "ciudad",
+    "zona",
+    "estado",
+    "motivo_fallido",
+    "decision_reintento",
+    "cliente",
+    "telefono",
+    "direccion_original",
+    "direccion_normalizada",
+    "lat",
+    "lng",
+    "metodo_pago",
+    "modo_fulfillment",
+    "valor_total_cop",
+    "producto",
+    "sku",
+    "cantidad",
+    "lider_logistico",
+    "mensajero",
+    "punto_recogida",
+    "direccion_recogida",
+    "fecha_programada",
+    "ventana_programada",
+    "resultado_llamada",
+    "nota_llamada",
+    "fecha_reprogramada",
+    "ventana_reprogramada",
+    "rotulo_impreso_en",
+    "rotulo_impreso_por",
+    "veces_impreso",
+    "recogido_en",
+    "creado_en",
+    "actualizado_en",
+    "cantidad_evidencias",
+    "evidencia_tipo",
+    "evidencia_motivo",
+    "evidencia_nota",
+    "evidencia_archivo",
+    "evidencia_link_foto",
+    "evidencia_creada_en",
+    "todos_links_evidencia",
+    "todas_notas_evidencia",
+    "pedido_json",
+    "evidencias_json"
+  ];
+  const rows = orders.map((order) => {
+    const seller = state.sellers.find((item) => item.id === order.sellerId);
+    const city = state.cities.find((item) => item.id === order.cityId);
+    const zone = state.zones.find((item) => item.id === order.zoneId);
+    const driver = state.drivers.find((item) => item.id === order.driverId);
+    const messenger = state.messengers.find((item) => item.id === order.messengerId);
+    const latestEvidence = [...order.evidence].reverse().find((item) => item.type === "failed") ?? order.evidence.at(-1);
+    return [
+      order.trackingCode,
+      order.shopifyOrderId,
+      order.id,
+      seller?.name,
+      seller?.shopDomain,
+      city?.name ?? order.cityId,
+      zone?.name ?? order.zoneId,
+      statusLabel(order.status),
+      order.failedReason,
+      order.retryDecision,
+      order.customerName,
+      order.customerPhone,
+      order.addressRaw,
+      order.normalizedAddress,
+      order.lat,
+      order.lng,
+      order.paymentMethod,
+      order.fulfillmentMode,
+      order.totalCop,
+      order.productName,
+      order.sku,
+      order.quantity,
+      driver?.name,
+      messenger?.name,
+      order.pickupPointName,
+      order.pickupAddress,
+      order.scheduledDate,
+      order.scheduledWindow,
+      order.callOutcome,
+      order.callNote,
+      order.rescheduledDate,
+      order.rescheduledWindow,
+      order.labelPrintedAt,
+      order.labelPrintedBy,
+      order.labelPrintCount,
+      order.pickedUpAt,
+      order.createdAt,
+      order.updatedAt,
+      order.evidence.length,
+      latestEvidence?.type,
+      latestEvidence?.reason,
+      latestEvidence?.note,
+      latestEvidence?.photoLabel,
+      latestEvidence?.photoUrl,
+      latestEvidence?.createdAt,
+      order.evidence.map((item) => item.photoUrl).filter(Boolean).join(" | "),
+      order.evidence.map((item) => [item.createdAt, item.reason, item.note].filter(Boolean).join(" - ")).join(" | "),
+      JSON.stringify(order),
+      JSON.stringify(order.evidence)
+    ];
+  });
+  const csv = [header, ...rows].map((line) => line.map(csvValue).join(",")).join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `fallidos-${sellerFilter === "all" ? "todos" : sellerFilter}-${startDate || "inicio"}-${endDate || "hoy"}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadLiquidationsCsv(rows: LiquidationRow[], storeRows: StoreLiquidationRow[], orderAudits: LiquidationOrderAudit[], blockedAudits: LiquidationOrderAudit[], startDate: string, endDate: string) {
   const totalSellerFees = rows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.feesCop, 0);
   const totalDriverPay = rows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.earningsCop, 0);
   const platformMargin = totalSellerFees - totalDriverPay;
-  const header = ["tipo", "nombre", "ordenes", "cod_recaudado", "fee_tienda", "pago_domiciliario", "margen", "debe_entregar", "saldo_a_recibir", "neto", "estado"];
+  const header = ["tipo", "nombre", "ordenes", "entregados", "fallidos", "cod_recaudado", "cobro_entrega_tienda", "cobro_fallido_tienda", "fulfillment", "total_cobrado_tienda", "pago_entregados_domiciliario", "pago_fallidos_domiciliario", "total_pago_domiciliario", "margen_plataforma", "debe_entregar", "saldo_a_recibir", "neto", "estado"];
   const body = rows.map((row) => [
     row.role === "seller" ? "vendedor" : "transportista",
     row.name,
     row.orders,
+    row.deliveredOrders,
+    row.failedOrders,
     row.codCop,
+    row.deliveryFeeCop,
+    row.failedFeeCop,
+    row.fulfillmentCop,
     row.feesCop,
+    row.deliveredPayCop,
+    row.failedPayCop,
     row.earningsCop,
     row.platformMarginCop,
     row.cashToReturnCop,
@@ -3644,20 +3964,68 @@ function downloadLiquidationsCsv(rows: LiquidationRow[], storeRows: StoreLiquida
   ]);
   const summary = [
     [],
-    ["resumen", "margen plataforma estimado", "", "", totalSellerFees, totalDriverPay, platformMargin, "", "", "", ""]
+    ["resumen", "margen plataforma estimado", "", "", "", "", "", "", "", totalSellerFees, "", "", totalDriverPay, platformMargin, "", "", "", ""]
   ];
-  const storeHeader = ["tienda", "vendedor", "dominio", "ordenes", "cod_recaudado", "fee_transporte_tienda", "fulfillment", "total_cobrado_tienda", "saldo_tienda", "tiendas_conectadas"];
+  const storeHeader = ["tienda", "vendedor", "dominio", "ordenes", "entregados", "fallidos", "cod_recaudado", "cobro_entrega_tienda", "cobro_fallido_tienda", "fulfillment", "total_cobrado_tienda", "saldo_a_pagar_tienda", "tiendas_conectadas"];
   const storeBody = storeRows.map((row) => [
     row.sellerName,
     row.sellerId,
     row.shopDomain,
     row.orders,
+    row.deliveredOrders,
+    row.failedOrders,
     row.codCop,
-    row.feeCop,
+    row.deliveryFeeCop,
+    row.failedFeeCop,
     row.fulfillmentCop,
     row.totalChargedCop,
     row.sellerBalanceCop,
     row.connectedStores
+  ]);
+  const orderHeader = ["guia", "shopify", "pedido_id", "tienda", "domiciliario", "estado", "metodo_pago", "cod", "cobro_entrega_tienda", "cobro_fallido_tienda", "fulfillment", "total_cobrado_tienda", "pago_entregado_domiciliario", "pago_fallido_domiciliario", "total_pago_domiciliario", "comision_plataforma", "a_pagar_tienda", "cod_recibido_domiciliario", "tienda_habilitada", "nota"];
+  const orderBody = orderAudits.map((audit) => [
+    audit.trackingCode,
+    audit.shopifyOrderId,
+    audit.orderId,
+    audit.sellerName,
+    audit.driverName,
+    statusLabel(audit.status),
+    audit.paymentMethod,
+    audit.codCop,
+    audit.deliveryFeeCop,
+    audit.failedFeeCop,
+    audit.fulfillmentCop,
+    audit.storeChargeCop,
+    audit.driverDeliveredPayCop,
+    audit.driverFailedPayCop,
+    audit.driverPayCop,
+    audit.platformMarginCop,
+    audit.sellerNetCop,
+    audit.codReceived ? "si" : "no",
+    audit.sellerEligible ? "si" : "no",
+    audit.reason
+  ]);
+  const blockedBody = blockedAudits.map((audit) => [
+    audit.trackingCode,
+    audit.shopifyOrderId,
+    audit.orderId,
+    audit.sellerName,
+    audit.driverName,
+    statusLabel(audit.status),
+    audit.paymentMethod,
+    audit.codCop,
+    audit.deliveryFeeCop,
+    audit.failedFeeCop,
+    audit.fulfillmentCop,
+    audit.storeChargeCop,
+    audit.driverDeliveredPayCop,
+    audit.driverFailedPayCop,
+    audit.driverPayCop,
+    audit.platformMarginCop,
+    audit.sellerNetCop,
+    audit.codReceived ? "si" : "no",
+    audit.sellerEligible ? "si" : "no",
+    audit.reason
   ]);
   const csv = [
     header,
@@ -3666,7 +4034,15 @@ function downloadLiquidationsCsv(rows: LiquidationRow[], storeRows: StoreLiquida
     [],
     ["registro por tienda"],
     storeHeader,
-    ...storeBody
+    ...storeBody,
+    [],
+    ["auditoria por pedido"],
+    orderHeader,
+    ...orderBody,
+    [],
+    ["pedidos cod no habilitados para tienda"],
+    orderHeader,
+    ...blockedBody
   ].map((line) => line.map(csvValue).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -3686,19 +4062,43 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const [error, setError] = useState<string | null>(null);
   const rangeEntries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
   const entries = rangeEntries.filter((entry) => !entry.settlementId);
-  const rows = buildLiquidationRows(state, entries);
-  const rangeRows = buildLiquidationRows(state, rangeEntries);
-  const storeRows = buildStoreLiquidationRows(state, entries);
-  const rangeStoreRows = buildStoreLiquidationRows(state, rangeEntries);
-  const sellerRows = rows.filter((row) => row.role === "seller");
-  const driverRows = rows.filter((row) => row.role === "driver");
+  const rangeAudits = buildLiquidationOrderAudits(state, rangeEntries);
+  const auditByOrderId = new Map(rangeAudits.map((audit) => [audit.orderId, audit]));
+  const eligibleSellerEntries = entries.filter((entry) => isSellerEntryEligible(entry, auditByOrderId));
+  const eligibleRangeSellerEntries = rangeEntries.filter((entry) => isSellerEntryEligible(entry, auditByOrderId));
+  const driverRows = buildLiquidationRows(state, entries.filter((entry) => entry.ownerType === "driver"), state.wallet, rangeAudits).filter((row) => row.role === "driver");
+  const sellerRows = buildLiquidationRows(state, eligibleSellerEntries.filter((entry) => entry.ownerType === "seller"), state.wallet, rangeAudits).filter((row) => row.role === "seller");
+  const rows = [...sellerRows, ...driverRows];
+  const storeRows = buildStoreLiquidationRows(state, eligibleSellerEntries.filter((entry) => entry.ownerType === "seller"));
+  const rangeStoreRows = buildStoreLiquidationRows(state, eligibleRangeSellerEntries.filter((entry) => entry.ownerType === "seller"));
+  const pendingSellerOrderIds = new Set(entries.filter((entry) => entry.ownerType === "seller").map((entry) => entry.orderId).filter(Boolean) as string[]);
+  const blockedSellerAudits = rangeAudits.filter((audit) => pendingSellerOrderIds.has(audit.orderId) && audit.paymentMethod === "cod" && !audit.sellerEligible);
+  const pendingEntryIds = new Set(entries.map((entry) => entry.id));
+  const pendingAudits = rangeAudits.filter((audit) => {
+    return [...audit.sellerWalletEntryIds, ...audit.driverWalletEntryIds].some((entryId) => pendingEntryIds.has(entryId));
+  });
   const closedSettlements = [...state.settlements].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const totalCod = rangeRows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.codCop, 0);
-  const totalSellerFees = rangeRows.filter((row) => row.role === "seller").reduce((sum, row) => sum + row.feesCop, 0);
-  const totalDriverPay = rangeRows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.earningsCop, 0);
+  const totalCod = rangeAudits.reduce((sum, audit) => sum + audit.codCop, 0);
+  const totalSellerFees = rangeAudits.reduce((sum, audit) => sum + audit.storeChargeCop, 0);
+  const rangeDriverEarnings = rangeEntries.filter((entry) => entry.ownerType === "driver" && entry.type === "driver_earning");
+  const totalDriverPay = rangeDriverEarnings.filter((entry) => entry.amountCop > 0).reduce((sum, entry) => sum + entry.amountCop, 0);
+  const totalDriverAdjustments = rangeDriverEarnings.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0);
+  const totalDriverAdjustmentCredit = Math.abs(totalDriverAdjustments);
+  const totalDriverCost = totalDriverPay + totalDriverAdjustments;
+  const totalDeliveredOrders = rangeAudits.filter((audit) => audit.status === "delivered").length;
+  const totalFailedOrders = rangeAudits.filter((audit) => audit.status === "failed").length;
+  const totalDeliveryFees = rangeAudits.reduce((sum, audit) => sum + audit.deliveryFeeCop, 0);
+  const totalFailedFees = rangeAudits.reduce((sum, audit) => sum + audit.failedFeeCop, 0);
+  const totalFulfillmentFees = rangeAudits.reduce((sum, audit) => sum + audit.fulfillmentCop, 0);
+  const totalDeliveredPay = rangeDriverEarnings
+    .filter((entry) => entry.amountCop > 0 && entry.description.toLowerCase().includes("entregado"))
+    .reduce((sum, entry) => sum + entry.amountCop, 0);
+  const totalFailedPay = rangeDriverEarnings
+    .filter((entry) => entry.amountCop > 0 && entry.description.toLowerCase().includes("fallido"))
+    .reduce((sum, entry) => sum + entry.amountCop, 0);
   const totalDriverCashToReturn = rows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.cashToReturnCop, 0);
   const totalDriverReceivable = rows.filter((row) => row.role === "driver").reduce((sum, row) => sum + row.receivableCop, 0);
-  const platformMargin = totalSellerFees - totalDriverPay;
+  const platformMargin = totalSellerFees - totalDriverCost;
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
 
   const mergeSettlement = (settlement: Settlement, walletEntries: WalletEntry[]) => {
@@ -3726,7 +4126,10 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
     setBusyId(`${row.role}-${row.id}`);
     setError(null);
     void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate, endDate })
-      .then(({ settlement, walletEntries }) => mergeSettlement(settlement, walletEntries))
+      .then(async ({ settlement, walletEntries }) => {
+        const { settlement: paidSettlement } = await updateFirebaseSettlementStatus({ settlementId: settlement.id, status: "paid" });
+        mergeSettlement(paidSettlement, walletEntries);
+      })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo cerrar la liquidacion."))
       .finally(() => setBusyId(null));
   };
@@ -3751,7 +4154,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
           className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
           type="button"
           disabled={rows.length === 0}
-          onClick={() => downloadLiquidationsCsv(rows, storeRows, startDate, endDate)}
+          onClick={() => downloadLiquidationsCsv(rows, storeRows, pendingAudits, blockedSellerAudits, startDate, endDate)}
         >
           <FileDown size={16} />
           Exportar CSV
@@ -3783,6 +4186,37 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
         <Metric icon={<ShieldCheck size={20} />} label="Margen plataforma" value={formatCop(platformMargin)} />
       </div>
 
+      <Card>
+        <div className="mb-3">
+          <h2 className="font-bold">Resumen completo del rango</h2>
+          <p className="text-sm text-black/60">Desglose de lo que se cobra a tiendas, lo que se paga a domiciliarios y lo que queda como comision de plataforma.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-md bg-field p-3">
+            <p className="text-xs font-semibold uppercase text-black/50">Pedidos</p>
+            <p className="mt-1 text-sm text-black/70">Entregados: <b>{totalDeliveredOrders}</b></p>
+            <p className="text-sm text-black/70">Fallidos: <b>{totalFailedOrders}</b></p>
+            <p className="text-sm text-black/70">Total cerrados: <b>{totalDeliveredOrders + totalFailedOrders}</b></p>
+          </div>
+          <div className="rounded-md bg-field p-3">
+            <p className="text-xs font-semibold uppercase text-black/50">Cobrado a tiendas</p>
+            <p className="mt-1 text-sm text-black/70">Entregas: <b>{formatCop(totalDeliveryFees)}</b></p>
+            <p className="text-sm text-black/70">Fallidos: <b>{formatCop(totalFailedFees)}</b></p>
+            <p className="text-sm text-black/70">Fulfillment: <b>{formatCop(totalFulfillmentFees)}</b></p>
+            <p className="text-sm text-black/70">Total cobrado: <b>{formatCop(totalSellerFees)}</b></p>
+          </div>
+          <div className="rounded-md bg-field p-3">
+            <p className="text-xs font-semibold uppercase text-black/50">Pagado a domiciliarios</p>
+            <p className="mt-1 text-sm text-black/70">Entregas: <b>{formatCop(totalDeliveredPay)}</b></p>
+            <p className="text-sm text-black/70">Fallidos: <b>{formatCop(totalFailedPay)}</b></p>
+            <p className="text-sm text-black/70">Total pagado: <b>{formatCop(totalDriverPay)}</b></p>
+            {totalDriverAdjustmentCredit > 0 && <p className="text-sm text-black/70">Ajustes/reversas a favor: <b>{formatCop(totalDriverAdjustmentCredit)}</b></p>}
+            <p className="text-sm text-black/70">Costo neto para margen: <b>{formatCop(Math.max(0, totalDriverCost))}</b></p>
+            <p className={`text-sm font-bold ${platformMargin < 0 ? "text-rust" : "text-mint"}`}>Comision plataforma: {formatCop(platformMargin)}</p>
+          </div>
+        </div>
+      </Card>
+
       <StoreLiquidationSummary rows={rangeStoreRows} />
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -3801,8 +4235,9 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
       </div>
 
       <StoreLiquidationTable rows={storeRows} />
-      <LiquidationTable title="Vendedores pendientes" rows={sellerRows} emptyMessage="No hay movimientos de vendedores sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
-      <LiquidationTable title="Transportistas pendientes" rows={driverRows} emptyMessage="No hay movimientos de transportistas sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
+      <LiquidationTable title="Tiendas disponibles para pagar" rows={sellerRows} emptyMessage="No hay tiendas habilitadas para pagar en este rango. Para COD, primero marca recibido el dinero del domiciliario." busyId={busyId} onClose={closeRow} />
+      <BlockedSellerOrdersTable audits={blockedSellerAudits} />
+      <LiquidationTable title="Domiciliarios por cortar" rows={driverRows} emptyMessage="No hay movimientos de domiciliarios sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
       <SettlementsTable state={state} settlements={closedSettlements} busyId={busyId} onChangeStatus={changeStatus} />
     </main>
   );
@@ -3822,6 +4257,7 @@ function LiquidationTable({
   onClose: (row: LiquidationRow) => void;
 }) {
   const { page, setPage, totalPages, visibleItems } = usePaginatedItems(rows, 10);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -3832,13 +4268,14 @@ function LiquidationTable({
         <p className="text-sm text-black/60">{emptyMessage}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-collapse text-sm">
+          <table className="w-full min-w-[1160px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
                 <th className="py-2 pr-3 font-semibold">Cuenta</th>
                 <th className="py-2 pr-3 font-semibold">Ordenes</th>
+                <th className="py-2 pr-3 font-semibold">Ent/Fall</th>
                 <th className="py-2 pr-3 font-semibold">COD recaudado</th>
-                <th className="py-2 pr-3 font-semibold">Fee tienda</th>
+                <th className="py-2 pr-3 font-semibold">Cobrado tienda</th>
                 <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
                 <th className="py-2 pr-3 font-semibold">Margen</th>
                 <th className="py-2 pr-3 font-semibold">Debe entregar</th>
@@ -3849,38 +4286,202 @@ function LiquidationTable({
               </tr>
             </thead>
             <tbody>
-              {visibleItems.map((row) => (
-                <tr key={`${row.role}-${row.id}`} className="border-b border-black/5 last:border-0">
-                  <td className="py-3 pr-3 font-semibold">{row.name}</td>
-                  <td className="py-3 pr-3">{row.orders}</td>
-                  <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
-                  <td className="py-3 pr-3">{formatCop(row.feesCop)}</td>
-                  <td className="py-3 pr-3">{formatCop(row.earningsCop)}</td>
-                  <td className={`py-3 pr-3 font-bold ${row.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.platformMarginCop)}</td>
-                  <td className="py-3 pr-3 font-bold text-rust">{row.role === "driver" ? formatCop(row.cashToReturnCop) : "-"}</td>
-                  <td className="py-3 pr-3 font-bold text-mint">{row.role === "driver" ? formatCop(row.receivableCop) : formatCop(row.receivableCop)}</td>
-                  <td className={`py-3 pr-3 font-bold ${row.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.netCop)}</td>
-                  <td className="py-3">
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "pendiente" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">
-                    <button
-                      className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                      type="button"
-                      disabled={busyId === `${row.role}-${row.id}`}
-                      onClick={() => onClose(row)}
-                    >
-                      {busyId === `${row.role}-${row.id}` ? "Cerrando..." : "Cerrar"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {visibleItems.map((row) => {
+                const rowKey = `${row.role}-${row.id}`;
+                const expanded = expandedId === rowKey;
+                const actionLabel = row.role === "seller" ? "Pagar tienda" : row.cashToReturnCop > 0 ? "Marcar dinero recibido" : "Marcar pago realizado";
+                return (
+                  <Fragment key={rowKey}>
+                    <tr key={rowKey} className="border-b border-black/5 last:border-0">
+                      <td className="py-3 pr-3 font-semibold">{row.name}</td>
+                      <td className="py-3 pr-3">{row.orders}</td>
+                      <td className="py-3 pr-3">{row.deliveredOrders}/{row.failedOrders}</td>
+                      <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
+                      <td className="py-3 pr-3">{formatCop(row.feesCop)}</td>
+                      <td className="py-3 pr-3">{formatCop(row.earningsCop)}</td>
+                      <td className={`py-3 pr-3 font-bold ${row.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.platformMarginCop)}</td>
+                      <td className="py-3 pr-3 font-bold text-rust">{row.role === "driver" ? formatCop(row.cashToReturnCop) : "-"}</td>
+                      <td className="py-3 pr-3 font-bold text-mint">{formatCop(row.receivableCop)}</td>
+                      <td className={`py-3 pr-3 font-bold ${row.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.netCop)}</td>
+                      <td className="py-3">
+                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "pendiente" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            className="focus-ring rounded-md border border-black/10 px-3 py-2 text-xs font-semibold hover:bg-field"
+                            type="button"
+                            onClick={() => setExpandedId(expanded ? null : rowKey)}
+                          >
+                            {expanded ? "Ocultar" : "Detalle"}
+                          </button>
+                          <button
+                            className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                            type="button"
+                            disabled={busyId === rowKey}
+                            onClick={() => onClose(row)}
+                          >
+                            {busyId === rowKey ? "Guardando..." : actionLabel}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr key={`${rowKey}-detail`} className="border-b border-black/5">
+                        <td colSpan={12} className="bg-field/60 px-3 py-3">
+                          <LiquidationRowDetail row={row} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
           <PaginationControls page={page} totalPages={totalPages} totalItems={rows.length} onPageChange={setPage} />
         </div>
+      )}
+    </Card>
+  );
+}
+
+function DetailLine({ label, value, tone }: { label: string; value: string | number; tone?: "mint" | "rust" | "ink" }) {
+  const toneClass = tone === "mint" ? "text-mint" : tone === "rust" ? "text-rust" : "text-ink";
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-black/5 py-1.5 last:border-0">
+      <span className="text-black/60">{label}</span>
+      <span className={`font-bold ${toneClass}`}>{value}</span>
+    </div>
+  );
+}
+
+function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Pedidos incluidos</p>
+          <DetailLine label="Total pedidos" value={row.orders} />
+          <DetailLine label="Entregados" value={row.deliveredOrders} tone="mint" />
+          <DetailLine label="Fallidos" value={row.failedOrders} tone="rust" />
+        </div>
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Cobros a tienda</p>
+          <DetailLine label="COD recaudado" value={formatCop(row.codCop)} />
+          <DetailLine label="Cobro por entregas" value={formatCop(row.deliveryFeeCop)} />
+          <DetailLine label="Cobro por fallidos" value={formatCop(row.failedFeeCop)} />
+          <DetailLine label="Fulfillment" value={formatCop(row.fulfillmentCop)} />
+          <DetailLine label="Total cobrado" value={formatCop(row.feesCop)} tone="mint" />
+        </div>
+        {row.role === "driver" ? (
+          <div className="rounded-md bg-white p-3">
+            <p className="mb-2 text-xs font-bold uppercase text-black/50">Pago domiciliario</p>
+            <DetailLine label="Pago por entregados" value={formatCop(row.deliveredPayCop)} />
+            <DetailLine label="Pago por fallidos" value={formatCop(row.failedPayCop)} />
+            <DetailLine label="Total pago" value={formatCop(row.earningsCop)} tone="rust" />
+            <DetailLine label="Debe entregar" value={formatCop(row.cashToReturnCop)} tone="rust" />
+            <DetailLine label="Saldo a recibir" value={formatCop(row.receivableCop)} tone="mint" />
+          </div>
+        ) : (
+          <div className="rounded-md bg-white p-3">
+            <p className="mb-2 text-xs font-bold uppercase text-black/50">Liquidacion tienda</p>
+            <DetailLine label="COD a favor de tienda" value={formatCop(row.codCop)} tone="mint" />
+            <DetailLine label="Cobros descontados" value={formatCop(row.feesCop)} tone="rust" />
+            <DetailLine label="A pagar a tienda" value={formatCop(row.receivableCop)} tone="mint" />
+          </div>
+        )}
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Resultado</p>
+          <DetailLine label="Comision plataforma" value={formatCop(row.platformMarginCop)} tone={row.platformMarginCop < 0 ? "rust" : "mint"} />
+          <DetailLine label={row.role === "seller" ? "A pagar a tienda" : "Neto domiciliario"} value={formatCop(row.netCop)} tone={row.netCop < 0 ? "rust" : "mint"} />
+          <p className="mt-2 rounded-md bg-field px-2 py-1.5 text-xs text-black/60">
+            {row.role === "seller"
+              ? "A pagar a tienda = COD ya recibido menos cobros de transporte, fallidos y fulfillment."
+              : "Neto domiciliario = pago domiciliario menos COD recaudado. Si es negativo, debe entregar dinero."}
+          </p>
+        </div>
+      </div>
+      <LiquidationOrderAuditTable audits={row.orderDetails} compact />
+    </div>
+  );
+}
+
+function LiquidationOrderAuditTable({ audits, compact = false }: { audits: LiquidationOrderAudit[]; compact?: boolean }) {
+  if (audits.length === 0) {
+    return <p className="rounded-md bg-white px-3 py-2 text-sm text-black/60">No hay pedidos detallados para esta liquidacion.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-md bg-white">
+      <table className={`w-full border-collapse text-sm ${compact ? "min-w-[1200px]" : "min-w-[1320px]"}`}>
+        <thead>
+          <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
+            <th className="py-2 pl-3 pr-3 font-semibold">Guia</th>
+            <th className="py-2 pr-3 font-semibold">Shopify</th>
+            <th className="py-2 pr-3 font-semibold">Tienda</th>
+            <th className="py-2 pr-3 font-semibold">Domiciliario</th>
+            <th className="py-2 pr-3 font-semibold">Estado</th>
+            <th className="py-2 pr-3 font-semibold">COD</th>
+            <th className="py-2 pr-3 font-semibold">Cobro tienda</th>
+            <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
+            <th className="py-2 pr-3 font-semibold">Comision</th>
+            <th className="py-2 pr-3 font-semibold">A pagar tienda</th>
+            <th className="py-2 pr-3 font-semibold">Habilitado tienda</th>
+            <th className="py-2 pr-3 font-semibold">Nota</th>
+          </tr>
+        </thead>
+        <tbody>
+          {audits.map((audit) => (
+            <tr key={audit.orderId} className="border-b border-black/5 last:border-0">
+              <td className="py-3 pl-3 pr-3 font-semibold">{audit.trackingCode}</td>
+              <td className="py-3 pr-3">{audit.shopifyOrderId}</td>
+              <td className="py-3 pr-3">{audit.sellerName}</td>
+              <td className="py-3 pr-3">{audit.driverName}</td>
+              <td className="py-3 pr-3">{statusLabel(audit.status)}</td>
+              <td className="py-3 pr-3">{formatCop(audit.codCop)}</td>
+              <td className="py-3 pr-3">
+                <p className="font-semibold">{formatCop(audit.storeChargeCop)}</p>
+                <p className="text-xs text-black/50">Ent {formatCop(audit.deliveryFeeCop)} · Fall {formatCop(audit.failedFeeCop)} · Ful {formatCop(audit.fulfillmentCop)}</p>
+              </td>
+              <td className="py-3 pr-3">
+                <p className="font-semibold">{formatCop(audit.driverPayCop)}</p>
+                <p className="text-xs text-black/50">Ent {formatCop(audit.driverDeliveredPayCop)} · Fall {formatCop(audit.driverFailedPayCop)}</p>
+              </td>
+              <td className={`py-3 pr-3 font-bold ${audit.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(audit.platformMarginCop)}</td>
+              <td className={`py-3 pr-3 font-bold ${audit.sellerNetCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(audit.sellerNetCop)}</td>
+              <td className="py-3 pr-3">
+                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${audit.sellerEligible ? "bg-mint/10 text-mint" : "bg-rust/10 text-rust"}`}>
+                  {audit.sellerEligible ? "Si" : "No"}
+                </span>
+              </td>
+              <td className="py-3 pr-3 text-black/60">{audit.reason}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BlockedSellerOrdersTable({ audits }: { audits: LiquidationOrderAudit[] }) {
+  const { page, setPage, totalPages, visibleItems } = usePaginatedItems(audits, 10);
+  return (
+    <Card>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-bold">Pedidos COD no habilitados para tienda</h2>
+          <p className="text-sm text-black/60">Estos pedidos tienen movimientos de tienda pendientes, pero aun falta marcar recibido el dinero del domiciliario.</p>
+        </div>
+        <span className="shrink-0 text-sm text-black/60">{audits.length} pedidos</span>
+      </div>
+      {audits.length === 0 ? (
+        <p className="text-sm text-black/60">No hay pedidos COD bloqueados en este rango.</p>
+      ) : (
+        <>
+          <LiquidationOrderAuditTable audits={visibleItems} />
+          <PaginationControls page={page} totalPages={totalPages} totalItems={audits.length} onPageChange={setPage} />
+        </>
       )}
     </Card>
   );
@@ -3916,17 +4517,19 @@ function StoreLiquidationTable({ rows }: { rows: StoreLiquidationRow[] }) {
         <p className="text-sm text-black/60">No hay movimientos de tiendas sin liquidar en este rango.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] border-collapse text-sm">
+          <table className="w-full min-w-[1080px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
                 <th className="py-2 pr-3 font-semibold">Tienda</th>
                 <th className="py-2 pr-3 font-semibold">Dominio</th>
                 <th className="py-2 pr-3 font-semibold">Ordenes</th>
+                <th className="py-2 pr-3 font-semibold">Ent/Fall</th>
                 <th className="py-2 pr-3 font-semibold">COD recaudado</th>
-                <th className="py-2 pr-3 font-semibold">Fee transporte</th>
+                <th className="py-2 pr-3 font-semibold">Cobro entrega</th>
+                <th className="py-2 pr-3 font-semibold">Cobro fallido</th>
                 <th className="py-2 pr-3 font-semibold">Fulfillment</th>
                 <th className="py-2 pr-3 font-semibold">Total cobrado</th>
-                <th className="py-2 pr-3 font-semibold">Saldo tienda</th>
+                <th className="py-2 pr-3 font-semibold">A pagar tienda</th>
               </tr>
             </thead>
             <tbody>
@@ -3938,8 +4541,10 @@ function StoreLiquidationTable({ rows }: { rows: StoreLiquidationRow[] }) {
                   </td>
                   <td className="py-3 pr-3">{row.shopDomain}</td>
                   <td className="py-3 pr-3">{row.orders}</td>
+                  <td className="py-3 pr-3">{row.deliveredOrders}/{row.failedOrders}</td>
                   <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
-                  <td className="py-3 pr-3">{formatCop(row.feeCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(row.deliveryFeeCop)}</td>
+                  <td className="py-3 pr-3">{formatCop(row.failedFeeCop)}</td>
                   <td className="py-3 pr-3">{formatCop(row.fulfillmentCop)}</td>
                   <td className="py-3 pr-3 font-bold">{formatCop(row.totalChargedCop)}</td>
                   <td className={`py-3 pr-3 font-bold ${row.sellerBalanceCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.sellerBalanceCop)}</td>
@@ -3968,7 +4573,7 @@ function settlementFinancialView(state: AppState, settlement: Settlement) {
   if (settlement.kind === "driver") {
     const relatedSellerEntries = getRelatedSellerEntries(state.wallet, orderIds);
     const codCop = settlement.codCop || relatedSellerEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + entry.amountCop, 0);
-    const feesCop = settlement.feesCop || Math.abs(relatedSellerEntries.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0));
+    const feesCop = settlement.feesCop || netChargeCop(relatedSellerEntries, ["delivery_fee", "failed_fee", "fulfillment_fee"]);
     const driverPayCop = settlement.driverPayCop || settlementEntries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + entry.amountCop, 0);
     const netCop = driverPayCop - codCop;
     return {
@@ -3993,6 +4598,12 @@ function settlementFinancialView(state: AppState, settlement: Settlement) {
   };
 }
 
+function settlementLiquidationRow(state: AppState, settlement: Settlement): LiquidationRow | null {
+  const settlementEntries = state.wallet.filter((entry) => settlement.walletEntryIds.includes(entry.id));
+  const rows = buildLiquidationRows(state, settlementEntries, state.wallet);
+  return rows.find((row) => row.role === settlement.kind && row.id === settlement.ownerId) ?? null;
+}
+
 function SettlementsTable({
   state,
   settlements,
@@ -4005,6 +4616,7 @@ function SettlementsTable({
   onChangeStatus: (settlement: Settlement, status: "paid" | "reconciled") => void;
 }) {
   const { page, setPage, totalPages, visibleItems } = usePaginatedItems(settlements, 10);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -4018,14 +4630,15 @@ function SettlementsTable({
         <p className="text-sm text-black/60">Todavia no hay liquidaciones cerradas.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] border-collapse text-sm">
+          <table className="w-full min-w-[1200px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
                 <th className="py-2 pr-3 font-semibold">Cuenta</th>
                 <th className="py-2 pr-3 font-semibold">Rango</th>
                 <th className="py-2 pr-3 font-semibold">Ordenes</th>
+                <th className="py-2 pr-3 font-semibold">Ent/Fall</th>
                 <th className="py-2 pr-3 font-semibold">COD recaudado</th>
-                <th className="py-2 pr-3 font-semibold">Fee tienda</th>
+                <th className="py-2 pr-3 font-semibold">Cobrado tienda</th>
                 <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
                 <th className="py-2 pr-3 font-semibold">Margen</th>
                 <th className="py-2 pr-3 font-semibold">Debe entregar</th>
@@ -4038,51 +4651,70 @@ function SettlementsTable({
             <tbody>
               {visibleItems.map((settlement) => {
                 const view = settlementFinancialView(state, settlement);
+                const detailRow = settlementLiquidationRow(state, settlement);
+                const expanded = expandedId === settlement.id;
                 return (
-                <tr key={settlement.id} className="border-b border-black/5 last:border-0">
-                  <td className="py-3 pr-3">
-                    <p className="font-semibold">{settlement.ownerName}</p>
-                    <p className="text-xs text-black/50">{settlement.kind === "seller" ? "Vendedor" : "Transportista"}</p>
-                  </td>
-                  <td className="py-3 pr-3">{settlement.startDate} a {settlement.endDate}</td>
-                  <td className="py-3 pr-3">{settlement.orderIds.length}</td>
-                  <td className="py-3 pr-3">{formatCop(view.codCop)}</td>
-                  <td className="py-3 pr-3">{formatCop(view.feesCop)}</td>
-                  <td className="py-3 pr-3">{formatCop(view.driverPayCop)}</td>
-                  <td className={`py-3 pr-3 font-bold ${view.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(view.platformMarginCop)}</td>
-                  <td className="py-3 pr-3 font-bold text-rust">{settlement.kind === "driver" ? formatCop(view.cashToReturnCop) : "-"}</td>
-                  <td className="py-3 pr-3 font-bold text-mint">{settlement.kind === "driver" ? formatCop(view.receivableCop) : formatCop(view.receivableCop)}</td>
-                  <td className={`py-3 pr-3 font-bold ${view.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(view.netCop)}</td>
-                  <td className="py-3 pr-3">
-                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${settlement.status === "pending" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
-                      {settlementStatusLabel(settlement.status)}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      {settlement.status === "pending" && (
-                        <button
-                          className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                          type="button"
-                          disabled={busyId === `${settlement.id}-paid`}
-                          onClick={() => onChangeStatus(settlement, "paid")}
-                        >
-                          {busyId === `${settlement.id}-paid` ? "Guardando..." : "Marcar pagada"}
-                        </button>
-                      )}
-                      {settlement.status === "paid" && (
-                        <button
-                          className="focus-ring rounded-md bg-mint px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                          type="button"
-                          disabled={busyId === `${settlement.id}-reconciled`}
-                          onClick={() => onChangeStatus(settlement, "reconciled")}
-                        >
-                          {busyId === `${settlement.id}-reconciled` ? "Guardando..." : "Conciliar"}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                  <Fragment key={settlement.id}>
+                    <tr className="border-b border-black/5 last:border-0">
+                      <td className="py-3 pr-3">
+                        <p className="font-semibold">{settlement.ownerName}</p>
+                        <p className="text-xs text-black/50">{settlement.kind === "seller" ? "Vendedor" : "Transportista"}</p>
+                      </td>
+                      <td className="py-3 pr-3">{settlement.startDate} a {settlement.endDate}</td>
+                      <td className="py-3 pr-3">{settlement.orderIds.length}</td>
+                      <td className="py-3 pr-3">{detailRow ? `${detailRow.deliveredOrders}/${detailRow.failedOrders}` : "-"}</td>
+                      <td className="py-3 pr-3">{formatCop(view.codCop)}</td>
+                      <td className="py-3 pr-3">{formatCop(view.feesCop)}</td>
+                      <td className="py-3 pr-3">{formatCop(view.driverPayCop)}</td>
+                      <td className={`py-3 pr-3 font-bold ${view.platformMarginCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(view.platformMarginCop)}</td>
+                      <td className="py-3 pr-3 font-bold text-rust">{settlement.kind === "driver" ? formatCop(view.cashToReturnCop) : "-"}</td>
+                      <td className="py-3 pr-3 font-bold text-mint">{formatCop(view.receivableCop)}</td>
+                      <td className={`py-3 pr-3 font-bold ${view.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(view.netCop)}</td>
+                      <td className="py-3 pr-3">
+                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${settlement.status === "pending" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
+                          {settlementStatusLabel(settlement.status)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            className="focus-ring rounded-md border border-black/10 px-3 py-2 text-xs font-semibold hover:bg-field"
+                            type="button"
+                            onClick={() => setExpandedId(expanded ? null : settlement.id)}
+                          >
+                            {expanded ? "Ocultar" : "Detalle"}
+                          </button>
+                          {settlement.status === "pending" && (
+                            <button
+                              className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                              type="button"
+                              disabled={busyId === `${settlement.id}-paid`}
+                              onClick={() => onChangeStatus(settlement, "paid")}
+                            >
+                              {busyId === `${settlement.id}-paid` ? "Guardando..." : "Marcar pagada"}
+                            </button>
+                          )}
+                          {settlement.status === "paid" && (
+                            <button
+                              className="focus-ring rounded-md bg-mint px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                              type="button"
+                              disabled={busyId === `${settlement.id}-reconciled`}
+                              onClick={() => onChangeStatus(settlement, "reconciled")}
+                            >
+                              {busyId === `${settlement.id}-reconciled` ? "Guardando..." : "Conciliar"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="border-b border-black/5">
+                        <td colSpan={13} className="bg-field/60 px-3 py-3">
+                          <ClosedSettlementDetail state={state} settlement={settlement} detailRow={detailRow} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -4091,6 +4723,185 @@ function SettlementsTable({
         </div>
       )}
     </Card>
+  );
+}
+
+function walletEntryTypeLabel(type: WalletEntry["type"]) {
+  const labels: Record<WalletEntry["type"], string> = {
+    cod_revenue: "COD recaudado",
+    delivery_fee: "Cobro entrega tienda",
+    failed_fee: "Cobro fallido tienda",
+    fulfillment_fee: "Fulfillment",
+    driver_earning: "Pago domiciliario",
+    platform_margin: "Comision plataforma",
+    cod_remittance: "Remesa COD",
+    payout: "Pago"
+  };
+  return labels[type] ?? type;
+}
+
+function ClosedSettlementDetail({ state, settlement, detailRow }: { state: AppState; settlement: Settlement; detailRow: LiquidationRow | null }) {
+  const settlementEntries = state.wallet
+    .filter((entry) => settlement.walletEntryIds.includes(entry.id))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const orderIds = settlement.orderIds.length > 0
+    ? settlement.orderIds
+    : Array.from(new Set(settlementEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+  const relatedOrderEntries = state.wallet.filter((entry) => entry.orderId && orderIds.includes(entry.orderId));
+  const audits = buildLiquidationOrderAudits(state, relatedOrderEntries).filter((audit) => orderIds.includes(audit.orderId));
+  const title = settlement.kind === "seller" ? "Detalle de pago a tienda" : "Detalle de corte del domiciliario";
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">{title}</p>
+          <DetailLine label="Cuenta" value={settlement.ownerName} />
+          <DetailLine label="Estado" value={settlementStatusLabel(settlement.status)} tone={settlement.status === "pending" ? "rust" : "mint"} />
+          <DetailLine label="Creada" value={new Date(settlement.createdAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })} />
+          {settlement.paidAt && <DetailLine label="Pagada" value={new Date(settlement.paidAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })} tone="mint" />}
+          {settlement.reconciledAt && <DetailLine label="Conciliada" value={new Date(settlement.reconciledAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })} tone="mint" />}
+        </div>
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Valores guardados</p>
+          <DetailLine label="COD" value={formatCop(settlement.codCop)} />
+          <DetailLine label="Cobrado tienda" value={formatCop(settlement.feesCop)} />
+          <DetailLine label="Pago domiciliario" value={formatCop(settlement.driverPayCop)} />
+          <DetailLine label="Comision plataforma" value={formatCop(settlement.platformMarginCop)} tone={settlement.platformMarginCop < 0 ? "rust" : "mint"} />
+          <DetailLine label="Neto" value={formatCop(settlement.netCop)} tone={settlement.netCop < 0 ? "rust" : "mint"} />
+        </div>
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Pedidos</p>
+          <DetailLine label="Total pedidos" value={orderIds.length} />
+          <DetailLine label="Entregados" value={detailRow?.deliveredOrders ?? audits.filter((audit) => audit.status === "delivered").length} tone="mint" />
+          <DetailLine label="Fallidos" value={detailRow?.failedOrders ?? audits.filter((audit) => audit.status === "failed").length} tone="rust" />
+          <DetailLine label="Movimientos wallet" value={settlementEntries.length} />
+        </div>
+        <div className="rounded-md bg-white p-3">
+          <p className="mb-2 text-xs font-bold uppercase text-black/50">Nota</p>
+          <p className="text-sm text-black/70">{settlement.note || "Sin nota registrada."}</p>
+        </div>
+      </div>
+
+      <ClosedSettlementOrderTable state={state} settlement={settlement} entries={settlementEntries} />
+
+      <div className="overflow-x-auto rounded-md bg-white">
+        <table className="w-full min-w-[980px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
+              <th className="py-2 pl-3 pr-3 font-semibold">Movimiento</th>
+              <th className="py-2 pr-3 font-semibold">Pedido</th>
+              <th className="py-2 pr-3 font-semibold">Tipo</th>
+              <th className="py-2 pr-3 font-semibold">Fecha</th>
+              <th className="py-2 pr-3 text-right font-semibold">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {settlementEntries.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-3 pl-3 pr-3 text-sm text-black/60">No hay movimientos de wallet cargados para este corte.</td>
+              </tr>
+            ) : (
+              settlementEntries.map((entry) => {
+                const order = state.orders.find((item) => item.id === entry.orderId);
+                return (
+                  <tr key={entry.id} className="border-b border-black/5 last:border-0">
+                    <td className="py-3 pl-3 pr-3">
+                      <p className="font-semibold">{entry.description}</p>
+                      <p className="text-xs text-black/50">{entry.id}</p>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <p className="font-semibold">{order?.trackingCode ?? entry.orderId ?? "-"}</p>
+                      <p className="text-xs text-black/50">{order?.shopifyOrderId ?? ""}</p>
+                    </td>
+                    <td className="py-3 pr-3">{walletEntryTypeLabel(entry.type)}</td>
+                    <td className="py-3 pr-3">{new Date(entry.createdAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}</td>
+                    <td className={`py-3 pr-3 text-right font-bold ${entry.amountCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(entry.amountCop)}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function closedSettlementOrderLabel(order: Order | undefined, entries: WalletEntry[]) {
+  const text = entries.map((entry) => `${entry.type} ${entry.description}`.toLowerCase()).join(" ");
+  if (text.includes("correccion") || text.includes("reversa")) return "Correccion";
+  if (text.includes("fallido")) return "Fallido";
+  if (text.includes("entregado")) return "Entregado";
+  return order ? statusLabel(order.status) : "Movimiento";
+}
+
+function ClosedSettlementOrderTable({ state, settlement, entries }: { state: AppState; settlement: Settlement; entries: WalletEntry[] }) {
+  const orderIds = Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+  const rows = orderIds.map((orderId) => {
+    const order = state.orders.find((item) => item.id === orderId);
+    const ownEntries = entries.filter((entry) => entry.orderId === orderId);
+    const codCop = netAmountCop(ownEntries, ["cod_revenue"]);
+    const deliveryFeeCop = netChargeCop(ownEntries, ["delivery_fee"]);
+    const failedFeeCop = netChargeCop(ownEntries, ["failed_fee"]);
+    const fulfillmentCop = netChargeCop(ownEntries, ["fulfillment_fee"]);
+    const storeChargeCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
+    const driverPayCop = netAmountCop(ownEntries, ["driver_earning"]);
+    const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
+    return {
+      orderId,
+      trackingCode: order?.trackingCode ?? orderId,
+      shopifyOrderId: order?.shopifyOrderId ?? "",
+      movementLabel: closedSettlementOrderLabel(order, ownEntries),
+      codCop,
+      deliveryFeeCop,
+      failedFeeCop,
+      fulfillmentCop,
+      storeChargeCop,
+      driverPayCop,
+      netCop,
+      entriesCount: ownEntries.length
+    };
+  });
+
+  if (rows.length === 0) {
+    return <p className="rounded-md bg-white px-3 py-2 text-sm text-black/60">Este corte no tiene pedidos asociados.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md bg-white">
+      <table className="w-full min-w-[1120px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
+            <th className="py-2 pl-3 pr-3 font-semibold">Guia</th>
+            <th className="py-2 pr-3 font-semibold">Shopify</th>
+            <th className="py-2 pr-3 font-semibold">Movimiento pagado</th>
+            <th className="py-2 pr-3 font-semibold">COD</th>
+            <th className="py-2 pr-3 font-semibold">Cobro entrega</th>
+            <th className="py-2 pr-3 font-semibold">Cobro fallido</th>
+            <th className="py-2 pr-3 font-semibold">Fulfillment</th>
+            <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
+            <th className="py-2 pr-3 font-semibold">{settlement.kind === "seller" ? "A pagar tienda" : "Neto corte"}</th>
+            <th className="py-2 pr-3 font-semibold">Movs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.orderId} className="border-b border-black/5 last:border-0">
+              <td className="py-3 pl-3 pr-3 font-semibold">{row.trackingCode}</td>
+              <td className="py-3 pr-3">{row.shopifyOrderId}</td>
+              <td className="py-3 pr-3">{row.movementLabel}</td>
+              <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
+              <td className="py-3 pr-3">{formatCop(row.deliveryFeeCop)}</td>
+              <td className="py-3 pr-3">{formatCop(row.failedFeeCop)}</td>
+              <td className="py-3 pr-3">{formatCop(row.fulfillmentCop)}</td>
+              <td className="py-3 pr-3">{formatCop(row.driverPayCop)}</td>
+              <td className={`py-3 pr-3 font-bold ${row.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.netCop)}</td>
+              <td className="py-3 pr-3">{row.entriesCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -4150,15 +4961,19 @@ function ShopifyInstallRequestsPanel({ state, setState }: { state: AppState; set
             const mailBody = [
               `Tienda: ${request.shopDomain}`,
               `Vendedor: ${request.sellerName}`,
+              request.orderSkuContains ? `Filtro: SKU contiene ${request.orderSkuContains}` : "",
+              request.observation ? `Observacion: ${request.observation}` : "",
               "",
               "Genera el enlace en Shopify Dev Dashboard > Kentro Pilot > Distribution > Custom distribution y pegalo en Kentro."
-            ].join("\n");
+            ].filter((line, index, lines) => line || lines[index - 1] !== "").join("\n");
             return (
               <div key={request.id} className="rounded-md border border-black/10 p-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{request.shopDomain}</p>
                     <p className="text-xs text-black/50">{request.sellerName} · {request.status === "link_ready" ? "enlace listo" : request.status === "cancelled" ? "cancelada" : "pendiente"}</p>
+                    {request.orderSkuContains && <p className="mt-1 text-xs font-semibold text-black/60">Filtro: SKU contiene {request.orderSkuContains}</p>}
+                    {request.observation && <p className="mt-1 text-xs text-black/60">Observacion: {request.observation}</p>}
                   </div>
                   <a className="focus-ring rounded-md bg-field px-2 py-1 text-xs font-semibold" href={`mailto:?subject=${encodeURIComponent(`Solicitud Shopify ${request.shopDomain}`)}&body=${encodeURIComponent(mailBody)}`}>
                     Email
@@ -4235,6 +5050,7 @@ function ShopifyStoresAdminPanel({ state, setState }: { state: AppState; setStat
                 <p className="text-xs text-black/50">
                   {seller ? `Vendedor: ${seller.name}` : "Sin vendedor asignado"} · {store.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(store.lastWebhookAt)}` : "Sin webhooks recibidos"}
                 </p>
+                {store.orderSkuContains && <p className="mt-1 text-xs font-semibold text-black/60">Filtro activo: SKU contiene {store.orderSkuContains}</p>}
                 <div className="mt-2 grid gap-2">
                   <select
                     className="focus-ring rounded-md border border-black/10 px-3 py-2 text-xs"
@@ -4407,6 +5223,8 @@ function ShopifySyncIssuesPanel({ issues, sellers }: { issues: ShopifySyncIssue[
 
 function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: { seller: Seller; stores: ShopifyStore[]; requests: ShopifyInstallRequest[]; state: AppState; setState: (state: AppState) => void }) {
   const [shop, setShop] = useState("");
+  const [observation, setObservation] = useState("");
+  const [orderSkuContains, setOrderSkuContains] = useState("");
   const [message, setMessage] = useState("");
   const primaryStore = stores[0];
   const shopify = getSellerShopifyConnection(seller.id, seller.shopDomain, primaryStore);
@@ -4425,6 +5243,8 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
       sellerName: seller.name,
       shopDomain: normalizedShop,
       status: "requested",
+      ...(observation.trim() ? { observation: observation.trim() } : {}),
+      ...(orderSkuContains.trim() ? { orderSkuContains: orderSkuContains.trim().toUpperCase() } : {}),
       requestedAt: existingRequest?.requestedAt ?? now,
       updatedAt: now
     };
@@ -4464,6 +5284,8 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
                 <p className="text-xs text-black/50">
                   {request.status === "installed" ? "Instalada y conectada" : request.installLink ? "Enlace listo para instalar" : "Solicitud pendiente de enlace privado"}
                 </p>
+                {request.orderSkuContains && <p className="mt-1 text-xs font-semibold text-black/60">Filtro: SKU contiene {request.orderSkuContains}</p>}
+                {request.observation && <p className="mt-1 text-xs text-black/60">Observacion: {request.observation}</p>}
                 {request.status === "installed" ? (
                   <span className="mt-2 inline-flex min-h-9 items-center justify-center rounded-md bg-mint/10 px-3 py-2 text-xs font-semibold text-mint">
                     Instalada
@@ -4484,6 +5306,24 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
             placeholder="mitienda.myshopify.com"
             value={shop}
             onChange={(event) => setShop(event.target.value)}
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Sincronizar solo si el SKU contiene (opcional)
+          <input
+            className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-normal uppercase text-ink"
+            placeholder="Ej. ADMA"
+            value={orderSkuContains}
+            onChange={(event) => setOrderSkuContains(event.target.value)}
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Observacion (opcional)
+          <textarea
+            className="focus-ring min-h-20 rounded-md border border-black/10 px-3 py-2 text-sm font-normal text-ink"
+            placeholder="Condiciones especiales para esta conexion"
+            value={observation}
+            onChange={(event) => setObservation(event.target.value)}
           />
         </label>
         {normalizedShop && <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">{alreadyConnected ? "Esta tienda ya esta conectada." : existingRequest?.installLink ? "El enlace privado ya esta disponible arriba." : existingRequest ? "Ya existe una solicitud pendiente para esta tienda." : `Se solicitara enlace para: ${normalizedShop}`}</p>}
@@ -4625,7 +5465,7 @@ function InventoryPanel({ state, seller }: { state: AppState; seller: Seller }) 
 function DriverView({ state, setState, session, orderSearch, onOrderSearchChange }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void }) {
   const driver = state.drivers.find((item) => item.id === session.profileId);
   const [pickupOpen, setPickupOpen] = useState(false);
-  const [operationTab, setOperationTab] = useState<"all" | "rescheduled">("all");
+  const [operationTab, setOperationTab] = useState<"all" | "rescheduled" | "failed">("all");
   const [assignmentMessage, setAssignmentMessage] = useState("");
   const [repairingProfile, setRepairingProfile] = useState(false);
   const [repairMessage, setRepairMessage] = useState("");
@@ -4655,8 +5495,10 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
   const pendingMessenger = assigned.filter((order) => order.status === "picked_up" && !order.messengerId);
   const messengerAssigned = assigned.filter((order) => order.messengerId);
   const rescheduledPending = assigned.filter((order) => order.status === "retry_pending" || order.callOutcome === "rescheduled");
-  const operationOrders = operationTab === "rescheduled" ? rescheduledPending : assigned;
+  const failedOrders = state.orders.filter((order) => order.driverId === driver.id && order.status === "failed");
+  const operationOrders = operationTab === "failed" ? failedOrders : operationTab === "rescheduled" ? rescheduledPending : assigned;
   const visibleAssigned = operationOrders.filter((order) => orderSearchMatches(order, orderSearch));
+  const visibleFailedOrders = failedOrders.filter((order) => orderSearchMatches(order, orderSearch));
   const callRescheduled = assigned.filter((order) => order.callOutcome === "rescheduled");
   const deliveryScheduled = assigned.filter((order) => order.status === "scheduled");
   const rate = weeklyFailedRate(state, driver.id);
@@ -4742,20 +5584,38 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
       <section className="grid gap-3">
         <h2 className="font-bold">Operacion de la flota</h2>
         <OrderLookupBar value={orderSearch} onChange={onOrderSearchChange} />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${operationTab === "all" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+              type="button"
+              onClick={() => setOperationTab("all")}
+            >
+              Todos ({assigned.length})
+            </button>
+            <button
+              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${operationTab === "rescheduled" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+              type="button"
+              onClick={() => setOperationTab("rescheduled")}
+            >
+              Reprogramados pendientes ({rescheduledPending.length})
+            </button>
+            <button
+              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${operationTab === "failed" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+              type="button"
+              onClick={() => setOperationTab("failed")}
+            >
+              Fallidos / reintento ({failedOrders.length})
+            </button>
+          </div>
           <button
-            className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${operationTab === "all" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
             type="button"
-            onClick={() => setOperationTab("all")}
+            disabled={visibleFailedOrders.length === 0}
+            onClick={() => downloadFailedOrdersCsv(visibleFailedOrders, state, "", "", driver.id)}
           >
-            Todos ({assigned.length})
-          </button>
-          <button
-            className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${operationTab === "rescheduled" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
-            type="button"
-            onClick={() => setOperationTab("rescheduled")}
-          >
-            Reprogramados pendientes ({rescheduledPending.length})
+            <FileDown size={16} />
+            Descargar fallidos ({visibleFailedOrders.length})
           </button>
         </div>
         {(callRescheduled.length > 0 || deliveryScheduled.length > 0) && (
@@ -4771,7 +5631,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
         <PaginatedList
           items={visibleAssigned}
           pageSize={8}
-          empty={<Card><p className="text-sm text-black/60">{operationTab === "rescheduled" ? "No hay reprogramados pendientes." : "No tienes pedidos asignados."}</p></Card>}
+          empty={<Card><p className="text-sm text-black/60">{operationTab === "failed" ? "No hay fallidos para exportar." : operationTab === "rescheduled" ? "No hay reprogramados pendientes." : "No tienes pedidos asignados."}</p></Card>}
         >
           {(order) => <OrderCard key={order.id} order={order} state={state} setState={setState} actorProfileId={driver.id} />}
         </PaginatedList>

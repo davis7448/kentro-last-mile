@@ -59,6 +59,7 @@ export async function createManagedFirebaseUser(input: {
   name: string;
   role: Role;
   profileId: string;
+  leaderDriverId?: string;
 }) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
