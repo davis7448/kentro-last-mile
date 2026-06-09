@@ -608,6 +608,10 @@ function canPrintAdminWarehouseLabel(order: Order) {
   return order.fulfillmentMode === "warehouse" && printableOrderStatuses.has(order.status);
 }
 
+function canPrintAdminLabel(order: Order) {
+  return Boolean(order.labelPrintedAt) || printableOrderStatuses.has(order.status);
+}
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1069,7 +1073,7 @@ function OrderCard({
     (state.activeRole === "admin" || (state.activeRole === "seller" && actorProfileId === order.sellerId));
   const canPrintLabel =
     state.activeRole === "admin"
-      ? canPrintAdminWarehouseLabel(order)
+      ? canPrintAdminLabel(order)
       : state.activeRole === "seller" || actorProfileId
         ? canPrintSellerLabel(order, actorProfileId)
         : false;
@@ -1200,7 +1204,7 @@ function OrderCard({
               type="button"
               onClick={async () => {
                 await printOrderLabels([order], state, `Rotulo ${order.trackingCode ?? order.shopifyOrderId}`);
-                setState(markOrdersLabelsPrinted(state, [order], actorProfileId));
+                setState(markOrdersLabelsPrinted(state, [order], state.activeRole === "admin" ? "admin" : actorProfileId));
               }}
             >
               <Printer size={16} />
@@ -2418,6 +2422,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   const operationOrders = sellerFilteredOrders.filter((order) => order.status !== "failed");
   const tabOrders = adminOrderTab === "failed" ? failedOrders : operationOrders;
   const visibleOrders = filterOrdersByRangeStatus(tabOrders, startDate, endDate, statusFilter, orderSearch);
+  const reprintableVisibleOrders = visibleOrders.filter((order) => Boolean(order.labelPrintedAt));
   const exportableFailedOrders = filterOrdersByRangeStatus(failedOrders, startDate, endDate, statusFilter, orderSearch);
   const alerts = [
     ...review.map((order) => `Direccion en revision ${order.shopifyOrderId}`),
@@ -2509,6 +2514,18 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
             </button>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} sellers={state.sellers} sellerFilter={sellerFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} onSeller={onSellerFilter} />
+          <button
+            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+            type="button"
+            disabled={reprintableVisibleOrders.length === 0}
+            onClick={async () => {
+              await printOrderLabels(reprintableVisibleOrders, state, "Reimpresion de rotulos");
+              setState(markOrdersLabelsPrinted(state, reprintableVisibleOrders, "admin"));
+            }}
+          >
+            <Printer size={16} />
+            Reimprimir rotulos visibles ({reprintableVisibleOrders.length})
+          </button>
           {(callRescheduled.length > 0 || deliveryScheduled.length > 0) && (
             <div className="flex flex-wrap gap-2">
               {callRescheduled.length > 0 && (
