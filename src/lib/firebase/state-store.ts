@@ -155,7 +155,7 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
 export async function saveFirestoreOrder(order: Order): Promise<void> {
   const client = getFirebaseClient();
   if (!client) return;
-  await setDoc(doc(client.db, "orders", order.id), { ...order, driverId: order.driverId ?? null, messengerId: order.messengerId ?? null }, { merge: true });
+  await setDoc(doc(client.db, "orders", order.id), sanitizeFirestoreValue({ ...order, driverId: order.driverId ?? null, messengerId: order.messengerId ?? null }), { merge: true });
 }
 
 export async function saveFirestoreOrderLabelPrint(order: Pick<Order, "id" | "labelPrintedAt" | "labelPrintedBy" | "labelPrintCount" | "updatedAt">): Promise<void> {
@@ -337,6 +337,20 @@ function writeEntities<T extends { id: string }>(
   if (!client) return;
   for (const entity of entities) {
     const payload = collectionName === "orders" ? { ...entity, driverId: (entity as unknown as Order).driverId ?? null, messengerId: (entity as unknown as Order).messengerId ?? null } : entity;
-    batch.set(doc(client.db, collectionName, entity.id), payload, { merge: true });
+    batch.set(doc(client.db, collectionName, entity.id), sanitizeFirestoreValue(payload), { merge: true });
   }
+}
+
+function sanitizeFirestoreValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.filter((item) => item !== undefined).map((item) => sanitizeFirestoreValue(item)) as T;
+  }
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, sanitizeFirestoreValue(item)])
+    ) as T;
+  }
+  return value;
 }

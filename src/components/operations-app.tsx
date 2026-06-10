@@ -387,8 +387,8 @@ function useAppState(session: Session | null) {
           if (remoteState) {
             const cleanState = withoutLegacyDemo(remoteState);
             setState(cleanState);
-            if (cleanState !== remoteState) void saveFirestoreState(cleanState, context);
-          } else void saveFirestoreState(state, context);
+            if (cleanState !== remoteState) void saveFirestoreState(cleanState, context).catch((error) => console.error("No se pudo normalizar el estado remoto.", error));
+          } else void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
           setHydrated(true);
         })
         .catch(() => hydrateLocal());
@@ -411,7 +411,7 @@ function useAppState(session: Session | null) {
     }
     if (remoteEnabled) {
       const context = session ? { role: session.role, profileId: session.profileId } : undefined;
-      void saveFirestoreState(state, context);
+      void saveFirestoreState(state, context).catch((error) => console.error("No se pudo guardar el estado remoto.", error));
       return;
     }
     window.localStorage.setItem(storageKey, JSON.stringify(state));
@@ -4136,13 +4136,23 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   };
 
   const closeRow = (row: LiquidationRow) => {
-    if (!startDate || !endDate) {
-      setError("Selecciona un rango de fechas antes de cerrar la liquidacion.");
+    if (!endDate) {
+      setError("Selecciona la fecha final antes de cerrar la liquidacion.");
+      return;
+    }
+    const rowEntryDates = state.wallet
+      .filter((entry) => row.walletEntryIds.includes(entry.id))
+      .map((entry) => entry.createdAt.slice(0, 10))
+      .filter(Boolean)
+      .sort();
+    const settlementStartDate = startDate || rowEntryDates[0];
+    if (!settlementStartDate) {
+      setError("No se encontro una fecha inicial para los movimientos de esta cuenta.");
       return;
     }
     setBusyId(`${row.role}-${row.id}`);
     setError(null);
-    void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate, endDate })
+    void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate: settlementStartDate, endDate })
       .then(async ({ settlement, walletEntries }) => {
         const { settlement: paidSettlement } = await updateFirebaseSettlementStatus({ settlementId: settlement.id, status: "paid" });
         mergeSettlement(paidSettlement, walletEntries);
