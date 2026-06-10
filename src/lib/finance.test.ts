@@ -113,4 +113,20 @@ describe("wallet calculations", () => {
     expect(entries.some((entry) => entry.type === "failed_fee")).toBe(false);
     expect(entries.some((entry) => entry.type === "driver_earning")).toBe(false);
   });
+
+  it("charges every non-DANDA seller 12.000 for a failed order", () => {
+    const state = seedState();
+    const order = {
+      ...state.orders[0],
+      id: "ord-standard-failed-rate",
+      sellerId: "seller-1",
+      status: "failed" as const,
+      driverId: "driver-1"
+    };
+
+    const entries = entriesForClosedOrder(order, state);
+
+    expect(entries.some((entry) => entry.type === "failed_fee" && entry.amountCop === -12000)).toBe(true);
+    expect(entries.some((entry) => entry.type === "driver_earning" && entry.amountCop === 9000)).toBe(true);
+  });
 });

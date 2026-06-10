@@ -13,7 +13,12 @@ type Tariffs = {
 };
 
 function applySellerTariffOverrides(order: Order, tariffs: Tariffs): Tariffs {
-  if (!dandaSellerIds.has(order.sellerId)) return tariffs;
+  if (!dandaSellerIds.has(order.sellerId)) {
+    return {
+      ...tariffs,
+      sellerFailedFeeCop: 12000
+    };
+  }
   const pickedUpAt = order.pickedUpAt ? Date.parse(order.pickedUpAt) : Number.NaN;
   const usesNewDriverPay =
     order.driverId === dandaPreferredDriverId &&

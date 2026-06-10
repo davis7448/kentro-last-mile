@@ -104,7 +104,7 @@ const assignMessengerSchema = z.object({
 
 const defaultSettings = {
   sellerDeliveredFeeCop: 12000,
-  sellerFailedFeeCop: 9000,
+  sellerFailedFeeCop: 12000,
   fulfillmentFeeCop: 2000,
   driverDeliveredPayCop: 9000,
   driverFailedPayCop: 9000
@@ -1137,7 +1137,11 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
         driverDeliveredPayCop: usesNewDandaDriverPay ? 11000 : 10000,
         driverFailedPayCop: 0
       }
-    : { ...defaultSettings, ...settings };
+    : {
+        ...defaultSettings,
+        ...settings,
+        sellerFailedFeeCop: 12000
+      };
   const entries: WalletEntryDoc[] = [];
 
   if (order.status === "delivered" && order.paymentMethod === "cod") {

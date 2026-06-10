@@ -23,7 +23,7 @@ export function emptyState(): AppState {
     settings: {
       activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,
-      sellerFailedFeeCop: 9000,
+      sellerFailedFeeCop: 12000,
       fulfillmentFeeCop: 2000,
       driverDeliveredPayCop: 9000,
       driverFailedPayCop: 9000,
@@ -43,9 +43,9 @@ export function seedState(): AppState {
       { id: "city-med", name: "Medellin", active: false }
     ],
     zones: [
-      { id: "zone-north", cityId: "city-cali", name: "Norte Cali", polygonLabel: "Sameco, La Flora, Chipichape", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 },
-      { id: "zone-center", cityId: "city-cali", name: "Centro Cali", polygonLabel: "Centro, San Nicolas, Alameda", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 },
-      { id: "zone-south", cityId: "city-cali", name: "Sur Cali", polygonLabel: "Ciudad Jardin, Valle del Lili, Caney", active: true, sellerDeliveredFeeCop: 13000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 }
+      { id: "zone-north", cityId: "city-cali", name: "Norte Cali", polygonLabel: "Sameco, La Flora, Chipichape", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 },
+      { id: "zone-center", cityId: "city-cali", name: "Centro Cali", polygonLabel: "Centro, San Nicolas, Alameda", active: true, sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 },
+      { id: "zone-south", cityId: "city-cali", name: "Sur Cali", polygonLabel: "Ciudad Jardin, Valle del Lili, Caney", active: true, sellerDeliveredFeeCop: 13000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 9000, driverFailedPayCop: 9000 }
     ],
     sellers: [
       {
@@ -238,7 +238,7 @@ export function seedState(): AppState {
     settings: {
       activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,
-      sellerFailedFeeCop: 9000,
+      sellerFailedFeeCop: 12000,
       fulfillmentFeeCop: 2000,
       driverDeliveredPayCop: 9000,
       driverFailedPayCop: 9000,
