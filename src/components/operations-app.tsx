@@ -2742,7 +2742,7 @@ function ManualOrderPanel({
         {selectedZone && (
           <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
             {sellerId === "seller-1779315416119"
-              ? `Tarifa DANDA: cobro por entregado ${formatCop(12000)} · fallido ${formatCop(0)}`
+              ? `Tarifa DANDA: cobro entregado ${formatCop(12000)} · pago domiciliario actual ${formatCop(11000)} para recogidos desde 09/06/2026 · fallido ${formatCop(0)}`
               : `Tarifa zona ${selectedZone.name}: vendedor entregado ${formatCop(selectedZone.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop)} · transportista entregado ${formatCop(selectedZone.driverDeliveredPayCop || state.settings.driverDeliveredPayCop)}`}
           </p>
         )}

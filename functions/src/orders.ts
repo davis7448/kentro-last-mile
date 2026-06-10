@@ -119,6 +119,8 @@ const tariffFields = [
 ] as const;
 
 const dandaSellerIds = new Set(["seller-1779315416119"]);
+const dandaPreferredDriverId = "driver-1778271901513";
+const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
 
 type WalletEntryDoc = {
   id: string;
@@ -1121,13 +1123,18 @@ function settleInventoryForOrder(
 }
 
 function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {
+  const pickedUpAt = typeof order.pickedUpAt === "string" ? Date.parse(order.pickedUpAt) : Number.NaN;
+  const usesNewDandaDriverPay =
+    String(order.driverId ?? "") === dandaPreferredDriverId &&
+    Number.isFinite(pickedUpAt) &&
+    pickedUpAt >= dandaDriverPayCutoff;
   const values = dandaSellerIds.has(String(order.sellerId ?? ""))
     ? {
         ...defaultSettings,
         ...settings,
         sellerDeliveredFeeCop: 12000,
         sellerFailedFeeCop: 0,
-        driverDeliveredPayCop: 10000,
+        driverDeliveredPayCop: usesNewDandaDriverPay ? 11000 : 10000,
         driverFailedPayCop: 0
       }
     : { ...defaultSettings, ...settings };
