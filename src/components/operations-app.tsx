@@ -387,7 +387,6 @@ function useAppState(session: Session | null) {
           if (remoteState) {
             const cleanState = withoutLegacyDemo(remoteState);
             setState(cleanState);
-            if (cleanState !== remoteState) void saveFirestoreState(cleanState, context).catch((error) => console.error("No se pudo normalizar el estado remoto.", error));
           } else void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
           setHydrated(true);
         })

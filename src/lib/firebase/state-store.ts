@@ -139,7 +139,6 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "sellers", state.sellers);
   writeEntities(batch, "shopifyStores", state.shopifyStores);
   writeEntities(batch, "shopifyInstallRequests", state.shopifyInstallRequests);
-  writeEntities(batch, "shopifySyncIssues", state.shopifySyncIssues);
   writeEntities(batch, "drivers", state.drivers);
   writeEntities(batch, "messengers", state.messengers);
   writeEntities(batch, "pickupBatches", state.pickupBatches);
@@ -148,7 +147,6 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "walletEntries", state.wallet);
   writeEntities(batch, "settlements", state.settlements);
   writeEntities(batch, "payouts", state.payouts);
-  writeEntities(batch, "auditEvents", state.audit.slice(0, 100));
   await batch.commit();
 }
 
