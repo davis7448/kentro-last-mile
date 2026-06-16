@@ -2,7 +2,7 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import type { AddressRisk, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, PickupBatch, Role, Settlement, WalletEntry } from "@/lib/types";
+import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 export type FirebaseSessionClaims = {
@@ -213,6 +213,7 @@ export async function closeFirebaseOrder(input: {
   photoUrl?: string;
   storagePath?: string;
   reason?: string;
+  failedCategory?: FailedCategory;
   scheduledDate?: string;
   scheduledWindow?: string;
 }) {
@@ -223,6 +224,16 @@ export async function closeFirebaseOrder(input: {
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { order: Order; walletEntries: WalletEntry[] };
+}
+
+export async function createFirebaseStoreWebhookConfig(input: { sellerId: string; shopDomain?: string; skuContains?: string; tagContains?: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "createStoreWebhookConfig");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { config: StoreWebhookConfig; webhookUrl: string };
 }
 
 export async function createFirebaseSettlement(input: {
@@ -281,7 +292,7 @@ export async function syncFirebaseShopifyHistoricalOrders(input: { shopDomain: s
   const callable = httpsCallable(functions, "syncShopifyHistoricalOrders");
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
-  return result.data as { imported: number; existing: number; skippedOutsideCali: number; fetched: number; orders: Order[] };
+  return result.data as { imported: number; existing: number; skippedOutsideCali: number; skippedSkuFilter: number; fetched: number; orders: Order[] };
 }
 
 export async function setFirebaseUserRole(uid: string, role: Role, profileId?: string) {

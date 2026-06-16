@@ -21,6 +21,7 @@ const manualOrderSchema = z.object({
 
 const optionalString = z.preprocess((value) => (value === null ? undefined : value), z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => (value === null ? undefined : value), z.string().min(1).optional());
+const failedCategorySchema = z.enum(["failed_visit", "no_coverage", "bad_order_or_no_contact", "pending_review"]);
 
 const closeOrderSchema = z.object({
   orderId: z.string().min(1),
@@ -30,6 +31,7 @@ const closeOrderSchema = z.object({
   photoUrl: optionalUrl,
   storagePath: optionalString,
   reason: optionalString,
+  failedCategory: failedCategorySchema.optional(),
   scheduledDate: optionalString,
   scheduledWindow: optionalString
 });
@@ -158,6 +160,8 @@ type SettlementDoc = {
 type SettlementOrderDoc = {
   paymentMethod?: "cod" | "prepaid";
 };
+
+type FailedCategory = z.infer<typeof failedCategorySchema>;
 
 export const createManualOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
@@ -810,6 +814,11 @@ export const closeOrder = onCall(async (request) => {
     ]);
 
     const nextStatus = input.outcome === "delivered" ? "delivered" : isVisitRescheduled ? "retry_pending" : "failed";
+    const failedCategory: FailedCategory | undefined = input.outcome === "failed"
+      ? isVisitRescheduled
+        ? undefined
+        : input.failedCategory ?? "failed_visit"
+      : undefined;
     const evidence = {
       id: `ev-${Date.now()}`,
       type: input.outcome === "delivered" ? "delivery" : "failed",
@@ -818,6 +827,7 @@ export const closeOrder = onCall(async (request) => {
       storagePath: input.storagePath,
       note: input.note.trim(),
       reason: input.outcome === "failed" ? input.reason?.trim() || "Cliente no recibe" : undefined,
+      failedCategory,
       actorId: request.auth?.uid ?? "unknown",
       createdAt: now
     };
@@ -825,6 +835,8 @@ export const closeOrder = onCall(async (request) => {
       ...order,
       status: nextStatus,
       failedReason: input.outcome === "failed" ? evidence.reason : order.failedReason,
+      failedCategory: nextStatus === "failed" ? failedCategory : order.failedCategory,
+      failedCategorySource: nextStatus === "failed" ? "driver" : order.failedCategorySource,
       retryDecision: isVisitRescheduled ? "retry" : input.outcome === "failed" ? "pending" : order.retryDecision,
       scheduledDate: isVisitRescheduled ? input.scheduledDate : order.scheduledDate,
       scheduledWindow: isVisitRescheduled ? input.scheduledWindow : order.scheduledWindow,
@@ -1180,7 +1192,8 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
     });
   }
 
-  if (order.status === "failed") {
+  const isChargeableFailedVisit = order.status === "failed" && String(order.failedCategory ?? "failed_visit") === "failed_visit";
+  if (isChargeableFailedVisit) {
     if (Number(values.sellerFailedFeeCop) > 0) {
       entries.push({
         id: `we-${order.id}-seller-failed-fee`,
@@ -1207,7 +1220,7 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
     }
   }
 
-  if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || order.status === "failed")) {
+  if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || isChargeableFailedVisit)) {
     entries.push({
       id: `we-${order.id}-fulfillment-fee`,
       ownerType: "seller",

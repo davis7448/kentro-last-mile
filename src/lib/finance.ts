@@ -12,6 +12,10 @@ type Tariffs = {
   driverFailedPayCop: number;
 };
 
+export function isChargeableFailedOrder(order: Pick<Order, "status" | "failedCategory">) {
+  return order.status === "failed" && (order.failedCategory ?? "failed_visit") === "failed_visit";
+}
+
 function applySellerTariffOverrides(order: Order, tariffs: Tariffs): Tariffs {
   if (!dandaSellerIds.has(order.sellerId)) {
     return {
@@ -89,7 +93,8 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
     });
   }
 
-  if (order.status === "failed") {
+  const chargeableFailed = isChargeableFailedOrder(order);
+  if (chargeableFailed) {
     if (tariffs.sellerFailedFeeCop > 0) {
       entries.push({
         id: `we-${order.id}-seller-failed-fee`,
@@ -116,7 +121,7 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
     }
   }
 
-  if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || order.status === "failed")) {
+  if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || chargeableFailed)) {
     entries.push({
       id: `we-${order.id}-fulfillment-fee`,
       ownerType: "seller",
@@ -151,6 +156,8 @@ export function weeklyFailedRate(state: AppState, driverId: string) {
     const closedStatus = order.status === "delivered" || order.status === "failed";
     return order.driverId === driverId && closedStatus && new Date(order.updatedAt).getTime() >= weekAgo;
   });
-  const failed = closed.filter((order) => order.status === "failed").length;
-  return { total: closed.length, failed, rate: closed.length === 0 ? 0 : Math.round((failed / closed.length) * 100) };
+  const excluded = closed.filter((order) => order.status === "failed" && (order.failedCategory === "no_coverage" || order.failedCategory === "bad_order_or_no_contact")).length;
+  const total = Math.max(0, closed.length - excluded);
+  const failed = closed.filter(isChargeableFailedOrder).length;
+  return { total, failed, rate: total === 0 ? 0 : Math.round((failed / total) * 100) };
 }

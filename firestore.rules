@@ -147,6 +147,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /storeWebhookConfigs/{configId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if isAdmin();
+    }
+
+    match /storeWebhookSamples/{sampleId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if false;
+    }
+
     match /shopifyInstallRequests/{requestId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
       allow create: if isSeller(request.resource.data.sellerId)

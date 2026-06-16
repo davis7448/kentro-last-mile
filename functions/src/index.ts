@@ -7,6 +7,9 @@ import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
 export { assignMessengerToOrders, cancelOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
 export { importShopifyOrder, shopifyComplianceWebhook, shopifyCustomersDataRequest, shopifyCustomersRedact, shopifyOAuthCallback, shopifyOAuthStart, shopifyPilotOAuthStart, shopifyShopRedact, shopifyTenantOAuthStart, syncShopifyHistoricalOrders } from "./shopify";
+export { mercadotiendaContactFormWebhook } from "./contact-form";
+export { onstockOrderWebhook } from "./onstock-webhook";
+export { createStoreWebhookConfig, storeOrderWebhook } from "./store-webhook";
 
 initializeApp();
 
@@ -25,6 +28,7 @@ const shopifyWebhookSchema = z.object({
   total_price: nullableString,
   financial_status: nullableString,
   created_at: nullableString,
+  tags: z.union([z.string(), z.array(z.string())]).nullish(),
   shipping_address: z
     .object({
       name: nullableString,
@@ -180,9 +184,12 @@ function normalizeSkuFilter(value: unknown) {
 
 function shopifyOrderMatchesSkuFilter(order: z.infer<typeof shopifyWebhookSchema>, filter: string) {
   if (!filter) return true;
-  return (order.line_items ?? []).some((item) =>
+  const skuMatch = (order.line_items ?? []).some((item) =>
     !isShippingLineItem(item) && (item.sku ?? "").toUpperCase().includes(filter)
   );
+  const tags = Array.isArray(order.tags) ? order.tags : String(order.tags ?? "").split(",");
+  const tagMatch = tags.some((tag) => tag.trim().toUpperCase() === filter || tag.trim().toUpperCase().includes(filter));
+  return skuMatch || tagMatch;
 }
 
 async function recordShopifySyncIssue(input: { sellerId: string; shopDomain: string; reference: string; reason: string; detail: string }) {

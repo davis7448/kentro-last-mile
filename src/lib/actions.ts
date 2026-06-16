@@ -1,7 +1,7 @@
 "use client";
 
 import { entriesForClosedOrder, sellerBalance } from "./finance";
-import type { AddressRisk, AppState, AuditEvent, FulfillmentMode, Order, OrderStatus, PaymentMethod, Role } from "./types";
+import type { AddressRisk, AppState, AuditEvent, FailedCategory, FulfillmentMode, Order, OrderStatus, PaymentMethod, Role } from "./types";
 
 const actorByRole: Record<Role, string> = {
   admin: "admin",
@@ -78,6 +78,7 @@ type CloseEvidenceInput = {
 
 type FailedEvidenceInput = CloseEvidenceInput & {
   reason?: string;
+  failedCategory?: FailedCategory;
   scheduledDate?: string;
   scheduledWindow?: string;
 };
@@ -207,12 +208,15 @@ export function closeFailed(state: AppState, orderId: string, input: FailedEvide
   const now = new Date().toISOString();
   const reason = input.reason?.trim() || "Cliente no recibe";
   const isVisitRescheduled = reason === "Cliente reagenda visita";
+  const failedCategory = isVisitRescheduled ? undefined : input.failedCategory ?? "failed_visit";
   const nextOrders = state.orders.map((order) =>
     order.id === orderId
       ? {
           ...order,
           status: isVisitRescheduled ? ("retry_pending" as const) : ("failed" as const),
           failedReason: reason,
+          failedCategory,
+          failedCategorySource: isVisitRescheduled ? order.failedCategorySource : ("driver" as const),
           retryDecision: isVisitRescheduled ? ("retry" as const) : ("pending" as const),
           scheduledDate: input.scheduledDate ?? order.scheduledDate,
           scheduledWindow: input.scheduledWindow ?? order.scheduledWindow,
@@ -226,6 +230,7 @@ export function closeFailed(state: AppState, orderId: string, input: FailedEvide
               storagePath: input.storagePath,
               note: input.note?.trim() || "Novedad de entrega registrada.",
               reason,
+              failedCategory,
               actorId: actorByRole[state.activeRole],
               createdAt: now
             }

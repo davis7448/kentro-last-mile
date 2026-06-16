@@ -21,6 +21,7 @@ const shopifyOrderSchema = z.object({
   total_price: nullableString,
   financial_status: nullableString,
   created_at: nullableString,
+  tags: z.union([z.string(), z.array(z.string())]).nullish(),
   shipping_address: z
     .object({
       name: nullableString,
@@ -657,9 +658,12 @@ function normalizeSkuFilter(value: unknown) {
 
 function shopifyOrderMatchesSkuFilter(order: z.infer<typeof shopifyOrderSchema>, filter: string) {
   if (!filter) return true;
-  return (order.line_items ?? []).some((item) =>
+  const skuMatch = (order.line_items ?? []).some((item) =>
     !isShippingLineItem(item) && (item.sku ?? "").toUpperCase().includes(filter)
   );
+  const tags = Array.isArray(order.tags) ? order.tags : String(order.tags ?? "").split(",");
+  const tagMatch = tags.some((tag) => tag.trim().toUpperCase() === filter || tag.trim().toUpperCase().includes(filter));
+  return skuMatch || tagMatch;
 }
 
 function cleanShopifyOrderReference(reference: string) {

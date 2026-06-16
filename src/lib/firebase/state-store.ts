@@ -15,7 +15,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { emptyState } from "@/lib/seed";
-import type { AppState, AuditEvent, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, WalletEntry, Zone } from "@/lib/types";
+import type { AppState, AuditEvent, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 const settingsPath = ["settings", "global"] as const;
@@ -24,6 +24,7 @@ const collectionNames = [
   "zones",
   "sellers",
   "shopifyStores",
+  "storeWebhookConfigs",
   "shopifyInstallRequests",
   "shopifySyncIssues",
   "drivers",
@@ -51,12 +52,13 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
   if (!client) return null;
   const base = emptyState();
   const role = context?.role ?? "admin";
-  const [settingsSnapshot, cities, zones, sellers, shopifyStores, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
+  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
     role === "seller" && context ? getOwnDocument<Seller>("sellers", context.profileId) : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
     role === "seller" && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([]),
+    role === "seller" && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([]),
     role === "seller" && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([]),
     role === "seller" && context ? getCollection<ShopifySyncIssue>("shopifySyncIssues", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true) : Promise.resolve([]),
     role === "driver" && context ? getOwnDocument<Driver>("drivers", context.profileId) : role === "admin" ? getCollection<Driver>("drivers") : Promise.resolve([]),
@@ -93,6 +95,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
     zones: zones ?? [],
     sellers: resolvedSellers ?? [],
     shopifyStores: shopifyStores ?? [],
+    storeWebhookConfigs: storeWebhookConfigs ?? [],
     shopifyInstallRequests: shopifyInstallRequests ?? [],
     shopifySyncIssues: shopifySyncIssues ?? [],
     drivers: drivers ?? [],
@@ -138,6 +141,7 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "zones", state.zones);
   writeEntities(batch, "sellers", state.sellers);
   writeEntities(batch, "shopifyStores", state.shopifyStores);
+  writeEntities(batch, "storeWebhookConfigs", state.storeWebhookConfigs);
   writeEntities(batch, "shopifyInstallRequests", state.shopifyInstallRequests);
   writeEntities(batch, "drivers", state.drivers);
   writeEntities(batch, "messengers", state.messengers);
@@ -199,6 +203,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
   const orderRef = collection(client.db, "orders");
   const inventoryRef = collection(client.db, "inventory");
   const shopifyStoreRef = collection(client.db, "shopifyStores");
+  const storeWebhookConfigRef = collection(client.db, "storeWebhookConfigs");
   const shopifyInstallRequestRef = collection(client.db, "shopifyInstallRequests");
   const shopifySyncIssueRef = collection(client.db, "shopifySyncIssues");
   const walletRef = collection(client.db, "walletEntries");
@@ -211,6 +216,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
           query(orderRef, where("sellerId", "==", context.profileId)),
           query(inventoryRef, where("sellerId", "==", context.profileId)),
           query(shopifyStoreRef, where("sellerId", "==", context.profileId)),
+          query(storeWebhookConfigRef, where("sellerId", "==", context.profileId)),
           query(shopifyInstallRequestRef, where("sellerId", "==", context.profileId)),
           query(shopifySyncIssueRef, where("sellerId", "==", context.profileId)),
           query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId)),
@@ -230,7 +236,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
               query(orderRef, where("messengerId", "==", context.profileId)),
               query(messengerRef, where("__name__", "==", context.profileId))
             ]
-          : [orderRef, inventoryRef, shopifyStoreRef, shopifyInstallRequestRef, shopifySyncIssueRef, messengerRef, pickupBatchRef, walletRef, settlementRef];
+          : [orderRef, inventoryRef, shopifyStoreRef, storeWebhookConfigRef, shopifyInstallRequestRef, shopifySyncIssueRef, messengerRef, pickupBatchRef, walletRef, settlementRef];
   const reload = () => {
     void loadFirestoreState(context).then((state) => {
       if (state) onState(state);

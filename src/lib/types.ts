@@ -2,6 +2,7 @@ export type Role = "admin" | "seller" | "driver" | "messenger";
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
+export type FailedCategory = "failed_visit" | "no_coverage" | "bad_order_or_no_contact" | "pending_review";
 export type OrderStatus =
   | "imported"
   | "address_risk"
@@ -26,6 +27,7 @@ export type Evidence = {
   storagePath?: string;
   note: string;
   reason?: string;
+  failedCategory?: FailedCategory;
   createdAt: string;
   actorId: string;
 };
@@ -63,10 +65,25 @@ export type ShopifyStore = {
   status: "connected" | "error";
   scopes: string[];
   orderSkuContains?: string;
+  orderTagContains?: string;
   connectedAt: string;
   updatedAt: string;
   lastWebhookAt?: string;
   errorMessage?: string;
+};
+export type StoreWebhookConfig = {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  shopDomain?: string;
+  webhookKey: string;
+  skuContains?: string;
+  tagContains?: string;
+  cityAllowlist: string[];
+  status: "active" | "disabled";
+  createdAt: string;
+  updatedAt: string;
+  lastWebhookAt?: string;
 };
 export type ShopifyInstallRequest = {
   id: string;
@@ -77,6 +94,7 @@ export type ShopifyInstallRequest = {
   installLink?: string;
   observation?: string;
   orderSkuContains?: string;
+  orderTagContains?: string;
   requestedAt: string;
   updatedAt: string;
   fulfilledAt?: string;
@@ -167,6 +185,9 @@ export type Order = {
   rescheduledDate?: string;
   rescheduledWindow?: string;
   failedReason?: string;
+  failedCategory?: FailedCategory;
+  failedCategorySource?: "driver" | "auto_reclassification" | "manual";
+  failedCategoryConfidence?: number;
   retryDecision?: "pending" | "retry" | "cancel";
   evidence: Evidence[];
   createdAt: string;
@@ -239,6 +260,7 @@ export type AppState = {
   zones: Zone[];
   sellers: Seller[];
   shopifyStores: ShopifyStore[];
+  storeWebhookConfigs: StoreWebhookConfig[];
   shopifyInstallRequests: ShopifyInstallRequest[];
   shopifySyncIssues: ShopifySyncIssue[];
   drivers: Driver[];

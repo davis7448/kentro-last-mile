@@ -31,6 +31,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelFirebaseOrder,
   assignFirebaseMessengerToOrders,
+  createFirebaseStoreWebhookConfig,
   createManualFirebaseOrder,
   createFirebaseMessengerProfile,
   createFirebasePickupBatch,
@@ -66,10 +67,10 @@ import {
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
-import { entriesForClosedOrder, formatCop, sellerBalance, weeklyFailedRate } from "@/lib/finance";
+import { entriesForClosedOrder, formatCop, isChargeableFailedOrder, sellerBalance, weeklyFailedRate } from "@/lib/finance";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, Driver, Evidence, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, WalletEntry } from "@/lib/types";
+import type { AppState, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -86,6 +87,21 @@ const printableOrderStatuses = new Set<Order["status"]>([
   "in_route",
   "retry_pending"
 ]);
+
+const failedCategoryOptions: Array<{ value: FailedCategory; label: string; hint: string }> = [
+  { value: "failed_visit", label: "Fallido real con visita", hint: "Genera cobro a tienda y pago al domiciliario." },
+  { value: "no_coverage", label: "Sin cobertura", hint: "No genera cobro ni pago; queda para remonte por plataforma." },
+  { value: "bad_order_or_no_contact", label: "Pedido malo / no contesta", hint: "No genera cobro ni pago; queda para gestion del vendedor." },
+  { value: "pending_review", label: "Pendiente revisar", hint: "No genera cobro ni pago hasta clasificarlo." }
+];
+
+function failedCategoryLabel(category?: FailedCategory) {
+  return failedCategoryOptions.find((option) => option.value === (category ?? "failed_visit"))?.label ?? "Fallido real con visita";
+}
+
+function failedCategoryHint(category?: FailedCategory) {
+  return failedCategoryOptions.find((option) => option.value === category)?.hint ?? "";
+}
 
 type LocalAccount = {
   id: string;
@@ -104,6 +120,7 @@ type QueuedEvidence = {
   outcome: "delivered" | "failed";
   note: string;
   reason?: string;
+  failedCategory?: FailedCategory;
   scheduledDate?: string;
   scheduledWindow?: string;
   fileName: string;
@@ -151,6 +168,7 @@ async function enqueueEvidence(input: Omit<QueuedEvidence, "id" | "dataUrl" | "f
     outcome: input.outcome,
     note: input.note,
     reason: input.reason,
+    failedCategory: input.failedCategory,
     scheduledDate: input.scheduledDate,
     scheduledWindow: input.scheduledWindow,
     fileName: queuedFile.name || input.file.name || "evidencia.jpg",
@@ -545,13 +563,17 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
   const inOperation = orders.filter((order) => ["call_pending", "scheduled", "in_route", "retry_pending"].includes(order.status) || (order.status === "picked_up" && Boolean(order.messengerId))).length;
   const delivered = orders.filter((order) => order.status === "delivered").length;
   const failed = orders.filter((order) => order.status === "failed").length;
+  const chargeableFailed = orders.filter(isChargeableFailedOrder).length;
+  const noCoverageFailed = orders.filter((order) => order.status === "failed" && order.failedCategory === "no_coverage").length;
+  const badOrderFailed = orders.filter((order) => order.status === "failed" && order.failedCategory === "bad_order_or_no_contact").length;
   const cancelled = orders.filter((order) => order.status === "cancelled").length;
   const liquidated = orders.filter((order) => order.status === "liquidated").length;
   const funnelTotal = pendingConfirm + readyWithoutLeader + assignedPendingPickup + pickedWithoutMessenger + inOperation + delivered + failed + cancelled + liquidated;
   const pickedByDriver = orders.filter((order) => order.driverId && ["call_pending", "scheduled", "picked_up", "in_route", "retry_pending", "delivered", "failed"].includes(order.status)).length;
+  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed);
   const codCop = orders.filter((order) => order.paymentMethod === "cod" && order.status !== "cancelled").reduce((sum, order) => sum + order.totalCop, 0);
-  const deliveryRate = pickedByDriver > 0 ? Math.round((delivered / pickedByDriver) * 100) : 0;
-  const completionRate = pickedByDriver > 0 ? Math.round(((delivered + failed) / pickedByDriver) * 100) : 0;
+  const deliveryRate = dispatchable > 0 ? Math.round((delivered / dispatchable) * 100) : 0;
+  const returnRate = dispatchable > 0 ? Math.round((chargeableFailed / dispatchable) * 100) : 0;
   return (
     <div className="grid gap-3">
       <div className="flex flex-col gap-1">
@@ -567,6 +589,7 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
         <Metric icon={<Route size={20} />} label="En gestion/ruta" value={String(inOperation)} />
         <Metric icon={<PackageCheck size={20} />} label="Entregados" value={String(delivered)} />
         <Metric icon={<X size={20} />} label="Fallidos" value={String(failed)} />
+        <Metric icon={<AlertTriangle size={20} />} label="Fallido con visita" value={String(chargeableFailed)} />
         <Metric icon={<ShieldCheck size={20} />} label="Cancelados" value={String(cancelled)} />
         {liquidated > 0 && <Metric icon={<CreditCard size={20} />} label="Liquidados" value={String(liquidated)} />}
       </div>
@@ -579,14 +602,15 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
         <h2 className="text-sm font-bold uppercase text-black/50">Indicadores</h2>
         <p className="text-xs text-black/50">Estas metricas no se suman; son lecturas transversales del mismo rango.</p>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <Metric icon={<QrCode size={20} />} label="Tomados por lider" value={String(pickedByDriver)} />
-        <Metric icon={<ShieldCheck size={20} />} label="Entrega sobre tomados" value={`${deliveryRate}%`} />
-        <Metric icon={<Route size={20} />} label="% finalizacion operacion" value={`${completionRate}%`} />
+        <Metric icon={<Route size={20} />} label="Despachables" value={String(dispatchable)} />
+        <Metric icon={<ShieldCheck size={20} />} label="% entrega" value={`${deliveryRate}%`} />
+        <Metric icon={<X size={20} />} label="% devolucion" value={`${returnRate}%`} />
         <Metric icon={<Wallet size={20} />} label="Recaudo COD rango" value={formatCop(codCop)} />
       </div>
       <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
-        Entrega sobre tomados = entregados / tomados por lider. Finalizacion = entregados + fallidos / tomados por lider. No considera pedidos no despachados.
+        Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables.
       </p>
     </div>
   );
@@ -1543,6 +1567,7 @@ function EvidenceItem({ item }: { item: Evidence }) {
               {item.type === "delivery" ? "Entrega" : "Novedad"}
             </span>
             {item.reason && <span className="rounded bg-field px-2 py-1 font-semibold">{item.reason}</span>}
+            {item.failedCategory && <span className="rounded bg-field px-2 py-1 font-semibold">{failedCategoryLabel(item.failedCategory)}</span>}
           </div>
           <p className="mt-1 font-semibold text-black/70">{item.photoLabel}</p>
           <p className="text-black/50">{formatDateTime(item.createdAt)}</p>
@@ -1688,6 +1713,7 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
         photoUrl: evidence.url,
         storagePath: evidence.path,
         reason: item.reason,
+        failedCategory: item.failedCategory,
         scheduledDate: item.scheduledDate,
         scheduledWindow: item.scheduledWindow
       });
@@ -1855,12 +1881,14 @@ function FailedEvidenceForm({
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
+  const [failedCategory, setFailedCategory] = useState<FailedCategory | "">("");
   const [scheduledDate, setScheduledDate] = useState(order.scheduledDate ?? "");
   const [scheduledWindow, setScheduledWindow] = useState(order.scheduledWindow ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isVisitRescheduled = reason === "Cliente reagenda visita";
-  const canSubmit = Boolean(file && note.trim() && reason && (!isVisitRescheduled || (isDateInputComplete(scheduledDate) && scheduledWindow)));
+  const selectedFailedCategory = failedCategory || undefined;
+  const canSubmit = Boolean(file && note.trim() && reason && (isVisitRescheduled || selectedFailedCategory) && (!isVisitRescheduled || (isDateInputComplete(scheduledDate) && scheduledWindow)));
 
   return (
     <form
@@ -1881,6 +1909,7 @@ function FailedEvidenceForm({
                 outcome: "failed",
                 note,
                 reason,
+                failedCategory: isVisitRescheduled ? undefined : selectedFailedCategory,
                 scheduledDate: isVisitRescheduled ? scheduledDate : undefined,
                 scheduledWindow: isVisitRescheduled ? scheduledWindow : undefined,
                 file
@@ -1895,6 +1924,7 @@ function FailedEvidenceForm({
           try {
             const payload = {
               reason,
+              failedCategory: isVisitRescheduled ? undefined : selectedFailedCategory,
               note,
               photoLabel: evidence.label,
               photoUrl: evidence.url,
@@ -1931,6 +1961,16 @@ function FailedEvidenceForm({
           <option value="Otro">Otro</option>
         </select>
       </label>
+      {!isVisitRescheduled && (
+        <label className="grid gap-1 text-xs font-semibold text-black/60">
+          Clasificacion
+          <select className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-normal text-ink" value={failedCategory} onChange={(event) => setFailedCategory(event.target.value as FailedCategory | "")} required>
+            <option value="">Seleccionar clasificacion</option>
+            {failedCategoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          {selectedFailedCategory && <span className="text-xs text-black/50">{failedCategoryHint(selectedFailedCategory)}</span>}
+        </label>
+      )}
       {isVisitRescheduled && (
         <div className="grid gap-2 rounded-md bg-field p-3">
           <p className="text-xs font-semibold text-black/60">Nueva visita de entrega</p>
@@ -2558,6 +2598,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
           </Card>
           <ManualOrderPanel state={state} setState={setState} />
           <ShopifyStoresAdminPanel state={state} setState={setState} />
+          <StoreWebhookConfigsPanel configs={state.storeWebhookConfigs ?? []} sellers={state.sellers} />
           <ShopifyImportOrderPanel
             stores={state.shopifyStores ?? []}
             sellers={state.sellers}
@@ -3536,6 +3577,8 @@ type LiquidationRow = {
   orders: number;
   deliveredOrders: number;
   failedOrders: number;
+  chargeableFailedOrders: number;
+  nonChargeableFailedOrders: number;
   codCop: number;
   feesCop: number;
   deliveryFeeCop: number;
@@ -3560,6 +3603,8 @@ type LiquidationOrderAudit = {
   driverId: string;
   driverName: string;
   status: Order["status"];
+  failedCategory?: FailedCategory;
+  chargeableFailed: boolean;
   paymentMethod: PaymentMethod;
   codCop: number;
   deliveryFeeCop: number;
@@ -3594,7 +3639,9 @@ function countClosedOrders(state: AppState, orderIds: string[]) {
   const orders = state.orders.filter((order) => orderIdSet.has(order.id));
   return {
     delivered: orders.filter((order) => order.status === "delivered").length,
-    failed: orders.filter((order) => order.status === "failed").length
+    failed: orders.filter((order) => order.status === "failed").length,
+    chargeableFailed: orders.filter(isChargeableFailedOrder).length,
+    nonChargeableFailed: orders.filter((order) => order.status === "failed" && !isChargeableFailedOrder(order)).length
   };
 }
 
@@ -3665,6 +3712,8 @@ function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = s
         driverId: order.driverId ?? "unassigned",
         driverName: driver?.name ?? "Sin domiciliario",
         status: order.status,
+        failedCategory: order.failedCategory,
+        chargeableFailed: isChargeableFailedOrder(order),
         paymentMethod: order.paymentMethod,
         codCop,
         deliveryFeeCop,
@@ -3721,6 +3770,8 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       orders: uniqueOrderCount(ownEntries),
       deliveredOrders: closedCounts.delivered,
       failedOrders: closedCounts.failed,
+      chargeableFailedOrders: closedCounts.chargeableFailed,
+      nonChargeableFailedOrders: closedCounts.nonChargeableFailed,
       codCop,
       feesCop,
       deliveryFeeCop,
@@ -3762,6 +3813,8 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       orders: uniqueOrderCount(ownEntries),
       deliveredOrders: closedCounts.delivered,
       failedOrders: closedCounts.failed,
+      chargeableFailedOrders: closedCounts.chargeableFailed,
+      nonChargeableFailedOrders: closedCounts.nonChargeableFailed,
       codCop,
       feesCop,
       deliveryFeeCop,
@@ -3842,6 +3895,8 @@ function downloadFailedOrdersCsv(orders: Order[], state: AppState, startDate: st
     "ciudad",
     "zona",
     "estado",
+    "categoria_fallido",
+    "fallido_cobrable",
     "motivo_fallido",
     "decision_reintento",
     "cliente",
@@ -3900,6 +3955,8 @@ function downloadFailedOrdersCsv(orders: Order[], state: AppState, startDate: st
       city?.name ?? order.cityId,
       zone?.name ?? order.zoneId,
       statusLabel(order.status),
+      order.status === "failed" ? failedCategoryLabel(order.failedCategory) : "",
+      order.status === "failed" ? (isChargeableFailedOrder(order) ? "si" : "no") : "",
       order.failedReason,
       order.retryDecision,
       order.customerName,
@@ -4392,6 +4449,8 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
           <DetailLine label="Total pedidos" value={row.orders} />
           <DetailLine label="Entregados" value={row.deliveredOrders} tone="mint" />
           <DetailLine label="Fallidos" value={row.failedOrders} tone="rust" />
+          <DetailLine label="Fallidos cobrables" value={row.chargeableFailedOrders} tone="rust" />
+          <DetailLine label="Fallidos no cobrables" value={row.nonChargeableFailedOrders} />
         </div>
         <div className="rounded-md bg-white p-3">
           <p className="mb-2 text-xs font-bold uppercase text-black/50">Cobros a tienda</p>
@@ -4448,6 +4507,7 @@ function LiquidationOrderAuditTable({ audits, compact = false }: { audits: Liqui
             <th className="py-2 pr-3 font-semibold">Tienda</th>
             <th className="py-2 pr-3 font-semibold">Domiciliario</th>
             <th className="py-2 pr-3 font-semibold">Estado</th>
+            <th className="py-2 pr-3 font-semibold">Fallido</th>
             <th className="py-2 pr-3 font-semibold">COD</th>
             <th className="py-2 pr-3 font-semibold">Cobro tienda</th>
             <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
@@ -4465,6 +4525,14 @@ function LiquidationOrderAuditTable({ audits, compact = false }: { audits: Liqui
               <td className="py-3 pr-3">{audit.sellerName}</td>
               <td className="py-3 pr-3">{audit.driverName}</td>
               <td className="py-3 pr-3">{statusLabel(audit.status)}</td>
+              <td className="py-3 pr-3">
+                {audit.status === "failed" ? (
+                  <>
+                    <p className="font-semibold">{failedCategoryLabel(audit.failedCategory)}</p>
+                    <p className="text-xs text-black/50">{audit.chargeableFailed ? "Cobrable" : "No cobrable"}</p>
+                  </>
+                ) : "-"}
+              </td>
               <td className="py-3 pr-3">{formatCop(audit.codCop)}</td>
               <td className="py-3 pr-3">
                 <p className="font-semibold">{formatCop(audit.storeChargeCop)}</p>
@@ -5097,6 +5165,38 @@ function ShopifyStoresAdminPanel({ state, setState }: { state: AppState; setStat
   );
 }
 
+function StoreWebhookConfigsPanel({ configs, sellers }: { configs: StoreWebhookConfig[]; sellers: Seller[] }) {
+  const activeConfigs = [...configs].filter((config) => config.status === "active").sort((left, right) => left.sellerName.localeCompare(right.sellerName));
+  return (
+    <Card>
+      <h2 className="mb-3 font-bold">Webhooks Shopify por tienda</h2>
+      <PaginatedList items={activeConfigs} pageSize={4} empty={<p className="text-sm text-black/60">No hay webhooks generados.</p>}>
+        {(config) => {
+          const seller = sellers.find((item) => item.id === config.sellerId);
+          const url = `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(config.sellerId)}&key=${encodeURIComponent(config.webhookKey)}`;
+          return (
+            <div key={config.id} className="grid gap-2 rounded-md border border-black/10 p-3 text-sm">
+              <div>
+                <p className="font-semibold">{seller?.name ?? config.sellerName}</p>
+                <p className="text-xs text-black/50">{config.shopDomain || "Sin dominio"} · {config.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(config.lastWebhookAt)}` : "Sin webhooks recibidos"}</p>
+              </div>
+              <input className="rounded-md border border-black/10 bg-field px-3 py-2 text-xs" readOnly value={url} />
+              <div className="flex flex-wrap gap-2">
+                <button className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(url)}>
+                  Copiar URL
+                </button>
+                <span className="rounded-md bg-field px-3 py-2 text-xs font-semibold">SKU {config.skuContains || "ADMA"}</span>
+                <span className="rounded-md bg-field px-3 py-2 text-xs font-semibold">Etiqueta {config.tagContains || "ADMA"}</span>
+              </div>
+              <p className="text-xs text-black/60">Configurar esta URL en Order creation y Order update. Para pedidos viejos, agregar etiqueta {config.tagContains || "ADMA"} en Shopify.</p>
+            </div>
+          );
+        }}
+      </PaginatedList>
+    </Card>
+  );
+}
+
 function ShopifyImportOrderPanel({ stores, sellers, lockedSellerId, onImported }: { stores: ShopifyStore[]; sellers: Seller[]; lockedSellerId?: string; onImported: (order: Order) => void }) {
   const visibleStores = lockedSellerId ? stores.filter((store) => store.sellerId === lockedSellerId) : stores;
   const [shopDomain, setShopDomain] = useState(visibleStores[0]?.shopDomain ?? "");
@@ -5137,7 +5237,7 @@ function ShopifyImportOrderPanel({ stores, sellers, lockedSellerId, onImported }
       const resolvedSellerId = (lockedSellerId ?? sellerId) || assignedSellerId;
       const result = await syncFirebaseShopifyHistoricalOrders({ shopDomain, sellerId: resolvedSellerId, startDate: syncStartDate, endDate: syncEndDate });
       result.orders.forEach(onImported);
-      setMessage(`Historico sincronizado: ${result.imported} nuevos, ${result.existing} ya existian, ${result.skippedOutsideCali} fuera de Cali.`);
+      setMessage(`Historico sincronizado: ${result.imported} nuevos, ${result.existing} ya existian, ${result.skippedOutsideCali} fuera de Cali, ${result.skippedSkuFilter ?? 0} sin SKU/etiqueta requerida.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo sincronizar el historico.");
     } finally {
@@ -5252,7 +5352,10 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
   const [observation, setObservation] = useState("");
   const [orderSkuContains, setOrderSkuContains] = useState("");
   const [message, setMessage] = useState("");
+  const [webhookBusy, setWebhookBusy] = useState(false);
   const primaryStore = stores[0];
+  const webhookConfig = (state.storeWebhookConfigs ?? []).find((config) => config.sellerId === seller.id && config.status === "active");
+  const webhookUrl = webhookConfig ? `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(webhookConfig.sellerId)}&key=${encodeURIComponent(webhookConfig.webhookKey)}` : "";
   const shopify = getSellerShopifyConnection(seller.id, seller.shopDomain, primaryStore);
   const normalizedShop = shop.trim() ? normalizeShopifyDomain(shop) : "";
   const alreadyConnected = normalizedShop ? stores.some((store) => store.shopDomain === normalizedShop) : false;
@@ -5283,10 +5386,66 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
     setMessage("Solicitud enviada. Kentro generara el enlace privado de instalacion y aparecera aqui.");
   }
 
+  async function createWebhookConfig() {
+    setWebhookBusy(true);
+    setMessage("");
+    try {
+      const result = await createFirebaseStoreWebhookConfig({
+        sellerId: seller.id,
+        shopDomain: normalizedShop || seller.shopDomain || undefined,
+        skuContains: orderSkuContains.trim() || "ADMA",
+        tagContains: "ADMA"
+      });
+      setState({
+        ...state,
+        storeWebhookConfigs: [result.config, ...(state.storeWebhookConfigs ?? []).filter((item) => item.id !== result.config.id)]
+      });
+      setMessage("Webhook generado. Configura Order creation y Order update con la misma URL.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo generar el webhook.");
+    } finally {
+      setWebhookBusy(false);
+    }
+  }
+
   return (
     <Card>
       <h2 className="mb-3 font-bold">Conexion Shopify</h2>
       <div className="grid gap-3 rounded-md border border-black/10 p-3">
+        <div className="grid gap-2 rounded-md bg-field p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-semibold">Webhook de sincronizacion</p>
+              <p className="text-xs text-black/60">Configura la misma URL en Shopify para Order creation y Order update.</p>
+            </div>
+            <button
+              className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              type="button"
+              disabled={webhookBusy}
+              onClick={() => void createWebhookConfig()}
+            >
+              {webhookConfig ? "Actualizar webhook" : webhookBusy ? "Generando..." : "Generar webhook"}
+            </button>
+          </div>
+          {webhookConfig && (
+            <div className="grid gap-2">
+              <input className="rounded-md border border-black/10 bg-white px-3 py-2 text-xs text-ink" readOnly value={webhookUrl} />
+              <div className="flex flex-wrap gap-2">
+                <button className="focus-ring rounded-md bg-white px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(webhookUrl)}>
+                  Copiar URL
+                </button>
+                <span className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-black/60">SKU contiene {webhookConfig.skuContains || "ADMA"}</span>
+                <span className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-black/60">Etiqueta {webhookConfig.tagContains || "ADMA"}</span>
+              </div>
+              <div className="rounded-md bg-white px-3 py-2 text-xs text-black/60">
+                <p className="font-semibold text-ink">Instrucciones Shopify</p>
+                <p>1. Crear webhook Order creation con esta URL.</p>
+                <p>2. Crear webhook Order update con esta misma URL.</p>
+                <p>3. Para sincronizar un pedido viejo, agrega la etiqueta ADMA al pedido en Shopify y guarda.</p>
+              </div>
+            </div>
+          )}
+        </div>
         <div>
           <p className="font-semibold">{stores.length > 0 ? `${stores.length} tienda${stores.length === 1 ? "" : "s"} conectada${stores.length === 1 ? "" : "s"}` : "Tiendas Shopify pendientes"}</p>
           <p className="mt-1 text-sm text-black/60">Estado: {stores.length > 0 ? "con conexion activa" : shopify.status === "error" ? "requiere revision" : "requiere enlace privado"}</p>

@@ -9,6 +9,7 @@ export function emptyState(): AppState {
     zones: [],
     sellers: [],
     shopifyStores: [],
+    storeWebhookConfigs: [],
     shopifyInstallRequests: [],
     shopifySyncIssues: [],
     drivers: [],
@@ -73,6 +74,7 @@ export function seedState(): AppState {
       }
     ],
     shopifyStores: [],
+    storeWebhookConfigs: [],
     shopifyInstallRequests: [],
     shopifySyncIssues: [],
     drivers: [
