@@ -27,8 +27,8 @@ function classify(order) {
   ].filter(Boolean).join(" "));
   const hasPhoto = Boolean(evidence.photoUrl || evidence.storagePath);
 
-  if (/(sin cobertura|cobertura|fuera de cobertura|zona no cubierta|no cubre|fuera de ruta|sin ruta)/.test(text)) {
-    return { failedCategory: "no_coverage", failedCategoryConfidence: 0.9 };
+  if (/(sin cobertura|cobertura|fuera de cobertura|fuera del area|fuera de del area|zona no cubierta|no cubre|fuera de ruta|sin ruta|alto riesgo|zona roja|zona de riesgo|sector riesgo|sector peligroso|no se ingresa|no ingresar|peligroso|peligrosa)/.test(text)) {
+    return { failedCategory: "no_coverage", failedCategoryConfidence: 0.95 };
   }
   if (/(no contesta|no responde|no contacto|telefono malo|numero malo|datos malos|pedido malo|cliente no confirma|no confirma)/.test(text)) {
     return { failedCategory: "bad_order_or_no_contact", failedCategoryConfidence: 0.85 };
