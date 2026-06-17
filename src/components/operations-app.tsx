@@ -67,7 +67,7 @@ import {
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
-import { entriesForClosedOrder, formatCop, isChargeableFailedOrder, sellerBalance, weeklyFailedRate } from "@/lib/finance";
+import { entriesForClosedOrder, formatCop, isChargeableFailedOrder, sellerBalance, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
 import type { AppState, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, WalletEntry } from "@/lib/types";
@@ -554,7 +554,7 @@ function OrderFilters({
   );
 }
 
-function LogisticsKpis({ orders }: { orders: Order[] }) {
+function LogisticsKpis({ orders, state }: { orders: Order[]; state: AppState }) {
   const total = orders.length;
   const pendingConfirm = orders.filter((order) => order.status === "imported" || order.status === "address_risk").length;
   const readyWithoutLeader = orders.filter((order) => order.status === "ready_to_assign" && !order.driverId).length;
@@ -575,7 +575,9 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
   const closedDispatchable = delivered + chargeableFailed + liquidated;
   const openDispatchable = Math.max(0, dispatchable - closedDispatchable);
   const completionRate = dispatchable > 0 ? Math.round((closedDispatchable / dispatchable) * 100) : 0;
-  const codCop = orders.filter((order) => order.paymentMethod === "cod" && order.status !== "cancelled").reduce((sum, order) => sum + order.totalCop, 0);
+  const storeCodCop = orders
+    .filter((order) => order.paymentMethod === "cod" && (order.status === "delivered" || order.status === "liquidated"))
+    .reduce((sum, order) => sum + Math.max(0, order.totalCop - sellerDeliveredFeeForOrder(order, state)), 0);
   const deliveryRate = dispatchable > 0 ? Math.round((delivered / dispatchable) * 100) : 0;
   const returnRate = dispatchable > 0 ? Math.round((chargeableFailed / dispatchable) * 100) : 0;
   return (
@@ -614,10 +616,10 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
         <Metric icon={<Route size={20} />} label="Despachables" value={String(dispatchable)} />
         <Metric icon={<ShieldCheck size={20} />} label="% entrega" value={`${deliveryRate}%`} />
         <Metric icon={<X size={20} />} label="% devolucion" value={`${returnRate}%`} />
-        <Metric icon={<Wallet size={20} />} label="Recaudo COD rango" value={formatCop(codCop)} />
+        <Metric icon={<Wallet size={20} />} label="Recaudo tienda rango" value={formatCop(storeCodCop)} />
       </div>
       <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
-        % despacho = despachables / tomados por lider. % terminacion = entregados, fallidos con visita y liquidados / despachables. Abiertos despachables = despachables menos cerrados. Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables.
+        % despacho = despachables / tomados por lider. % terminacion = entregados, fallidos con visita y liquidados / despachables. Abiertos despachables = despachables menos cerrados. Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables. Recaudo tienda rango = COD entregado menos flete cobrado a tienda.
       </p>
     </div>
   );
@@ -2490,7 +2492,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
           Ver liquidaciones
         </button>
       </div>
-      <LogisticsKpis orders={rangeOrders} />
+      <LogisticsKpis orders={rangeOrders} state={state} />
       <div className="grid gap-3 lg:grid-cols-2">
         <AdminOperationalSummary
           title="Pedidos sin imprimir"
@@ -5562,7 +5564,7 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
         <Metric icon={<Store size={20} />} label="Tiendas conectadas" value={String(shopifyStores.length)} />
         <Metric icon={<ClipboardList size={20} />} label="Pedidos" value={String(orders.length)} />
       </div>
-      <LogisticsKpis orders={rangeOrders} />
+      <LogisticsKpis orders={rangeOrders} state={state} />
       <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
         <section className="grid content-start gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

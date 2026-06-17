@@ -45,6 +45,18 @@ export function formatCop(value: number): string {
   }).format(value);
 }
 
+export function sellerDeliveredFeeForOrder(order: Order, state: AppState): number {
+  const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
+  const tariffs = applySellerTariffOverrides(order, {
+    sellerDeliveredFeeCop: zone?.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop,
+    sellerFailedFeeCop: zone?.sellerFailedFeeCop || state.settings.sellerFailedFeeCop,
+    fulfillmentFeeCop: zone?.fulfillmentFeeCop || state.settings.fulfillmentFeeCop,
+    driverDeliveredPayCop: zone?.driverDeliveredPayCop || state.settings.driverDeliveredPayCop,
+    driverFailedPayCop: zone?.driverFailedPayCop || state.settings.driverFailedPayCop
+  });
+  return tariffs.sellerDeliveredFeeCop;
+}
+
 export function entriesForClosedOrder(order: Order, state: AppState): WalletEntry[] {
   const now = new Date().toISOString();
   const entries: WalletEntry[] = [];
