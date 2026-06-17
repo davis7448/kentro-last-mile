@@ -571,6 +571,7 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
   const funnelTotal = pendingConfirm + readyWithoutLeader + assignedPendingPickup + pickedWithoutMessenger + inOperation + delivered + failed + cancelled + liquidated;
   const pickedByDriver = orders.filter((order) => order.driverId && ["call_pending", "scheduled", "picked_up", "in_route", "retry_pending", "delivered", "failed", "liquidated"].includes(order.status)).length;
   const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed);
+  const dispatchRate = pickedByDriver > 0 ? Math.round((dispatchable / pickedByDriver) * 100) : 0;
   const closedDispatchable = delivered + chargeableFailed + liquidated;
   const openDispatchable = Math.max(0, dispatchable - closedDispatchable);
   const completionRate = dispatchable > 0 ? Math.round((closedDispatchable / dispatchable) * 100) : 0;
@@ -607,6 +608,7 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
       </div>
       <div className="grid gap-3 md:grid-cols-5">
         <Metric icon={<QrCode size={20} />} label="Tomados por lider" value={String(pickedByDriver)} />
+        <Metric icon={<Route size={20} />} label="% despacho" value={`${dispatchRate}%`} />
         <Metric icon={<Check size={20} />} label="% terminacion" value={`${completionRate}%`} />
         <Metric icon={<AlertTriangle size={20} />} label="Abiertos despachables" value={String(openDispatchable)} />
         <Metric icon={<Route size={20} />} label="Despachables" value={String(dispatchable)} />
@@ -615,7 +617,7 @@ function LogisticsKpis({ orders }: { orders: Order[] }) {
         <Metric icon={<Wallet size={20} />} label="Recaudo COD rango" value={formatCop(codCop)} />
       </div>
       <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
-        % terminacion = entregados, fallidos con visita y liquidados / despachables. Abiertos despachables = despachables menos cerrados. Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables.
+        % despacho = despachables / tomados por lider. % terminacion = entregados, fallidos con visita y liquidados / despachables. Abiertos despachables = despachables menos cerrados. Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables.
       </p>
     </div>
   );
