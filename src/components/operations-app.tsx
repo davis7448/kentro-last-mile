@@ -103,6 +103,51 @@ function failedCategoryHint(category?: FailedCategory) {
   return failedCategoryOptions.find((option) => option.value === category)?.hint ?? "";
 }
 
+type FailedCategoryFilter = "all" | FailedCategory;
+
+function normalizedFailedCategory(order: Order): FailedCategory {
+  return order.failedCategory ?? "failed_visit";
+}
+
+const failedCategoryFilterOptions: Array<{ value: FailedCategoryFilter; label: string; helper: string }> = [
+  { value: "all", label: "Todos", helper: "Total fallidos del rango." },
+  { value: "failed_visit", label: "Con visita", helper: "Cobrable; puede requerir reintento." },
+  { value: "no_coverage", label: "Sin cobertura", helper: "Se manda por transportadora." },
+  { value: "bad_order_or_no_contact", label: "No contesta / pedido malo", helper: "Volver a contactar o corregir datos." },
+  { value: "pending_review", label: "Pendiente revisar", helper: "Falta clasificar." }
+];
+
+function filterByFailedCategory(orders: Order[], category: FailedCategoryFilter) {
+  if (category === "all") return orders;
+  return orders.filter((order) => normalizedFailedCategory(order) === category);
+}
+
+function FailedCategoryFilters({ orders, value, onChange }: { orders: Order[]; value: FailedCategoryFilter; onChange: (value: FailedCategoryFilter) => void }) {
+  const counts = failedCategoryFilterOptions.reduce<Record<FailedCategoryFilter, number>>((acc, option) => {
+    acc[option.value] = option.value === "all" ? orders.length : orders.filter((order) => normalizedFailedCategory(order) === option.value).length;
+    return acc;
+  }, {} as Record<FailedCategoryFilter, number>);
+
+  return (
+    <div className="grid gap-2">
+      <div className="grid gap-2 md:grid-cols-5">
+        {failedCategoryFilterOptions.map((option) => (
+          <button
+            key={option.value}
+            className={`focus-ring grid min-h-20 content-between rounded-md border px-3 py-2 text-left text-sm ${value === option.value ? "border-ink bg-ink text-white" : "border-black/10 bg-white text-ink"}`}
+            type="button"
+            onClick={() => onChange(option.value)}
+          >
+            <span className="font-semibold">{option.label}</span>
+            <span className={`text-2xl font-bold ${value === option.value ? "text-white" : "text-ink"}`}>{counts[option.value]}</span>
+            <span className={`text-xs ${value === option.value ? "text-white/75" : "text-black/50"}`}>{option.helper}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type LocalAccount = {
   id: string;
   email: string;
@@ -2450,6 +2495,7 @@ function PickupScanModal({ state, driver, onClose, onCommit }: { state: AppState
 
 function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, sellerFilter, onStartDate, onEndDate, onStatusFilter, onSellerFilter }: { state: AppState; setState: (state: AppState) => void; onNavigate: (view: AppView) => void; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; sellerFilter: string; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSellerFilter: (value: string) => void }) {
   const [adminOrderTab, setAdminOrderTab] = useState<"operation" | "failed">("operation");
+  const [adminFailedCategoryFilter, setAdminFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
   const sellerFilteredOrders = sellerFilter === "all" ? state.orders : state.orders.filter((order) => order.sellerId === sellerFilter);
   const rangeOrders = filterOrdersByRangeStatus(sellerFilteredOrders, startDate, endDate, "all", "");
   const pending = rangeOrders.filter((order) => !["delivered", "failed", "cancelled"].includes(order.status));
@@ -2468,10 +2514,11 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   );
   const failedOrders = sellerFilteredOrders.filter((order) => order.status === "failed");
   const operationOrders = sellerFilteredOrders.filter((order) => order.status !== "failed");
-  const tabOrders = adminOrderTab === "failed" ? failedOrders : operationOrders;
-  const visibleOrders = filterOrdersByRangeStatus(tabOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleOperationOrders = filterOrdersByRangeStatus(operationOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleFailedBaseOrders = filterOrdersByRangeStatus(failedOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleOrders = adminOrderTab === "failed" ? filterByFailedCategory(visibleFailedBaseOrders, adminFailedCategoryFilter) : visibleOperationOrders;
   const reprintableVisibleOrders = visibleOrders.filter((order) => Boolean(order.labelPrintedAt));
-  const exportableFailedOrders = filterOrdersByRangeStatus(failedOrders, startDate, endDate, statusFilter, orderSearch);
+  const exportableFailedOrders = filterByFailedCategory(visibleFailedBaseOrders, adminFailedCategoryFilter);
   const alerts = [
     ...review.map((order) => `Direccion en revision ${order.shopifyOrderId}`),
     ...failed.filter((order) => order.retryDecision === "pending").map((order) => `Reintento pendiente ${order.shopifyOrderId}`),
@@ -2558,10 +2605,13 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
               onClick={() => downloadFailedOrdersCsv(exportableFailedOrders, state, startDate, endDate, sellerFilter)}
             >
               <FileDown size={16} />
-              Descargar fallidos ({exportableFailedOrders.length})
+              Descargar fallidos visibles ({exportableFailedOrders.length})
             </button>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} sellers={state.sellers} sellerFilter={sellerFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} onSeller={onSellerFilter} />
+          {adminOrderTab === "failed" && (
+            <FailedCategoryFilters orders={visibleFailedBaseOrders} value={adminFailedCategoryFilter} onChange={setAdminFailedCategoryFilter} />
+          )}
           <button
             className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
             type="button"
@@ -5538,6 +5588,7 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
 function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, onStartDate, onEndDate, onStatusFilter }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void }) {
   const seller = state.sellers.find((item) => item.id === session.profileId);
   const [sellerOrderTab, setSellerOrderTab] = useState<"operation" | "failed">("operation");
+  const [sellerFailedCategoryFilter, setSellerFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
   if (!seller) {
     return (
       <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
@@ -5549,8 +5600,9 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
   const rangeOrders = filterOrdersByRangeStatus(orders, startDate, endDate, "all", "");
   const failedOrders = orders.filter((order) => order.status === "failed");
   const operationOrders = orders.filter((order) => order.status !== "failed");
-  const tabOrders = sellerOrderTab === "failed" ? failedOrders : operationOrders;
-  const visibleOrders = filterOrdersByRangeStatus(tabOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleOperationOrders = filterOrdersByRangeStatus(operationOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleFailedBaseOrders = filterOrdersByRangeStatus(failedOrders, startDate, endDate, statusFilter, orderSearch);
+  const visibleOrders = sellerOrderTab === "failed" ? filterByFailedCategory(visibleFailedBaseOrders, sellerFailedCategoryFilter) : visibleOperationOrders;
   const callRescheduled = orders.filter((order) => order.callOutcome === "rescheduled");
   const deliveryScheduled = orders.filter((order) => order.status === "scheduled");
   const shopifyStores = (state.shopifyStores ?? []).filter((store) => store.sellerId === seller.id);
@@ -5600,6 +5652,9 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
             </button>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} />
+          {sellerOrderTab === "failed" && (
+            <FailedCategoryFilters orders={visibleFailedBaseOrders} value={sellerFailedCategoryFilter} onChange={setSellerFailedCategoryFilter} />
+          )}
           {(callRescheduled.length > 0 || deliveryScheduled.length > 0) && (
             <div className="flex flex-wrap gap-2">
               {callRescheduled.length > 0 && (
