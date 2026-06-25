@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { entriesForClosedOrder, sellerBalance } from "./finance";
+import { calculateDriverFinancialSummary, entriesForClosedOrder, sellerBalance } from "./finance";
 import { seedState } from "./seed";
+import type { AppState } from "./types";
 
 describe("wallet calculations", () => {
   it("reserves 9.000 COP per pending order before withdrawal", () => {
@@ -24,6 +25,69 @@ describe("wallet calculations", () => {
     expect(entries.some((entry) => entry.type === "delivery_fee" && entry.amountCop === -12000)).toBe(true);
     expect(entries.some((entry) => entry.type === "fulfillment_fee" && entry.amountCop === -2000)).toBe(true);
     expect(entries.some((entry) => entry.type === "driver_earning" && entry.amountCop === 9000)).toBe(true);
+  });
+
+  it("creates product cost entries for delivered orders with a configured catalog match", () => {
+    const state: AppState = {
+      ...seedState(),
+      suppliers: [{ id: "sup-1", name: "Proveedor Uno", active: true, createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z" }],
+      productCatalog: [{
+        id: "prd-1",
+        sellerId: "seller-1",
+        supplierId: "sup-1",
+        sku: "AUR-CAFE-250",
+        name: "Cafe premium 250g",
+        normalizedProductName: "cafe premium 250g",
+        productCostCop: 18000,
+        productCostConfigured: true,
+        active: true,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z"
+      }]
+    };
+    const order = {
+      ...state.orders[0],
+      status: "delivered" as const,
+      paymentMethod: "cod" as const,
+      sku: "aur-cafe-250",
+      quantity: 2
+    };
+
+    const entries = entriesForClosedOrder(order, state);
+    const productCost = entries.find((entry) => entry.type === "product_cost");
+
+    expect(productCost?.amountCop).toBe(-36000);
+    expect(productCost?.supplierId).toBe("sup-1");
+    expect(productCost?.productId).toBe("prd-1");
+  });
+
+  it("does not create product cost entries when cost is not configured", () => {
+    const state: AppState = {
+      ...seedState(),
+      suppliers: [{ id: "sup-1", name: "Proveedor Uno", active: true, createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z" }],
+      productCatalog: [{
+        id: "prd-1",
+        sellerId: "seller-1",
+        supplierId: "sup-1",
+        sku: "AUR-CAFE-250",
+        name: "Cafe premium 250g",
+        normalizedProductName: "cafe premium 250g",
+        productCostCop: 18000,
+        productCostConfigured: false,
+        active: true,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z"
+      }]
+    };
+    const order = {
+      ...state.orders[0],
+      status: "delivered" as const,
+      paymentMethod: "cod" as const
+    };
+
+    const entries = entriesForClosedOrder(order, state);
+
+    expect(entries.some((entry) => entry.type === "product_cost")).toBe(false);
   });
 
   it("uses the special DANDA delivered tariff without failed charges", () => {
@@ -128,5 +192,187 @@ describe("wallet calculations", () => {
 
     expect(entries.some((entry) => entry.type === "failed_fee" && entry.amountCop === -12000)).toBe(true);
     expect(entries.some((entry) => entry.type === "driver_earning" && entry.amountCop === 9000)).toBe(true);
+  });
+});
+
+describe("driver financial summary", () => {
+  const baseState = (): AppState => ({
+    ...seedState(),
+    orders: [],
+    wallet: [],
+    settlements: []
+  });
+
+  it("tracks partial driver settlement cash", () => {
+    const state = baseState();
+    state.settlements = [{
+      id: "stl-partial",
+      kind: "driver",
+      ownerId: "driver-1",
+      ownerName: "Driver",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      walletEntryIds: [],
+      orderIds: ["ord-1"],
+      codCop: 100,
+      feesCop: 0,
+      driverPayCop: 0,
+      platformMarginCop: 0,
+      netCop: -100,
+      status: "paid",
+      createdAt: "2026-06-02T00:00:00.000Z",
+      cashPendingCop: 30,
+      cashReceipts: [{ id: "rcp-1", amountCop: 70, receivedAt: "2026-06-02T01:00:00.000Z" }]
+    }];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.pendingBalanceCop).toBe(30);
+    expect(summary.receivedCop).toBe(70);
+    expect(summary.incompleteSettlementsCop).toBe(30);
+    expect(summary.receiptRows[0].pendingAfterCop).toBe(30);
+  });
+
+  it("keeps a pending settlement without receipts fully pending", () => {
+    const state = baseState();
+    state.settlements = [{
+      id: "stl-pending",
+      kind: "driver",
+      ownerId: "driver-1",
+      ownerName: "Driver",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      walletEntryIds: [],
+      orderIds: ["ord-1"],
+      codCop: 100,
+      feesCop: 0,
+      driverPayCop: 0,
+      platformMarginCop: 0,
+      netCop: -100,
+      status: "pending",
+      createdAt: "2026-06-02T00:00:00.000Z"
+    }];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.pendingBalanceCop).toBe(100);
+    expect(summary.receivedCop).toBe(0);
+    expect(summary.incompleteSettlements).toHaveLength(1);
+  });
+
+  it("keeps a closed settlement out of the pending balance", () => {
+    const state = baseState();
+    state.settlements = [{
+      id: "stl-closed",
+      kind: "driver",
+      ownerId: "driver-1",
+      ownerName: "Driver",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      walletEntryIds: [],
+      orderIds: ["ord-1"],
+      codCop: 100,
+      feesCop: 0,
+      driverPayCop: 0,
+      platformMarginCop: 0,
+      netCop: -100,
+      status: "reconciled",
+      createdAt: "2026-06-02T00:00:00.000Z"
+    }];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.pendingBalanceCop).toBe(0);
+    expect(summary.receivedCop).toBe(100);
+  });
+
+  it("adds delivered COD orders without a driver settlement using total minus driver pay", () => {
+    const state = baseState();
+    state.orders = [{
+      ...seedState().orders[0],
+      id: "ord-uncut",
+      shopifyOrderId: "1001",
+      driverId: "driver-1",
+      status: "delivered",
+      paymentMethod: "cod",
+      totalCop: 100
+    }];
+    state.wallet = [{
+      id: "we-driver-pay",
+      ownerType: "driver",
+      ownerId: "driver-1",
+      orderId: "ord-uncut",
+      type: "driver_earning",
+      amountCop: 20,
+      description: "Pago transportista entregado 1001",
+      createdAt: "2026-06-02T00:00:00.000Z"
+    }];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.unsettledCashCop).toBe(80);
+    expect(summary.pendingBalanceCop).toBe(80);
+  });
+
+  it("does not duplicate delivered COD orders already included in a settlement", () => {
+    const state = baseState();
+    state.orders = [{
+      ...seedState().orders[0],
+      id: "ord-settled",
+      shopifyOrderId: "1001",
+      driverId: "driver-1",
+      status: "delivered",
+      paymentMethod: "cod",
+      totalCop: 100
+    }];
+    state.settlements = [{
+      id: "stl-existing",
+      kind: "driver",
+      ownerId: "driver-1",
+      ownerName: "Driver",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      walletEntryIds: [],
+      orderIds: ["ord-settled"],
+      codCop: 100,
+      feesCop: 0,
+      driverPayCop: 20,
+      platformMarginCop: -20,
+      netCop: -80,
+      status: "pending",
+      createdAt: "2026-06-02T00:00:00.000Z"
+    }];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.unsettledCashCop).toBe(0);
+    expect(summary.pendingBalanceCop).toBe(80);
+  });
+
+  it("ignores prepaid and failed orders as cash to return", () => {
+    const state = baseState();
+    state.orders = [
+      {
+        ...seedState().orders[0],
+        id: "ord-prepaid",
+        driverId: "driver-1",
+        status: "delivered",
+        paymentMethod: "prepaid",
+        totalCop: 100
+      },
+      {
+        ...seedState().orders[0],
+        id: "ord-failed",
+        driverId: "driver-1",
+        status: "failed",
+        paymentMethod: "cod",
+        totalCop: 100
+      }
+    ];
+
+    const summary = calculateDriverFinancialSummary(state, "driver-1");
+
+    expect(summary.pendingBalanceCop).toBe(0);
+    expect(summary.unsettledOrders).toHaveLength(0);
   });
 });

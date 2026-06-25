@@ -1,4 +1,4 @@
-import type { AppState, Order, WalletEntry } from "./types";
+import type { AppState, CashReceipt, Order, Settlement, WalletEntry } from "./types";
 
 const dandaSellerIds = new Set(["seller-1779315416119"]);
 const dandaPreferredDriverId = "driver-1778271901513";
@@ -43,6 +43,48 @@ export function formatCop(value: number): string {
     currency: "COP",
     maximumFractionDigits: 0
   }).format(value);
+}
+
+export function normalizeProductName(value?: string) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function productCostForOrder(order: Pick<Order, "sellerId" | "productId" | "sku" | "productName" | "quantity">, state: AppState) {
+  const catalog = state.productCatalog ?? [];
+  const normalizedSku = order.sku?.trim().toUpperCase();
+  const normalizedName = normalizeProductName(order.productName);
+  const product =
+    (order.productId ? catalog.find((item) => item.id === order.productId && item.sellerId === order.sellerId && item.active !== false) : undefined) ??
+    (normalizedSku ? catalog.find((item) => item.sellerId === order.sellerId && item.sku?.trim().toUpperCase() === normalizedSku && item.active !== false) : undefined) ??
+    (normalizedName ? catalog.find((item) => item.sellerId === order.sellerId && !item.sku && item.normalizedProductName === normalizedName && item.active !== false) : undefined);
+  if (!product || !product.productCostConfigured) {
+    return {
+      configured: false,
+      unitCostCop: 0,
+      totalCostCop: 0,
+      productId: product?.id ?? order.productId,
+      productName: product?.name ?? order.productName,
+      supplierId: product?.supplierId
+    };
+  }
+  const supplier = state.suppliers.find((item) => item.id === product.supplierId);
+  const quantity = Math.max(1, Number(order.quantity) || 1);
+  const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
+  return {
+    configured: true,
+    unitCostCop,
+    totalCostCop: unitCostCop * quantity,
+    productId: product.id,
+    productName: product.name,
+    supplierId: product.supplierId,
+    supplierName: supplier?.name
+  };
 }
 
 export function sellerDeliveredFeeForOrder(order: Order, state: AppState): number {
@@ -103,6 +145,23 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
+    const productCost = productCostForOrder(order, state);
+    if (productCost.configured) {
+      entries.push({
+        id: `we-${order.id}-product-cost`,
+        ownerType: "seller",
+        ownerId: order.sellerId,
+        orderId: order.id,
+        type: "product_cost",
+        amountCop: -productCost.totalCostCop,
+        description: `Costo producto ${order.shopifyOrderId}`,
+        supplierId: productCost.supplierId,
+        supplierName: productCost.supplierName,
+        productId: productCost.productId,
+        productName: productCost.productName,
+        createdAt: now
+      });
+    }
   }
 
   const chargeableFailed = isChargeableFailedOrder(order);
@@ -160,6 +219,182 @@ export function sellerBalance(state: AppState, sellerId: string) {
   ).length;
   const reservedCop = pendingOrders * state.settings.pendingReserveCop;
   return { ledgerCop, pendingOrders, reservedCop, availableCop: Math.max(0, ledgerCop - reservedCop) };
+}
+
+export type DriverSettlementCashRow = {
+  settlementId: string;
+  label: string;
+  orderCount: number;
+  expectedCashCop: number;
+  receivedCop: number;
+  pendingCop: number;
+  status: Settlement["status"];
+  createdAt: string;
+  note?: string;
+};
+
+export type DriverCashReceiptRow = {
+  id: string;
+  settlementId: string;
+  settlementLabel: string;
+  amountCop: number;
+  receivedAt: string;
+  pendingAfterCop: number;
+  note?: string;
+  synthetic?: boolean;
+};
+
+export type DriverUnsettledCashOrderRow = {
+  orderId: string;
+  trackingCode: string;
+  shopifyOrderId: string;
+  totalCop: number;
+  driverPayCop: number;
+  expectedCashCop: number;
+};
+
+export type DriverFinancialSummary = {
+  pendingBalanceCop: number;
+  receivedCop: number;
+  incompleteSettlementsCop: number;
+  unsettledCashCop: number;
+  incompleteSettlements: DriverSettlementCashRow[];
+  settlementRows: DriverSettlementCashRow[];
+  receiptRows: DriverCashReceiptRow[];
+  unsettledOrders: DriverUnsettledCashOrderRow[];
+};
+
+function settlementLabel(settlement: Pick<Settlement, "id" | "startDate" | "endDate">) {
+  if (settlement.startDate && settlement.endDate) return `${settlement.startDate} a ${settlement.endDate}`;
+  return settlement.id;
+}
+
+function settlementOrderIds(settlement: Settlement, wallet: WalletEntry[]) {
+  const storedOrderIds = settlement.orderIds ?? [];
+  const walletEntryIds = settlement.walletEntryIds ?? [];
+  if (storedOrderIds.length > 0) return storedOrderIds;
+  return Array.from(new Set(
+    wallet
+      .filter((entry) => walletEntryIds.includes(entry.id))
+      .map((entry) => entry.orderId)
+      .filter(Boolean) as string[]
+  ));
+}
+
+function driverPayForOrder(wallet: WalletEntry[], driverId: string, orderId: string) {
+  return wallet
+    .filter((entry) => entry.ownerType === "driver" && entry.ownerId === driverId && entry.orderId === orderId && entry.type === "driver_earning")
+    .reduce((sum, entry) => sum + entry.amountCop, 0);
+}
+
+function cashExpectedForSettlement(state: AppState, settlement: Settlement, orderIds: string[]) {
+  const orderIdSet = new Set(orderIds);
+  const walletEntryIds = settlement.walletEntryIds ?? [];
+  const codCop = settlement.codCop > 0
+    ? settlement.codCop
+    : state.wallet
+      .filter((entry) => entry.ownerType === "seller" && entry.orderId && orderIdSet.has(entry.orderId) && entry.type === "cod_revenue")
+      .reduce((sum, entry) => sum + entry.amountCop, 0);
+  const driverPayCop = settlement.driverPayCop > 0
+    ? settlement.driverPayCop
+    : state.wallet
+      .filter((entry) => walletEntryIds.includes(entry.id) && entry.type === "driver_earning")
+      .reduce((sum, entry) => sum + entry.amountCop, 0);
+  return Math.max(0, codCop - driverPayCop);
+}
+
+function receiptDate(receipt: CashReceipt, fallback: string) {
+  return receipt.receivedAt ?? receipt.createdAt ?? fallback;
+}
+
+export function calculateDriverFinancialSummary(state: AppState, driverId: string): DriverFinancialSummary {
+  const driverSettlements = state.settlements.filter((settlement) => settlement.kind === "driver" && settlement.ownerId === driverId);
+  const settledOrderIds = new Set<string>();
+  const settlementRows: DriverSettlementCashRow[] = [];
+  const receiptRows: DriverCashReceiptRow[] = [];
+
+  for (const settlement of driverSettlements) {
+    const orderIds = settlementOrderIds(settlement, state.wallet);
+    for (const orderId of orderIds) settledOrderIds.add(orderId);
+
+    const expectedCashCop = cashExpectedForSettlement(state, settlement, orderIds);
+    const receipts = settlement.cashReceipts ?? [];
+    const receivedFromReceipts = receipts.reduce((sum, receipt) => sum + Math.max(0, Number(receipt.amountCop) || 0), 0);
+    const hasExplicitPending = typeof settlement.cashPendingCop === "number";
+    const pendingCop = hasExplicitPending
+      ? Math.max(0, Number(settlement.cashPendingCop) || 0)
+      : settlement.status === "pending"
+        ? Math.max(0, expectedCashCop - receivedFromReceipts)
+        : 0;
+    const receivedCop = receipts.length > 0 ? receivedFromReceipts : Math.max(0, expectedCashCop - pendingCop);
+    const label = settlementLabel(settlement);
+
+    settlementRows.push({
+      settlementId: settlement.id,
+      label,
+      orderCount: orderIds.length,
+      expectedCashCop,
+      receivedCop,
+      pendingCop,
+      status: settlement.status,
+      createdAt: settlement.createdAt,
+      note: settlement.note
+    });
+
+    if (receipts.length > 0) {
+      for (const receipt of receipts) {
+        receiptRows.push({
+          id: receipt.id ?? `${settlement.id}-${receiptDate(receipt, settlement.createdAt)}-${receipt.amountCop}`,
+          settlementId: settlement.id,
+          settlementLabel: label,
+          amountCop: Math.max(0, Number(receipt.amountCop) || 0),
+          receivedAt: receiptDate(receipt, settlement.createdAt),
+          pendingAfterCop: pendingCop,
+          note: receipt.note
+        });
+      }
+    } else if (receivedCop > 0) {
+      receiptRows.push({
+        id: `${settlement.id}-legacy-received`,
+        settlementId: settlement.id,
+        settlementLabel: label,
+        amountCop: receivedCop,
+        receivedAt: settlement.paidAt ?? settlement.reconciledAt ?? settlement.createdAt,
+        pendingAfterCop: pendingCop,
+        note: "Registro historico sin recibos detallados.",
+        synthetic: true
+      });
+    }
+  }
+
+  const unsettledOrders = state.orders
+    .filter((order) => order.driverId === driverId && order.status === "delivered" && order.paymentMethod === "cod" && !settledOrderIds.has(order.id))
+    .map((order) => {
+      const driverPayCop = driverPayForOrder(state.wallet, driverId, order.id);
+      return {
+        orderId: order.id,
+        trackingCode: order.trackingCode ?? order.id,
+        shopifyOrderId: order.shopifyOrderId,
+        totalCop: order.totalCop,
+        driverPayCop,
+        expectedCashCop: Math.max(0, order.totalCop - driverPayCop)
+      };
+    });
+
+  const incompleteSettlements = settlementRows.filter((row) => row.pendingCop > 0);
+  const incompleteSettlementsCop = incompleteSettlements.reduce((sum, row) => sum + row.pendingCop, 0);
+  const unsettledCashCop = unsettledOrders.reduce((sum, row) => sum + row.expectedCashCop, 0);
+
+  return {
+    pendingBalanceCop: incompleteSettlementsCop + unsettledCashCop,
+    receivedCop: settlementRows.reduce((sum, row) => sum + row.receivedCop, 0),
+    incompleteSettlementsCop,
+    unsettledCashCop,
+    incompleteSettlements,
+    settlementRows: settlementRows.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    receiptRows: receiptRows.sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
+    unsettledOrders: unsettledOrders.sort((left, right) => left.trackingCode.localeCompare(right.trackingCode))
+  };
 }
 
 export function weeklyFailedRate(state: AppState, driverId: string) {

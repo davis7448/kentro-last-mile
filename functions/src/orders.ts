@@ -1,21 +1,29 @@
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, type QuerySnapshot, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type QuerySnapshot, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 
+const requiredText = (label: string) => z.string().trim().min(1, `${label} es obligatorio.`);
+const optionalText = z.preprocess((value) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return value;
+}, z.string().trim().min(1).optional());
+
 const manualOrderSchema = z.object({
-  sellerId: z.string().min(1),
-  shopifyOrderId: z.string().optional(),
-  customerName: z.string().min(1),
-  customerPhone: z.string().min(1),
-  addressRaw: z.string().min(1),
-  normalizedAddress: z.string().optional(),
-  zoneId: z.string().optional(),
+  sellerId: requiredText("La tienda"),
+  shopifyOrderId: optionalText,
+  customerName: requiredText("El nombre del cliente"),
+  customerPhone: requiredText("El telefono del cliente"),
+  addressRaw: requiredText("La direccion"),
+  normalizedAddress: optionalText,
+  zoneId: optionalText,
   paymentMethod: z.enum(["cod", "prepaid"]),
   fulfillmentMode: z.enum(["seller_pickup", "warehouse"]),
-  totalCop: z.number().positive(),
-  productName: z.string().optional(),
-  sku: z.string().optional(),
+  totalCop: z.number().positive("El valor del pedido debe ser mayor a cero."),
+  productId: optionalText,
+  productName: optionalText,
+  sku: optionalText,
   addressRisk: z.enum(["accepted", "review"])
 });
 
@@ -37,10 +45,11 @@ const closeOrderSchema = z.object({
 });
 
 const settlementSchema = z.object({
-  kind: z.enum(["seller", "driver"]),
+  kind: z.enum(["seller", "driver", "supplier"]),
   ownerId: z.string().min(1),
   startDate: z.string().min(1),
   endDate: z.string().min(1),
+  walletEntryIds: z.array(z.string().min(1)).optional(),
   note: optionalString
 });
 
@@ -50,12 +59,23 @@ const settlementStatusSchema = z.object({
   note: optionalString
 });
 
+const driverCashReceiptSchema = z.object({
+  settlementId: z.string().min(1),
+  receivedNowCop: z.number().min(0),
+  note: optionalString
+});
+
 const confirmImportedOrderSchema = z.object({
   orderId: z.string().min(1)
 });
 
 const confirmRetryOrderSchema = z.object({
   orderId: z.string().min(1)
+});
+
+const classifyFailedOrderSchema = z.object({
+  orderId: z.string().min(1),
+  failedCategory: failedCategorySchema
 });
 
 const cancelOrderSchema = z.object({
@@ -73,6 +93,7 @@ const updateImportedOrderSchema = z.object({
   paymentMethod: z.enum(["cod", "prepaid"]),
   fulfillmentMode: z.enum(["seller_pickup", "warehouse"]),
   totalCop: z.number().positive(),
+  productId: optionalString,
   productName: optionalString,
   sku: optionalString,
   quantity: z.number().positive().optional()
@@ -81,6 +102,7 @@ const updateImportedOrderSchema = z.object({
 const updateOrderAdjustmentsSchema = z.object({
   orderId: z.string().min(1),
   totalCop: z.number().positive(),
+  productId: optionalString,
   productName: optionalString,
   sku: optionalString,
   quantity: z.number().positive().optional()
@@ -129,16 +151,21 @@ type WalletEntryDoc = {
   ownerType: "seller" | "driver" | "admin";
   ownerId: string;
   orderId: string;
-  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "driver_earning" | "platform_margin";
+  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage";
   amountCop: number;
   description: string;
   createdAt: string;
   settlementId?: string;
+  supplierSettlementId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  productId?: string;
+  productName?: string;
 };
 
 type SettlementDoc = {
   id: string;
-  kind: "seller" | "driver";
+  kind: "seller" | "driver" | "supplier";
   ownerId: string;
   ownerName: string;
   startDate: string;
@@ -147,10 +174,17 @@ type SettlementDoc = {
   orderIds: string[];
   codCop: number;
   feesCop: number;
+  productCostCop?: number;
   driverPayCop: number;
   platformMarginCop: number;
   netCop: number;
   status: "pending" | "paid" | "reconciled";
+  cashExpectedCop?: number;
+  cashReceivedCop?: number;
+  cashPendingCop?: number;
+  cashReceiptStatus?: "none" | "partial" | "complete";
+  cashReceipts?: Array<{ amountCop: number; receivedAt: string; note?: string }>;
+  cashAllocations?: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }>;
   createdAt: string;
   paidAt?: string;
   reconciledAt?: string;
@@ -159,31 +193,54 @@ type SettlementDoc = {
 
 type SettlementOrderDoc = {
   paymentMethod?: "cod" | "prepaid";
+  createdAt?: string;
+  trackingCode?: string;
+};
+
+type DriverCashAllocation = {
+  orderId: string;
+  expectedCop: number;
+  receivedCop: number;
+  covered: boolean;
+};
+
+type DriverCashSummary = {
+  codCop: number;
+  driverPayCop: number;
+  expectedCop: number;
+  allocations: DriverCashAllocation[];
 };
 
 type FailedCategory = z.infer<typeof failedCategorySchema>;
+
+function zodFieldMessage(error: z.ZodError) {
+  const flat = error.flatten();
+  const messages = Object.entries(flat.fieldErrors)
+    .flatMap(([field, errors]) => (errors ?? []).map((message) => `${field}: ${message}`));
+  return messages.length > 0 ? `Revisa los datos del pedido. ${messages.join(" ")}` : "Revisa los datos del pedido.";
+}
 
 export const createManualOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
   if (!request.auth || (role !== "admin" && role !== "seller")) {
-    throw new HttpsError("permission-denied", "Only admins and sellers can create orders.");
+    throw new HttpsError("permission-denied", "Tu usuario no tiene permiso para crear pedidos.");
   }
 
   const parsed = manualOrderSchema.safeParse(request.data);
   if (!parsed.success) {
-    throw new HttpsError("invalid-argument", "Invalid order data.", parsed.error.flatten());
+    throw new HttpsError("invalid-argument", zodFieldMessage(parsed.error), parsed.error.flatten());
   }
 
   const input = parsed.data;
   if (role === "seller" && input.sellerId !== sellerClaim) {
-    throw new HttpsError("permission-denied", "Sellers can only create their own orders.");
+    throw new HttpsError("permission-denied", "Solo puedes crear pedidos de tu propia tienda.");
   }
 
   const db = getFirestore();
   const seller = await db.collection("sellers").doc(input.sellerId).get();
   if (!seller.exists) {
-    throw new HttpsError("not-found", "Seller profile not found.");
+    throw new HttpsError("not-found", "No se encontro el perfil de la tienda.");
   }
 
   const sellerData = seller.data() ?? {};
@@ -192,7 +249,7 @@ export const createManualOrder = onCall(async (request) => {
   if (formattedRequestedNumber) {
     const duplicate = await db.collection("orders").where("sellerId", "==", input.sellerId).where("shopifyOrderId", "==", formattedRequestedNumber).limit(1).get();
     if (!duplicate.empty) {
-      throw new HttpsError("already-exists", "An order with this seller reference already exists.");
+      throw new HttpsError("already-exists", "Ya existe un pedido con esa referencia de la tienda.");
     }
   }
 
@@ -212,7 +269,7 @@ export const createManualOrder = onCall(async (request) => {
       const available = Number(inventory.available) || 0;
       const reserved = Number(inventory.reserved) || 0;
       if (available - reserved <= 0) {
-        throw new HttpsError("failed-precondition", "Product is out of stock.");
+        throw new HttpsError("failed-precondition", "El producto seleccionado no tiene stock disponible.");
       }
       transaction.set(inventoryDoc.ref, { reserved: reserved + 1, updatedAt: now }, { merge: true });
     }
@@ -234,6 +291,7 @@ export const createManualOrder = onCall(async (request) => {
       paymentMethod: input.paymentMethod,
       fulfillmentMode: input.fulfillmentMode,
       totalCop: input.totalCop,
+      productId: input.productId?.trim() || undefined,
       productName: input.productName?.trim() || undefined,
       sku: input.sku?.trim() || undefined,
       pickupPointName: typeof sellerData.pickupPointName === "string" && sellerData.pickupPointName.trim() ? sellerData.pickupPointName.trim() : String(sellerData.name ?? "Punto de recogida"),
@@ -262,7 +320,7 @@ export const createManualOrder = onCall(async (request) => {
 export const confirmImportedOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
-  if (!request.auth || (role !== "admin" && role !== "seller")) {
+  if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
     throw new HttpsError("permission-denied", "Only admins and sellers can confirm imported orders.");
   }
 
@@ -279,7 +337,7 @@ export const confirmImportedOrder = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
     const current = snap.data() ?? {};
     const sellerId = String(current.sellerId ?? "");
-    if (role === "seller" && sellerId !== sellerClaim) {
+    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
       throw new HttpsError("permission-denied", "Sellers can only confirm their own orders.");
     }
     if (current.status !== "imported") {
@@ -299,7 +357,7 @@ export const confirmImportedOrder = onCall(async (request) => {
       action: "order.seller_confirmed",
       entity: "order",
       entityId: snap.id,
-      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por ${role === "seller" ? "vendedor" : "admin"}`,
+      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por ${role === "admin" ? "admin" : "vendedor"}`,
       createdAt: now
     });
     return { id: snap.id, ...updated };
@@ -311,7 +369,7 @@ export const confirmImportedOrder = onCall(async (request) => {
 export const updateImportedOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
-  if (!request.auth || (role !== "admin" && role !== "seller")) {
+  if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
     throw new HttpsError("permission-denied", "Only admins and sellers can edit imported orders.");
   }
 
@@ -329,7 +387,7 @@ export const updateImportedOrder = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
     const current = snap.data() ?? {};
     const sellerId = String(current.sellerId ?? "");
-    if (role === "seller" && sellerId !== sellerClaim) {
+    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
       throw new HttpsError("permission-denied", "Sellers can only edit their own orders.");
     }
     if (current.status !== "imported") {
@@ -345,6 +403,7 @@ export const updateImportedOrder = onCall(async (request) => {
       paymentMethod: input.paymentMethod,
       fulfillmentMode: input.fulfillmentMode,
       totalCop: input.totalCop,
+      productId: input.productId?.trim(),
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
@@ -370,7 +429,7 @@ export const updateImportedOrder = onCall(async (request) => {
 export const confirmRetryOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
-  if (!request.auth || (role !== "admin" && role !== "seller")) {
+  if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
     throw new HttpsError("permission-denied", "Only admins and sellers can confirm retries.");
   }
 
@@ -389,7 +448,7 @@ export const confirmRetryOrder = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
     const current = snap.data() ?? {};
     const sellerId = String(current.sellerId ?? "");
-    if (role === "seller" && sellerId !== sellerClaim) {
+    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
       throw new HttpsError("permission-denied", "Sellers can only confirm retries for their own orders.");
     }
     if (String(current.status ?? "") !== "failed") {
@@ -425,6 +484,74 @@ export const confirmRetryOrder = onCall(async (request) => {
   return { order };
 });
 
+export const classifyFailedOrder = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Solo admins pueden clasificar fallidos pendientes.");
+  }
+
+  const parsed = classifyFailedOrderSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Datos invalidos para clasificar el fallido.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  const db = getFirestore();
+  const orderRef = db.collection("orders").doc(input.orderId);
+  const settingsRef = db.doc("settings/global");
+  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const now = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const [orderSnap, settingsSnap] = await Promise.all([transaction.get(orderRef), transaction.get(settingsRef)]);
+    if (!orderSnap.exists) throw new HttpsError("not-found", "Pedido no encontrado.");
+    const order = { id: orderSnap.id, ...orderSnap.data() } as Record<string, any>;
+    if (String(order.status ?? "") !== "failed") {
+      throw new HttpsError("failed-precondition", "Solo se pueden clasificar pedidos fallidos.");
+    }
+    if (String(order.failedCategory ?? "pending_review") !== "pending_review") {
+      throw new HttpsError("failed-precondition", "Este fallido ya tiene clasificacion. Ajustalo manualmente con soporte si requiere cambio financiero.");
+    }
+
+    const existingEntriesSnap = await transaction.get(db.collection("walletEntries").where("orderId", "==", input.orderId));
+    const hasFinancialEntries = existingEntriesSnap.docs.some((doc) => {
+      const type = String(doc.data().type ?? "");
+      return ["failed_fee", "driver_earning", "fulfillment_fee"].includes(type);
+    });
+    if (hasFinancialEntries) {
+      throw new HttpsError("failed-precondition", "Este pedido ya tiene movimientos financieros. No se puede reclasificar desde esta accion.");
+    }
+
+    const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
+    const zoneSnap = zoneId ? await transaction.get(db.collection("zones").doc(zoneId)) : null;
+    const updated = stripUndefined({
+      ...order,
+      failedCategory: input.failedCategory,
+      failedCategorySource: "manual",
+      updatedAt: now
+    });
+    const walletEntries = input.failedCategory === "failed_visit"
+      ? buildWalletEntries(updated, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now, null)
+      : [];
+
+    transaction.set(orderRef, updated, { merge: true });
+    for (const entry of walletEntries) {
+      transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
+    }
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: "order.failed_classified",
+      entity: "order",
+      entityId: orderSnap.id,
+      summary: `Fallido ${order.trackingCode ?? order.shopifyOrderId ?? orderSnap.id} clasificado como ${input.failedCategory}`,
+      createdAt: now
+    });
+    return { order: { id: orderSnap.id, ...updated }, walletEntries };
+  });
+});
+
 export const updateOrderAdjustments = onCall(async (request) => {
   const role = request.auth?.token.role;
   if (!request.auth || role !== "admin") {
@@ -451,6 +578,7 @@ export const updateOrderAdjustments = onCall(async (request) => {
     const updated = stripUndefined({
       ...current,
       totalCop: input.totalCop,
+      productId: input.productId?.trim(),
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
@@ -647,7 +775,7 @@ export const assignMessengerToOrders = onCall(async (request) => {
 export const cancelOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
-  if (!request.auth || (role !== "admin" && role !== "seller")) {
+  if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
     throw new HttpsError("permission-denied", "Only admins and sellers can cancel orders.");
   }
 
@@ -668,13 +796,13 @@ export const cancelOrder = onCall(async (request) => {
     const current = snap.data() ?? {};
     const sellerId = String(current.sellerId ?? "");
     const status = String(current.status ?? "");
-    if (role === "seller" && sellerId !== sellerClaim) {
+    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
       throw new HttpsError("permission-denied", "Sellers can only cancel their own orders.");
     }
     if (closedStatuses.has(status)) {
       throw new HttpsError("failed-precondition", "Closed orders cannot be cancelled.");
     }
-    if (role === "seller" && collectedStatuses.has(status)) {
+    if ((role === "seller" || role === "seller_logistics") && collectedStatuses.has(status)) {
       throw new HttpsError("failed-precondition", "This order was already collected. Only an admin can cancel it.");
     }
 
@@ -704,7 +832,7 @@ export const cancelOrder = onCall(async (request) => {
       action: "order.cancelled",
       entity: "order",
       entityId: snap.id,
-      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} anulado por ${role === "seller" ? "vendedor" : "admin"}`,
+      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} anulado por ${role === "admin" ? "admin" : role === "seller_logistics" ? "logistico tienda" : "vendedor"}`,
       createdAt: now
     });
     return { id: snap.id, ...updated };
@@ -808,9 +936,22 @@ export const closeOrder = onCall(async (request) => {
     const inventoryQuery = typeof order.sku === "string" && typeof order.sellerId === "string"
       ? db.collection("inventory").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku).limit(1)
       : null;
-    const [zoneSnap, inventorySnap] = await Promise.all([
+    const productByIdRef = typeof order.productId === "string" && order.productId.trim()
+      ? db.collection("productCatalog").doc(order.productId.trim())
+      : null;
+    const productBySkuQuery = !productByIdRef && typeof order.sku === "string" && typeof order.sellerId === "string"
+      ? db.collection("productCatalog").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku.trim().toUpperCase()).limit(1)
+      : null;
+    const normalizedProductName = normalizeProductName(typeof order.productName === "string" ? order.productName : "");
+    const productByNameQuery = !productByIdRef && !productBySkuQuery && normalizedProductName && typeof order.sellerId === "string"
+      ? db.collection("productCatalog").where("sellerId", "==", order.sellerId).where("normalizedProductName", "==", normalizedProductName).limit(1)
+      : null;
+    const [zoneSnap, inventorySnap, productByIdSnap, productBySkuSnap, productByNameSnap] = await Promise.all([
       zoneId ? transaction.get(db.collection("zones").doc(zoneId)) : Promise.resolve(null),
-      inventoryQuery ? transaction.get(inventoryQuery) : Promise.resolve(null)
+      inventoryQuery ? transaction.get(inventoryQuery) : Promise.resolve(null),
+      productByIdRef ? transaction.get(productByIdRef) : Promise.resolve(null),
+      productBySkuQuery ? transaction.get(productBySkuQuery) : Promise.resolve(null),
+      productByNameQuery ? transaction.get(productByNameQuery) : Promise.resolve(null)
     ]);
 
     const nextStatus = input.outcome === "delivered" ? "delivered" : isVisitRescheduled ? "retry_pending" : "failed";
@@ -847,7 +988,13 @@ export const closeOrder = onCall(async (request) => {
     transaction.set(orderRef, nextOrder, { merge: true });
 
     settleInventoryForOrder(transaction, inventorySnap, input.outcome, isVisitRescheduled, now);
-    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now);
+    const productCost = resolveProductCostForOrder(
+      nextOrder,
+      productByIdSnap?.exists ? productByIdSnap.data() ?? null : null,
+      productBySkuSnap && !productBySkuSnap.empty ? productBySkuSnap.docs[0].data() : null,
+      productByNameSnap && !productByNameSnap.empty ? productByNameSnap.docs[0].data() : null
+    );
+    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now, productCost);
     for (const entry of walletEntries) {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
     }
@@ -884,21 +1031,30 @@ export const createSettlement = onCall(async (request) => {
   }
 
   const db = getFirestore();
-  const ownerRef = db.collection(input.kind === "seller" ? "sellers" : "drivers").doc(input.ownerId);
-  const entriesSnap = await db
-    .collection("walletEntries")
-    .where("ownerType", "==", input.kind)
-    .where("ownerId", "==", input.ownerId)
-    .get();
-  const unsettledEntryDocs = entriesSnap.docs
+  const ownerCollection = input.kind === "seller" ? "sellers" : input.kind === "driver" ? "drivers" : "suppliers";
+  const ownerRef = db.collection(ownerCollection).doc(input.ownerId);
+  const explicitEntryDocs = input.walletEntryIds && input.walletEntryIds.length > 0
+    ? (await Promise.all(input.walletEntryIds.map((entryId) => db.collection("walletEntries").doc(entryId).get()))).filter((entry) => entry.exists)
+    : null;
+  const entriesQuery = input.kind === "supplier"
+    ? db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "==", "product_cost").where("supplierId", "==", input.ownerId)
+    : db.collection("walletEntries").where("ownerType", "==", input.kind).where("ownerId", "==", input.ownerId);
+  const entriesSnap = explicitEntryDocs ? null : await entriesQuery.get();
+  const sourceDocs = explicitEntryDocs ?? entriesSnap?.docs ?? [];
+  const unsettledEntryDocs = sourceDocs
     .filter((entry) => {
-      const data = entry.data();
+      const data = entry.data() ?? {};
       const entryDate = String(data.createdAt ?? "").slice(0, 10);
-      return !data.settlementId && entryDate >= input.startDate && entryDate <= input.endDate;
+      const isUnsettled = input.kind === "supplier" ? !data.supplierSettlementId : !data.settlementId;
+      const ownerMatches = input.kind === "supplier"
+        ? data.ownerType === "seller" && data.type === "product_cost" && data.supplierId === input.ownerId
+        : data.ownerType === input.kind && data.ownerId === input.ownerId;
+      const inRange = explicitEntryDocs ? true : entryDate >= input.startDate && entryDate <= input.endDate;
+      return ownerMatches && isUnsettled && isLiquidationWalletType(String(data.type ?? "")) && inRange;
     });
 
   let candidateDocs = unsettledEntryDocs;
-  if (input.kind === "seller") {
+  if (input.kind === "seller" || input.kind === "supplier") {
     const paidDriverSettlementsSnap = await db
       .collection("settlements")
       .where("kind", "==", "driver")
@@ -906,17 +1062,24 @@ export const createSettlement = onCall(async (request) => {
     const codReceivedOrderIds = new Set<string>();
     for (const settlementDoc of paidDriverSettlementsSnap.docs) {
       const settlement = settlementDoc.data() as SettlementDoc;
-      if (settlement.status !== "paid" && settlement.status !== "reconciled") continue;
-      for (const orderId of settlement.orderIds ?? []) {
-        codReceivedOrderIds.add(orderId);
+      if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
+        for (const allocation of settlement.cashAllocations) {
+          if (allocation.covered) codReceivedOrderIds.add(allocation.orderId);
+        }
+        continue;
+      }
+      if (settlement.status === "paid" || settlement.status === "reconciled") {
+        for (const orderId of settlement.orderIds ?? []) {
+          codReceivedOrderIds.add(orderId);
+        }
       }
     }
 
-    const orderIds = Array.from(new Set(unsettledEntryDocs.map((entry) => String(entry.data().orderId ?? "")).filter(Boolean)));
+    const orderIds = Array.from(new Set(unsettledEntryDocs.map((entry) => String((entry.data() ?? {}).orderId ?? "")).filter(Boolean)));
     const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
     const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
     candidateDocs = unsettledEntryDocs.filter((entry) => {
-      const orderId = String(entry.data().orderId ?? "");
+      const orderId = String((entry.data() ?? {}).orderId ?? "");
       const order = ordersById.get(orderId);
       if (!order) return false;
       if (order.paymentMethod === "prepaid") return true;
@@ -927,7 +1090,7 @@ export const createSettlement = onCall(async (request) => {
   const candidateRefs = candidateDocs.map((entry) => entry.ref);
 
   if (candidateRefs.length === 0) {
-    if (input.kind === "seller" && unsettledEntryDocs.length > 0) {
+    if ((input.kind === "seller" || input.kind === "supplier") && unsettledEntryDocs.length > 0) {
       throw new HttpsError("failed-precondition", "No hay pedidos habilitados para pagar a esta tienda. Primero marca recibido el dinero del domiciliario.");
     }
     throw new HttpsError("failed-precondition", "There are no unsettled wallet movements for this account and date range.");
@@ -948,7 +1111,12 @@ export const createSettlement = onCall(async (request) => {
       .filter((snap) => {
         const entry = { id: snap.id, ...snap.data() } as WalletEntryDoc;
         const entryDate = String(entry.createdAt ?? "").slice(0, 10);
-        return !entry.settlementId && entryDate >= input.startDate && entryDate <= input.endDate;
+        const isUnsettled = input.kind === "supplier" ? !entry.supplierSettlementId : !entry.settlementId;
+        const ownerMatches = input.kind === "supplier"
+          ? entry.ownerType === "seller" && entry.type === "product_cost" && entry.supplierId === input.ownerId
+          : entry.ownerType === input.kind && entry.ownerId === input.ownerId;
+        const inRange = input.walletEntryIds && input.walletEntryIds.length > 0 ? true : entryDate >= input.startDate && entryDate <= input.endDate;
+        return ownerMatches && isUnsettled && isLiquidationWalletType(entry.type) && inRange;
       });
     const entries = unsettledSnaps.map((snap) => ({ id: snap.id, ...snap.data() }) as WalletEntryDoc);
 
@@ -972,7 +1140,7 @@ export const createSettlement = onCall(async (request) => {
 
     transaction.set(settlementRef, settlement);
     for (const snap of unsettledSnaps) {
-      transaction.set(snap.ref, { settlementId: settlement.id }, { merge: true });
+      transaction.set(snap.ref, input.kind === "supplier" ? { supplierSettlementId: settlement.id } : { settlementId: settlement.id }, { merge: true });
     }
     if (platformEntry) {
       transaction.set(db.collection("walletEntries").doc(platformEntry.id), platformEntry, { merge: true });
@@ -988,7 +1156,13 @@ export const createSettlement = onCall(async (request) => {
       createdAt: now
     });
 
-    return { settlement, walletEntries: [...entries.map((entry) => ({ ...entry, settlementId: settlement.id })), ...(platformEntry ? [platformEntry] : [])] };
+    return {
+      settlement,
+      walletEntries: [
+        ...entries.map((entry) => input.kind === "supplier" ? { ...entry, supplierSettlementId: settlement.id } : { ...entry, settlementId: settlement.id }),
+        ...(platformEntry ? [platformEntry] : [])
+      ]
+    };
   });
 });
 
@@ -1008,6 +1182,18 @@ export const updateSettlementStatus = onCall(async (request) => {
   const settlementRef = db.collection("settlements").doc(input.settlementId);
   const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
   const now = new Date().toISOString();
+  const settlementPreviewSnap = await settlementRef.get();
+  if (!settlementPreviewSnap.exists) {
+    throw new HttpsError("not-found", "Settlement not found.");
+  }
+  const settlementPreview = { id: settlementPreviewSnap.id, ...settlementPreviewSnap.data() } as SettlementDoc;
+  const driverCash = settlementPreview.kind === "driver" ? await calculateDriverCashSummary(db, settlementPreview, Number(settlementPreview.cashReceivedCop || 0)) : null;
+  if (driverCash && input.status === "paid" && Math.max(0, driverCash.expectedCop - Number(settlementPreview.cashReceivedCop || 0)) > 0) {
+    throw new HttpsError("failed-precondition", "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido.");
+  }
+  if (driverCash && input.status === "reconciled" && Math.max(0, driverCash.expectedCop - Number(settlementPreview.cashReceivedCop || 0)) > 0) {
+    throw new HttpsError("failed-precondition", "No se puede conciliar un corte de domiciliario con saldo pendiente.");
+  }
 
   return db.runTransaction(async (transaction) => {
     const settlementSnap = await transaction.get(settlementRef);
@@ -1021,9 +1207,21 @@ export const updateSettlementStatus = onCall(async (request) => {
     if (input.status === "reconciled" && settlement.status !== "paid") {
       throw new HttpsError("failed-precondition", "Only paid settlements can be reconciled.");
     }
+    if (driverCash && Math.max(0, driverCash.expectedCop - Number(settlement.cashReceivedCop || 0)) > 0) {
+      throw new HttpsError("failed-precondition", "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido.");
+    }
 
     const nextSettlement = stripUndefined({
       ...settlement,
+      ...(driverCash ? {
+        codCop: driverCash.codCop,
+        driverPayCop: driverCash.driverPayCop,
+        cashExpectedCop: driverCash.expectedCop,
+        cashReceivedCop: Number(settlement.cashReceivedCop || 0),
+        cashPendingCop: Math.max(0, driverCash.expectedCop - Number(settlement.cashReceivedCop || 0)),
+        cashReceiptStatus: driverCash.expectedCop === 0 ? "complete" : "complete",
+        cashAllocations: driverCash.allocations
+      } : {}),
       status: input.status,
       paidAt: input.status === "paid" ? now : settlement.paidAt,
       reconciledAt: input.status === "reconciled" ? now : settlement.reconciledAt,
@@ -1046,9 +1244,166 @@ export const updateSettlementStatus = onCall(async (request) => {
   });
 });
 
+export const recordDriverCashReceipt = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can record driver cash receipts.");
+  }
+
+  const parsed = driverCashReceiptSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Invalid driver cash receipt data.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  const db = getFirestore();
+  const settlementRef = db.collection("settlements").doc(input.settlementId);
+  const now = new Date().toISOString();
+
+  const settlementSnap = await settlementRef.get();
+  if (!settlementSnap.exists) throw new HttpsError("not-found", "Settlement not found.");
+  const currentSettlement = { id: settlementSnap.id, ...settlementSnap.data() } as SettlementDoc;
+  if (currentSettlement.kind !== "driver") {
+    throw new HttpsError("failed-precondition", "Cash receipts can only be recorded for driver settlements.");
+  }
+  if (currentSettlement.status === "reconciled") {
+    throw new HttpsError("failed-precondition", "Reconciled settlements cannot receive cash updates.");
+  }
+
+  const cashSummaryBeforeReceipt = await calculateDriverCashSummary(db, currentSettlement, 0);
+
+  return db.runTransaction(async (transaction) => {
+    const liveSnap = await transaction.get(settlementRef);
+    if (!liveSnap.exists) throw new HttpsError("not-found", "Settlement not found.");
+    const settlement = { id: liveSnap.id, ...liveSnap.data() } as SettlementDoc;
+    const expectedCop = cashSummaryBeforeReceipt.expectedCop;
+    const previousReceivedCop = Math.max(0, Number(settlement.cashReceivedCop || 0));
+    const receivedNowCop = Math.max(0, Math.min(Number(input.receivedNowCop || 0), expectedCop - previousReceivedCop));
+    const receivedCop = previousReceivedCop + receivedNowCop;
+    const pendingCop = Math.max(0, expectedCop - receivedCop);
+    const cashSummary = await calculateDriverCashSummary(db, settlement, receivedCop);
+    const receipts = [
+      ...(Array.isArray(settlement.cashReceipts) ? settlement.cashReceipts : []),
+      ...(receivedNowCop > 0 ? [stripUndefined({ amountCop: receivedNowCop, receivedAt: now, note: input.note?.trim() || undefined })] : [])
+    ];
+    const nextSettlement = {
+      ...settlement,
+      status: pendingCop === 0 ? "paid" : "pending",
+      paidAt: pendingCop === 0 ? now : FieldValue.delete(),
+      reconciledAt: pendingCop === 0 ? settlement.reconciledAt : FieldValue.delete(),
+      codCop: cashSummary.codCop,
+      driverPayCop: cashSummary.driverPayCop,
+      cashExpectedCop: expectedCop,
+      cashReceivedCop: receivedCop,
+      cashPendingCop: pendingCop,
+      cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
+      cashReceipts: receipts,
+      cashAllocations: cashSummary.allocations,
+      note: input.note?.trim() || settlement.note
+    };
+    const responseSettlement = stripUndefined({
+      ...settlement,
+      status: pendingCop === 0 ? "paid" : "pending",
+      paidAt: pendingCop === 0 ? now : undefined,
+      reconciledAt: pendingCop === 0 ? settlement.reconciledAt : undefined,
+      codCop: cashSummary.codCop,
+      driverPayCop: cashSummary.driverPayCop,
+      cashExpectedCop: expectedCop,
+      cashReceivedCop: receivedCop,
+      cashPendingCop: pendingCop,
+      cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
+      cashReceipts: receipts,
+      cashAllocations: cashSummary.allocations,
+      note: input.note?.trim() || settlement.note
+    });
+    const shortageRef = db.collection("walletEntries").doc(`we-${settlement.id}-cash-shortage`);
+    transaction.set(settlementRef, nextSettlement, { merge: true });
+    transaction.set(shortageRef, stripUndefined({
+      id: shortageRef.id,
+      ownerType: "driver",
+      ownerId: settlement.ownerId,
+      orderId: settlement.id,
+      type: "cash_shortage",
+      amountCop: -pendingCop,
+      description: `Saldo pendiente de recaudo ${settlement.ownerName}`,
+      createdAt: now,
+      settlementId: pendingCop === 0 ? settlement.id : undefined
+    }), { merge: true });
+    transaction.set(db.collection("auditEvents").doc(`audit-${Date.now()}`), {
+      id: `audit-${Date.now()}`,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: "settlement.cash_received",
+      entity: "settlement",
+      entityId: settlement.id,
+      summary: `Abono recaudo ${settlement.ownerName}: ${receivedNowCop}`,
+      createdAt: now
+    });
+    return { settlement: responseSettlement, walletEntries: [stripUndefined({ id: shortageRef.id, ownerType: "driver", ownerId: settlement.ownerId, orderId: settlement.id, type: "cash_shortage", amountCop: -pendingCop, description: `Saldo pendiente de recaudo ${settlement.ownerName}`, createdAt: now, settlementId: pendingCop === 0 ? settlement.id : undefined }) as WalletEntryDoc] };
+  });
+});
+
+async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, settlement: SettlementDoc, receivedCop: number): Promise<DriverCashSummary> {
+  const orderIds = Array.from(new Set(settlement.orderIds ?? []));
+  if (orderIds.length === 0) {
+    return { codCop: 0, driverPayCop: 0, expectedCop: 0, allocations: [] };
+  }
+
+  const [sellerEntrySnap, driverEntrySnap, orderSnaps] = await Promise.all([
+    db.collection("walletEntries").where("ownerType", "==", "seller").get(),
+    db.collection("walletEntries").where("ownerType", "==", "driver").get(),
+    Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()))
+  ]);
+  const orderIdSet = new Set(orderIds);
+  const codByOrder = new Map<string, number>();
+  for (const doc of sellerEntrySnap.docs) {
+    const entry = doc.data() as WalletEntryDoc;
+    const orderId = String(entry.orderId ?? "");
+    if (entry.type !== "cod_revenue" || !orderIdSet.has(orderId)) continue;
+    codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
+  }
+  const driverPayByOrder = new Map<string, number>();
+  for (const doc of driverEntrySnap.docs) {
+    const entry = doc.data() as WalletEntryDoc;
+    const orderId = String(entry.orderId ?? "");
+    if (entry.type !== "driver_earning" || !orderIdSet.has(orderId)) continue;
+    driverPayByOrder.set(orderId, (driverPayByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
+  }
+  const orderMeta = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
+  const sortedOrderIds = orderIds
+    .filter((orderId) => Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0)) > 0)
+    .sort((left, right) => {
+      const leftOrder = orderMeta.get(left);
+      const rightOrder = orderMeta.get(right);
+      return String(leftOrder?.createdAt ?? "").localeCompare(String(rightOrder?.createdAt ?? "")) || String(leftOrder?.trackingCode ?? left).localeCompare(String(rightOrder?.trackingCode ?? right));
+    });
+
+  let remaining = Math.max(0, Number(receivedCop) || 0);
+  const allocations = sortedOrderIds.map((orderId) => {
+    const expectedOrderCop = Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0));
+    const receivedOrderCop = Math.min(expectedOrderCop, remaining);
+    remaining -= receivedOrderCop;
+    return {
+      orderId,
+      expectedCop: expectedOrderCop,
+      receivedCop: receivedOrderCop,
+      covered: receivedOrderCop >= expectedOrderCop
+    };
+  });
+
+  const codCop = Array.from(codByOrder.values()).reduce((sum, amount) => sum + amount, 0);
+  const driverPayCop = Array.from(driverPayByOrder.values()).reduce((sum, amount) => sum + amount, 0);
+  return {
+    codCop,
+    driverPayCop,
+    expectedCop: Math.max(0, codCop - driverPayCop),
+    allocations
+  };
+}
+
 function buildSettlement(
   id: string,
-  kind: "seller" | "driver",
+  kind: "seller" | "driver" | "supplier",
   ownerId: string,
   ownerName: string,
   startDate: string,
@@ -1061,8 +1416,12 @@ function buildSettlement(
   const feesCop = Math.max(0, -entries
     .filter((entry) => entry.ownerType === "seller" && ["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type))
     .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
+  const productCostCop = Math.max(0, -entries
+    .filter((entry) => entry.ownerType === "seller" && entry.type === "product_cost")
+    .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
   const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const netCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const entryNetCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const netCop = kind === "supplier" ? productCostCop : entryNetCop;
   return stripUndefined({
     id,
     kind,
@@ -1074,8 +1433,9 @@ function buildSettlement(
     orderIds: Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean))),
     codCop,
     feesCop,
+    productCostCop,
     driverPayCop,
-    platformMarginCop: kind === "seller" ? feesCop : -driverPayCop,
+    platformMarginCop: kind === "seller" ? feesCop : 0,
     netCop,
     status: "pending",
     createdAt: now,
@@ -1083,7 +1443,12 @@ function buildSettlement(
   });
 }
 
+function isLiquidationWalletType(type: string) {
+  return ["cod_revenue", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning"].includes(type);
+}
+
 function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {
+  if (settlement.kind === "supplier") return null;
   const amountCop = settlement.kind === "seller" ? settlement.feesCop : -settlement.driverPayCop;
   if (amountCop === 0) return null;
   return {
@@ -1134,7 +1499,39 @@ function settleInventoryForOrder(
   }
 }
 
-function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string): WalletEntryDoc[] {
+function normalizeProductName(value?: string) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function resolveProductCostForOrder(order: Record<string, any>, productById: Record<string, any> | null, productBySku: Record<string, any> | null, productByName: Record<string, any> | null) {
+  const product = productById && productById.sellerId === order.sellerId
+    ? productById
+    : productBySku && productBySku.sellerId === order.sellerId
+      ? productBySku
+      : productByName && productByName.sellerId === order.sellerId
+        ? productByName
+        : null;
+  if (!product || product.active === false || product.productCostConfigured !== true) {
+    return null;
+  }
+  const quantity = Math.max(1, Number(order.quantity) || 1);
+  const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
+  return {
+    productId: String(product.id ?? order.productId ?? ""),
+    productName: String(product.name ?? order.productName ?? "Producto"),
+    supplierId: typeof product.supplierId === "string" ? product.supplierId : undefined,
+    supplierName: typeof product.supplierName === "string" ? product.supplierName : undefined,
+    totalCostCop: unitCostCop * quantity
+  };
+}
+
+function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string, productCost?: ReturnType<typeof resolveProductCostForOrder>): WalletEntryDoc[] {
   const pickedUpAt = typeof order.pickedUpAt === "string" ? Date.parse(order.pickedUpAt) : Number.NaN;
   const usesNewDandaDriverPay =
     String(order.driverId ?? "") === dandaPreferredDriverId &&
@@ -1190,6 +1587,22 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
+    if (productCost) {
+      entries.push(stripUndefined({
+        id: `we-${order.id}-product-cost`,
+        ownerType: "seller",
+        ownerId: order.sellerId,
+        orderId: order.id,
+        type: "product_cost",
+        amountCop: -productCost.totalCostCop,
+        description: `Costo producto ${order.shopifyOrderId}`,
+        supplierId: productCost.supplierId,
+        supplierName: productCost.supplierName,
+        productId: productCost.productId || undefined,
+        productName: productCost.productName,
+        createdAt: now
+      }) as WalletEntryDoc);
+    }
   }
 
   const isChargeableFailedVisit = order.status === "failed" && String(order.failedCategory ?? "failed_visit") === "failed_visit";

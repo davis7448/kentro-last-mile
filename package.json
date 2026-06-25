@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deploy": "firebase deploy --only hosting,firestore:rules",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:functions": "ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only functions"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

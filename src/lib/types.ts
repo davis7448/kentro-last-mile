@@ -124,6 +124,29 @@ export type Messenger = {
   createdAt: string;
   updatedAt: string;
 };
+export type Supplier = {
+  id: string;
+  name: string;
+  contactName?: string;
+  phone?: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type ProductCatalogItem = {
+  id: string;
+  sellerId: string;
+  supplierId: string;
+  sku?: string;
+  name: string;
+  normalizedProductName?: string;
+  productCostCop: number;
+  productCostConfigured: boolean;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 export type PickupBatch = {
   id: string;
   driverId: string;
@@ -141,6 +164,10 @@ export type InventoryItem = {
   sellerId: string;
   sku: string;
   name: string;
+  productId?: string;
+  supplierId?: string;
+  productCostCop?: number;
+  productCostConfigured?: boolean;
   available: number;
   reserved: number;
   minStock?: number;
@@ -172,6 +199,7 @@ export type Order = {
   paymentMethod: PaymentMethod;
   fulfillmentMode: FulfillmentMode;
   totalCop: number;
+  productId?: string;
   productName?: string;
   sku?: string;
   quantity?: number;
@@ -205,18 +233,33 @@ export type WalletEntry = {
     | "delivery_fee"
     | "failed_fee"
     | "fulfillment_fee"
+    | "product_cost"
     | "driver_earning"
     | "platform_margin"
     | "cod_remittance"
-    | "payout";
+    | "payout"
+    | "cash_shortage";
   amountCop: number;
   description: string;
+  supplierSettlementId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  productId?: string;
+  productName?: string;
   createdAt: string;
+};
+
+export type CashReceipt = {
+  id?: string;
+  amountCop: number;
+  receivedAt?: string;
+  createdAt?: string;
+  note?: string;
 };
 
 export type Settlement = {
   id: string;
-  kind: "seller" | "driver";
+  kind: "seller" | "driver" | "supplier";
   ownerId: string;
   ownerName: string;
   startDate: string;
@@ -225,6 +268,7 @@ export type Settlement = {
   orderIds: string[];
   codCop: number;
   feesCop: number;
+  productCostCop?: number;
   driverPayCop: number;
   platformMarginCop: number;
   netCop: number;
@@ -233,6 +277,15 @@ export type Settlement = {
   paidAt?: string;
   reconciledAt?: string;
   note?: string;
+  cashExpectedCop?: number;
+  cashReceivedCop?: number;
+  cashReceiptStatus?: "pending" | "partial" | "complete";
+  cashPendingCop?: number;
+  cashReceipts?: CashReceipt[];
+  cashAllocations?: Array<{
+    orderId?: string;
+    amountCop: number;
+  }>;
 };
 
 export type PayoutRequest = {
@@ -266,6 +319,8 @@ export type AppState = {
   drivers: Driver[];
   messengers: Messenger[];
   pickupBatches: PickupBatch[];
+  suppliers: Supplier[];
+  productCatalog: ProductCatalogItem[];
   inventory: InventoryItem[];
   orders: Order[];
   wallet: WalletEntry[];

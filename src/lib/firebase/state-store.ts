@@ -15,7 +15,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { emptyState } from "@/lib/seed";
-import type { AppState, AuditEvent, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, WalletEntry, Zone } from "@/lib/types";
+import type { AppState, AuditEvent, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 const settingsPath = ["settings", "global"] as const;
@@ -30,6 +30,8 @@ const collectionNames = [
   "drivers",
   "messengers",
   "pickupBatches",
+  "suppliers",
+  "productCatalog",
   "inventory",
   "orders",
   "walletEntries",
@@ -52,7 +54,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
   if (!client) return null;
   const base = emptyState();
   const role = context?.role ?? "admin";
-  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
+  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
@@ -64,6 +66,8 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
     role === "driver" && context ? getOwnDocument<Driver>("drivers", context.profileId) : role === "admin" ? getCollection<Driver>("drivers") : Promise.resolve([]),
     role === "messenger" && context ? getOwnDocument<Messenger>("messengers", context.profileId) : role === "driver" && context ? getCollection<Messenger>("messengers", where("leaderDriverId", "==", context.profileId)) : role === "admin" ? getCollection<Messenger>("messengers") : Promise.resolve([]),
     role === "driver" && context ? getCollection<PickupBatch>("pickupBatches", where("driverId", "==", context.profileId)) : role === "admin" ? getCollection<PickupBatch>("pickupBatches") : Promise.resolve([]),
+    role === "admin" ? getCollection<Supplier>("suppliers") : Promise.resolve([]),
+    role === "seller" && context ? getCollection<ProductCatalogItem>("productCatalog", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ProductCatalogItem>("productCatalog") : Promise.resolve([]),
     role === "seller" && context ? getCollection<InventoryItem>("inventory", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<InventoryItem>("inventory") : Promise.resolve([]),
     getOrdersForContext(context),
     getWalletForContext(context),
@@ -75,7 +79,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
   const resolvedSellers =
     sellers.length > 0 || role !== "driver"
       ? sellers
-      : await getDocumentsByIds<Seller>("sellers", Array.from(new Set((orders ?? []).map((order) => order.sellerId).filter(Boolean))));
+      : sellerReferencesFromOrders(orders ?? []);
 
   if (
     !settingsSnapshot.exists() &&
@@ -101,6 +105,8 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
     drivers: drivers ?? [],
     messengers: messengers ?? [],
     pickupBatches: pickupBatches ?? [],
+    suppliers: suppliers ?? [],
+    productCatalog: productCatalog ?? [],
     inventory: inventory ?? [],
     orders: (orders ?? []).map(normalizeOrder),
     wallet: wallet ?? [],
@@ -125,7 +131,7 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
     writeEntities(
       batch,
       "orders",
-      state.orders.filter((order) => order.driverId === context.profileId || (!order.driverId && order.status === "ready_to_assign"))
+      state.orders.filter((order) => order.driverId === context.profileId)
     );
     await batch.commit();
     return;
@@ -146,6 +152,8 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "drivers", state.drivers);
   writeEntities(batch, "messengers", state.messengers);
   writeEntities(batch, "pickupBatches", state.pickupBatches);
+  writeEntities(batch, "suppliers", state.suppliers);
+  writeEntities(batch, "productCatalog", state.productCatalog);
   writeEntities(batch, "inventory", state.inventory);
   writeEntities(batch, "orders", state.orders);
   writeEntities(batch, "walletEntries", state.wallet);
@@ -179,10 +187,28 @@ export async function saveFirestoreWalletEntries(entries: WalletEntry[]): Promis
   await batch.commit();
 }
 
+export async function saveFirestoreSettlement(settlement: Settlement): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, "settlements", settlement.id), sanitizeFirestoreValue(settlement), { merge: true });
+}
+
 export async function saveFirestoreInventoryItem(item: InventoryItem): Promise<void> {
   const client = getFirebaseClient();
   if (!client) return;
   await setDoc(doc(client.db, "inventory", item.id), item, { merge: true });
+}
+
+export async function saveFirestoreSupplier(supplier: Supplier): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, "suppliers", supplier.id), sanitizeFirestoreValue(supplier), { merge: true });
+}
+
+export async function saveFirestoreProductCatalogItem(item: ProductCatalogItem): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, "productCatalog", item.id), sanitizeFirestoreValue(item), { merge: true });
 }
 
 export async function saveFirestoreZone(zone: Zone): Promise<void> {
@@ -210,6 +236,8 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
   const settlementRef = collection(client.db, "settlements");
   const messengerRef = collection(client.db, "messengers");
   const pickupBatchRef = collection(client.db, "pickupBatches");
+  const supplierRef = collection(client.db, "suppliers");
+  const productCatalogRef = collection(client.db, "productCatalog");
   const targets =
     context?.role === "seller"
       ? [
@@ -219,6 +247,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
           query(storeWebhookConfigRef, where("sellerId", "==", context.profileId)),
           query(shopifyInstallRequestRef, where("sellerId", "==", context.profileId)),
           query(shopifySyncIssueRef, where("sellerId", "==", context.profileId)),
+          query(productCatalogRef, where("sellerId", "==", context.profileId)),
           query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId)),
           query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId))
         ]
@@ -236,7 +265,7 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
               query(orderRef, where("messengerId", "==", context.profileId)),
               query(messengerRef, where("__name__", "==", context.profileId))
             ]
-          : [orderRef, inventoryRef, shopifyStoreRef, storeWebhookConfigRef, shopifyInstallRequestRef, shopifySyncIssueRef, messengerRef, pickupBatchRef, walletRef, settlementRef];
+          : [orderRef, inventoryRef, supplierRef, productCatalogRef, shopifyStoreRef, storeWebhookConfigRef, shopifyInstallRequestRef, shopifySyncIssueRef, messengerRef, pickupBatchRef, walletRef, settlementRef];
   const reload = () => {
     void loadFirestoreState(context).then((state) => {
       if (state) onState(state);
@@ -295,6 +324,23 @@ async function getDocumentsByIds<T extends { id: string }>(name: string, ids: st
   return docs
     .filter((snapshot): snapshot is NonNullable<typeof snapshot> => Boolean(snapshot?.exists()))
     .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }) as T);
+}
+
+function sellerReferencesFromOrders(orders: Order[]): Seller[] {
+  const sellers = new Map<string, Seller>();
+  for (const order of orders) {
+    if (!order.sellerId || sellers.has(order.sellerId)) continue;
+    sellers.set(order.sellerId, {
+      id: order.sellerId,
+      name: order.pickupPointName || order.sellerId,
+      shopDomain: "",
+      cityId: order.cityId,
+      bankAccount: "",
+      pickupPointName: order.pickupPointName,
+      pickupAddress: order.pickupAddress
+    });
+  }
+  return Array.from(sellers.values());
 }
 
 async function getOrdersForContext(context?: FirestoreStateContext): Promise<Order[]> {

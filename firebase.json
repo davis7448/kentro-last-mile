@@ -15,6 +15,7 @@
   },
   "functions": {
     "source": "functions",
+    "predeploy": ["node scripts/guard-functions-deploy.js"],
     "runtime": "nodejs20"
   }
 }

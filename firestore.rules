@@ -78,15 +78,29 @@ service cloud.firestore {
       allow read: if isAdmin()
         || isMessenger(messengerId)
         || (role() == "driver" && resource.data.leaderDriverId == request.auth.token.driverId);
-      allow create, update, delete: if isAdmin()
+      allow create: if isAdmin()
         || (role() == "driver" && request.resource.data.leaderDriverId == request.auth.token.driverId);
+      allow update: if isAdmin()
+        || (
+          role() == "driver"
+          && resource.data.leaderDriverId == request.auth.token.driverId
+          && request.resource.data.leaderDriverId == resource.data.leaderDriverId
+        );
+      allow delete: if isAdmin();
     }
 
     match /pickupBatches/{batchId} {
       allow read: if isAdmin()
         || (role() == "driver" && resource.data.driverId == request.auth.token.driverId);
-      allow write: if isAdmin()
+      allow create: if isAdmin()
         || (role() == "driver" && request.resource.data.driverId == request.auth.token.driverId);
+      allow update: if isAdmin()
+        || (
+          role() == "driver"
+          && resource.data.driverId == request.auth.token.driverId
+          && request.resource.data.driverId == resource.data.driverId
+        );
+      allow delete: if isAdmin();
     }
 
     match /orders/{orderId} {
@@ -115,6 +129,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /suppliers/{supplierId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /productCatalog/{productId} {
+      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow write: if isAdmin();
+    }
+
     match /walletEntries/{entryId} {
       allow read: if isAdmin()
         || (resource.data.ownerType == "seller" && isSeller(resource.data.ownerId))
@@ -132,7 +155,7 @@ service cloud.firestore {
     match /payouts/{payoutId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
       allow create: if isAdmin() || isSeller(request.resource.data.sellerId);
-      allow update: if isAdmin() || isSeller(resource.data.sellerId);
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

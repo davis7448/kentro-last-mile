@@ -15,6 +15,8 @@ export function emptyState(): AppState {
     drivers: [],
     messengers: [],
     pickupBatches: [],
+    suppliers: [],
+    productCatalog: [],
     inventory: [],
     orders: [],
     wallet: [],
@@ -84,6 +86,8 @@ export function seedState(): AppState {
     ],
     messengers: [],
     pickupBatches: [],
+    suppliers: [],
+    productCatalog: [],
     inventory: [
       { id: "inv-1", sellerId: "seller-1", sku: "AUR-CAFE-250", name: "Cafe premium 250g", available: 42, reserved: 3 },
       { id: "inv-2", sellerId: "seller-1", sku: "AUR-TERMO", name: "Termo acero", available: 18, reserved: 1 },
