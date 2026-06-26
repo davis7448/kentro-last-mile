@@ -279,7 +279,7 @@ export type Settlement = {
   note?: string;
   cashExpectedCop?: number;
   cashReceivedCop?: number;
-  cashReceiptStatus?: "pending" | "partial" | "complete";
+  cashReceiptStatus?: "none" | "partial" | "complete";
   cashPendingCop?: number;
   cashReceipts?: CashReceipt[];
   cashAllocations?: Array<{

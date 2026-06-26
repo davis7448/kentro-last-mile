@@ -25,6 +25,13 @@ service cloud.firestore {
       return role() == "messenger" && request.auth.token.messengerId == messengerId;
     }
 
+    function messengerBelongsToDriver(messengerId) {
+      return role() == "driver"
+        && messengerId is string
+        && exists(/databases/$(database)/documents/messengers/$(messengerId))
+        && get(/databases/$(database)/documents/messengers/$(messengerId)).data.leaderDriverId == request.auth.token.driverId;
+    }
+
     function sellerOrderCreate() {
       return isSeller(request.resource.data.sellerId)
         && request.resource.data.driverId == null
@@ -92,14 +99,7 @@ service cloud.firestore {
     match /pickupBatches/{batchId} {
       allow read: if isAdmin()
         || (role() == "driver" && resource.data.driverId == request.auth.token.driverId);
-      allow create: if isAdmin()
-        || (role() == "driver" && request.resource.data.driverId == request.auth.token.driverId);
-      allow update: if isAdmin()
-        || (
-          role() == "driver"
-          && resource.data.driverId == request.auth.token.driverId
-          && request.resource.data.driverId == resource.data.driverId
-        );
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -108,17 +108,10 @@ service cloud.firestore {
         || isSeller(resource.data.sellerId)
         || isDriver(resource.data.driverId)
         || isMessenger(resource.data.messengerId)
+        || messengerBelongsToDriver(resource.data.messengerId)
         || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
       allow create: if isAdmin() || sellerOrderCreate();
       allow update: if isAdmin()
-        || isDriver(resource.data.driverId)
-        || isMessenger(resource.data.messengerId)
-        || (
-          role() == "driver"
-          && resource.data.driverId == null
-          && request.resource.data.driverId == request.auth.token.driverId
-          && request.resource.data.status in ["picked_up", "assigned"]
-        )
         || sellerOrderLabelUpdate()
         || sellerOrderNoopUpdate();
       allow delete: if isAdmin();

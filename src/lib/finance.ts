@@ -264,6 +264,59 @@ export type DriverFinancialSummary = {
   unsettledOrders: DriverUnsettledCashOrderRow[];
 };
 
+export type DriverSettlementFinancials = {
+  codCop: number;
+  feesCop: number;
+  driverPayCop: number;
+  platformMarginCop: number;
+  cashToReturnCop: number;
+  receivableCop: number;
+  netCop: number;
+};
+
+export function calculateDriverSettlementFinancials(
+  wallet: WalletEntry[],
+  settlement: Pick<Settlement, "ownerId" | "walletEntryIds" | "orderIds">
+): DriverSettlementFinancials {
+  const walletEntryIds = settlement.walletEntryIds ?? [];
+  const storedOrderIds = settlement.orderIds ?? [];
+  const orderIds = storedOrderIds.length > 0
+    ? storedOrderIds
+    : Array.from(new Set(
+      wallet
+        .filter((entry) => walletEntryIds.includes(entry.id))
+        .map((entry) => entry.orderId)
+        .filter(Boolean) as string[]
+    ));
+  const orderIdSet = new Set(orderIds);
+  const relatedSellerEntries = wallet.filter((entry) => entry.ownerType === "seller" && entry.orderId && orderIdSet.has(entry.orderId));
+  const codCop = relatedSellerEntries
+    .filter((entry) => entry.type === "cod_revenue")
+    .reduce((sum, entry) => sum + entry.amountCop, 0);
+  const feesCop = Math.max(0, -relatedSellerEntries
+    .filter((entry) => entry.type === "delivery_fee" || entry.type === "failed_fee" || entry.type === "fulfillment_fee")
+    .reduce((sum, entry) => sum + entry.amountCop, 0));
+  const driverPayCop = wallet
+    .filter((entry) =>
+      entry.type === "driver_earning" &&
+      (
+        walletEntryIds.includes(entry.id) ||
+        (entry.ownerType === "driver" && entry.ownerId === settlement.ownerId && Boolean(entry.orderId && orderIdSet.has(entry.orderId)))
+      )
+    )
+    .reduce((sum, entry) => sum + entry.amountCop, 0);
+  const netCop = driverPayCop - codCop;
+  return {
+    codCop,
+    feesCop,
+    driverPayCop,
+    platformMarginCop: feesCop - driverPayCop,
+    cashToReturnCop: Math.max(0, codCop - driverPayCop),
+    receivableCop: Math.max(0, driverPayCop - codCop),
+    netCop
+  };
+}
+
 function settlementLabel(settlement: Pick<Settlement, "id" | "startDate" | "endDate">) {
   if (settlement.startDate && settlement.endDate) return `${settlement.startDate} a ${settlement.endDate}`;
   return settlement.id;

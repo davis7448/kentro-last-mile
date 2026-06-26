@@ -1,0 +1,23 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "83bf4ad453ed8df1321ffa203290caa5"
+application_url = "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyOnstockOAuthStart"
+embedded = false
+name = "Kentro OnStock"
+
+[webhooks]
+api_version = "2026-04"
+
+  [[webhooks.subscriptions]]
+  uri = "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyComplianceWebhook"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_fulfillments,read_orders,read_products"
+
+[auth]
+redirect_urls = [ "https://us-central1-kentro-last-mile.cloudfunctions.net/shopifyOAuthCallback" ]
+
+[build]
+automatically_update_urls_on_dev = true

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateDriverFinancialSummary, entriesForClosedOrder, sellerBalance } from "./finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, entriesForClosedOrder, sellerBalance } from "./finance";
 import { seedState } from "./seed";
 import type { AppState } from "./types";
 
@@ -374,5 +374,66 @@ describe("driver financial summary", () => {
 
     expect(summary.pendingBalanceCop).toBe(0);
     expect(summary.unsettledOrders).toHaveLength(0);
+  });
+});
+
+describe("driver settlement financials", () => {
+  it("calculates platform margin from seller fees minus driver pay without product cost", () => {
+    const state = seedState();
+    const settlement = {
+      id: "stl-driver",
+      kind: "driver" as const,
+      ownerId: "driver-1",
+      ownerName: "Driver",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      walletEntryIds: ["we-driver-pay"],
+      orderIds: ["ord-1"],
+      codCop: 0,
+      feesCop: 0,
+      driverPayCop: 9000,
+      platformMarginCop: -9000,
+      netCop: 9000,
+      status: "paid" as const,
+      createdAt: "2026-06-02T00:00:00.000Z"
+    };
+    state.wallet = [
+      {
+        id: "we-seller-fee",
+        ownerType: "seller",
+        ownerId: "seller-1",
+        orderId: "ord-1",
+        type: "delivery_fee",
+        amountCop: -12000,
+        description: "Cobro entrega",
+        createdAt: "2026-06-01T00:00:00.000Z"
+      },
+      {
+        id: "we-product-cost",
+        ownerType: "seller",
+        ownerId: "seller-1",
+        orderId: "ord-1",
+        type: "product_cost",
+        amountCop: -20000,
+        description: "Costo producto",
+        createdAt: "2026-06-01T00:00:00.000Z"
+      },
+      {
+        id: "we-driver-pay",
+        ownerType: "driver",
+        ownerId: "driver-1",
+        orderId: "ord-1",
+        type: "driver_earning",
+        amountCop: 9000,
+        description: "Pago domiciliario",
+        createdAt: "2026-06-01T00:00:00.000Z"
+      }
+    ];
+
+    const financials = calculateDriverSettlementFinancials(state.wallet, settlement);
+
+    expect(financials.feesCop).toBe(12000);
+    expect(financials.driverPayCop).toBe(9000);
+    expect(financials.platformMarginCop).toBe(3000);
   });
 });

@@ -131,8 +131,9 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
   const orderRef = db.collection("orders").doc(docId);
   await db.runTransaction(async (transaction) => {
     const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
+    const existingData = existing.data() ?? {};
     const seller = sellerSnap.data() ?? {};
-    const trackingCode = typeof existing.data()?.trackingCode === "string" ? existing.data()?.trackingCode : await nextTrackingCode(transaction);
+    const trackingCode = typeof existingData.trackingCode === "string" ? existingData.trackingCode : await nextTrackingCode(transaction);
     const items = summarizeShopifyLineItems(order.line_items ?? [], shopDomain);
     transaction.set(orderRef, {
       id: docId,
@@ -141,7 +142,7 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       shopifyNumericId: order.id,
       shopDomain,
       sellerId,
-      driverId: existing.data()?.driverId ?? null,
+      driverId: existingData.driverId ?? null,
       cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",
       customerPhone: address?.phone ?? "",
@@ -155,10 +156,10 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
       fulfillmentMode: "seller_pickup",
       addressRisk: sellerId === dandaSellerId ? "accepted" : "review",
-      status: sellerId === dandaSellerId ? "ready_to_assign" : "imported",
-      evidence: existing.data()?.evidence ?? [],
+      status: existing.exists && typeof existingData.status === "string" ? existingData.status : sellerId === dandaSellerId ? "ready_to_assign" : "imported",
+      evidence: existingData.evidence ?? [],
       source: "shopify_webhook",
-      createdAt: existing.data()?.createdAt ?? order.created_at ?? new Date().toISOString(),
+      createdAt: existingData.createdAt ?? order.created_at ?? new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }, { merge: true });
   });

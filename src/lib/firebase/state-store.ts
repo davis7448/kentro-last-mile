@@ -157,7 +157,6 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "inventory", state.inventory);
   writeEntities(batch, "orders", state.orders);
   writeEntities(batch, "walletEntries", state.wallet);
-  writeEntities(batch, "settlements", state.settlements);
   writeEntities(batch, "payouts", state.payouts);
   await batch.commit();
 }

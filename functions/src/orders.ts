@@ -118,7 +118,7 @@ const createMessengerSchema = z.object({
 });
 
 const pickupBatchSchema = z.object({
-  orderIds: z.array(z.string().min(1)).min(1)
+  orderIds: z.array(z.string().trim().min(1)).min(1)
 });
 
 const assignMessengerSchema = z.object({
@@ -206,7 +206,9 @@ type DriverCashAllocation = {
 
 type DriverCashSummary = {
   codCop: number;
+  feesCop: number;
   driverPayCop: number;
+  platformMarginCop: number;
   expectedCop: number;
   allocations: DriverCashAllocation[];
 };
@@ -687,7 +689,8 @@ export const createOrUpdatePickupBatch = onCall(async (request) => {
   const db = getFirestore();
   const now = new Date().toISOString();
   return db.runTransaction(async (transaction) => {
-    const orderRefs = parsed.data.orderIds.map((orderId) => db.collection("orders").doc(orderId));
+    const orderIds = Array.from(new Set(parsed.data.orderIds));
+    const orderRefs = orderIds.map((orderId) => db.collection("orders").doc(orderId));
     const snaps = await Promise.all(orderRefs.map((ref) => transaction.get(ref)));
     const orders = snaps.map((snap) => ({ snap, data: snap.data() ?? {} }));
     const invalid = orders.find(({ snap, data }) => {
@@ -749,7 +752,8 @@ export const assignMessengerToOrders = onCall(async (request) => {
 
   const now = new Date().toISOString();
   return db.runTransaction(async (transaction) => {
-    const refs = parsed.data.orderIds.map((orderId) => db.collection("orders").doc(orderId));
+    const orderIds = Array.from(new Set(parsed.data.orderIds));
+    const refs = orderIds.map((orderId) => db.collection("orders").doc(orderId));
     const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
     const orders = snaps.map((snap) => ({ snap, data: snap.data() ?? {} }));
     const invalid = orders.find(({ snap, data }) => !snap.exists || String(data.driverId ?? "") !== driverClaim || !["picked_up", "scheduled", "call_pending", "in_route"].includes(String(data.status ?? "")));
@@ -1091,7 +1095,8 @@ export const createSettlement = onCall(async (request) => {
 
   if (candidateRefs.length === 0) {
     if ((input.kind === "seller" || input.kind === "supplier") && unsettledEntryDocs.length > 0) {
-      throw new HttpsError("failed-precondition", "No hay pedidos habilitados para pagar a esta tienda. Primero marca recibido el dinero del domiciliario.");
+      const ownerLabel = input.kind === "supplier" ? "este proveedor" : "esta tienda";
+      throw new HttpsError("failed-precondition", `No hay pedidos habilitados para pagar a ${ownerLabel}. Primero marca recibido el dinero del domiciliario.`);
     }
     throw new HttpsError("failed-precondition", "There are no unsettled wallet movements for this account and date range.");
   }
@@ -1124,6 +1129,13 @@ export const createSettlement = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "The wallet movements were already settled.");
     }
 
+    const entryOrderIds = Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean)));
+    const relatedSellerEntries = input.kind === "driver" && entryOrderIds.length > 0
+      ? (await transaction.get(db.collection("walletEntries").where("ownerType", "==", "seller")))
+        .docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc)
+        .filter((entry) => entry.orderId && entryOrderIds.includes(entry.orderId))
+      : [];
     const settlement = buildSettlement(
       settlementRef.id,
       input.kind,
@@ -1133,7 +1145,8 @@ export const createSettlement = onCall(async (request) => {
       input.endDate,
       entries,
       now,
-      input.note
+      input.note,
+      relatedSellerEntries
     );
 
     const platformEntry = buildPlatformWalletEntry(settlement, now);
@@ -1187,11 +1200,13 @@ export const updateSettlementStatus = onCall(async (request) => {
     throw new HttpsError("not-found", "Settlement not found.");
   }
   const settlementPreview = { id: settlementPreviewSnap.id, ...settlementPreviewSnap.data() } as SettlementDoc;
-  const driverCash = settlementPreview.kind === "driver" ? await calculateDriverCashSummary(db, settlementPreview, Number(settlementPreview.cashReceivedCop || 0)) : null;
-  if (driverCash && input.status === "paid" && Math.max(0, driverCash.expectedCop - Number(settlementPreview.cashReceivedCop || 0)) > 0) {
+  const previewReceivedCop = settlementCashReceivedCop(settlementPreview);
+  const driverCash = settlementPreview.kind === "driver" ? await calculateDriverCashSummary(db, settlementPreview, previewReceivedCop) : null;
+  const previewPendingCop = driverCash ? Math.max(0, driverCash.expectedCop - previewReceivedCop) : 0;
+  if (driverCash && input.status === "paid" && previewPendingCop > 0) {
     throw new HttpsError("failed-precondition", "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido.");
   }
-  if (driverCash && input.status === "reconciled" && Math.max(0, driverCash.expectedCop - Number(settlementPreview.cashReceivedCop || 0)) > 0) {
+  if (driverCash && input.status === "reconciled" && previewPendingCop > 0) {
     throw new HttpsError("failed-precondition", "No se puede conciliar un corte de domiciliario con saldo pendiente.");
   }
 
@@ -1207,20 +1222,31 @@ export const updateSettlementStatus = onCall(async (request) => {
     if (input.status === "reconciled" && settlement.status !== "paid") {
       throw new HttpsError("failed-precondition", "Only paid settlements can be reconciled.");
     }
-    if (driverCash && Math.max(0, driverCash.expectedCop - Number(settlement.cashReceivedCop || 0)) > 0) {
-      throw new HttpsError("failed-precondition", "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido.");
+    const receivedCop = settlementCashReceivedCop(settlement);
+    const liveDriverCash = settlement.kind === "driver" ? await calculateDriverCashSummary(db, settlement, receivedCop) : null;
+    const pendingCop = liveDriverCash ? Math.max(0, liveDriverCash.expectedCop - receivedCop) : 0;
+    if (liveDriverCash && pendingCop > 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        input.status === "reconciled"
+          ? "No se puede conciliar un corte de domiciliario con saldo pendiente."
+          : "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido."
+      );
     }
 
     const nextSettlement = stripUndefined({
       ...settlement,
-      ...(driverCash ? {
-        codCop: driverCash.codCop,
-        driverPayCop: driverCash.driverPayCop,
-        cashExpectedCop: driverCash.expectedCop,
-        cashReceivedCop: Number(settlement.cashReceivedCop || 0),
-        cashPendingCop: Math.max(0, driverCash.expectedCop - Number(settlement.cashReceivedCop || 0)),
-        cashReceiptStatus: driverCash.expectedCop === 0 ? "complete" : "complete",
-        cashAllocations: driverCash.allocations
+      ...(liveDriverCash ? {
+        codCop: liveDriverCash.codCop,
+        feesCop: liveDriverCash.feesCop,
+        driverPayCop: liveDriverCash.driverPayCop,
+        platformMarginCop: liveDriverCash.platformMarginCop,
+        netCop: liveDriverCash.driverPayCop - liveDriverCash.codCop,
+        cashExpectedCop: liveDriverCash.expectedCop,
+        cashReceivedCop: receivedCop,
+        cashPendingCop: pendingCop,
+        cashReceiptStatus: liveDriverCash.expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
+        cashAllocations: liveDriverCash.allocations
       } : {}),
       status: input.status,
       paidAt: input.status === "paid" ? now : settlement.paidAt,
@@ -1277,7 +1303,7 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     if (!liveSnap.exists) throw new HttpsError("not-found", "Settlement not found.");
     const settlement = { id: liveSnap.id, ...liveSnap.data() } as SettlementDoc;
     const expectedCop = cashSummaryBeforeReceipt.expectedCop;
-    const previousReceivedCop = Math.max(0, Number(settlement.cashReceivedCop || 0));
+    const previousReceivedCop = settlementCashReceivedCop(settlement);
     const receivedNowCop = Math.max(0, Math.min(Number(input.receivedNowCop || 0), expectedCop - previousReceivedCop));
     const receivedCop = previousReceivedCop + receivedNowCop;
     const pendingCop = Math.max(0, expectedCop - receivedCop);
@@ -1292,7 +1318,10 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       paidAt: pendingCop === 0 ? now : FieldValue.delete(),
       reconciledAt: pendingCop === 0 ? settlement.reconciledAt : FieldValue.delete(),
       codCop: cashSummary.codCop,
+      feesCop: cashSummary.feesCop,
       driverPayCop: cashSummary.driverPayCop,
+      platformMarginCop: cashSummary.platformMarginCop,
+      netCop: cashSummary.driverPayCop - cashSummary.codCop,
       cashExpectedCop: expectedCop,
       cashReceivedCop: receivedCop,
       cashPendingCop: pendingCop,
@@ -1307,7 +1336,10 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       paidAt: pendingCop === 0 ? now : undefined,
       reconciledAt: pendingCop === 0 ? settlement.reconciledAt : undefined,
       codCop: cashSummary.codCop,
+      feesCop: cashSummary.feesCop,
       driverPayCop: cashSummary.driverPayCop,
+      platformMarginCop: cashSummary.platformMarginCop,
+      netCop: cashSummary.driverPayCop - cashSummary.codCop,
       cashExpectedCop: expectedCop,
       cashReceivedCop: receivedCop,
       cashPendingCop: pendingCop,
@@ -1343,10 +1375,17 @@ export const recordDriverCashReceipt = onCall(async (request) => {
   });
 });
 
+function settlementCashReceivedCop(settlement: SettlementDoc) {
+  if (typeof settlement.cashReceivedCop === "number") {
+    return Math.max(0, Number(settlement.cashReceivedCop) || 0);
+  }
+  return (settlement.cashReceipts ?? []).reduce((sum, receipt) => sum + Math.max(0, Number(receipt.amountCop) || 0), 0);
+}
+
 async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, settlement: SettlementDoc, receivedCop: number): Promise<DriverCashSummary> {
   const orderIds = Array.from(new Set(settlement.orderIds ?? []));
   if (orderIds.length === 0) {
-    return { codCop: 0, driverPayCop: 0, expectedCop: 0, allocations: [] };
+    return { codCop: 0, feesCop: 0, driverPayCop: 0, platformMarginCop: 0, expectedCop: 0, allocations: [] };
   }
 
   const [sellerEntrySnap, driverEntrySnap, orderSnaps] = await Promise.all([
@@ -1356,11 +1395,17 @@ async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, s
   ]);
   const orderIdSet = new Set(orderIds);
   const codByOrder = new Map<string, number>();
+  const feesByOrder = new Map<string, number>();
   for (const doc of sellerEntrySnap.docs) {
     const entry = doc.data() as WalletEntryDoc;
     const orderId = String(entry.orderId ?? "");
-    if (entry.type !== "cod_revenue" || !orderIdSet.has(orderId)) continue;
-    codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
+    if (!orderIdSet.has(orderId)) continue;
+    if (entry.type === "cod_revenue") {
+      codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
+    }
+    if (["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type)) {
+      feesByOrder.set(orderId, (feesByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
+    }
   }
   const driverPayByOrder = new Map<string, number>();
   for (const doc of driverEntrySnap.docs) {
@@ -1392,10 +1437,13 @@ async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, s
   });
 
   const codCop = Array.from(codByOrder.values()).reduce((sum, amount) => sum + amount, 0);
+  const feesCop = Math.max(0, -Array.from(feesByOrder.values()).reduce((sum, amount) => sum + amount, 0));
   const driverPayCop = Array.from(driverPayByOrder.values()).reduce((sum, amount) => sum + amount, 0);
   return {
     codCop,
+    feesCop,
     driverPayCop,
+    platformMarginCop: feesCop - driverPayCop,
     expectedCop: Math.max(0, codCop - driverPayCop),
     allocations
   };
@@ -1410,10 +1458,12 @@ function buildSettlement(
   endDate: string,
   entries: WalletEntryDoc[],
   now: string,
-  note?: string
+  note?: string,
+  relatedSellerEntries: WalletEntryDoc[] = []
 ): SettlementDoc {
-  const codCop = entries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const feesCop = Math.max(0, -entries
+  const financialEntries = kind === "driver" ? relatedSellerEntries : entries;
+  const codCop = financialEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const feesCop = Math.max(0, -financialEntries
     .filter((entry) => entry.ownerType === "seller" && ["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type))
     .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
   const productCostCop = Math.max(0, -entries
@@ -1421,7 +1471,7 @@ function buildSettlement(
     .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
   const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
   const entryNetCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const netCop = kind === "supplier" ? productCostCop : entryNetCop;
+  const netCop = kind === "driver" ? driverPayCop - codCop : kind === "supplier" ? productCostCop : entryNetCop;
   return stripUndefined({
     id,
     kind,
@@ -1435,7 +1485,7 @@ function buildSettlement(
     feesCop,
     productCostCop,
     driverPayCop,
-    platformMarginCop: kind === "seller" ? feesCop : 0,
+    platformMarginCop: kind === "seller" || kind === "driver" ? feesCop - driverPayCop : 0,
     netCop,
     status: "pending",
     createdAt: now,

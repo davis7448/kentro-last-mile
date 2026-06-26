@@ -237,10 +237,11 @@ export async function createFirebaseStoreWebhookConfig(input: { sellerId: string
 }
 
 export async function createFirebaseSettlement(input: {
-  kind: "seller" | "driver";
+  kind: "seller" | "driver" | "supplier";
   ownerId: string;
   startDate: string;
   endDate: string;
+  walletEntryIds?: string[];
   note?: string;
 }) {
   const client = getFirebaseClient();
@@ -264,6 +265,20 @@ export async function updateFirebaseSettlementStatus(input: {
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { settlement: Settlement };
+}
+
+export async function recordFirebaseDriverCashReceipt(input: {
+  settlementId: string;
+  receivedNowCop: number;
+  note?: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "recordDriverCashReceipt");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { settlement: Settlement; walletEntries: WalletEntry[] };
 }
 
 export async function reconcileFirebaseInventoryReservations() {
