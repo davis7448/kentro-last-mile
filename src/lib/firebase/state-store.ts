@@ -122,23 +122,14 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   if (!client) return;
   const batch = writeBatch(client.db);
   if (context?.role === "seller") {
-    writeEntities(batch, "orders", state.orders.filter((order) => order.sellerId === context.profileId));
     writeEntities(batch, "payouts", state.payouts.filter((payout) => payout.sellerId === context.profileId));
     await batch.commit();
     return;
   }
   if (context?.role === "driver") {
-    writeEntities(
-      batch,
-      "orders",
-      state.orders.filter((order) => order.driverId === context.profileId)
-    );
-    await batch.commit();
     return;
   }
   if (context?.role === "messenger") {
-    writeEntities(batch, "orders", state.orders.filter((order) => order.messengerId === context.profileId));
-    await batch.commit();
     return;
   }
 
@@ -155,8 +146,6 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
   writeEntities(batch, "suppliers", state.suppliers);
   writeEntities(batch, "productCatalog", state.productCatalog);
   writeEntities(batch, "inventory", state.inventory);
-  writeEntities(batch, "orders", state.orders);
-  writeEntities(batch, "walletEntries", state.wallet);
   writeEntities(batch, "payouts", state.payouts);
   await batch.commit();
 }
