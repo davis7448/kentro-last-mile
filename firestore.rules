@@ -56,6 +56,29 @@ service cloud.firestore {
         ]);
     }
 
+    function operationalOrderUpdateByAssignee() {
+      return (
+          isDriver(resource.data.driverId)
+          || isMessenger(resource.data.messengerId)
+        )
+        && resource.data.status in ["assigned", "call_pending", "scheduled", "picked_up", "in_route", "retry_pending"]
+        && request.resource.data.status in ["call_pending", "scheduled", "picked_up", "in_route", "retry_pending"]
+        && request.resource.data.driverId == resource.data.driverId
+        && request.resource.data.messengerId == resource.data.messengerId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.evidence == resource.data.evidence
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "callOutcome",
+          "callNote",
+          "scheduledDate",
+          "scheduledWindow",
+          "rescheduledDate",
+          "rescheduledWindow",
+          "updatedAt"
+        ]);
+    }
+
     match /settings/{settingId} {
       allow read: if signedIn();
       allow write: if isAdmin();
@@ -112,6 +135,7 @@ service cloud.firestore {
         || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
       allow create: if isAdmin() || sellerOrderCreate();
       allow update: if isAdmin()
+        || operationalOrderUpdateByAssignee()
         || sellerOrderLabelUpdate()
         || sellerOrderNoopUpdate();
       allow delete: if isAdmin();
