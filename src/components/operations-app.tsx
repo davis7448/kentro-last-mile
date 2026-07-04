@@ -4716,7 +4716,8 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
     const { settlement: updatedSettlement, walletEntries } = await recordFirebaseDriverCashReceipt({
       settlementId: settlement.id,
       receivedNowCop: amountCop,
-      note
+      // El backend rechaza note: "" (min 1 caracter); solo se envia si hay texto.
+      note: note?.trim() || undefined
     });
     mergeSettlement(updatedSettlement, walletEntries);
   };
@@ -4803,6 +4804,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
           settlement={cashReceiptTarget.settlement}
           pendingCop={cashReceiptTarget.pendingCop}
           busy={busyId === `${cashReceiptTarget.settlement.id}-cash`}
+          error={error}
           onClose={() => setCashReceiptTarget(null)}
           onSave={(amountCop, note) => {
             const target = cashReceiptTarget.settlement;
@@ -5034,12 +5036,14 @@ function DriverCashReceiptModal({
   settlement,
   pendingCop,
   busy,
+  error,
   onClose,
   onSave
 }: {
   settlement: Settlement;
   pendingCop: number;
   busy: boolean;
+  error?: string | null;
   onClose: () => void;
   onSave: (amountCop: number, note?: string) => void;
 }) {
@@ -5081,6 +5085,7 @@ function DriverCashReceiptModal({
           />
         </label>
         {!validAmount && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">Ingresa un valor mayor a cero y menor o igual al pendiente.</p>}
+        {error && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
         <div className="flex justify-end gap-2">
           <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={onClose}>
             Cancelar
