@@ -1,4 +1,4 @@
-export type Role = "admin" | "seller" | "driver" | "messenger";
+export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger";
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
@@ -18,6 +18,12 @@ export type OrderStatus =
   | "retry_pending"
   | "cancelled"
   | "liquidated";
+
+export type OrderLineItem = {
+  sku?: string;
+  productName?: string;
+  quantity: number;
+};
 
 export type Evidence = {
   id: string;
@@ -84,6 +90,13 @@ export type StoreWebhookConfig = {
   createdAt: string;
   updatedAt: string;
   lastWebhookAt?: string;
+  lastUchatConfirmAt?: string;
+  uchatConfirmEnabled?: boolean;
+  uchatConfigured?: boolean;
+  uchatPlatform?: "chatby" | "chateapro" | "lucidbot";
+  uchatDropiConfigured?: boolean;
+  lastUchatPullAt?: string;
+  lastUchatPullConfirmed?: number;
 };
 export type ShopifyInstallRequest = {
   id: string;
@@ -203,6 +216,7 @@ export type Order = {
   productName?: string;
   sku?: string;
   quantity?: number;
+  lineItems?: OrderLineItem[];
   labelPrintedAt?: string;
   labelPrintedBy?: string;
   labelPrintCount?: number;

@@ -6,6 +6,7 @@ import type { AddressRisk, AppState, AuditEvent, FailedCategory, FulfillmentMode
 const actorByRole: Record<Role, string> = {
   admin: "admin",
   seller: "seller",
+  seller_logistics: "seller_logistics",
   driver: "driver",
   messenger: "messenger"
 };

@@ -5,11 +5,13 @@ import { defineSecret } from "firebase-functions/params";
 import crypto from "crypto";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
-export { assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, recordDriverCashReceipt, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
+export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, recordDriverCashReceipt, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
 export { importShopifyOrder, shopifyComplianceWebhook, shopifyCustomersDataRequest, shopifyCustomersRedact, shopifyOAuthCallback, shopifyOAuthStart, shopifyPilotOAuthStart, shopifyShopRedact, shopifyTenantOAuthStart, syncShopifyHistoricalOrders } from "./shopify";
 export { mercadotiendaContactFormWebhook } from "./contact-form";
 export { onstockOrderWebhook } from "./onstock-webhook";
 export { createStoreWebhookConfig, storeOrderWebhook } from "./store-webhook";
+export { uchatConfirmWebhook } from "./uchat-webhook";
+export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
 
 initializeApp();
 
@@ -19,7 +21,6 @@ const shopifyPilotApiSecret = defineSecret("SHOPIFY_PILOT_APP_API_SECRET");
 const shopifyU0jxrmApiSecret = defineSecret("SHOPIFY_U0JXRM_APP_API_SECRET");
 const shopifyN1v0swApiSecret = defineSecret("SHOPIFY_N1V0SW_APP_API_SECRET");
 const nullableString = z.string().nullish();
-const dandaSellerId = "seller-1779315416119";
 
 const shopifyWebhookSchema = z.object({
   id: z.number(),
@@ -151,12 +152,13 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       productName: items.productName,
       sku: items.sku,
       quantity: items.quantity,
+      lineItems: items.lineItems,
       pickupPointName: typeof seller.pickupPointName === "string" && seller.pickupPointName.trim() ? seller.pickupPointName.trim() : String(seller.name ?? "Punto de recogida"),
       pickupAddress: typeof seller.pickupAddress === "string" ? seller.pickupAddress.trim() : "",
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
       fulfillmentMode: "seller_pickup",
-      addressRisk: sellerId === dandaSellerId ? "accepted" : "review",
-      status: existing.exists && typeof existingData.status === "string" ? existingData.status : sellerId === dandaSellerId ? "ready_to_assign" : "imported",
+      addressRisk: "review",
+      status: existing.exists && typeof existingData.status === "string" ? existingData.status : "imported",
       evidence: existingData.evidence ?? [],
       source: "shopify_webhook",
       createdAt: existingData.createdAt ?? order.created_at ?? new Date().toISOString(),
@@ -223,17 +225,25 @@ function summarizeShopifyLineItems(items: Array<{ name?: string | null; title?: 
     if (properties) nameParts.push(properties);
     const name = nameParts.join(" · ");
     const sku = item.sku?.trim();
-    const shopifyQuantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
-    const quantity = shopifyQuantity * (offer?.unitsPerSoldUnit ?? 1);
+    // Cantidad real de Shopify (sin expandir). El costo de la oferta 2x1 se modela como costo
+    // del item por unidad-Shopify en el catalogo. Se conserva la etiqueta en el nombre.
+    const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
     return { name, sku, quantity };
   });
   if (normalized.length === 0) {
-    return { productName: "Producto Shopify", sku: undefined, quantity: undefined };
+    return { productName: "Producto Shopify", sku: undefined, quantity: undefined, lineItems: [] as Array<{ sku?: string; productName?: string; quantity: number }> };
   }
+  // lineItems con cantidad ya expandida por la oferta (unitsPerSoldUnit), para cobrar costo por SKU.
+  const lineItems = normalized.map((item) => {
+    const li: { sku?: string; productName?: string; quantity: number } = { productName: item.name, quantity: item.quantity };
+    if (item.sku) li.sku = item.sku;
+    return li;
+  });
   return {
     productName: normalized.map((item) => `${item.name} x${item.quantity}`).join(" + "),
     sku: normalized.map((item) => item.sku).filter(Boolean).join(" + ") || undefined,
-    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0)
+    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0),
+    lineItems
   };
 }
 

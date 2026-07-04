@@ -61,6 +61,59 @@ describe("wallet calculations", () => {
     expect(productCost?.productId).toBe("prd-1");
   });
 
+  it("charges product cost per line item (combo + extra product) using per-unit catalog cost", () => {
+    const state: AppState = {
+      ...seedState(),
+      suppliers: [{ id: "sup-1", name: "Proveedor Uno", active: true, createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z" }],
+      productCatalog: [
+        {
+          id: "prd-spray",
+          sellerId: "seller-1",
+          supplierId: "sup-1",
+          sku: "SPRAY-X2",
+          name: "Spray",
+          normalizedProductName: "spray",
+          productCostCop: 10000,
+          productCostConfigured: true,
+          active: true,
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z"
+        },
+        {
+          id: "prd-biohair",
+          sellerId: "seller-1",
+          supplierId: "sup-1",
+          sku: "BIOHAIR",
+          name: "Biohair",
+          normalizedProductName: "biohair",
+          productCostCop: 23000,
+          productCostConfigured: true,
+          active: true,
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z"
+        }
+      ]
+    };
+    const order = {
+      ...state.orders[0],
+      status: "delivered" as const,
+      paymentMethod: "cod" as const,
+      sku: "SPRAY-X2 + BIOHAIR",
+      quantity: 4,
+      lineItems: [
+        { sku: "SPRAY-X2", productName: "Spray", quantity: 3 },
+        { sku: "BIOHAIR", productName: "Biohair", quantity: 1 }
+      ]
+    };
+
+    const costEntries = entriesForClosedOrder(order, state).filter((entry) => entry.type === "product_cost");
+    expect(costEntries).toHaveLength(2);
+    expect(costEntries.find((entry) => entry.productId === "prd-spray")?.amountCop).toBe(-30000);
+    expect(costEntries.find((entry) => entry.productId === "prd-biohair")?.amountCop).toBe(-23000);
+    // 10.000x3 + 23.000x1 = 53.000, no 42.000x4 = 168.000 del combo pegado.
+    expect(costEntries.reduce((sum, entry) => sum + entry.amountCop, 0)).toBe(-53000);
+  });
+
   it("does not create product cost entries when cost is not configured", () => {
     const state: AppState = {
       ...seedState(),

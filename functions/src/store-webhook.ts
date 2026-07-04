@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
+import { markChatraceContactForSeller } from "./uchat-pull";
 
 const nullableString = z.string().nullish();
 const defaultSkuContains = "ADMA";
@@ -71,6 +72,9 @@ function tagsList(tags: string | string[] | null | undefined) {
 }
 
 function matchesOrderFilters(order: z.infer<typeof orderSchema>, skuContains: string, tagContains: string) {
+  // "*" = aceptar todos los productos de la tienda; el filtro de ciudad sigue
+  // decidiendo la cobertura (tiendas cuyos SKUs no llevan marca ADMA).
+  if (skuContains === "*" || tagContains === "*") return true;
   const skuMatch = (order.line_items ?? []).some((item) => (item.sku ?? "").toUpperCase().includes(skuContains));
   const tagMatch = tagsList(order.tags).some((tag) => tag.toUpperCase() === tagContains || tag.toUpperCase().includes(tagContains));
   return skuMatch || tagMatch;
@@ -81,8 +85,21 @@ function isAllowedCity(city: string, allowlist: string[]) {
   return allowlist.map(normalizeText).includes(normalizedCity);
 }
 
+function isShippingLineItem(item: z.infer<typeof lineItemSchema>) {
+  const text = [item.name, item.title, item.sku]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  return /\benvio\b/.test(text) && /\bprioritario\b/.test(text);
+}
+
 function summarizeItems(items: z.infer<typeof lineItemSchema>[]) {
-  const normalized = items.map((item) => {
+  // Excluimos "envio prioritario": no es producto y inflaba la cantidad/costo.
+  const productItems = items.filter((item) => !isShippingLineItem(item));
+  const source = productItems.length > 0 ? productItems : items;
+  const normalized = source.map((item) => {
     const baseName = item.name?.trim() || item.title?.trim() || "Producto Shopify";
     const variant = item.variant_title?.trim();
     const properties = (item.properties ?? [])
@@ -97,10 +114,16 @@ function summarizeItems(items: z.infer<typeof lineItemSchema>[]) {
       quantity: item.quantity ?? 1
     };
   });
+  const lineItems = normalized.map((item) => stripUndefined({
+    sku: item.sku || undefined,
+    productName: item.name,
+    quantity: item.quantity
+  }));
   return {
     productName: normalized.map((item) => `${item.name} x${item.quantity}`).join(" + "),
     sku: normalized.map((item) => item.sku).filter(Boolean).join(" + ") || undefined,
-    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0)
+    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0),
+    lineItems
   };
 }
 
@@ -274,6 +297,7 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
       productName: items.productName,
       sku: items.sku,
       quantity: items.quantity,
+      lineItems: items.lineItems,
       pickupPointName: typeof seller.pickupPointName === "string" && seller.pickupPointName.trim() ? seller.pickupPointName.trim() : String(seller.name ?? "Punto de recogida"),
       pickupAddress: typeof seller.pickupAddress === "string" ? seller.pickupAddress.trim() : "",
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
@@ -303,7 +327,10 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
 
   await Promise.all([
     sampleRef.set({ status: result.created ? "order_created" : "duplicate", orderId: result.order.id, trackingCode: result.order.trackingCode ?? null, updatedAt: new Date().toISOString() }, { merge: true }),
-    configRef.set({ lastWebhookAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true })
+    configRef.set({ lastWebhookAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true }),
+    // Marca en tiempo real el contacto del bot (LucidBot/ChatRace) como cobertura
+    // Kentro para que el flow pueda saltar la subida a Dropi. Nunca lanza.
+    markChatraceContactForSeller(sellerId, customerPhone)
   ]);
   response.status(result.created ? 201 : 200).json({
     ok: true,

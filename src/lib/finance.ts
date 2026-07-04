@@ -55,36 +55,71 @@ export function normalizeProductName(value?: string) {
     .replace(/\s+/g, " ");
 }
 
-export function productCostForOrder(order: Pick<Order, "sellerId" | "productId" | "sku" | "productName" | "quantity">, state: AppState) {
+export type ProductCostLine = {
+  productId?: string;
+  productName?: string;
+  supplierId?: string;
+  supplierName?: string;
+  unitCostCop: number;
+  quantity: number;
+  totalCostCop: number;
+};
+
+function findCatalogMatch(
+  state: AppState,
+  sellerId: string,
+  options: { sku?: string; productName?: string; productId?: string }
+) {
   const catalog = state.productCatalog ?? [];
-  const normalizedSku = order.sku?.trim().toUpperCase();
-  const normalizedName = normalizeProductName(order.productName);
-  const product =
-    (order.productId ? catalog.find((item) => item.id === order.productId && item.sellerId === order.sellerId && item.active !== false) : undefined) ??
-    (normalizedSku ? catalog.find((item) => item.sellerId === order.sellerId && item.sku?.trim().toUpperCase() === normalizedSku && item.active !== false) : undefined) ??
-    (normalizedName ? catalog.find((item) => item.sellerId === order.sellerId && !item.sku && item.normalizedProductName === normalizedName && item.active !== false) : undefined);
-  if (!product || !product.productCostConfigured) {
-    return {
-      configured: false,
-      unitCostCop: 0,
-      totalCostCop: 0,
-      productId: product?.id ?? order.productId,
-      productName: product?.name ?? order.productName,
-      supplierId: product?.supplierId
-    };
+  const normalizedSku = options.sku?.trim().toUpperCase();
+  const normalizedName = normalizeProductName(options.productName);
+  return (
+    (options.productId ? catalog.find((item) => item.id === options.productId && item.sellerId === sellerId && item.active !== false) : undefined) ??
+    (normalizedSku ? catalog.find((item) => item.sellerId === sellerId && item.sku?.trim().toUpperCase() === normalizedSku && item.active !== false) : undefined) ??
+    (normalizedName ? catalog.find((item) => item.sellerId === sellerId && !item.sku && item.normalizedProductName === normalizedName && item.active !== false) : undefined)
+  );
+}
+
+// Costo de producto por linea/SKU: una entrada por producto del catalogo, cobrando costo
+// unitario x cantidad. Si el pedido trae lineItems se calcula por linea (soporta combos y
+// productos adicionales en un mismo pedido); si no, usa los campos colapsados (pedidos manuales
+// o historicos de un solo producto). El costo del catalogo se interpreta SIEMPRE como por unidad.
+export function productCostLinesForOrder(
+  order: Pick<Order, "sellerId" | "productId" | "sku" | "productName" | "quantity" | "lineItems">,
+  state: AppState
+): ProductCostLine[] {
+  const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
+  const rawLines = hasLineItems
+    ? order.lineItems!
+    : [{ sku: order.sku, productName: order.productName, quantity: order.quantity }];
+  const byProduct = new Map<string, ProductCostLine>();
+  for (const line of rawLines) {
+    const quantity = Math.max(1, Number(line.quantity) || 1);
+    const product = findCatalogMatch(state, order.sellerId, {
+      sku: line.sku,
+      productName: line.productName,
+      productId: hasLineItems ? undefined : order.productId
+    });
+    if (!product || !product.productCostConfigured) continue;
+    const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
+    const existing = byProduct.get(product.id);
+    if (existing) {
+      existing.quantity += quantity;
+      existing.totalCostCop = existing.unitCostCop * existing.quantity;
+    } else {
+      const supplier = state.suppliers.find((item) => item.id === product.supplierId);
+      byProduct.set(product.id, {
+        productId: product.id,
+        productName: product.name,
+        supplierId: product.supplierId,
+        supplierName: supplier?.name,
+        unitCostCop,
+        quantity,
+        totalCostCop: unitCostCop * quantity
+      });
+    }
   }
-  const supplier = state.suppliers.find((item) => item.id === product.supplierId);
-  const quantity = Math.max(1, Number(order.quantity) || 1);
-  const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
-  return {
-    configured: true,
-    unitCostCop,
-    totalCostCop: unitCostCop * quantity,
-    productId: product.id,
-    productName: product.name,
-    supplierId: product.supplierId,
-    supplierName: supplier?.name
-  };
+  return Array.from(byProduct.values());
 }
 
 export function sellerDeliveredFeeForOrder(order: Order, state: AppState): number {
@@ -145,20 +180,21 @@ export function entriesForClosedOrder(order: Order, state: AppState): WalletEntr
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
-    const productCost = productCostForOrder(order, state);
-    if (productCost.configured) {
+    const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
+    const productCostLines = productCostLinesForOrder(order, state);
+    for (const line of productCostLines) {
       entries.push({
-        id: `we-${order.id}-product-cost`,
+        id: hasLineItems ? `we-${order.id}-product-cost-${line.productId}` : `we-${order.id}-product-cost`,
         ownerType: "seller",
         ownerId: order.sellerId,
         orderId: order.id,
         type: "product_cost",
-        amountCop: -productCost.totalCostCop,
+        amountCop: -line.totalCostCop,
         description: `Costo producto ${order.shopifyOrderId}`,
-        supplierId: productCost.supplierId,
-        supplierName: productCost.supplierName,
-        productId: productCost.productId,
-        productName: productCost.productName,
+        supplierId: line.supplierId,
+        supplierName: line.supplierName,
+        productId: line.productId,
+        productName: line.productName,
         createdAt: now
       });
     }
@@ -225,6 +261,7 @@ export type DriverSettlementCashRow = {
   settlementId: string;
   label: string;
   orderCount: number;
+  orders: DriverUnsettledCashOrderRow[];
   expectedCashCop: number;
   receivedCop: number;
   pendingCop: number;
@@ -248,6 +285,7 @@ export type DriverUnsettledCashOrderRow = {
   orderId: string;
   trackingCode: string;
   shopifyOrderId: string;
+  status?: Order["status"];
   totalCop: number;
   driverPayCop: number;
   expectedCashCop: number;
@@ -382,10 +420,27 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
     const receivedCop = receipts.length > 0 ? receivedFromReceipts : Math.max(0, expectedCashCop - pendingCop);
     const label = settlementLabel(settlement);
 
+    // Detalle por pedido del corte (nivel caja: COD recaudado, pago al domiciliario, efectivo esperado).
+    const orders: DriverUnsettledCashOrderRow[] = orderIds.map((orderId) => {
+      const order = state.orders.find((item) => item.id === orderId);
+      const orderDriverPayCop = driverPayForOrder(state.wallet, driverId, orderId);
+      const codCop = order && order.paymentMethod === "cod" ? Math.max(0, Number(order.totalCop) || 0) : 0;
+      return {
+        orderId,
+        trackingCode: order?.trackingCode ?? orderId,
+        shopifyOrderId: order?.shopifyOrderId ?? "",
+        status: order?.status,
+        totalCop: codCop,
+        driverPayCop: orderDriverPayCop,
+        expectedCashCop: Math.max(0, codCop - orderDriverPayCop)
+      };
+    });
+
     settlementRows.push({
       settlementId: settlement.id,
       label,
       orderCount: orderIds.length,
+      orders,
       expectedCashCop,
       receivedCop,
       pendingCop,
@@ -428,6 +483,7 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
         orderId: order.id,
         trackingCode: order.trackingCode ?? order.id,
         shopifyOrderId: order.shopifyOrderId,
+        status: order.status,
         totalCop: order.totalCop,
         driverPayCop,
         expectedCashCop: Math.max(0, order.totalCop - driverPayCop)

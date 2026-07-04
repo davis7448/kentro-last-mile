@@ -54,21 +54,23 @@ export async function loadFirestoreState(context?: FirestoreStateContext): Promi
   if (!client) return null;
   const base = emptyState();
   const role = context?.role ?? "admin";
+  // seller_logistics ve lo operativo de su tienda igual que el vendedor, pero sin datos financieros.
+  const storeRole = role === "seller" || role === "seller_logistics";
   const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
-    role === "seller" && context ? getOwnDocument<Seller>("sellers", context.profileId) : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<ShopifySyncIssue>("shopifySyncIssues", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true) : Promise.resolve([]),
+    storeRole && context ? getOwnDocument<Seller>("sellers", context.profileId) : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
+    storeRole && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([]),
+    storeRole && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([]),
+    storeRole && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([]),
+    storeRole && context ? getCollection<ShopifySyncIssue>("shopifySyncIssues", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true) : Promise.resolve([]),
     role === "driver" && context ? getOwnDocument<Driver>("drivers", context.profileId) : role === "admin" ? getCollection<Driver>("drivers") : Promise.resolve([]),
     role === "messenger" && context ? getOwnDocument<Messenger>("messengers", context.profileId) : role === "driver" && context ? getCollection<Messenger>("messengers", where("leaderDriverId", "==", context.profileId)) : role === "admin" ? getCollection<Messenger>("messengers") : Promise.resolve([]),
     role === "driver" && context ? getCollection<PickupBatch>("pickupBatches", where("driverId", "==", context.profileId)) : role === "admin" ? getCollection<PickupBatch>("pickupBatches") : Promise.resolve([]),
     role === "admin" ? getCollection<Supplier>("suppliers") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<ProductCatalogItem>("productCatalog", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ProductCatalogItem>("productCatalog") : Promise.resolve([]),
-    role === "seller" && context ? getCollection<InventoryItem>("inventory", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<InventoryItem>("inventory") : Promise.resolve([]),
+    storeRole && context ? getCollection<ProductCatalogItem>("productCatalog", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ProductCatalogItem>("productCatalog") : Promise.resolve([]),
+    storeRole && context ? getCollection<InventoryItem>("inventory", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<InventoryItem>("inventory") : Promise.resolve([]),
     getOrdersForContext(context),
     getWalletForContext(context),
     getSettlementsForContext(context),
@@ -130,6 +132,10 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
     return;
   }
   if (context?.role === "messenger") {
+    return;
+  }
+  if (context?.role === "seller_logistics") {
+    // El logistico de tienda no persiste estado global; sus acciones van por callables.
     return;
   }
 
@@ -227,7 +233,17 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
   const supplierRef = collection(client.db, "suppliers");
   const productCatalogRef = collection(client.db, "productCatalog");
   const targets =
-    context?.role === "seller"
+    context?.role === "seller_logistics"
+      ? [
+          query(orderRef, where("sellerId", "==", context.profileId)),
+          query(inventoryRef, where("sellerId", "==", context.profileId)),
+          query(shopifyStoreRef, where("sellerId", "==", context.profileId)),
+          query(storeWebhookConfigRef, where("sellerId", "==", context.profileId)),
+          query(shopifyInstallRequestRef, where("sellerId", "==", context.profileId)),
+          query(shopifySyncIssueRef, where("sellerId", "==", context.profileId)),
+          query(productCatalogRef, where("sellerId", "==", context.profileId))
+        ]
+      : context?.role === "seller"
       ? [
           query(orderRef, where("sellerId", "==", context.profileId)),
           query(inventoryRef, where("sellerId", "==", context.profileId)),
@@ -254,17 +270,57 @@ export function subscribeFirestoreState(context: FirestoreStateContext | undefin
               query(messengerRef, where("__name__", "==", context.profileId))
             ]
           : [orderRef, inventoryRef, supplierRef, productCatalogRef, shopifyStoreRef, storeWebhookConfigRef, shopifyInstallRequestRef, shopifySyncIssueRef, messengerRef, pickupBatchRef, walletRef, settlementRef];
-  const reload = () => {
-    void loadFirestoreState(context).then((state) => {
-      if (state) onState(state);
-    });
+  // Cada listener dispara reload(), y reload recarga el estado completo. Al suscribirnos,
+  // todos los listeners emiten su snapshot inicial casi a la vez: sin coalescer, eso son
+  // N recargas completas en cascada. Coalescemos: la primera corre ya, la rafaga restante
+  // se junta en una sola, y nunca se solapan dos recargas.
+  const DEBOUNCE_MS = 200;
+  const MAX_WAIT_MS = 1200;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let inFlight = false;
+  let rerunQueued = false;
+  let lastRunAt = 0;
+  let stopped = false;
+
+  const run = () => {
+    timer = null;
+    if (stopped) return;
+    if (inFlight) {
+      rerunQueued = true;
+      return;
+    }
+    inFlight = true;
+    lastRunAt = Date.now();
+    void loadFirestoreState(context)
+      .then((state) => {
+        if (!stopped && state) onState(state);
+      })
+      .finally(() => {
+        inFlight = false;
+        if (rerunQueued && !stopped) {
+          rerunQueued = false;
+          reload();
+        }
+      });
   };
+
+  const reload = () => {
+    if (stopped) return;
+    if (timer) clearTimeout(timer);
+    const wait = Date.now() - lastRunAt > MAX_WAIT_MS ? 0 : DEBOUNCE_MS;
+    timer = setTimeout(run, wait);
+  };
+
   const unsubscribers = targets.map((target) =>
     onSnapshot(target, reload, (error) => {
       console.warn("No se pudo sincronizar una coleccion de Live.", error.message);
     })
   );
-  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
 
 async function getCollection<T extends { id: string }>(
@@ -332,7 +388,7 @@ function sellerReferencesFromOrders(orders: Order[]): Seller[] {
 }
 
 async function getOrdersForContext(context?: FirestoreStateContext): Promise<Order[]> {
-  if (context?.role === "seller") return getCollection<Order>("orders", where("sellerId", "==", context.profileId));
+  if (context?.role === "seller" || context?.role === "seller_logistics") return getCollection<Order>("orders", where("sellerId", "==", context.profileId));
   if (context?.role === "driver") {
     const [assigned, free] = await Promise.all([
       getCollection<Order>("orders", where("driverId", "==", context.profileId)),
@@ -351,7 +407,7 @@ async function getWalletForContext(context?: FirestoreStateContext): Promise<Wal
   if (context?.role === "driver") {
     return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId));
   }
-  if (context?.role === "messenger") return Promise.resolve([]);
+  if (context?.role === "messenger" || context?.role === "seller_logistics") return Promise.resolve([]);
   return getCollection<WalletEntry>("walletEntries");
 }
 
@@ -362,7 +418,7 @@ async function getSettlementsForContext(context?: FirestoreStateContext): Promis
   if (context?.role === "driver") {
     return getCollection<Settlement>("settlements", where("kind", "==", "driver"), where("ownerId", "==", context.profileId));
   }
-  if (context?.role === "messenger") return Promise.resolve([]);
+  if (context?.role === "messenger" || context?.role === "seller_logistics") return Promise.resolve([]);
   return getCollection<Settlement>("settlements", true);
 }
 

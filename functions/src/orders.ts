@@ -409,6 +409,8 @@ export const updateImportedOrder = onCall(async (request) => {
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
+      // Edicion manual de producto: prima sobre lineItems del webhook (se recalcula por los campos colapsados).
+      lineItems: (input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined) ? [] : undefined,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
@@ -584,6 +586,8 @@ export const updateOrderAdjustments = onCall(async (request) => {
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
+      // Edicion manual de producto: prima sobre lineItems del webhook (se recalcula por los campos colapsados).
+      lineItems: (input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined) ? [] : undefined,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
@@ -940,23 +944,15 @@ export const closeOrder = onCall(async (request) => {
     const inventoryQuery = typeof order.sku === "string" && typeof order.sellerId === "string"
       ? db.collection("inventory").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku).limit(1)
       : null;
-    const productByIdRef = typeof order.productId === "string" && order.productId.trim()
-      ? db.collection("productCatalog").doc(order.productId.trim())
+    const catalogQuery = typeof order.sellerId === "string" && order.sellerId
+      ? db.collection("productCatalog").where("sellerId", "==", order.sellerId)
       : null;
-    const productBySkuQuery = !productByIdRef && typeof order.sku === "string" && typeof order.sellerId === "string"
-      ? db.collection("productCatalog").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku.trim().toUpperCase()).limit(1)
-      : null;
-    const normalizedProductName = normalizeProductName(typeof order.productName === "string" ? order.productName : "");
-    const productByNameQuery = !productByIdRef && !productBySkuQuery && normalizedProductName && typeof order.sellerId === "string"
-      ? db.collection("productCatalog").where("sellerId", "==", order.sellerId).where("normalizedProductName", "==", normalizedProductName).limit(1)
-      : null;
-    const [zoneSnap, inventorySnap, productByIdSnap, productBySkuSnap, productByNameSnap] = await Promise.all([
+    const [zoneSnap, inventorySnap, catalogSnap] = await Promise.all([
       zoneId ? transaction.get(db.collection("zones").doc(zoneId)) : Promise.resolve(null),
       inventoryQuery ? transaction.get(inventoryQuery) : Promise.resolve(null),
-      productByIdRef ? transaction.get(productByIdRef) : Promise.resolve(null),
-      productBySkuQuery ? transaction.get(productBySkuQuery) : Promise.resolve(null),
-      productByNameQuery ? transaction.get(productByNameQuery) : Promise.resolve(null)
+      catalogQuery ? transaction.get(catalogQuery) : Promise.resolve(null)
     ]);
+    const sellerCatalog = catalogSnap ? catalogSnap.docs.map((catalogDoc) => ({ id: catalogDoc.id, ...catalogDoc.data() } as Record<string, any>)) : [];
 
     const nextStatus = input.outcome === "delivered" ? "delivered" : isVisitRescheduled ? "retry_pending" : "failed";
     const failedCategory: FailedCategory | undefined = input.outcome === "failed"
@@ -992,13 +988,8 @@ export const closeOrder = onCall(async (request) => {
     transaction.set(orderRef, nextOrder, { merge: true });
 
     settleInventoryForOrder(transaction, inventorySnap, input.outcome, isVisitRescheduled, now);
-    const productCost = resolveProductCostForOrder(
-      nextOrder,
-      productByIdSnap?.exists ? productByIdSnap.data() ?? null : null,
-      productBySkuSnap && !productBySkuSnap.empty ? productBySkuSnap.docs[0].data() : null,
-      productByNameSnap && !productByNameSnap.empty ? productByNameSnap.docs[0].data() : null
-    );
-    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now, productCost);
+    const productCostLines = resolveProductCostLinesForOrder(nextOrder, sellerCatalog);
+    const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now, productCostLines);
     for (const entry of walletEntries) {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
     }
@@ -1549,6 +1540,94 @@ function settleInventoryForOrder(
   }
 }
 
+// Transicion operativa validada en el servidor. Reemplaza las escrituras optimistas del cliente
+// (saveFirestoreOrder) que podian "pisar" un pedido con estado viejo en cache.
+const orderTransitionPatchSchema = z.object({
+  status: z.string().optional(),
+  addressRisk: z.enum(["accepted", "review", "rejected"]).optional(),
+  driverId: z.string().nullable().optional(),
+  geoProvider: z.string().optional(),
+  normalizedAddress: z.string().optional(),
+  callOutcome: z.enum(["pending", "confirmed", "rescheduled"]).optional(),
+  callNote: z.string().optional(),
+  scheduledDate: z.string().optional(),
+  scheduledWindow: z.string().optional(),
+  rescheduledDate: z.string().optional(),
+  rescheduledWindow: z.string().optional(),
+  pickupBatchId: z.string().optional(),
+  pickedUpAt: z.string().optional()
+}).strict();
+
+const orderTransitionSchema = z.object({
+  orderId: z.string().min(1),
+  expectedStatus: z.string().min(1),
+  patch: orderTransitionPatchSchema
+});
+
+const OPERATIONAL_TARGET_STATUS = new Set(["address_risk", "ready_to_assign", "assigned", "call_pending", "scheduled", "picked_up", "in_route", "retry_pending"]);
+const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+
+export const applyOrderTransition = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || (role !== "admin" && role !== "driver" && role !== "messenger")) {
+    throw new HttpsError("permission-denied", "No autorizado para operar pedidos.");
+  }
+  const parsed = orderTransitionSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Datos de transicion invalidos.", parsed.error.flatten());
+  }
+  const { orderId, expectedStatus, patch } = parsed.data;
+  const db = getFirestore();
+  const ref = db.collection("orders").doc(orderId);
+  const now = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "El pedido no existe.");
+    const order = snap.data() ?? {};
+
+    // Scoping: lideres/mensajeros solo sus pedidos (o libres para tomar).
+    if (role === "driver") {
+      const driverId = typeof request.auth?.token.driverId === "string" ? request.auth.token.driverId : "";
+      const ownsIt = order.driverId === driverId;
+      const canClaimFree = (order.driverId === null || order.driverId === undefined) && order.status === "ready_to_assign";
+      if (!ownsIt && !canClaimFree) throw new HttpsError("permission-denied", "Pedido no asignado a este lider logistico.");
+    }
+    if (role === "messenger") {
+      const messengerId = typeof request.auth?.token.messengerId === "string" ? request.auth.token.messengerId : "";
+      if (order.messengerId !== messengerId) throw new HttpsError("permission-denied", "Pedido no asignado a este mensajero.");
+    }
+
+    // Optimistic concurrency: el estado real debe coincidir con lo que el cliente creia.
+    if (String(order.status ?? "") !== expectedStatus) {
+      throw new HttpsError("failed-precondition", `El pedido cambio de estado (ahora ${order.status}). Refresca e intenta de nuevo.`);
+    }
+    // No operar sobre estados terminales por esta via (van por closeOrder/cancelOrder/etc.).
+    if (TERMINAL_STATUS.has(String(order.status ?? ""))) {
+      throw new HttpsError("failed-precondition", "El pedido esta en un estado terminal; usa el flujo correspondiente.");
+    }
+    // El destino, si cambia el status, debe ser un estado operativo valido.
+    if (patch.status !== undefined && !OPERATIONAL_TARGET_STATUS.has(patch.status)) {
+      throw new HttpsError("invalid-argument", `Transicion a "${patch.status}" no permitida por esta via.`);
+    }
+
+    const clean = stripUndefined({ ...patch, updatedAt: now } as Record<string, unknown>);
+    transaction.set(ref, clean, { merge: true });
+    const auditId = `audit-transition-${Date.now()}-${orderId.slice(-8)}`;
+    transaction.set(db.collection("auditEvents").doc(auditId), {
+      id: auditId,
+      actorId: request.auth?.uid ?? "unknown",
+      actorRole: role,
+      action: "order.transition",
+      entity: "order",
+      entityId: orderId,
+      summary: `Transicion ${order.status} -> ${patch.status ?? order.status}`,
+      createdAt: now
+    });
+    return { ok: true, order: { ...order, ...clean, id: orderId } };
+  });
+});
+
 function normalizeProductName(value?: string) {
   return (value ?? "")
     .normalize("NFD")
@@ -1559,29 +1638,70 @@ function normalizeProductName(value?: string) {
     .replace(/\s+/g, " ");
 }
 
-function resolveProductCostForOrder(order: Record<string, any>, productById: Record<string, any> | null, productBySku: Record<string, any> | null, productByName: Record<string, any> | null) {
-  const product = productById && productById.sellerId === order.sellerId
-    ? productById
-    : productBySku && productBySku.sellerId === order.sellerId
-      ? productBySku
-      : productByName && productByName.sellerId === order.sellerId
-        ? productByName
-        : null;
-  if (!product || product.active === false || product.productCostConfigured !== true) {
-    return null;
-  }
-  const quantity = Math.max(1, Number(order.quantity) || 1);
-  const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
-  return {
-    productId: String(product.id ?? order.productId ?? ""),
-    productName: String(product.name ?? order.productName ?? "Producto"),
-    supplierId: typeof product.supplierId === "string" ? product.supplierId : undefined,
-    supplierName: typeof product.supplierName === "string" ? product.supplierName : undefined,
-    totalCostCop: unitCostCop * quantity
-  };
+type ProductCostLine = {
+  productId: string;
+  productName: string;
+  supplierId?: string;
+  supplierName?: string;
+  totalCostCop: number;
+};
+
+function matchCatalogForLine(
+  catalog: Record<string, any>[],
+  sellerId: string,
+  options: { sku?: string; productName?: string; productId?: string }
+): Record<string, any> | null {
+  const normalizedSku = typeof options.sku === "string" ? options.sku.trim().toUpperCase() : "";
+  const normalizedName = normalizeProductName(typeof options.productName === "string" ? options.productName : "");
+  const byId = options.productId
+    ? catalog.find((item) => item.id === options.productId && item.sellerId === sellerId && item.active !== false)
+    : undefined;
+  const bySku = normalizedSku
+    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && typeof item.sku === "string" && item.sku.trim().toUpperCase() === normalizedSku)
+    : undefined;
+  const byName = normalizedName
+    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && !item.sku && item.normalizedProductName === normalizedName)
+    : undefined;
+  return byId ?? bySku ?? byName ?? null;
 }
 
-function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string, productCost?: ReturnType<typeof resolveProductCostForOrder>): WalletEntryDoc[] {
+// Costo por linea/SKU: una entrada por producto del catalogo (costo unitario x cantidad).
+// Si el pedido trae lineItems se calcula por linea (combos + productos adicionales); si no,
+// usa los campos colapsados. El costo del catalogo se interpreta SIEMPRE como por unidad.
+function resolveProductCostLinesForOrder(order: Record<string, any>, catalog: Record<string, any>[]): ProductCostLine[] {
+  const sellerId = String(order.sellerId ?? "");
+  if (!sellerId) return [];
+  const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
+  const hasLineItems = lineItems.length > 0;
+  const rawLines = hasLineItems
+    ? lineItems
+    : [{ sku: order.sku, productName: order.productName, quantity: order.quantity }];
+  const byProduct = new Map<string, { product: Record<string, any>; quantity: number }>();
+  for (const line of rawLines) {
+    const quantity = Math.max(1, Number(line?.quantity) || 1);
+    const product = matchCatalogForLine(catalog, sellerId, {
+      sku: typeof line?.sku === "string" ? line.sku : undefined,
+      productName: typeof line?.productName === "string" ? line.productName : undefined,
+      productId: hasLineItems ? undefined : (typeof order.productId === "string" ? order.productId : undefined)
+    });
+    if (!product || product.productCostConfigured !== true) continue;
+    const existing = byProduct.get(product.id);
+    if (existing) existing.quantity += quantity;
+    else byProduct.set(product.id, { product, quantity });
+  }
+  return Array.from(byProduct.values()).map(({ product, quantity }) => {
+    const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
+    return {
+      productId: String(product.id ?? ""),
+      productName: String(product.name ?? "Producto"),
+      supplierId: typeof product.supplierId === "string" ? product.supplierId : undefined,
+      supplierName: typeof product.supplierName === "string" ? product.supplierName : undefined,
+      totalCostCop: unitCostCop * quantity
+    };
+  });
+}
+
+function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string, productCostLines?: ProductCostLine[] | null): WalletEntryDoc[] {
   const pickedUpAt = typeof order.pickedUpAt === "string" ? Date.parse(order.pickedUpAt) : Number.NaN;
   const usesNewDandaDriverPay =
     String(order.driverId ?? "") === dandaPreferredDriverId &&
@@ -1637,19 +1757,21 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
-    if (productCost) {
+    const costLines = productCostLines ?? [];
+    const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
+    for (const line of costLines) {
       entries.push(stripUndefined({
-        id: `we-${order.id}-product-cost`,
+        id: hasLineItems ? `we-${order.id}-product-cost-${line.productId}` : `we-${order.id}-product-cost`,
         ownerType: "seller",
         ownerId: order.sellerId,
         orderId: order.id,
         type: "product_cost",
-        amountCop: -productCost.totalCostCop,
+        amountCop: -line.totalCostCop,
         description: `Costo producto ${order.shopifyOrderId}`,
-        supplierId: productCost.supplierId,
-        supplierName: productCost.supplierName,
-        productId: productCost.productId || undefined,
-        productName: productCost.productName,
+        supplierId: line.supplierId,
+        supplierName: line.supplierName,
+        productId: line.productId || undefined,
+        productName: line.productName,
         createdAt: now
       }) as WalletEntryDoc);
     }

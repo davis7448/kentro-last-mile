@@ -32,9 +32,12 @@ import {
   cancelFirebaseOrder,
   assignFirebaseMessengerToOrders,
   createFirebaseStoreWebhookConfig,
+  setFirebaseStoreUchatConfig,
   createManualFirebaseOrder,
   createFirebaseMessengerProfile,
   createFirebasePickupBatch,
+  applyFirebaseOrderTransition,
+  type OrderTransitionPatch,
   createFirebaseSettlement,
   createManagedFirebaseUser,
   closeFirebaseOrder,
@@ -72,6 +75,7 @@ import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, e
 import type { DriverFinancialSummary } from "@/lib/finance";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
+import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
 import type { AppState, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
@@ -245,7 +249,7 @@ function shouldQueueEvidence(error: unknown) {
 
 function createLocalUser(
   state: AppState,
-  account: { name: string; email: string; password: string; role: Role; leaderDriverId?: string }
+  account: { name: string; email: string; password: string; role: Role; leaderDriverId?: string; linkedSellerId?: string }
 ): { state: AppState; account: LocalAccount; error: string | null } {
   const email = account.email.trim().toLowerCase();
   const accounts = readAccounts();
@@ -258,8 +262,15 @@ function createLocalUser(
   if (account.password.length < 6) {
     return { state, account: accounts[0], error: "La contrasena debe tener al menos 6 caracteres." };
   }
+  if (account.role === "seller_logistics" && !account.linkedSellerId) {
+    return { state, account: accounts[0], error: "El logistico de tienda debe vincularse a una tienda existente." };
+  }
 
-  const profileId = `${account.role}-${Date.now()}`;
+  // Vendedor y logistico de tienda pueden apuntar a un seller existente; el resto genera un perfil nuevo.
+  const profileId =
+    (account.role === "seller" || account.role === "seller_logistics") && account.linkedSellerId
+      ? account.linkedSellerId
+      : `${account.role}-${Date.now()}`;
   const localId = `user-${Date.now()}`;
   const nextAccount: LocalAccount = {
     id: localId,
@@ -334,7 +345,7 @@ function createLocalUser(
 
 async function createUserFromAdmin(
   state: AppState,
-  account: { name: string; email: string; password: string; role: Role; leaderDriverId?: string }
+  account: { name: string; email: string; password: string; role: Role; leaderDriverId?: string; linkedSellerId?: string }
 ): Promise<{ state: AppState; account: LocalAccount; error: string | null }> {
   if (!firebaseEnabled()) {
     const result = createLocalUser(state, account);
@@ -478,7 +489,7 @@ function useAppState(session: Session | null) {
 }
 
 function roleLabel(role: Role) {
-  return role === "admin" ? "Admin" : role === "seller" ? "Vendedor" : role === "driver" ? "Lider logistico" : "Mensajero";
+  return role === "admin" ? "Admin" : role === "seller" ? "Vendedor" : role === "seller_logistics" ? "Logistico tienda" : role === "driver" ? "Lider logistico" : "Mensajero";
 }
 
 function statusLabel(status: string) {
@@ -594,7 +605,7 @@ function OrderFilters({
   );
 }
 
-function LogisticsKpis({ orders, state }: { orders: Order[]; state: AppState }) {
+function LogisticsKpis({ orders, state, hideFinance = false }: { orders: Order[]; state: AppState; hideFinance?: boolean }) {
   const total = orders.length;
   const pendingConfirm = orders.filter((order) => order.status === "imported" || order.status === "address_risk").length;
   const readyWithoutLeader = orders.filter((order) => order.status === "ready_to_assign" && !order.driverId).length;
@@ -656,7 +667,7 @@ function LogisticsKpis({ orders, state }: { orders: Order[]; state: AppState }) 
         <Metric icon={<Route size={20} />} label="Despachables" value={String(dispatchable)} />
         <Metric icon={<ShieldCheck size={20} />} label="% entrega" value={`${deliveryRate}%`} />
         <Metric icon={<X size={20} />} label="% devolucion" value={`${returnRate}%`} />
-        <Metric icon={<Wallet size={20} />} label="Recaudo tienda rango" value={formatCop(storeCodCop)} />
+        {!hideFinance && <Metric icon={<Wallet size={20} />} label="Recaudo tienda rango" value={formatCop(storeCodCop)} />}
       </div>
       <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
         % despacho = despachables / tomados por lider. % terminacion = entregados, fallidos con visita y liquidados / despachables. Abiertos despachables = despachables menos cerrados. Despachables = tomados por lider menos sin cobertura y pedido malo/no contesta. % devolucion = fallidos con visita / despachables. Recaudo tienda rango = COD entregado menos flete cobrado a tienda.
@@ -1112,7 +1123,7 @@ function ViewTabs({ activeView, onChange, role }: { activeView: AppView; onChang
         >
           Operacion
         </button>
-        {role !== "messenger" && (
+        {role !== "messenger" && role !== "seller_logistics" && (
           <button
             className={`focus-ring shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeView === "wallet" ? "bg-ink text-white" : "hover:bg-field"}`}
             type="button"
@@ -1142,6 +1153,21 @@ function ViewTabs({ activeView, onChange, role }: { activeView: AppView; onChang
       </div>
     </nav>
   );
+}
+
+const ORDER_TRANSITION_FIELDS = ["status", "addressRisk", "driverId", "geoProvider", "normalizedAddress", "callOutcome", "callNote", "scheduledDate", "scheduledWindow", "rescheduledDate", "rescheduledWindow", "pickupBatchId", "pickedUpAt"] as const;
+
+// Diferencia solo los campos operativos que cambiaron, para enviar un patch acotado al callable
+// del servidor (que valida la transicion) en vez de reescribir el pedido completo desde el cliente.
+function orderTransitionPatch(before: Order, after: Order): OrderTransitionPatch {
+  const patch: Record<string, unknown> = {};
+  for (const key of ORDER_TRANSITION_FIELDS) {
+    const nextValue = (after as Record<string, unknown>)[key];
+    if (nextValue !== (before as Record<string, unknown>)[key] && nextValue !== undefined) {
+      patch[key] = nextValue;
+    }
+  }
+  return patch as OrderTransitionPatch;
 }
 
 function OrderCard({
@@ -1189,11 +1215,22 @@ function OrderCard({
   const commitOrderState = (nextState: AppState) => {
     setState(nextState);
     const updatedOrder = nextState.orders.find((item) => item.id === order.id);
-    if (updatedOrder) {
-      void saveFirestoreOrder(updatedOrder);
-      if (updatedOrder.status === "delivered" || updatedOrder.status === "failed") {
-        void saveFirestoreWalletEntries(entriesForClosedOrder(updatedOrder, nextState));
-      }
+    if (!updatedOrder) return;
+    if (firebaseEnabled()) {
+      // Las transiciones operativas van por un callable del servidor que valida el estado real
+      // (optimistic concurrency) y audita. Asi el cliente ya no puede "pisar" un pedido con
+      // estado viejo en cache. La UI se actualiza optimista; si el servidor rechaza, se registra.
+      const patch = orderTransitionPatch(order, updatedOrder);
+      if (Object.keys(patch).length === 0) return;
+      void applyFirebaseOrderTransition({ orderId: order.id, expectedStatus: order.status, patch }).catch((error) => {
+        console.error("No se pudo aplicar la transicion del pedido (posible estado desactualizado).", error);
+      });
+      return;
+    }
+    // Modo local (sin Firebase): persistencia directa.
+    void saveFirestoreOrder(updatedOrder);
+    if (updatedOrder.status === "delivered" || updatedOrder.status === "failed") {
+      void saveFirestoreWalletEntries(entriesForClosedOrder(updatedOrder, nextState));
     }
   };
   const commitClosedOrder = (updatedOrder: Order, walletEntries: WalletEntry[]) => {
@@ -2550,6 +2587,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   const visibleOrders = adminOrderTab === "failed" ? filterByFailedCategory(visibleFailedBaseOrders, adminFailedCategoryFilter) : visibleOperationOrders;
   const reprintableVisibleOrders = visibleOrders.filter((order) => Boolean(order.labelPrintedAt));
   const exportableFailedOrders = filterByFailedCategory(visibleFailedBaseOrders, adminFailedCategoryFilter);
+  const adminExcelFilename = `pedidos-admin-${sellerFilter === "all" ? "todos" : sellerFilter}-${startDate || "inicio"}-${endDate || "hoy"}.xlsx`;
   const alerts = [
     ...review.map((order) => `Direccion en revision ${order.shopifyOrderId}`),
     ...failed.filter((order) => order.retryDecision === "pending").map((order) => `Reintento pendiente ${order.shopifyOrderId}`),
@@ -2629,15 +2667,26 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
                 Fallidos / reintento ({failedOrders.length})
               </button>
             </div>
-            <button
-              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
-              type="button"
-              disabled={exportableFailedOrders.length === 0}
-              onClick={() => downloadFailedOrdersCsv(exportableFailedOrders, state, startDate, endDate, sellerFilter)}
-            >
-              <FileDown size={16} />
-              Descargar fallidos visibles ({exportableFailedOrders.length})
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                type="button"
+                disabled={visibleOrders.length === 0}
+                onClick={() => void downloadOrdersXlsx(visibleOrders, state, adminExcelFilename)}
+              >
+                <FileDown size={16} />
+                Descargar Excel visibles ({visibleOrders.length})
+              </button>
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                type="button"
+                disabled={exportableFailedOrders.length === 0}
+                onClick={() => downloadFailedOrdersCsv(exportableFailedOrders, state, startDate, endDate, sellerFilter)}
+              >
+                <FileDown size={16} />
+                Descargar fallidos visibles ({exportableFailedOrders.length})
+              </button>
+            </div>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} sellers={state.sellers} sellerFilter={sellerFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} onSeller={onSellerFilter} />
           {adminOrderTab === "failed" && (
@@ -2689,6 +2738,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
           <ManualOrderPanel state={state} setState={setState} />
           <ShopifyStoresAdminPanel state={state} setState={setState} />
           <StoreWebhookConfigsPanel configs={state.storeWebhookConfigs ?? []} sellers={state.sellers} />
+          <UchatConfigsAdminPanel configs={state.storeWebhookConfigs ?? []} sellers={state.sellers} />
           <ShopifyImportOrderPanel
             stores={state.shopifyStores ?? []}
             sellers={state.sellers}
@@ -2991,9 +3041,11 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("seller");
   const [leaderDriverId, setLeaderDriverId] = useState("");
+  const [linkSellerId, setLinkSellerId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const accounts = readAccounts();
+  const sellersForLink = [...state.sellers].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <Card>
@@ -3003,7 +3055,7 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
         onSubmit={(event) => {
           event.preventDefault();
           setSubmitting(true);
-          void createUserFromAdmin(state, { name, email, password, role, leaderDriverId })
+          void createUserFromAdmin(state, { name, email, password, role, leaderDriverId, linkedSellerId: linkSellerId || undefined })
             .then((result) => {
               if (result.error) {
                 setMessage(result.error);
@@ -3015,6 +3067,7 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
               setPassword("");
               setRole("seller");
               setLeaderDriverId("");
+              setLinkSellerId("");
           setMessage(`Cuenta ${roleLabel(result.account.role)} lista para ${result.account.email}`);
             })
             .finally(() => setSubmitting(false));
@@ -3023,12 +3076,22 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
         <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Nombre" value={name} onChange={(event) => setName(event.target.value)} required />
         <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Contrasena temporal" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
-        <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={role} onChange={(event) => setRole(event.target.value as Role)}>
+        <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={role} onChange={(event) => { setRole(event.target.value as Role); setLinkSellerId(""); }}>
           <option value="seller">Vendedor</option>
+          <option value="seller_logistics">Logistico de tienda (sin finanzas)</option>
           <option value="driver">Lider logistico</option>
           <option value="messenger">Mensajero</option>
           <option value="admin">Administrador</option>
         </select>
+        {(role === "seller" || role === "seller_logistics") && (
+          <label className="grid gap-1 text-xs text-black/60">
+            {role === "seller_logistics" ? "Tienda a la que pertenece (obligatorio)" : "Vincular a tienda existente (opcional)"}
+            <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={linkSellerId} onChange={(event) => setLinkSellerId(event.target.value)} required={role === "seller_logistics"}>
+              <option value="">{role === "seller_logistics" ? "Selecciona la tienda" : "Crear vendedor nuevo"}</option>
+              {sellersForLink.map((seller) => <option key={seller.id} value={seller.id}>{seller.name} ({seller.id})</option>)}
+            </select>
+          </label>
+        )}
         {role === "messenger" && (
           <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={leaderDriverId} onChange={(event) => setLeaderDriverId(event.target.value)} required>
             <option value="">Selecciona lider logistico</option>
@@ -3954,9 +4017,20 @@ function WalletPage({ state, session }: { state: AppState; session: Session }) {
           <h2 className="text-xl font-bold">Wallet</h2>
           <p className="text-sm text-black/60">Historial de movimientos, saldos y cargos por pedido.</p>
         </div>
-        <div className="grid gap-1 rounded-md border border-black/10 bg-white px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-normal text-black/50">Balance visible</span>
-          <span className={`text-xl font-bold ${balance < 0 ? "text-rust" : "text-mint"}`}>{formatCop(balance)}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+            type="button"
+            disabled={visibleEntries.length === 0}
+            onClick={() => void downloadWalletXlsx(visibleEntries, state, `wallet-${session.role === "admin" ? "todos" : session.profileId}-${new Date().toISOString().slice(0, 10)}.xlsx`)}
+          >
+            <FileDown size={16} />
+            Descargar wallet Excel ({visibleEntries.length})
+          </button>
+          <div className="grid gap-1 rounded-md border border-black/10 bg-white px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-normal text-black/50">Balance visible</span>
+            <span className={`text-xl font-bold ${balance < 0 ? "text-rust" : "text-mint"}`}>{formatCop(balance)}</span>
+          </div>
         </div>
       </div>
 
@@ -4394,120 +4468,8 @@ function csvValue(value: unknown) {
 }
 
 function downloadFailedOrdersCsv(orders: Order[], state: AppState, startDate: string, endDate: string, sellerFilter: string) {
-  const header = [
-    "numero_guia",
-    "numero_shopify",
-    "id_pedido",
-    "vendedor",
-    "dominio_tienda",
-    "ciudad",
-    "zona",
-    "estado",
-    "categoria_fallido",
-    "fallido_cobrable",
-    "motivo_fallido",
-    "decision_reintento",
-    "cliente",
-    "telefono",
-    "direccion_original",
-    "direccion_normalizada",
-    "lat",
-    "lng",
-    "metodo_pago",
-    "modo_fulfillment",
-    "valor_total_cop",
-    "producto",
-    "sku",
-    "cantidad",
-    "lider_logistico",
-    "mensajero",
-    "punto_recogida",
-    "direccion_recogida",
-    "fecha_programada",
-    "ventana_programada",
-    "resultado_llamada",
-    "nota_llamada",
-    "fecha_reprogramada",
-    "ventana_reprogramada",
-    "rotulo_impreso_en",
-    "rotulo_impreso_por",
-    "veces_impreso",
-    "recogido_en",
-    "creado_en",
-    "actualizado_en",
-    "cantidad_evidencias",
-    "evidencia_tipo",
-    "evidencia_motivo",
-    "evidencia_nota",
-    "evidencia_archivo",
-    "evidencia_link_foto",
-    "evidencia_creada_en",
-    "todos_links_evidencia",
-    "todas_notas_evidencia",
-    "pedido_json",
-    "evidencias_json"
-  ];
-  const rows = orders.map((order) => {
-    const seller = state.sellers.find((item) => item.id === order.sellerId);
-    const city = state.cities.find((item) => item.id === order.cityId);
-    const zone = state.zones.find((item) => item.id === order.zoneId);
-    const driver = state.drivers.find((item) => item.id === order.driverId);
-    const messenger = state.messengers.find((item) => item.id === order.messengerId);
-    const latestEvidence = [...order.evidence].reverse().find((item) => item.type === "failed") ?? order.evidence.at(-1);
-    return [
-      order.trackingCode,
-      order.shopifyOrderId,
-      order.id,
-      seller?.name,
-      seller?.shopDomain,
-      city?.name ?? order.cityId,
-      zone?.name ?? order.zoneId,
-      statusLabel(order.status),
-      order.status === "failed" ? failedCategoryLabel(order.failedCategory) : "",
-      order.status === "failed" ? (isChargeableFailedOrder(order) ? "si" : "no") : "",
-      order.failedReason,
-      order.retryDecision,
-      order.customerName,
-      order.customerPhone,
-      order.addressRaw,
-      order.normalizedAddress,
-      order.lat,
-      order.lng,
-      order.paymentMethod,
-      order.fulfillmentMode,
-      order.totalCop,
-      order.productName,
-      order.sku,
-      order.quantity,
-      driver?.name,
-      messenger?.name,
-      order.pickupPointName,
-      order.pickupAddress,
-      order.scheduledDate,
-      order.scheduledWindow,
-      order.callOutcome,
-      order.callNote,
-      order.rescheduledDate,
-      order.rescheduledWindow,
-      order.labelPrintedAt,
-      order.labelPrintedBy,
-      order.labelPrintCount,
-      order.pickedUpAt,
-      order.createdAt,
-      order.updatedAt,
-      order.evidence.length,
-      latestEvidence?.type,
-      latestEvidence?.reason,
-      latestEvidence?.note,
-      latestEvidence?.photoLabel,
-      latestEvidence?.photoUrl,
-      latestEvidence?.createdAt,
-      order.evidence.map((item) => item.photoUrl).filter(Boolean).join(" | "),
-      order.evidence.map((item) => [item.createdAt, item.reason, item.note].filter(Boolean).join(" - ")).join(" | "),
-      JSON.stringify(order),
-      JSON.stringify(order.evidence)
-    ];
-  });
+  const rows = buildOrderExportRows(orders, state).map((row) => orderExportColumns.map((column) => row[column]));
+  const header = [...orderExportColumns];
   const csv = [header, ...rows].map((line) => line.map(csvValue).join(",")).join("\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -5201,6 +5163,37 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
   );
 }
 
+const liquidationAuditExportColumns = [
+  "guia", "shopify", "tienda", "domiciliario", "estado", "fallido_cobrable",
+  "cod_recaudado", "cobro_entrega", "cobro_fallido", "fulfillment", "costo_producto", "cobros_operativos",
+  "pago_entregado_domiciliario", "pago_fallido_domiciliario", "pago_domiciliario", "comision_plataforma",
+  "a_pagar_tienda", "habilitado_tienda", "nota"
+] as const;
+
+function buildLiquidationAuditExportRows(audits: LiquidationOrderAudit[]) {
+  return audits.map((audit) => ({
+    guia: audit.trackingCode,
+    shopify: audit.shopifyOrderId,
+    tienda: audit.sellerName,
+    domiciliario: audit.driverName,
+    estado: statusLabel(audit.status),
+    fallido_cobrable: audit.status === "failed" ? (audit.chargeableFailed ? "si" : "no") : "",
+    cod_recaudado: audit.codCop,
+    cobro_entrega: audit.deliveryFeeCop,
+    cobro_fallido: audit.failedFeeCop,
+    fulfillment: audit.fulfillmentCop,
+    costo_producto: audit.productCostCop,
+    cobros_operativos: audit.storeChargeCop,
+    pago_entregado_domiciliario: audit.driverDeliveredPayCop,
+    pago_fallido_domiciliario: audit.driverFailedPayCop,
+    pago_domiciliario: audit.driverPayCop,
+    comision_plataforma: audit.platformMarginCop,
+    a_pagar_tienda: audit.sellerNetCop,
+    habilitado_tienda: audit.sellerEligible ? "si" : "no",
+    nota: audit.reason
+  }));
+}
+
 function LiquidationOrderAuditTable({ audits, compact = false }: { audits: LiquidationOrderAudit[]; compact?: boolean }) {
   if (audits.length === 0) {
     return <p className="rounded-md bg-white px-3 py-2 text-sm text-black/60">No hay pedidos detallados para esta liquidacion.</p>;
@@ -5767,7 +5760,19 @@ function ClosedSettlementDetail({ state, settlement, detailRow }: { state: AppSt
         </div>
       </div>
 
-      <ClosedSettlementOrderTable state={state} settlement={settlement} entries={settlementEntries} />
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold">Detalle por pedido</h3>
+        <button
+          className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+          type="button"
+          disabled={audits.length === 0}
+          onClick={() => void downloadRowsXlsx("Liquidacion", liquidationAuditExportColumns, buildLiquidationAuditExportRows(audits), `liquidacion-${settlement.ownerName.replace(/[^a-z0-9]+/gi, "-")}-${settlement.id}.xlsx`)}
+        >
+          <FileDown size={16} />
+          Descargar Excel ({audits.length})
+        </button>
+      </div>
+      <LiquidationOrderAuditTable audits={audits} />
 
       <div className="overflow-x-auto rounded-md bg-white">
         <table className="w-full min-w-[980px] border-collapse text-sm">
@@ -5808,84 +5813,6 @@ function ClosedSettlementDetail({ state, settlement, detailRow }: { state: AppSt
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function closedSettlementOrderLabel(order: Order | undefined, entries: WalletEntry[]) {
-  const text = entries.map((entry) => `${entry.type} ${entry.description}`.toLowerCase()).join(" ");
-  if (text.includes("correccion") || text.includes("reversa")) return "Correccion";
-  if (text.includes("fallido")) return "Fallido";
-  if (text.includes("entregado")) return "Entregado";
-  return order ? statusLabel(order.status) : "Movimiento";
-}
-
-function ClosedSettlementOrderTable({ state, settlement, entries }: { state: AppState; settlement: Settlement; entries: WalletEntry[] }) {
-  const orderIds = Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]));
-  const rows = orderIds.map((orderId) => {
-    const order = state.orders.find((item) => item.id === orderId);
-    const ownEntries = entries.filter((entry) => entry.orderId === orderId);
-    const codCop = netAmountCop(ownEntries, ["cod_revenue"]);
-    const deliveryFeeCop = netChargeCop(ownEntries, ["delivery_fee"]);
-    const failedFeeCop = netChargeCop(ownEntries, ["failed_fee"]);
-    const fulfillmentCop = netChargeCop(ownEntries, ["fulfillment_fee"]);
-    const storeChargeCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
-    const driverPayCop = netAmountCop(ownEntries, ["driver_earning"]);
-    const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
-    return {
-      orderId,
-      trackingCode: order?.trackingCode ?? orderId,
-      shopifyOrderId: order?.shopifyOrderId ?? "",
-      movementLabel: closedSettlementOrderLabel(order, ownEntries),
-      codCop,
-      deliveryFeeCop,
-      failedFeeCop,
-      fulfillmentCop,
-      storeChargeCop,
-      driverPayCop,
-      netCop,
-      entriesCount: ownEntries.length
-    };
-  });
-
-  if (rows.length === 0) {
-    return <p className="rounded-md bg-white px-3 py-2 text-sm text-black/60">Este corte no tiene pedidos asociados.</p>;
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-md bg-white">
-      <table className="w-full min-w-[1120px] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-black/10 text-left text-xs uppercase tracking-normal text-black/50">
-            <th className="py-2 pl-3 pr-3 font-semibold">Guia</th>
-            <th className="py-2 pr-3 font-semibold">Shopify</th>
-            <th className="py-2 pr-3 font-semibold">Movimiento pagado</th>
-            <th className="py-2 pr-3 font-semibold">COD</th>
-            <th className="py-2 pr-3 font-semibold">Cobro entrega</th>
-            <th className="py-2 pr-3 font-semibold">Cobro fallido</th>
-            <th className="py-2 pr-3 font-semibold">Fulfillment</th>
-            <th className="py-2 pr-3 font-semibold">Pago domiciliario</th>
-            <th className="py-2 pr-3 font-semibold">{settlement.kind === "seller" ? "A pagar tienda" : "Neto corte"}</th>
-            <th className="py-2 pr-3 font-semibold">Movs</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.orderId} className="border-b border-black/5 last:border-0">
-              <td className="py-3 pl-3 pr-3 font-semibold">{row.trackingCode}</td>
-              <td className="py-3 pr-3">{row.shopifyOrderId}</td>
-              <td className="py-3 pr-3">{row.movementLabel}</td>
-              <td className="py-3 pr-3">{formatCop(row.codCop)}</td>
-              <td className="py-3 pr-3">{formatCop(row.deliveryFeeCop)}</td>
-              <td className="py-3 pr-3">{formatCop(row.failedFeeCop)}</td>
-              <td className="py-3 pr-3">{formatCop(row.fulfillmentCop)}</td>
-              <td className="py-3 pr-3">{formatCop(row.driverPayCop)}</td>
-              <td className={`py-3 pr-3 font-bold ${row.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.netCop)}</td>
-              <td className="py-3 pr-3">{row.entriesCount}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -6051,6 +5978,126 @@ function ShopifyStoresAdminPanel({ state, setState }: { state: AppState; setStat
               </div>
             );
           }}
+      </PaginatedList>
+    </Card>
+  );
+}
+
+function UchatConfigForm({ sellerId, config }: { sellerId: string; config?: StoreWebhookConfig }) {
+  const [token, setToken] = useState("");
+  const [dropiToken, setDropiToken] = useState("");
+  const [platform, setPlatform] = useState<"chatby" | "chateapro" | "lucidbot">(config?.uchatPlatform ?? "chatby");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const configured = Boolean(config?.uchatConfigured);
+  const enabled = Boolean(config?.uchatConfirmEnabled);
+  const dropiConfigured = Boolean(config?.uchatDropiConfigured);
+
+  async function save(nextEnabled: boolean, clear = false) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await setFirebaseStoreUchatConfig({
+        sellerId,
+        apiToken: clear ? "" : token.trim() ? token.trim() : undefined,
+        dropiApiToken: clear ? "" : dropiToken.trim() ? dropiToken.trim() : undefined,
+        platform,
+        enabled: nextEnabled
+      });
+      setToken("");
+      setDropiToken("");
+      setMessage(res.configured ? (res.enabled ? "Token guardado y confirmacion activa." : "Token guardado (pausado).") : "Token eliminado.");
+    } catch (error) {
+      setMessage(`Error: ${(error as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-2 rounded-md border border-black/10 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold text-ink">Confirmacion por API Chateapro / Chatby</p>
+        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${configured ? (enabled ? "bg-lime text-ink" : "bg-field text-black/60") : "bg-field text-black/60"}`}>
+          {configured ? (enabled ? "Activo" : "Pausado") : "Sin token"}
+        </span>
+      </div>
+      <label className="grid gap-1 text-xs text-black/60">
+        Plataforma
+        <select
+          className="rounded-md border border-black/10 bg-field px-3 py-2 text-xs text-ink"
+          value={platform}
+          onChange={(event) => setPlatform(event.target.value as "chatby" | "chateapro" | "lucidbot")}
+        >
+          <option value="chatby">Chatby (verificado)</option>
+          <option value="chateapro">Chateapro (verificado)</option>
+          <option value="lucidbot">LucidBot (verificado)</option>
+        </select>
+      </label>
+      <input
+        className="rounded-md border border-black/10 bg-field px-3 py-2 text-xs text-ink"
+        type="password"
+        placeholder={configured ? "Token configurado — pega uno nuevo para reemplazar" : "Pega el API token de Chateapro / Chatby / LucidBot"}
+        value={token}
+        onChange={(event) => setToken(event.target.value)}
+      />
+      {platform === "lucidbot" && (
+        <div className="grid gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-ink">Sincronizacion Dropi ↔ LucidBot</p>
+            <span className={`rounded-md px-2 py-1 text-xs font-semibold ${dropiConfigured ? "bg-lime text-ink" : "bg-field text-black/60"}`}>
+              {dropiConfigured ? "Token Dropi configurado" : "Sin token Dropi"}
+            </span>
+          </div>
+          <input
+            className="rounded-md border border-black/10 bg-field px-3 py-2 text-xs text-ink"
+            type="password"
+            placeholder={dropiConfigured ? "Token Dropi configurado — pega uno nuevo para reemplazar" : "Pega el token de integracion de Dropi (dropi-integration-key)"}
+            value={dropiToken}
+            onChange={(event) => setDropiToken(event.target.value)}
+          />
+          <p className="text-xs text-black/60">Se genera en Dropi → Integraciones. Permite a Kentro consultar y ajustar los pedidos que LucidBot sube a Dropi (auditoria de duplicados).</p>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" type="button" disabled={busy || (!token.trim() && !dropiToken.trim() && !configured)} onClick={() => void save(true)}>
+          {busy ? "Guardando..." : configured ? "Actualizar token" : "Guardar token"}
+        </button>
+        {configured && (
+          <button className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => void save(!enabled)}>
+            {enabled ? "Pausar" : "Reactivar"}
+          </button>
+        )}
+        {configured && (
+          <button className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold text-red-600" type="button" disabled={busy} onClick={() => void save(false, true)}>
+            Quitar token
+          </button>
+        )}
+        <span className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
+          {config?.lastUchatPullAt ? `Ultimo chequeo: ${formatDateTime(config.lastUchatPullAt)}` : "Sin chequeos aun"}
+        </span>
+      </div>
+      <p className="text-xs text-black/60">Kentro consulta la API de Chateapro / Chatby cada ~2 h y pasa a &quot;Listo para asignar&quot; los pedidos marcados como Verificado o Confirmado (sincronizando direccion). El token se guarda del lado servidor, no se muestra.</p>
+      {message && <p className="text-xs font-semibold text-ink">{message}</p>}
+    </div>
+  );
+}
+
+function UchatConfigsAdminPanel({ configs, sellers }: { configs: StoreWebhookConfig[]; sellers: Seller[] }) {
+  const orderedSellers = [...sellers].sort((left, right) => String(left.name ?? "").localeCompare(String(right.name ?? "")));
+  return (
+    <Card>
+      <h2 className="mb-3 font-bold">Confirmacion por API (Chateapro / Chatby)</h2>
+      <PaginatedList items={orderedSellers} pageSize={4} empty={<p className="text-sm text-black/60">No hay tiendas.</p>}>
+        {(seller) => {
+          const config = configs.find((item) => item.sellerId === seller.id);
+          return (
+            <div key={seller.id} className="grid gap-2 rounded-md border border-black/10 p-3 text-sm">
+              <p className="font-semibold">{seller.name}</p>
+              <UchatConfigForm sellerId={seller.id} config={config} />
+            </div>
+          );
+        }}
       </PaginatedList>
     </Card>
   );
@@ -6336,6 +6383,7 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
               </div>
             </div>
           )}
+          <UchatConfigForm sellerId={seller.id} config={webhookConfig} />
         </div>
         <div>
           <p className="font-semibold">{stores.length > 0 ? `${stores.length} tienda${stores.length === 1 ? "" : "s"} conectada${stores.length === 1 ? "" : "s"}` : "Tiendas Shopify pendientes"}</p>
@@ -6417,7 +6465,7 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
   );
 }
 
-function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, onStartDate, onEndDate, onStatusFilter }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void }) {
+function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, onStartDate, onEndDate, onStatusFilter, hideFinance = false }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; hideFinance?: boolean }) {
   const seller = state.sellers.find((item) => item.id === session.profileId);
   const [sellerOrderTab, setSellerOrderTab] = useState<"operation" | "failed">("operation");
   const [sellerFailedCategoryFilter, setSellerFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
@@ -6425,7 +6473,7 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
   if (!seller) {
     return (
       <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
-        <EmptyRoleState title="Perfil de vendedor pendiente" message="Tu cuenta existe, pero falta crear el perfil de vendedor. Un administrador puede completarlo o puedes registrarte nuevamente como vendedor." />
+        <EmptyRoleState title={hideFinance ? "Perfil de tienda pendiente" : "Perfil de vendedor pendiente"} message="Tu cuenta existe, pero falta vincularla a una tienda. Un administrador debe asignar tu usuario al sellerId correcto." />
       </main>
     );
   }
@@ -6442,52 +6490,66 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
   const shopifyInstallRequests = (state.shopifyInstallRequests ?? []).filter((request) => request.sellerId === seller.id);
   const sellerLabelOrders = orders.filter((order) => canPrintSellerLabel(order, seller.id));
   const pendingSellerLabelOrders = sellerLabelOrders.filter((order) => !order.labelPrintedAt);
+  const sellerExcelFilename = `pedidos-vendedor-${seller.id}-${startDate || "inicio"}-${endDate || "hoy"}.xlsx`;
   return (
     <main className="mx-auto grid max-w-7xl gap-4 px-4 py-5">
-      <h2 className="text-xl font-bold">Dashboard vendedor</h2>
+      <h2 className="text-xl font-bold">{hideFinance ? "Dashboard logistico de tienda" : "Dashboard vendedor"}</h2>
       <div className="grid gap-3 md:grid-cols-2">
         <Metric icon={<Store size={20} />} label="Tiendas conectadas" value={String(shopifyStores.length)} />
         <Metric icon={<ClipboardList size={20} />} label="Pedidos" value={String(orders.length)} />
       </div>
-      <LogisticsKpis orders={rangeOrders} state={state} />
+      <LogisticsKpis orders={rangeOrders} state={state} hideFinance={hideFinance} />
       <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
         <section className="grid content-start gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-bold">Pedidos del vendedor</h2>
-            <button
-              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              type="button"
-              disabled={pendingSellerLabelOrders.length === 0 || printingSellerLabels}
-              onClick={async () => {
-                setPrintingSellerLabels(true);
-                try {
-                  const printed = await printOrderLabels(pendingSellerLabelOrders, state, "Rotulos vendedor pendientes");
-                  if (printed) setState(markOrdersLabelsPrinted(state, pendingSellerLabelOrders, seller.id));
-                } finally {
-                  setPrintingSellerLabels(false);
-                }
-              }}
-            >
-              <Printer size={16} />
-              {printingSellerLabels ? "Generando..." : `Imprimir pendientes (${pendingSellerLabelOrders.length})`}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                type="button"
+                disabled={visibleOrders.length === 0}
+                onClick={() => void downloadOrdersXlsx(visibleOrders, state, sellerExcelFilename)}
+              >
+                <FileDown size={16} />
+                Descargar reporte Excel ({visibleOrders.length})
+              </button>
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                type="button"
+                disabled={pendingSellerLabelOrders.length === 0 || printingSellerLabels}
+                onClick={async () => {
+                  setPrintingSellerLabels(true);
+                  try {
+                    const printed = await printOrderLabels(pendingSellerLabelOrders, state, "Rotulos vendedor pendientes");
+                    if (printed) setState(markOrdersLabelsPrinted(state, pendingSellerLabelOrders, seller.id));
+                  } finally {
+                    setPrintingSellerLabels(false);
+                  }
+                }}
+              >
+                <Printer size={16} />
+                {printingSellerLabels ? "Generando..." : `Imprimir pendientes (${pendingSellerLabelOrders.length})`}
+              </button>
+            </div>
           </div>
           <OrderLookupBar value={orderSearch} onChange={onOrderSearchChange} />
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${sellerOrderTab === "operation" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
-              type="button"
-              onClick={() => setSellerOrderTab("operation")}
-            >
-              Operacion ({operationOrders.length})
-            </button>
-            <button
-              className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${sellerOrderTab === "failed" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
-              type="button"
-              onClick={() => setSellerOrderTab("failed")}
-            >
-              Fallidos / reintento ({failedOrders.length})
-            </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${sellerOrderTab === "operation" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+                type="button"
+                onClick={() => setSellerOrderTab("operation")}
+              >
+                Operacion ({operationOrders.length})
+              </button>
+              <button
+                className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${sellerOrderTab === "failed" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
+                type="button"
+                onClick={() => setSellerOrderTab("failed")}
+              >
+                Fallidos / reintento ({failedOrders.length})
+              </button>
+            </div>
           </div>
           <OrderFilters startDate={startDate} endDate={endDate} status={statusFilter} onStartDate={onStartDate} onEndDate={onEndDate} onStatus={onStatusFilter} />
           {sellerOrderTab === "failed" && (
@@ -6517,8 +6579,8 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
             onImported={(order) => setState({ ...state, orders: [order, ...state.orders.filter((item) => item.id !== order.id)] })}
           />
           <ShopifySyncIssuesPanel issues={(state.shopifySyncIssues ?? []).filter((issue) => issue.sellerId === seller.id)} sellers={[seller]} />
-          <DashboardWalletCard state={state} ownerType="seller" ownerId={seller.id} title="Wallet del vendedor" />
-          <WalletPanel state={state} setState={setState} />
+          {!hideFinance && <DashboardWalletCard state={state} ownerType="seller" ownerId={seller.id} title="Wallet del vendedor" />}
+          {!hideFinance && <WalletPanel state={state} setState={setState} />}
           <InventoryPanel state={state} seller={seller} />
         </aside>
       </div>
@@ -7025,9 +7087,34 @@ function FleetMessengerPanel({ state, setState, driver }: { state: AppState; set
   );
 }
 
+const driverSettlementExportColumns = [
+  "corte", "guia", "shopify", "estado_pedido", "cod_recaudado", "pago_domiciliario", "efectivo_esperado", "estado_corte"
+] as const;
+
+function buildDriverSettlementExportRows(summary: DriverFinancialSummary) {
+  const rows: Record<string, string | number>[] = [];
+  for (const settlement of summary.settlementRows) {
+    for (const order of settlement.orders) {
+      rows.push({
+        corte: settlement.label,
+        guia: order.trackingCode,
+        shopify: order.shopifyOrderId,
+        estado_pedido: order.status ? statusLabel(order.status) : "",
+        cod_recaudado: order.totalCop,
+        pago_domiciliario: order.driverPayCop,
+        efectivo_esperado: order.expectedCashCop,
+        estado_corte: settlementStatusLabel(settlement.status)
+      });
+    }
+  }
+  return rows;
+}
+
 function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSummary }) {
   const [unsettledOpen, setUnsettledOpen] = useState(false);
+  const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null);
   const unsettledPage = usePaginatedItems(summary.unsettledOrders, 8);
+  const settlementExportRows = buildDriverSettlementExportRows(summary);
 
   return (
     <Card className="grid gap-5 p-5">
@@ -7040,9 +7127,20 @@ function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSumm
 
       <div className="grid gap-5 xl:grid-cols-2">
         <div className="overflow-x-auto rounded-md border border-black/10">
-          <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
             <h3 className="text-sm font-bold">Cortes</h3>
-            <span className="text-xs font-semibold text-black/50">{summary.settlementRows.length} corte{summary.settlementRows.length === 1 ? "" : "s"}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-black/50">{summary.settlementRows.length} corte{summary.settlementRows.length === 1 ? "" : "s"}</span>
+              <button
+                className="focus-ring inline-flex min-h-8 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
+                type="button"
+                disabled={settlementExportRows.length === 0}
+                onClick={() => void downloadRowsXlsx("Cortes", driverSettlementExportColumns, settlementExportRows, `cortes-domiciliario-${new Date().toISOString().slice(0, 10)}.xlsx`)}
+              >
+                <FileDown size={14} />
+                Excel
+              </button>
+            </div>
           </div>
           <table className="w-full min-w-[620px] text-left text-sm">
             <thead className="text-xs uppercase text-black/50">
@@ -7056,16 +7154,60 @@ function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSumm
               </tr>
             </thead>
             <tbody>
-              {summary.settlementRows.map((row) => (
-                <tr key={row.settlementId} className="border-t border-black/10">
-                  <td className="py-3 pl-4 pr-3 font-semibold">{row.label}</td>
-                  <td className="py-2 pr-3">{row.orderCount}</td>
-                  <td className="py-2 pr-3">{formatCop(row.expectedCashCop)}</td>
-                  <td className="py-2 pr-3">{formatCop(row.receivedCop)}</td>
-                  <td className={`py-2 pr-3 font-semibold ${row.pendingCop > 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.pendingCop)}</td>
-                  <td className="py-2 pr-3">{settlementStatusLabel(row.status)}</td>
-                </tr>
-              ))}
+              {summary.settlementRows.map((row) => {
+                const isOpen = expandedSettlement === row.settlementId;
+                return (
+                  <Fragment key={row.settlementId}>
+                    <tr
+                      className="cursor-pointer border-t border-black/10 hover:bg-field"
+                      onClick={() => setExpandedSettlement((current) => (current === row.settlementId ? null : row.settlementId))}
+                    >
+                      <td className="py-3 pl-4 pr-3 font-semibold">
+                        <span className="mr-1 text-black/40">{isOpen ? "▾" : "▸"}</span>{row.label}
+                      </td>
+                      <td className="py-2 pr-3">{row.orderCount}</td>
+                      <td className="py-2 pr-3">{formatCop(row.expectedCashCop)}</td>
+                      <td className="py-2 pr-3">{formatCop(row.receivedCop)}</td>
+                      <td className={`py-2 pr-3 font-semibold ${row.pendingCop > 0 ? "text-rust" : "text-mint"}`}>{formatCop(row.pendingCop)}</td>
+                      <td className="py-2 pr-3">{settlementStatusLabel(row.status)}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="border-t border-black/5 bg-field/40">
+                        <td colSpan={6} className="px-4 py-3">
+                          {row.orders.length === 0 ? (
+                            <p className="text-sm text-black/60">Sin pedidos asociados a este corte.</p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full min-w-[520px] text-left text-xs">
+                                <thead className="uppercase text-black/50">
+                                  <tr>
+                                    <th className="py-1 pr-3">Guia</th>
+                                    <th className="py-1 pr-3">Estado</th>
+                                    <th className="py-1 pr-3">COD</th>
+                                    <th className="py-1 pr-3">Pago</th>
+                                    <th className="py-1 pr-3">Efectivo esperado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {row.orders.map((order) => (
+                                    <tr key={order.orderId} className="border-t border-black/10">
+                                      <td className="py-1 pr-3 font-semibold">{order.trackingCode}</td>
+                                      <td className="py-1 pr-3">{order.status ? statusLabel(order.status) : "-"}</td>
+                                      <td className="py-1 pr-3">{formatCop(order.totalCop)}</td>
+                                      <td className="py-1 pr-3">{formatCop(order.driverPayCop)}</td>
+                                      <td className="py-1 pr-3">{formatCop(order.expectedCashCop)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
           {summary.settlementRows.length === 0 && <p className="px-3 pb-3 text-sm text-black/60">Todavia no hay cortes para este domiciliario.</p>}
@@ -7529,7 +7671,7 @@ export function OperationsApp() {
         const accounts = readAccounts();
         const account = accounts.find((item) => item.id === user.uid || item.email === user.email);
         const profileId =
-          claims.role === "seller"
+          claims.role === "seller" || claims.role === "seller_logistics"
             ? claims.sellerId ?? account?.profileId ?? `seller-${user.uid}`
             : claims.role === "driver"
               ? claims.driverId ?? account?.profileId ?? `driver-${user.uid}`
@@ -7617,10 +7759,10 @@ export function OperationsApp() {
 
   const view = useMemo(() => {
     if (!session) return null;
-    if (activeView === "wallet" && session.role !== "messenger") return <WalletPage state={state} session={session} />;
+    if (activeView === "wallet" && session.role !== "messenger" && session.role !== "seller_logistics") return <WalletPage state={state} session={session} />;
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={state} setState={setState} />;
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={state} setState={setState} />;
-    if (session.role === "seller") return <SellerView state={state} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} onStartDate={setOrderStartDate} onEndDate={setOrderEndDate} onStatusFilter={setOrderStatusFilter} />;
+    if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={state} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} onStartDate={setOrderStartDate} onEndDate={setOrderEndDate} onStatusFilter={setOrderStatusFilter} hideFinance={session.role === "seller_logistics"} />;
     if (session.role === "driver") return <DriverView state={state} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} />;
     if (session.role === "messenger") return <MessengerView state={state} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} />;
     return <AdminView state={state} setState={setState} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} onStartDate={setOrderStartDate} onEndDate={setOrderEndDate} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} />;

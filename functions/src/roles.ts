@@ -2,7 +2,9 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-type Role = "admin" | "seller" | "driver" | "messenger";
+type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger";
+
+const VALID_ROLES: Role[] = ["admin", "seller", "seller_logistics", "driver", "messenger"];
 
 export const setUserRole = onCall(async (request) => {
   const uid = String(request.data?.uid ?? "");
@@ -11,7 +13,7 @@ export const setUserRole = onCall(async (request) => {
   const driverId = request.data?.driverId ? String(request.data.driverId) : undefined;
   const messengerId = request.data?.messengerId ? String(request.data.messengerId) : undefined;
 
-  if (!uid || !["admin", "seller", "driver", "messenger"].includes(role)) {
+  if (!uid || !VALID_ROLES.includes(role)) {
     throw new HttpsError("invalid-argument", "uid and a valid role are required.");
   }
 
@@ -23,7 +25,7 @@ export const setUserRole = onCall(async (request) => {
 
   await getAuth().setCustomUserClaims(uid, {
     role,
-    sellerId: role === "seller" ? sellerId : undefined,
+    sellerId: role === "seller" || role === "seller_logistics" ? sellerId : undefined,
     driverId: role === "driver" ? driverId : undefined,
     messengerId: role === "messenger" ? messengerId : undefined
   });
@@ -45,8 +47,11 @@ export const createManagedUser = onCall(async (request) => {
   const role = String(request.data?.role ?? "") as Role;
   const profileId = request.data?.profileId ? String(request.data.profileId) : undefined;
 
-  if (!email || password.length < 6 || !displayName || !["admin", "seller", "driver", "messenger"].includes(role)) {
+  if (!email || password.length < 6 || !displayName || !VALID_ROLES.includes(role)) {
     throw new HttpsError("invalid-argument", "email, password, name and a valid role are required.");
+  }
+  if (role === "seller_logistics" && !profileId) {
+    throw new HttpsError("invalid-argument", "seller_logistics users must be linked to an existing sellerId via profileId.");
   }
 
   let user;
@@ -64,7 +69,7 @@ export const createManagedUser = onCall(async (request) => {
   }
   await getAuth().setCustomUserClaims(user.uid, {
     role,
-    sellerId: role === "seller" ? profileId : undefined,
+    sellerId: role === "seller" || role === "seller_logistics" ? profileId : undefined,
     driverId: role === "driver" ? profileId : undefined,
     messengerId: role === "messenger" ? profileId : undefined
   });

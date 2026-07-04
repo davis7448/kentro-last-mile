@@ -110,6 +110,31 @@ export async function createManualFirebaseOrder(input: {
   return result.data as { order: Order };
 }
 
+export type OrderTransitionPatch = {
+  status?: string;
+  addressRisk?: AddressRisk;
+  driverId?: string | null;
+  geoProvider?: "mapbox" | "google_address_validation";
+  normalizedAddress?: string;
+  callOutcome?: "pending" | "confirmed" | "rescheduled";
+  callNote?: string;
+  scheduledDate?: string;
+  scheduledWindow?: string;
+  rescheduledDate?: string;
+  rescheduledWindow?: string;
+  pickupBatchId?: string;
+  pickedUpAt?: string;
+};
+
+export async function applyFirebaseOrderTransition(input: { orderId: string; expectedStatus: string; patch: OrderTransitionPatch }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "applyOrderTransition");
+  const result = await callable(input);
+  return result.data as { ok: boolean; order: Order };
+}
+
 export async function confirmFirebaseImportedOrder(orderId: string) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
@@ -234,6 +259,16 @@ export async function createFirebaseStoreWebhookConfig(input: { sellerId: string
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { config: StoreWebhookConfig; webhookUrl: string };
+}
+
+export async function setFirebaseStoreUchatConfig(input: { sellerId: string; apiToken?: string; baseUrl?: string; platform?: "chatby" | "chateapro" | "lucidbot"; dropiApiToken?: string; enabled?: boolean }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "setStoreUchatConfig");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { ok: boolean; configured: boolean; enabled: boolean; platform: "chatby" | "chateapro" | "lucidbot"; dropiConfigured: boolean };
 }
 
 export async function createFirebaseSettlement(input: {

@@ -53,7 +53,6 @@ const syncShopifyHistoricalOrdersSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 });
-const dandaSellerId = "seller-1779315416119";
 
 type ShopifyAppKind = "public" | "pilot" | "u0jxrm" | "n1v0sw";
 
@@ -702,12 +701,13 @@ async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sel
       productName: items.productName,
       sku: items.sku,
       quantity: items.quantity,
+      lineItems: items.lineItems,
       pickupPointName: typeof seller.pickupPointName === "string" && seller.pickupPointName.trim() ? seller.pickupPointName.trim() : String(seller.name ?? "Punto de recogida"),
       pickupAddress: typeof seller.pickupAddress === "string" ? seller.pickupAddress.trim() : "",
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
       fulfillmentMode: "seller_pickup",
-      addressRisk: sellerId === dandaSellerId ? "accepted" : "review",
-      status: existing.exists ? existing.data()?.status : sellerId === dandaSellerId ? "ready_to_assign" : "imported",
+      addressRisk: "review",
+      status: existing.exists ? existing.data()?.status : "imported",
       evidence: existing.data()?.evidence ?? [],
       source,
       createdAt: existing.data()?.createdAt ?? order.created_at ?? now,
@@ -732,17 +732,26 @@ function summarizeShopifyLineItems(items: Array<{ name?: string | null; title?: 
     if (properties) nameParts.push(properties);
     const name = nameParts.join(" · ");
     const sku = item.sku?.trim();
-    const shopifyQuantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
-    const quantity = shopifyQuantity * (offer?.unitsPerSoldUnit ?? 1);
+    // Usamos la cantidad real de Shopify. El costo de la oferta 2x1 se modela como costo del
+    // item por unidad-Shopify en el catalogo (no se expande la cantidad en la plataforma).
+    // La etiqueta de la oferta se conserva en el nombre para que el operador sepa que entrega 2.
+    const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
     return { name, sku, quantity };
   });
   if (normalized.length === 0) {
-    return { productName: "Producto Shopify", sku: undefined, quantity: undefined };
+    return { productName: "Producto Shopify", sku: undefined, quantity: undefined, lineItems: [] as Array<{ sku?: string; productName?: string; quantity: number }> };
   }
+  // lineItems con cantidad ya expandida por la oferta (unitsPerSoldUnit), para cobrar costo por SKU.
+  const lineItems = normalized.map((item) => stripUndefined({
+    sku: item.sku || undefined,
+    productName: item.name,
+    quantity: item.quantity
+  })) as Array<{ sku?: string; productName?: string; quantity: number }>;
   return {
     productName: normalized.map((item) => `${item.name} x${item.quantity}`).join(" + "),
     sku: normalized.map((item) => item.sku).filter(Boolean).join(" + ") || undefined,
-    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0)
+    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0),
+    lineItems
   };
 }
 

@@ -74,8 +74,21 @@ function hasRequiredSkuOrTag(order: z.infer<typeof orderSchema>) {
   return skuMatch || tagMatch;
 }
 
+function isShippingLineItem(item: z.infer<typeof lineItemSchema>) {
+  const text = [item.name, item.title, item.sku]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  return /\benvio\b/.test(text) && /\bprioritario\b/.test(text);
+}
+
 function summarizeItems(items: z.infer<typeof lineItemSchema>[]) {
-  const normalized = items.map((item) => {
+  // Excluimos lineas de "envio prioritario": no son producto y inflaban la cantidad/costo.
+  const productItems = items.filter((item) => !isShippingLineItem(item));
+  const source = productItems.length > 0 ? productItems : items;
+  const normalized = source.map((item) => {
     const baseName = item.name?.trim() || item.title?.trim() || "Producto Shopify";
     const variant = item.variant_title?.trim();
     const properties = (item.properties ?? [])
@@ -86,14 +99,22 @@ function summarizeItems(items: z.infer<typeof lineItemSchema>[]) {
     nameParts.push(...properties);
     return {
       name: nameParts.join(" | "),
+      baseName,
       sku: item.sku?.trim(),
       quantity: item.quantity ?? 1
     };
   });
+  // lineItems: una entrada por linea de producto, para cobrar costo por SKU.
+  const lineItems = normalized.map((item) => stripUndefined({
+    sku: item.sku || undefined,
+    productName: item.name,
+    quantity: item.quantity
+  }));
   return {
     productName: normalized.map((item) => `${item.name} x${item.quantity}`).join(" + "),
     sku: normalized.map((item) => item.sku).filter(Boolean).join(" + ") || undefined,
-    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0)
+    quantity: normalized.reduce((sum, item) => sum + item.quantity, 0),
+    lineItems
   };
 }
 
@@ -261,6 +282,7 @@ export const onstockOrderWebhook = onRequest(
         productName: items.productName,
         sku: items.sku,
         quantity: items.quantity,
+        lineItems: items.lineItems,
         pickupPointName: typeof seller.pickupPointName === "string" && seller.pickupPointName.trim()
           ? seller.pickupPointName.trim()
           : String(seller.name ?? "OnStock"),

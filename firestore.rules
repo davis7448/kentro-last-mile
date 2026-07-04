@@ -17,6 +17,15 @@ service cloud.firestore {
       return role() == "seller" && request.auth.token.sellerId == sellerId;
     }
 
+    function isSellerLogistics(sellerId) {
+      return role() == "seller_logistics" && request.auth.token.sellerId == sellerId;
+    }
+
+    // Lectura operativa de la tienda: vendedor o logistico de la misma tienda.
+    function isStoreMember(sellerId) {
+      return isSeller(sellerId) || isSellerLogistics(sellerId);
+    }
+
     function isDriver(driverId) {
       return role() == "driver" && request.auth.token.driverId == driverId;
     }
@@ -32,6 +41,16 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/messengers/$(messengerId)).data.leaderDriverId == request.auth.token.driverId;
     }
 
+    // Solo cambia campos de impresion de rotulo (inofensivo para el ciclo de vida del pedido).
+    function labelOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "labelPrintedAt",
+        "labelPrintedBy",
+        "labelPrintCount",
+        "updatedAt"
+      ]);
+    }
+
     function sellerOrderCreate() {
       return isSeller(request.resource.data.sellerId)
         && request.resource.data.driverId == null
@@ -43,17 +62,6 @@ service cloud.firestore {
       return isSeller(resource.data.sellerId)
         && request.resource.data.sellerId == resource.data.sellerId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([]);
-    }
-
-    function sellerOrderLabelUpdate() {
-      return isSeller(resource.data.sellerId)
-        && request.resource.data.sellerId == resource.data.sellerId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "labelPrintedAt",
-          "labelPrintedBy",
-          "labelPrintCount",
-          "updatedAt"
-        ]);
     }
 
     function operationalOrderUpdateByAssignee() {
@@ -95,7 +103,7 @@ service cloud.firestore {
     }
 
     match /sellers/{sellerId} {
-      allow read: if isAdmin() || isSeller(sellerId);
+      allow read: if isAdmin() || isStoreMember(sellerId);
       allow write: if isAdmin();
     }
 
@@ -128,21 +136,25 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if isAdmin()
-        || isSeller(resource.data.sellerId)
+        || isStoreMember(resource.data.sellerId)
         || isDriver(resource.data.driverId)
         || isMessenger(resource.data.messengerId)
         || messengerBelongsToDriver(resource.data.messengerId)
         || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
       allow create: if isAdmin() || sellerOrderCreate();
-      allow update: if isAdmin()
+      // El ciclo de vida de los pedidos (status/driverId/evidence/etc.) se modifica SOLO por el
+      // servidor via callables (admin SDK, que ignoran estas reglas, auditan y validan la
+      // transicion). Desde el cliente solo se permite: imprimir rotulos (admin o miembro de la
+      // tienda) y no-ops. Asi ningun navegador con estado viejo en cache puede "pisar" un pedido.
+      allow update: if
+        ((isAdmin() || isStoreMember(resource.data.sellerId)) && labelOnlyUpdate())
         || operationalOrderUpdateByAssignee()
-        || sellerOrderLabelUpdate()
         || sellerOrderNoopUpdate();
       allow delete: if isAdmin();
     }
 
     match /inventory/{itemId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if isAdmin();
     }
 
@@ -151,7 +163,7 @@ service cloud.firestore {
     }
 
     match /productCatalog/{productId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if isAdmin();
     }
 
@@ -183,22 +195,28 @@ service cloud.firestore {
     }
 
     match /shopifyStores/{storeId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if isAdmin();
     }
 
     match /storeWebhookConfigs/{configId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if isAdmin();
     }
 
+    // Tokens de API de ChatBy/UChat: nunca legibles/escribibles por cliente.
+    // Solo las Cloud Functions (admin SDK) los usan.
+    match /storeUchatSecrets/{sellerId} {
+      allow read, write: if false;
+    }
+
     match /storeWebhookSamples/{sampleId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if false;
     }
 
     match /shopifyInstallRequests/{requestId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow create: if isSeller(request.resource.data.sellerId)
         && request.resource.data.status == "requested"
         && !("installLink" in request.resource.data);
@@ -214,7 +232,7 @@ service cloud.firestore {
     }
 
     match /shopifySyncIssues/{issueId} {
-      allow read: if isAdmin() || isSeller(resource.data.sellerId);
+      allow read: if isAdmin() || isStoreMember(resource.data.sellerId);
       allow write: if false;
     }
 
