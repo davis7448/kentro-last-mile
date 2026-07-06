@@ -76,6 +76,7 @@ import type { DriverFinancialSummary } from "@/lib/finance";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
 import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
+import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
 import type { AppState, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, PaymentMethod, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
@@ -3477,97 +3478,6 @@ function reconcileInventoryReservationsLocal(state: AppState): AppState {
   };
 }
 
-type UnassociatedProductRow = {
-  key: string;
-  sellerId: string;
-  sellerName: string;
-  productName: string;
-  normalizedProductName: string;
-  sku?: string;
-  orderCount: number;
-  quantity: number;
-  lastOrderAt: string;
-};
-
-function buildUnassociatedProductRows(state: AppState): UnassociatedProductRow[] {
-  const catalog = state.productCatalog ?? [];
-  const hasCatalogMatch = (sellerId: string, sku: string | undefined, normalizedName: string) =>
-    catalog.some((product) => {
-      if (product.sellerId !== sellerId || product.active === false) return false;
-      if (sku && product.sku?.trim().toUpperCase() === sku) return true;
-      return !sku && product.normalizedProductName === normalizedName;
-    });
-  const rows = new Map<string, UnassociatedProductRow>();
-  state.orders.forEach((order) => {
-    const productName = order.productName?.trim();
-    const sku = order.sku?.trim().toUpperCase();
-    const normalizedName = normalizeProductName(productName);
-    if (!productName && !sku) return;
-    if (hasCatalogMatch(order.sellerId, sku, normalizedName)) return;
-    const key = `${order.sellerId}::${sku ? `sku:${sku}` : `name:${normalizedName}`}`;
-    const seller = state.sellers.find((item) => item.id === order.sellerId);
-    const existing = rows.get(key);
-    if (existing) {
-      existing.orderCount += 1;
-      existing.quantity += Math.max(1, Number(order.quantity) || 1);
-      if (order.createdAt > existing.lastOrderAt) {
-        existing.lastOrderAt = order.createdAt;
-        existing.productName = productName || existing.productName;
-      }
-      return;
-    }
-    rows.set(key, {
-      key,
-      sellerId: order.sellerId,
-      sellerName: seller?.name ?? order.sellerId,
-      productName: productName || sku || "Producto sin nombre",
-      normalizedProductName: normalizedName,
-      sku,
-      orderCount: 1,
-      quantity: Math.max(1, Number(order.quantity) || 1),
-      lastOrderAt: order.createdAt
-    });
-  });
-  return Array.from(rows.values()).sort((left, right) => right.orderCount - left.orderCount || left.sellerName.localeCompare(right.sellerName) || left.productName.localeCompare(right.productName));
-}
-
-function orderMatchesProductCatalog(order: Order, product: ProductCatalogItem) {
-  if (order.sellerId !== product.sellerId) return false;
-  const orderSku = order.sku?.trim().toUpperCase();
-  if (product.sku && orderSku === product.sku) return true;
-  return !product.sku && normalizeProductName(order.productName) === product.normalizedProductName;
-}
-
-function buildMissingProductCostEntries(state: AppState, product: ProductCatalogItem): WalletEntry[] {
-  if (!product.productCostConfigured) return [];
-  const supplier = state.suppliers.find((item) => item.id === product.supplierId);
-  const now = new Date().toISOString();
-  return state.orders
-    .filter((order) => order.status === "delivered" && orderMatchesProductCatalog(order, product))
-    .filter((order) => !state.wallet.some((entry) => entry.orderId === order.id && entry.type === "product_cost"))
-    .filter((order) => {
-      const orderEntryIds = new Set(state.wallet.filter((entry) => entry.orderId === order.id).map((entry) => entry.id));
-      return !state.settlements.some((settlement) => settlement.kind === "seller" && settlement.walletEntryIds.some((entryId) => orderEntryIds.has(entryId)));
-    })
-    .map((order) => {
-      const quantity = Math.max(1, Number(order.quantity) || 1);
-      return {
-        id: `we-${order.id}-product-cost`,
-        ownerType: "seller" as const,
-        ownerId: order.sellerId,
-        orderId: order.id,
-        type: "product_cost" as const,
-        amountCop: -Math.max(0, Number(product.productCostCop) || 0) * quantity,
-        description: `Costo producto ${order.shopifyOrderId}`,
-        supplierId: product.supplierId,
-        supplierName: supplier?.name,
-        productId: product.id,
-        productName: product.name,
-        createdAt: now
-      };
-    });
-}
-
 function SupplierProductAdminPanel({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
@@ -3580,7 +3490,7 @@ function SupplierProductAdminPanel({ state, setState }: { state: AppState; setSt
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const detectedProducts = buildUnassociatedProductRows(state);
+  const detectedProducts = useMemo(() => buildUnassociatedProductRows(state), [state]);
 
   useEffect(() => {
     if (!sellerId && state.sellers[0]) setSellerId(state.sellers[0].id);
@@ -3672,9 +3582,10 @@ function SupplierProductAdminPanel({ state, setState }: { state: AppState; setSt
       wallet: [...productCostEntries, ...state.wallet]
     };
     setSaving(true);
+    const combinedSkuWarning = item.sku?.includes(" + ") ? " Ojo: ese parece un SKU combinado; el costo se cobra por SKU individual — asocia cada SKU por separado." : "";
     const commit = () => {
       setState(nextState);
-      setMessage(`${item.name} guardado.${productCostEntries.length > 0 ? ` Se agrego costo producto a ${productCostEntries.length} pedido(s) sin liquidar.` : ""}`);
+      setMessage(`${item.name} guardado.${productCostEntries.length > 0 ? ` Se agrego costo producto a ${productCostEntries.length} pedido(s) sin liquidar.` : ""}${combinedSkuWarning}`);
       resetProduct();
     };
     if (firebaseEnabled()) {
@@ -3707,6 +3618,7 @@ function SupplierProductAdminPanel({ state, setState }: { state: AppState; setSt
                 <p className="font-semibold">{row.productName}</p>
                 <p className="text-black/60">{row.sellerName} · {row.sku || "Sin SKU"} · {row.orderCount} pedidos · {row.quantity} unidades</p>
                 <p className="text-xs text-black/50">Ultimo pedido: {new Date(row.lastOrderAt).toLocaleDateString("es-CO")}</p>
+                {row.sources.length > 0 && <p className="text-xs text-black/50">Aparece en: {row.sources.join(" · ")}</p>}
               </div>
               <button className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white" type="button" onClick={() => {
                 setEditingProductId(null);

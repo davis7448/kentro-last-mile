@@ -65,7 +65,7 @@ export type ProductCostLine = {
   totalCostCop: number;
 };
 
-function findCatalogMatch(
+export function findCatalogMatch(
   state: AppState,
   sellerId: string,
   options: { sku?: string; productName?: string; productId?: string }
