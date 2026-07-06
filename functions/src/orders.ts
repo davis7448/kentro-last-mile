@@ -1486,7 +1486,8 @@ function buildSettlement(
 }
 
 function isLiquidationWalletType(type: string) {
-  return ["cod_revenue", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning"].includes(type);
+  // cod_remittance: reversas de COD por correcciones; sin el, esos asientos quedan huerfanos como saldo pendiente eterno
+  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning"].includes(type);
 }
 
 function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {
