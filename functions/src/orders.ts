@@ -1307,7 +1307,8 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       ...settlement,
       status: pendingCop === 0 ? "paid" : "pending",
       paidAt: pendingCop === 0 ? now : FieldValue.delete(),
-      reconciledAt: pendingCop === 0 ? settlement.reconciledAt : FieldValue.delete(),
+      // reconciledAt puede no existir aun; undefined no es valido para Firestore
+      reconciledAt: pendingCop === 0 ? settlement.reconciledAt ?? FieldValue.delete() : FieldValue.delete(),
       codCop: cashSummary.codCop,
       feesCop: cashSummary.feesCop,
       driverPayCop: cashSummary.driverPayCop,
@@ -1319,7 +1320,7 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
       cashReceipts: receipts,
       cashAllocations: cashSummary.allocations,
-      note: input.note?.trim() || settlement.note
+      note: input.note?.trim() || settlement.note || FieldValue.delete()
     };
     const responseSettlement = stripUndefined({
       ...settlement,
