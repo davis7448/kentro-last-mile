@@ -65,6 +65,12 @@ const driverCashReceiptSchema = z.object({
   note: optionalString
 });
 
+const sellerAbonoSchema = z.object({
+  sellerId: z.string().min(1),
+  amountCop: z.number().positive(),
+  note: optionalString
+});
+
 const confirmImportedOrderSchema = z.object({
   orderId: z.string().min(1)
 });
@@ -151,7 +157,7 @@ type WalletEntryDoc = {
   ownerType: "seller" | "driver" | "admin";
   ownerId: string;
   orderId: string;
-  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage";
+  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage" | "seller_abono";
   amountCop: number;
   description: string;
   createdAt: string;
@@ -225,7 +231,7 @@ function zodFieldMessage(error: z.ZodError) {
 export const createManualOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
-  if (!request.auth || (role !== "admin" && role !== "seller")) {
+  if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
     throw new HttpsError("permission-denied", "Tu usuario no tiene permiso para crear pedidos.");
   }
 
@@ -235,7 +241,10 @@ export const createManualOrder = onCall(async (request) => {
   }
 
   const input = parsed.data;
-  if (role === "seller" && input.sellerId !== sellerClaim) {
+  if ((role === "seller" || role === "seller_logistics") && !sellerClaim) {
+    throw new HttpsError("permission-denied", "Tu usuario no tiene una tienda asociada.");
+  }
+  if ((role === "seller" || role === "seller_logistics") && input.sellerId !== sellerClaim) {
     throw new HttpsError("permission-denied", "Solo puedes crear pedidos de tu propia tienda.");
   }
 
@@ -1074,7 +1083,10 @@ export const createSettlement = onCall(async (request) => {
     const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
     const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
     candidateDocs = unsettledEntryDocs.filter((entry) => {
-      const orderId = String((entry.data() ?? {}).orderId ?? "");
+      const data = entry.data() ?? {};
+      // Los abonos a tienda no dependen de un pedido; siempre se liquidan.
+      if (String(data.type ?? "") === "seller_abono") return true;
+      const orderId = String(data.orderId ?? "");
       const order = ordersById.get(orderId);
       if (!order) return false;
       if (order.paymentMethod === "prepaid") return true;
@@ -1367,6 +1379,73 @@ export const recordDriverCashReceipt = onCall(async (request) => {
   });
 });
 
+export const recordSellerAbono = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can record seller abonos.");
+  }
+
+  const parsed = sellerAbonoSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Invalid seller abono data.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  const db = getFirestore();
+  const sellerRef = db.collection("sellers").doc(input.sellerId);
+  const sellerSnap = await sellerRef.get();
+  if (!sellerSnap.exists) {
+    throw new HttpsError("not-found", "Seller not found.");
+  }
+  const sellerName = String(sellerSnap.data()?.name ?? input.sellerId);
+
+  // Saldo pendiente = suma de asientos liquidables sin liquidar de la tienda (incluye abonos previos, que son negativos).
+  const entriesSnap = await db
+    .collection("walletEntries")
+    .where("ownerType", "==", "seller")
+    .where("ownerId", "==", input.sellerId)
+    .get();
+  const netOwedCop = entriesSnap.docs
+    .map((doc) => doc.data() as WalletEntryDoc)
+    .filter((entry) => !entry.settlementId && isLiquidationWalletType(String(entry.type ?? "")))
+    .reduce((sum, entry) => sum + Number(entry.amountCop || 0), 0);
+
+  const amountCop = Math.min(Math.round(Number(input.amountCop)), Math.max(0, Math.round(netOwedCop)));
+  if (amountCop <= 0) {
+    throw new HttpsError("failed-precondition", "La tienda no tiene saldo pendiente para abonar.");
+  }
+
+  const now = new Date().toISOString();
+  const entryId = `we-abono-${input.sellerId}-${Date.now()}`;
+  const abonoEntry: WalletEntryDoc = stripUndefined({
+    id: entryId,
+    ownerType: "seller",
+    ownerId: input.sellerId,
+    orderId: "",
+    type: "seller_abono",
+    amountCop: -amountCop,
+    description: input.note?.trim() ? `Abono a tienda ${sellerName}: ${input.note.trim()}` : `Abono a tienda ${sellerName}`,
+    createdAt: now
+  }) as WalletEntryDoc;
+  const auditId = `audit-abono-${Date.now()}`;
+
+  const batch = db.batch();
+  batch.set(db.collection("walletEntries").doc(entryId), abonoEntry);
+  batch.set(db.collection("auditEvents").doc(auditId), {
+    id: auditId,
+    actorId: request.auth?.uid,
+    actorRole: role,
+    action: "seller.abono",
+    entity: "seller",
+    entityId: input.sellerId,
+    summary: `Abono de ${amountCop} COP a ${sellerName}`,
+    createdAt: now
+  });
+  await batch.commit();
+
+  return { walletEntry: abonoEntry, netOwedBeforeCop: Math.round(netOwedCop), amountCop };
+});
+
 function settlementCashReceivedCop(settlement: SettlementDoc) {
   if (typeof settlement.cashReceivedCop === "number") {
     return Math.max(0, Number(settlement.cashReceivedCop) || 0);
@@ -1487,7 +1566,8 @@ function buildSettlement(
 
 function isLiquidationWalletType(type: string) {
   // cod_remittance: reversas de COD por correcciones; sin el, esos asientos quedan huerfanos como saldo pendiente eterno
-  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning"].includes(type);
+  // seller_abono: pagos parciales adelantados a la tienda; deben barrerse a la liquidacion final para no quedar como saldo eterno
+  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning", "seller_abono"].includes(type);
 }
 
 function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {

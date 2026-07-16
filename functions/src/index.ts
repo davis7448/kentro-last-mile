@@ -5,11 +5,12 @@ import { defineSecret } from "firebase-functions/params";
 import crypto from "crypto";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
-export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, recordDriverCashReceipt, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
+export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, recordDriverCashReceipt, recordSellerAbono, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
 export { importShopifyOrder, shopifyComplianceWebhook, shopifyCustomersDataRequest, shopifyCustomersRedact, shopifyOAuthCallback, shopifyOAuthStart, shopifyPilotOAuthStart, shopifyShopRedact, shopifyTenantOAuthStart, syncShopifyHistoricalOrders } from "./shopify";
 export { mercadotiendaContactFormWebhook } from "./contact-form";
 export { onstockOrderWebhook } from "./onstock-webhook";
 export { createStoreWebhookConfig, storeOrderWebhook } from "./store-webhook";
+export { createStoreApiKey, storeApi } from "./store-api";
 export { uchatConfirmWebhook } from "./uchat-webhook";
 export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
 

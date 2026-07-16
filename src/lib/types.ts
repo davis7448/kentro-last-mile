@@ -252,6 +252,7 @@ export type WalletEntry = {
     | "platform_margin"
     | "cod_remittance"
     | "payout"
+    | "seller_abono"
     | "cash_shortage";
   amountCop: number;
   description: string;
@@ -298,7 +299,10 @@ export type Settlement = {
   cashReceipts?: CashReceipt[];
   cashAllocations?: Array<{
     orderId?: string;
-    amountCop: number;
+    expectedCop?: number;
+    receivedCop?: number;
+    covered?: boolean;
+    amountCop?: number;
   }>;
 };
 

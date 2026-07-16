@@ -31,6 +31,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelFirebaseOrder,
   assignFirebaseMessengerToOrders,
+  createFirebaseStoreApiKey,
   createFirebaseStoreWebhookConfig,
   setFirebaseStoreUchatConfig,
   createManualFirebaseOrder,
@@ -47,6 +48,7 @@ import {
   importFirebaseShopifyOrder,
   reconcileFirebaseInventoryReservations,
   recordFirebaseDriverCashReceipt,
+  recordFirebaseSellerAbono,
   repairFirebaseOwnDriverProfile,
   signInWithFirebaseEmail,
   signOutFirebase,
@@ -3999,6 +4001,7 @@ type LiquidationRow = {
   failedPayCop: number;
   platformMarginCop: number;
   cashToReturnCop: number;
+  abonoCop: number;
   receivableCop: number;
   netCop: number;
   status: "pendiente" | "conciliada";
@@ -4091,11 +4094,24 @@ function receivedDriverOrderIds(state: AppState) {
   const orderIds = new Set<string>();
   for (const settlement of state.settlements) {
     if (settlement.kind !== "driver") continue;
+
+    // Fuente autoritativa: cashAllocations, igual que createSettlement en el backend.
+    // Sin esto, la pantalla marcaba como elegibles pedidos (p.ej. fallidos) que el backend
+    // no liquida, mostrando un saldo por pagar menor al que realmente se cerraba y dejando
+    // residuales negativos atascados.
+    if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
+      for (const allocation of settlement.cashAllocations) {
+        if (allocation.covered && allocation.orderId) orderIds.add(allocation.orderId);
+      }
+      continue;
+    }
+
     if (settlement.status === "paid" || settlement.status === "reconciled" || settlement.cashPendingCop === 0) {
       for (const orderId of settlement.orderIds) orderIds.add(orderId);
       continue;
     }
 
+    // Fallback legacy: settlements sin cashAllocations (datos viejos); reparto por efectivo recibido.
     const receivedCop = (settlement.cashReceipts ?? []).reduce((sum, receipt) => sum + receipt.amountCop, 0);
     if (receivedCop <= 0) continue;
 
@@ -4193,6 +4209,8 @@ function auditsForOrderIds(audits: LiquidationOrderAudit[], orderIds: string[]) 
 
 function isSellerEntryEligible(entry: WalletEntry, auditByOrderId: Map<string, LiquidationOrderAudit>) {
   if (entry.ownerType !== "seller") return true;
+  // Los abonos a tienda no dependen de un pedido: siempre reducen el saldo por pagar.
+  if (entry.type === "seller_abono") return true;
   if (!entry.orderId) return false;
   return auditByOrderId.get(entry.orderId)?.sellerEligible ?? false;
 }
@@ -4209,6 +4227,7 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
     const fulfillmentCop = netChargeCop(ownEntries, ["fulfillment_fee"]);
     const productCostCop = netChargeCop(ownEntries, ["product_cost"]);
     const feesCop = deliveryFeeCop + failedFeeCop + fulfillmentCop;
+    const abonoCop = -ownEntries.filter((entry) => entry.type === "seller_abono").reduce((sum, entry) => sum + entry.amountCop, 0);
     const netCop = ownEntries.reduce((sum, entry) => sum + entry.amountCop, 0);
     return {
       id: seller.id,
@@ -4233,6 +4252,7 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       failedPayCop: 0,
       platformMarginCop: feesCop,
       cashToReturnCop: 0,
+      abonoCop,
       receivableCop: Math.max(0, netCop),
       netCop,
       status: netCop === 0 ? "conciliada" as const : "pendiente" as const
@@ -4278,6 +4298,7 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       failedPayCop,
       platformMarginCop: feesCop - earningsCop,
       cashToReturnCop: Math.max(0, codCop - earningsCop),
+      abonoCop: 0,
       receivableCop: Math.max(0, earningsCop - codCop),
       netCop,
       status: netCop === 0 ? "conciliada" as const : "pendiente" as const
@@ -4574,6 +4595,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cashReceiptTarget, setCashReceiptTarget] = useState<{ settlement: Settlement; pendingCop: number } | null>(null);
+  const [abonoTarget, setAbonoTarget] = useState<{ sellerId: string; sellerName: string; receivableCop: number } | null>(null);
   const rangeEntries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
   const entries = rangeEntries.filter((entry) => !entry.settlementId);
   const rangeAudits = buildLiquidationOrderAudits(state, rangeEntries);
@@ -4632,6 +4654,21 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
       note: note?.trim() || undefined
     });
     mergeSettlement(updatedSettlement, walletEntries);
+  };
+
+  const registerSellerAbono = async (sellerId: string, amountCop: number, note?: string) => {
+    const { walletEntry } = await recordFirebaseSellerAbono({
+      sellerId,
+      amountCop,
+      note: note?.trim() || undefined
+    });
+    const knownIds = new Set(state.wallet.map((entry) => entry.id));
+    setState({
+      ...state,
+      wallet: knownIds.has(walletEntry.id)
+        ? state.wallet.map((entry) => (entry.id === walletEntry.id ? walletEntry : entry))
+        : [walletEntry, ...state.wallet]
+    });
   };
 
   const closeRow = (row: LiquidationRow) => {
@@ -4725,6 +4762,24 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
             void registerDriverCashReceipt(target, amountCop, note)
               .then(() => setCashReceiptTarget(null))
               .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo registrar el recaudo."))
+              .finally(() => setBusyId(null));
+          }}
+        />
+      )}
+      {abonoTarget && (
+        <SellerAbonoModal
+          sellerName={abonoTarget.sellerName}
+          receivableCop={abonoTarget.receivableCop}
+          busy={busyId === `abono-${abonoTarget.sellerId}`}
+          error={error}
+          onClose={() => setAbonoTarget(null)}
+          onSave={(amountCop, note) => {
+            const target = abonoTarget;
+            setBusyId(`abono-${target.sellerId}`);
+            setError(null);
+            void registerSellerAbono(target.sellerId, amountCop, note)
+              .then(() => setAbonoTarget(null))
+              .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo registrar el abono."))
               .finally(() => setBusyId(null));
           }}
         />
@@ -4825,7 +4880,14 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
 
       <StoreLiquidationTable rows={storeRows} />
       <SupplierLiquidationTable rows={supplierRows} busyId={busyId} onClose={closeSupplierRow} />
-      <LiquidationTable title="Tiendas disponibles para pagar" rows={sellerRows} emptyMessage="No hay tiendas habilitadas para pagar en este rango. Para COD, primero marca recibido el dinero del domiciliario." busyId={busyId} onClose={closeRow} />
+      <LiquidationTable
+        title="Tiendas disponibles para pagar"
+        rows={sellerRows}
+        emptyMessage="No hay tiendas habilitadas para pagar en este rango. Para COD, primero marca recibido el dinero del domiciliario."
+        busyId={busyId}
+        onClose={closeRow}
+        onAbono={(row) => setAbonoTarget({ sellerId: row.id, sellerName: row.name, receivableCop: row.receivableCop })}
+      />
       <BlockedSellerOrdersTable audits={blockedSellerAudits} />
       <LiquidationTable title="Domiciliarios por cortar" rows={driverRows} emptyMessage="No hay movimientos de domiciliarios sin liquidar en este rango." busyId={busyId} onClose={closeRow} />
       <SettlementsTable
@@ -4845,13 +4907,15 @@ function LiquidationTable({
   rows,
   emptyMessage,
   busyId,
-  onClose
+  onClose,
+  onAbono
 }: {
   title: string;
   rows: LiquidationRow[];
   emptyMessage: string;
   busyId: string | null;
   onClose: (row: LiquidationRow) => void;
+  onAbono?: (row: LiquidationRow) => void;
 }) {
   const { page, setPage, totalPages, visibleItems } = usePaginatedItems(rows, 10);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -4914,6 +4978,16 @@ function LiquidationTable({
                           >
                             {expanded ? "Ocultar" : "Detalle"}
                           </button>
+                          {onAbono && row.role === "seller" && row.receivableCop > 0 && (
+                            <button
+                              className="focus-ring rounded-md border border-ink/30 px-3 py-2 text-xs font-semibold text-ink hover:bg-field disabled:opacity-50"
+                              type="button"
+                              disabled={busyId === `abono-${row.id}`}
+                              onClick={() => onAbono(row)}
+                            >
+                              {busyId === `abono-${row.id}` ? "Guardando..." : "Abonar"}
+                            </button>
+                          )}
                           <button
                             className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                             type="button"
@@ -5016,6 +5090,79 @@ function DriverCashReceiptModal({
   );
 }
 
+function SellerAbonoModal({
+  sellerName,
+  receivableCop,
+  busy,
+  error,
+  onClose,
+  onSave
+}: {
+  sellerName: string;
+  receivableCop: number;
+  busy: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onSave: (amountCop: number, note?: string) => void;
+}) {
+  const [amount, setAmount] = useState(String(Math.max(0, receivableCop)));
+  const [note, setNote] = useState("");
+  const amountCop = Number(amount || 0);
+  const validAmount = Number.isFinite(amountCop) && amountCop > 0 && amountCop <= receivableCop;
+  const remainingCop = validAmount ? receivableCop - amountCop : receivableCop;
+
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 px-4 py-6">
+      <div className="grid w-full max-w-md gap-4 rounded-lg bg-white p-4 shadow-panel">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-bold">Registrar abono a tienda</h2>
+            <p className="text-sm text-black/60">{sellerName}</p>
+          </div>
+          <IconButton title="Cerrar" onClick={onClose}><X size={16} /></IconButton>
+        </div>
+        <div className="rounded-md bg-field p-3">
+          <DetailLine label="Saldo por pagar" value={formatCop(receivableCop)} tone="mint" />
+          <DetailLine label="Quedará pendiente" value={formatCop(Math.max(0, remainingCop))} tone={remainingCop > 0 ? "rust" : "mint"} />
+        </div>
+        <label className="grid gap-1 text-sm font-semibold">
+          Valor a abonar
+          <input
+            className="focus-ring rounded-md border border-black/10 px-3 py-2 font-normal"
+            inputMode="numeric"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value.replace(/[^\d]/g, ""))}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold">
+          Nota
+          <textarea
+            className="focus-ring min-h-20 rounded-md border border-black/10 px-3 py-2 font-normal"
+            placeholder="Opcional"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        {!validAmount && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">Ingresa un valor mayor a cero y menor o igual al saldo por pagar.</p>}
+        {error && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-field" type="button" onClick={onClose}>
+            Cancelar
+          </button>
+          <button
+            className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            type="button"
+            disabled={busy || !validAmount}
+            onClick={() => onSave(amountCop, note)}
+          >
+            {busy ? "Guardando..." : "Registrar abono"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DetailLine({ label, value, tone }: { label: string; value: string | number; tone?: "mint" | "rust" | "ink" }) {
   const toneClass = tone === "mint" ? "text-mint" : tone === "rust" ? "text-rust" : "text-ink";
   return (
@@ -5061,6 +5208,7 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
             <p className="mb-2 text-xs font-bold uppercase text-black/50">Liquidacion tienda</p>
             <DetailLine label="COD a favor de tienda" value={formatCop(row.codCop)} tone="mint" />
             <DetailLine label="Cobros descontados" value={formatCop(row.feesCop + row.productCostCop)} tone="rust" />
+            {row.abonoCop > 0 && <DetailLine label="Abonos ya pagados" value={formatCop(row.abonoCop)} tone="rust" />}
             <DetailLine label="A pagar a tienda" value={formatCop(row.receivableCop)} tone="mint" />
           </div>
         )}
@@ -5620,6 +5768,7 @@ function walletEntryTypeLabel(type: WalletEntry["type"]) {
     platform_margin: "Margen operativo plataforma",
     cod_remittance: "Remesa COD",
     payout: "Pago",
+    seller_abono: "Abono a tienda",
     cash_shortage: "Faltante efectivo"
   };
   return labels[type] ?? type;
@@ -6202,6 +6351,80 @@ function ShopifySyncIssuesPanel({ issues, sellers }: { issues: ShopifySyncIssue[
   );
 }
 
+function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [usage, setUsage] = useState<{ kpis: string; orders: string; settlements: string } | null>(null);
+
+  async function fetchKey(rotate: boolean) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await createFirebaseStoreApiKey({ sellerId, ...(rotate ? { rotate: true } : {}) });
+      setApiKey(result.config.apiKey);
+      setUsage(result.usage);
+      setMessage(rotate ? "API key rotada. La key anterior dejo de funcionar; actualiza tus integraciones." : "");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo obtener la API key.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-bold">API de tienda</h2>
+          <p className="text-xs text-black/60">Consulta por API (solo lectura) tus pedidos, KPIs operativos y liquidaciones. La key solo ve los datos de tu tienda, sin importar como esta conectada (Shopify, webhook o manual).</p>
+        </div>
+        <button
+          className="focus-ring rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          type="button"
+          disabled={busy}
+          onClick={() => void fetchKey(false)}
+        >
+          {busy ? "Consultando..." : apiKey ? "Actualizar" : "Ver mi API key"}
+        </button>
+      </div>
+      {apiKey && (
+        <div className="mt-3 grid gap-2">
+          <input className="rounded-md border border-black/10 bg-field px-3 py-2 text-xs text-ink" readOnly value={apiKey} />
+          <div className="flex flex-wrap gap-2">
+            <button className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold hover:bg-black/10" type="button" onClick={() => void navigator.clipboard?.writeText(apiKey)}>
+              Copiar API key
+            </button>
+            {usage && (
+              <button className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold hover:bg-black/10" type="button" onClick={() => void navigator.clipboard?.writeText(usage.orders)}>
+                Copiar URL de pedidos
+              </button>
+            )}
+            <button
+              className="focus-ring rounded-md bg-field px-3 py-2 text-xs font-semibold text-rust hover:bg-black/10"
+              type="button"
+              disabled={busy}
+              onClick={() => { if (window.confirm("¿Rotar la API key? La key actual dejara de funcionar inmediatamente.")) void fetchKey(true); }}
+            >
+              Rotar key
+            </button>
+          </div>
+          <div className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
+            <p className="font-semibold text-ink">Endpoints</p>
+            <p>GET /storeApi/kpis — KPIs operativos (mismas formulas del dashboard).</p>
+            <p>GET /storeApi/orders — pedidos con clasificacion operativa y estado de pago.</p>
+            <p>GET /storeApi/settlements — liquidaciones: que pedidos ya se pagaron y cuales no.</p>
+            <p className="mt-1">
+              Manual completo: <a className="font-semibold text-ink underline" href="/api-tiendas" target="_blank" rel="noreferrer">kentro-last-mile.web.app/api-tiendas</a>
+            </p>
+          </div>
+        </div>
+      )}
+      {message && <p className="mt-3 rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/70">{message}</p>}
+    </Card>
+  );
+}
+
 function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: { seller: Seller; stores: ShopifyStore[]; requests: ShopifyInstallRequest[]; state: AppState; setState: (state: AppState) => void }) {
   const [shop, setShop] = useState("");
   const [observation, setObservation] = useState("");
@@ -6489,6 +6712,7 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
         <aside className="grid content-start gap-4">
           <ManualOrderPanel state={state} setState={setState} lockedSellerId={seller.id} />
           <ShopifyConnectionPanel seller={seller} stores={shopifyStores} requests={shopifyInstallRequests} state={state} setState={setState} />
+          <StoreApiKeyCard sellerId={seller.id} />
           <ShopifyImportOrderPanel
             stores={shopifyStores}
             sellers={[seller]}

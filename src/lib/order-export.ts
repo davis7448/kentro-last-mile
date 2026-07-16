@@ -326,6 +326,7 @@ const walletTypeLabels: Record<string, string> = {
   platform_margin: "Margen plataforma",
   cod_remittance: "Remesa COD",
   payout: "Pago a tienda",
+  seller_abono: "Abono a tienda",
   cash_shortage: "Faltante de efectivo"
 };
 

@@ -316,6 +316,36 @@ export async function recordFirebaseDriverCashReceipt(input: {
   return result.data as { settlement: Settlement; walletEntries: WalletEntry[] };
 }
 
+export async function createFirebaseStoreApiKey(input: {
+  sellerId: string;
+  rotate?: boolean;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "createStoreApiKey");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as {
+    config: { sellerId: string; sellerName: string; apiKey: string; status: string };
+    usage: { kpis: string; orders: string; settlements: string };
+  };
+}
+
+export async function recordFirebaseSellerAbono(input: {
+  sellerId: string;
+  amountCop: number;
+  note?: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "recordSellerAbono");
+  const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const result = await callable(payload);
+  return result.data as { walletEntry: WalletEntry; netOwedBeforeCop: number; amountCop: number };
+}
+
 export async function reconcileFirebaseInventoryReservations() {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
