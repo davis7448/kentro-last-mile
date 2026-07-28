@@ -1,6 +1,13 @@
 "use client";
 
 import { entriesForClosedOrder, sellerBalance } from "./finance";
+import {
+  applyInventoryMovementsToItems,
+  inventoryMovementsForOrder,
+  normalizeOrderLines,
+  orderOwnsInventoryReservation,
+  summarizeOrderLines
+} from "./inventory-movements";
 import type { AddressRisk, AppState, AuditEvent, FailedCategory, FulfillmentMode, Order, OrderStatus, PaymentMethod, Role } from "./types";
 
 const actorByRole: Record<Role, string> = {
@@ -32,33 +39,19 @@ function nextLocalTrackingCode(state: AppState) {
   return `KNT-${String(next).padStart(6, "0")}`;
 }
 
-function reserveInventoryForOrder(state: AppState, sellerId: string, sku?: string) {
-  if (!sku) return { state, ok: true };
-  const item = state.inventory.find((entry) => entry.sellerId === sellerId && entry.sku === sku);
-  if (!item) return { state, ok: true };
-  if (item.available - item.reserved <= 0) return { state, ok: false };
-  return {
-    ok: true,
-    state: {
-      ...state,
-      inventory: state.inventory.map((entry) => entry.id === item.id ? { ...entry, reserved: entry.reserved + 1 } : entry)
-    }
-  };
-}
-
+// Espejo offline de las rutas de inventario del backend. Nunca bloquea por falta de stock:
+// un SKU sin ficha simplemente no mueve nada.
 function settleInventoryForClosedOrder(state: AppState, order: Order, outcome: "delivered" | "failed", retry: boolean) {
-  if (!order.sku) return state;
-  const item = state.inventory.find((entry) => entry.sellerId === order.sellerId && entry.sku === order.sku);
-  if (!item) return state;
+  if (!orderOwnsInventoryReservation(order)) return state;
+  if (outcome === "failed" && retry) return state;
   return {
     ...state,
-    inventory: state.inventory.map((entry) => {
-      if (entry.id !== item.id) return entry;
-      if (outcome === "delivered") {
-        return { ...entry, available: Math.max(0, entry.available - 1), reserved: Math.max(0, entry.reserved - 1) };
-      }
-      return retry ? entry : { ...entry, reserved: Math.max(0, entry.reserved - 1) };
-    })
+    inventory: applyInventoryMovementsToItems(
+      state.inventory,
+      order.sellerId,
+      inventoryMovementsForOrder(order),
+      outcome === "delivered" ? "consume" : "release"
+    )
   };
 }
 
@@ -151,6 +144,21 @@ export function rescheduleCustomerCall(state: AppState, orderId: string, resched
       updatedAt: new Date().toISOString()
     }),
     note
+  );
+}
+
+export function registerNoAnswerAttempt(state: AppState, orderId: string): AppState {
+  const stamp = new Date().toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const attempt = `No contesta ${stamp}`;
+  return mutateOrder(
+    state,
+    orderId,
+    (order) => ({
+      ...order,
+      callNote: order.callNote ? `${order.callNote} | ${attempt}` : attempt,
+      updatedAt: new Date().toISOString()
+    }),
+    attempt
   );
 }
 
@@ -319,6 +327,8 @@ export function createManualOrder(
     totalCop: number;
     productName?: string;
     sku?: string;
+    quantity?: number;
+    lineItems?: Array<{ productName?: string; sku?: string; quantity: number }>;
     addressRisk: AddressRisk;
   }
 ): AppState {
@@ -328,9 +338,10 @@ export function createManualOrder(
   const orderId = `ord-${Date.now()}`;
   const orderNumber = input.shopifyOrderId?.trim() || `MAN-${String(state.orders.length + 1).padStart(4, "0")}`;
   const addressRisk = input.addressRisk;
-  const selectedSku = input.sku?.trim() || undefined;
-  const reservation = reserveInventoryForOrder(state, seller.id, selectedSku);
-  if (!reservation.ok) return state;
+  const collapsed = summarizeOrderLines(normalizeOrderLines(input));
+  const movements = inventoryMovementsForOrder(collapsed);
+  const reservedSomething = movements.some((movement) =>
+    state.inventory.some((item) => item.sellerId === seller.id && item.sku?.trim().toUpperCase() === movement.skuKey));
   const order: Order = {
     id: orderId,
     trackingCode: nextLocalTrackingCode(state),
@@ -347,8 +358,11 @@ export function createManualOrder(
     paymentMethod: input.paymentMethod,
     fulfillmentMode: input.fulfillmentMode,
     totalCop: input.totalCop,
-    productName: input.productName?.trim() || undefined,
-    sku: selectedSku,
+    productName: collapsed.productName,
+    sku: collapsed.sku,
+    quantity: collapsed.quantity,
+    lineItems: collapsed.lineItems.length > 0 ? collapsed.lineItems : undefined,
+    inventoryReserved: reservedSomething || undefined,
     pickupPointName: seller.pickupPointName || seller.name,
     pickupAddress: seller.pickupAddress || "",
     evidence: [],
@@ -357,7 +371,8 @@ export function createManualOrder(
   };
 
   return {
-    ...reservation.state,
+    ...state,
+    inventory: applyInventoryMovementsToItems(state.inventory, seller.id, movements, "reserve"),
     orders: [order, ...state.orders],
     audit: [audit(state, "order.manual_created", "order", order.id, `Pedido manual ${order.shopifyOrderId} creado`), ...state.audit]
   };

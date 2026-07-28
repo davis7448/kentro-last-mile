@@ -27,10 +27,11 @@ import {
 } from "lucide-react";
 import jsQR from "jsqr";
 import QRCode from "qrcode";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   cancelFirebaseOrder,
   assignFirebaseMessengerToOrders,
+  unassignFirebaseMessengerFromOrders,
   createFirebaseStoreApiKey,
   createFirebaseStoreWebhookConfig,
   setFirebaseStoreUchatConfig,
@@ -69,12 +70,14 @@ import {
   closeFailed,
   confirmDeliveryWindow,
   createManualOrder,
+  registerNoAnswerAttempt,
   requestPayout,
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
 import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, entriesForClosedOrder, formatCop, isChargeableFailedOrder, normalizeProductName, sellerBalance, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
 import type { DriverFinancialSummary } from "@/lib/finance";
+import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
 import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
@@ -91,6 +94,7 @@ const failedCategoryOptions: Array<{ value: FailedCategory; label: string; hint:
   { value: "failed_visit", label: "Fallido real con visita", hint: "Genera cobro a tienda y pago al domiciliario." },
   { value: "no_coverage", label: "Sin cobertura", hint: "No genera cobro ni pago; queda para remonte por plataforma." },
   { value: "bad_order_or_no_contact", label: "Pedido malo / no contesta", hint: "No genera cobro ni pago; queda para gestion del vendedor." },
+  { value: "bad_phone", label: "Pedido sin telefono / linea inactiva", hint: "No genera cobro ni pago; el numero no existe o la linea esta inactiva." },
   { value: "pending_review", label: "Pendiente revisar", hint: "No genera cobro ni pago hasta clasificarlo." }
 ];
 
@@ -113,6 +117,7 @@ const failedCategoryFilterOptions: Array<{ value: FailedCategoryFilter; label: s
   { value: "failed_visit", label: "Con visita", helper: "Cobrable; puede requerir reintento." },
   { value: "no_coverage", label: "Sin cobertura", helper: "Se manda por transportadora." },
   { value: "bad_order_or_no_contact", label: "No contesta / pedido malo", helper: "Volver a contactar o corregir datos." },
+  { value: "bad_phone", label: "Sin telefono / linea inactiva", helper: "Numero inexistente o linea inactiva." },
   { value: "pending_review", label: "Pendiente revisar", helper: "Falta clasificar." }
 ];
 
@@ -453,20 +458,21 @@ function useAppState(session: Session | null) {
     const context = session ? { role: session.role, profileId: session.profileId } : undefined;
     if (session && canUseFirestoreStore()) {
       setRemoteEnabled(true);
-      void loadFirestoreState(context)
-        .then((remoteState) => {
-          if (remoteState) {
-            const cleanState = withoutLegacyDemo(remoteState);
-            setState(cleanState);
-          } else void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
+      // La suscripcion es ahora la unica fuente: hace la carga inicial (omitiendo las
+      // colecciones que ella misma observa) y luego aplica cambios incrementales. Antes
+      // se llamaba tambien a loadFirestoreState aqui, lo que descargaba todo dos veces.
+      return subscribeFirestoreState(
+        context,
+        (remoteState) => {
+          applyingRemote.current = true;
+          setState(withoutLegacyDemo(remoteState));
           setHydrated(true);
-        })
-        .catch(() => hydrateLocal());
-
-      return subscribeFirestoreState(context, (remoteState) => {
-        applyingRemote.current = true;
-        setState(withoutLegacyDemo(remoteState));
-      });
+        },
+        () => {
+          void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
+          setHydrated(true);
+        }
+      );
     }
 
     hydrateLocal();
@@ -620,11 +626,12 @@ function LogisticsKpis({ orders, state, hideFinance = false }: { orders: Order[]
   const chargeableFailed = orders.filter(isChargeableFailedOrder).length;
   const noCoverageFailed = orders.filter((order) => order.status === "failed" && order.failedCategory === "no_coverage").length;
   const badOrderFailed = orders.filter((order) => order.status === "failed" && order.failedCategory === "bad_order_or_no_contact").length;
+  const badPhoneFailed = orders.filter((order) => order.status === "failed" && order.failedCategory === "bad_phone").length;
   const cancelled = orders.filter((order) => order.status === "cancelled").length;
   const liquidated = orders.filter((order) => order.status === "liquidated").length;
   const funnelTotal = pendingConfirm + readyWithoutLeader + assignedPendingPickup + pickedWithoutMessenger + inOperation + delivered + failed + cancelled + liquidated;
   const pickedByDriver = orders.filter((order) => order.driverId && ["call_pending", "scheduled", "picked_up", "in_route", "retry_pending", "delivered", "failed", "liquidated"].includes(order.status)).length;
-  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed);
+  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed - badPhoneFailed);
   const dispatchRate = pickedByDriver > 0 ? Math.round((dispatchable / pickedByDriver) * 100) : 0;
   const closedDispatchable = delivered + chargeableFailed + liquidated;
   const openDispatchable = Math.max(0, dispatchable - closedDispatchable);
@@ -1330,9 +1337,20 @@ function OrderCard({
         {(order.productName || order.sku || order.quantity) && (
           <div className="flex min-w-0 flex-wrap gap-2">
             <Boxes className="shrink-0" size={14} />
-            {order.productName && <span className="font-semibold text-ink">{order.productName}</span>}
-            {order.sku && <span>SKU {order.sku}</span>}
-            {order.quantity && <span className="rounded bg-white px-2 py-0.5 font-semibold text-ink">Cant. {order.quantity}</span>}
+            {order.lineItems && order.lineItems.length > 1 ? (
+              // Multi-linea: un chip por producto en vez del string colapsado, que se trunca.
+              order.lineItems.map((line, index) => (
+                <span key={`${line.sku ?? line.productName ?? "linea"}-${index}`} className="rounded bg-white px-2 py-0.5 font-semibold text-ink">
+                  {line.productName ?? "Producto"} ×{line.quantity}
+                </span>
+              ))
+            ) : (
+              <>
+                {order.productName && <span className="font-semibold text-ink">{order.productName}</span>}
+                {order.sku && <span>SKU {order.sku}</span>}
+                {order.quantity && <span className="rounded bg-white px-2 py-0.5 font-semibold text-ink">Cant. {order.quantity}</span>}
+              </>
+            )}
           </div>
         )}
         {(order.scheduledDate || order.scheduledWindow) && (
@@ -1393,7 +1411,7 @@ function OrderCard({
           {state.activeRole !== "seller" && order.driverId && order.status === "call_pending" && (
             <CallOutcomeControls state={state} order={order} onCommit={commitOrderState} />
           )}
-          {state.activeRole !== "seller" && order.driverId && ["scheduled", "picked_up", "in_route"].includes(order.status) && !waitingForMessengerAssignment && (
+          {state.activeRole !== "seller" && order.driverId && ["call_pending", "scheduled", "picked_up", "in_route"].includes(order.status) && !waitingForMessengerAssignment && (
             <CloseOrderControls state={state} order={order} onCommit={commitOrderState} onServerCommit={commitClosedOrder} />
           )}
           {canCancelOrder && (
@@ -2144,13 +2162,13 @@ function CallOutcomeControls({
   const canReschedule = isDateInputComplete(rescheduledDate) && Boolean(rescheduledWindow);
   return (
     <div className="grid gap-2 rounded-md border border-black/10 bg-field p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <button
           className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${mode === "confirm" ? "bg-ink text-white" : "border border-black/10 bg-white text-ink"}`}
           type="button"
           onClick={() => setMode(mode === "confirm" ? null : "confirm")}
         >
-          Cliente confirma entrega
+          Confirmar asignacion para entrega
         </button>
         <button
           className={`focus-ring rounded-md px-3 py-2 text-sm font-semibold ${mode === "reschedule" ? "bg-rust text-white" : "border border-rust/30 bg-white text-rust"}`}
@@ -2159,11 +2177,21 @@ function CallOutcomeControls({
         >
           Reprogramar llamada
         </button>
+        <button
+          className="focus-ring rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink"
+          type="button"
+          onClick={() => onCommit(registerNoAnswerAttempt(state, order.id))}
+        >
+          No contesta
+        </button>
       </div>
+      <p className="text-xs text-black/60">
+        &quot;No contesta&quot; registra el intento y el pedido sigue en llamada pendiente. Si el numero es malo o la linea esta inactiva, usa &quot;Reportar novedad&quot; para clasificarlo.
+      </p>
       {mode === "confirm" && (
         <div className="grid gap-2 rounded-md border border-black/10 bg-white p-3">
         <div>
-          <h3 className="text-sm font-bold">Cliente confirma entrega</h3>
+          <h3 className="text-sm font-bold">Confirmar asignacion para entrega</h3>
           <p className="text-xs text-black/60">Usa estos campos cuando el cliente ya eligio cuando recibir el pedido.</p>
         </div>
         <DateChoiceField label="Fecha de entrega" value={scheduledDate} onChange={setScheduledDate} />
@@ -2574,7 +2602,6 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   const review = rangeOrders.filter((order) => order.addressRisk === "review");
   const callRescheduled = rangeOrders.filter((order) => order.callOutcome === "rescheduled");
   const deliveryScheduled = rangeOrders.filter((order) => order.status === "scheduled");
-  const sellerBalances = state.sellers.map((seller) => ({ seller, balance: sellerBalance(state, seller.id) }));
   const pendingShopifyRequests = (state.shopifyInstallRequests ?? []).filter((request) => request.status === "requested");
   const warehouseLabelOrders = state.orders.filter(canPrintAdminWarehouseLabel);
   const pendingWarehouseLabelOrders = warehouseLabelOrders.filter((order) => !order.labelPrintedAt);
@@ -2773,6 +2800,19 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
   );
 }
 
+type ManualOrderLineDraft = {
+  key: string;
+  productName: string;
+  sku: string;
+  quantity: string;
+  /** El SKU lo puso una sugerencia; editarlo a mano lo congela. */
+  skuAuto: boolean;
+};
+
+function emptyManualLine(key: string): ManualOrderLineDraft {
+  return { key, productName: "", sku: "", quantity: "1", skuAuto: false };
+}
+
 function ManualOrderPanel({
   state,
   setState,
@@ -2792,12 +2832,12 @@ function ManualOrderPanel({
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "prepaid">("cod");
   const [fulfillmentMode, setFulfillmentMode] = useState<"seller_pickup" | "warehouse">("seller_pickup");
   const [totalCop, setTotalCop] = useState("");
-  const [productId, setProductId] = useState("");
-  const [productName, setProductName] = useState("");
-  const [sku, setSku] = useState("");
+  const [lines, setLines] = useState<ManualOrderLineDraft[]>([emptyManualLine("line-0")]);
   const [addressRisk, setAddressRisk] = useState<"accepted" | "review">("accepted");
   const [message, setMessage] = useState<string | null>(null);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const lineKeySeq = useRef(1);
+  const productListId = useId();
 
   useEffect(() => {
     if (lockedSellerId && sellerId !== lockedSellerId) setSellerId(lockedSellerId);
@@ -2807,13 +2847,72 @@ function ManualOrderPanel({
   const selectedSeller = state.sellers.find((seller) => seller.id === sellerId);
   const sellerZones = state.zones.filter((zone) => zone.cityId === (selectedSeller?.cityId ?? state.settings.activeCityId) && zone.active !== false);
   const selectedZone = sellerZones.find((zone) => zone.id === zoneId);
-  const sellerInventory = state.inventory.filter((item) => item.sellerId === sellerId);
-  const availableSellerInventory = sellerInventory.filter((item) => item.available - item.reserved > 0);
-  const selectedProduct = sellerInventory.find((item) => item.id === productId);
   const normalizedSellerReference = normalizeSellerReference(shopifyOrderId);
   const duplicateSellerReference = normalizedSellerReference
     ? state.orders.find((order) => order.sellerId === sellerId && normalizeSellerReference(order.shopifyOrderId) === normalizedSellerReference)
     : undefined;
+
+  // Sugerencias: catalogo (manda en el nombre, es quien resuelve el costo) + inventario
+  // (aporta el stock libre). Escribir algo que no este aqui sigue siendo valido.
+  const productSuggestions = useMemo(() => {
+    const byKey = new Map<string, { value: string; sku?: string; freeStock?: number }>();
+    const keyOf = (sku?: string, name?: string) =>
+      sku?.trim() ? `sku:${sku.trim().toUpperCase()}` : `name:${normalizeProductName(name)}`;
+    for (const item of state.productCatalog) {
+      if (item.sellerId !== sellerId || item.active === false) continue;
+      byKey.set(keyOf(item.sku, item.name), { value: item.name, sku: item.sku });
+    }
+    for (const item of state.inventory) {
+      if (item.sellerId !== sellerId) continue;
+      const key = keyOf(item.sku, item.name);
+      const previous = byKey.get(key);
+      byKey.set(key, {
+        value: previous?.value ?? item.name,
+        sku: previous?.sku ?? item.sku,
+        freeStock: item.available - item.reserved
+      });
+    }
+    return Array.from(byKey.values()).sort((left, right) => left.value.localeCompare(right.value));
+  }, [sellerId, state.productCatalog, state.inventory]);
+
+  const updateLine = (key: string, patch: Partial<ManualOrderLineDraft>) => {
+    setLines((current) => current.map((line) => {
+      if (line.key !== key) return line;
+      const next = { ...line, ...patch };
+      if (patch.productName !== undefined) {
+        // Elegir una opcion del datalist llega como un change normal: si el nombre coincide
+        // exactamente con una sugerencia, rellenamos el SKU. Editarlo a mano lo congela.
+        const match = productSuggestions.find((suggestion) => normalizeProductName(suggestion.value) === normalizeProductName(patch.productName));
+        if (match?.sku && (!line.sku || line.skuAuto)) return { ...next, sku: match.sku, skuAuto: true };
+      }
+      if (patch.sku !== undefined) next.skuAuto = false;
+      return next;
+    }));
+  };
+  const addLine = () => {
+    setLines((current) => [...current, emptyManualLine(`line-${lineKeySeq.current++}`)]);
+  };
+  const removeLine = (key: string) => {
+    setLines((current) => (current.length === 1 ? current : current.filter((line) => line.key !== key)));
+  };
+  const resetLines = () => {
+    setLines([emptyManualLine(`line-${lineKeySeq.current++}`)]);
+  };
+
+  const filledLines = lines.filter((line) => line.productName.trim() || line.sku.trim());
+  const incompleteLine = filledLines.some((line) => !line.productName.trim());
+  const invalidQuantity = filledLines.some((line) => {
+    const quantity = Number(line.quantity);
+    return !Number.isInteger(quantity) || quantity < 1 || quantity > 999;
+  });
+  // Sobre-reserva: se avisa, nunca se bloquea.
+  const stockWarnings = filledLines.flatMap((line) => {
+    const item = state.inventory.find((entry) => entry.sellerId === sellerId && entry.sku && line.sku.trim() && entry.sku.trim().toUpperCase() === line.sku.trim().toUpperCase());
+    if (!item) return [];
+    const free = item.available - item.reserved;
+    const quantity = Number(line.quantity) || 1;
+    return quantity > free ? [`${item.name}: stock libre ${free}, pediras ${quantity}. El pedido se crea igual.`] : [];
+  });
 
   return (
     <Card>
@@ -2836,7 +2935,20 @@ function ManualOrderPanel({
               setMessage(`Ya existe un pedido con la referencia ${normalizedSellerReference}. Usa otra referencia para evitar duplicados.`);
               return;
             }
+            if (incompleteLine) {
+              setMessage("Completa el nombre del producto de cada linea.");
+              return;
+            }
+            if (invalidQuantity) {
+              setMessage("La cantidad de cada linea debe ser un numero entre 1 y 999.");
+              return;
+            }
             setSubmittingOrder(true);
+            const lineItems = filledLines.map((line) => ({
+              productName: line.productName.trim() || undefined,
+              sku: line.sku.trim() || undefined,
+              quantity: Number(line.quantity) || 1
+            }));
             const input = {
                 sellerId,
                 shopifyOrderId,
@@ -2848,8 +2960,7 @@ function ManualOrderPanel({
                 paymentMethod,
                 fulfillmentMode,
                 totalCop: amount,
-                productName: selectedProduct?.name ?? productName,
-                sku: selectedProduct?.sku ?? sku,
+                lineItems: lineItems.length > 0 ? lineItems : undefined,
                 addressRisk
               };
             try {
@@ -2866,9 +2977,7 @@ function ManualOrderPanel({
               setNormalizedAddress("");
               setZoneId("");
               setTotalCop("");
-              setProductId("");
-              setProductName("");
-              setSku("");
+              resetLines();
               setAddressRisk("accepted");
               setMessage("Pedido creado.");
             } catch (error: unknown) {
@@ -2925,7 +3034,7 @@ function ManualOrderPanel({
         {selectedZone && (
           <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
             {sellerId === "seller-1779315416119"
-              ? `Tarifa DANDA: cobro entregado ${formatCop(12000)} · pago domiciliario actual ${formatCop(11000)} para recogidos desde 09/06/2026 · fallido ${formatCop(0)}`
+              ? `Tarifa DANDA: cobro entregado ${formatCop(13500)} para pedidos creados desde 17/07/2026 · pago domiciliario sin cambios · fallido ${formatCop(0)}`
               : `Tarifa zona ${selectedZone.name}: vendedor entregado ${formatCop(selectedZone.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop)} · lider logistico entregado ${formatCop(selectedZone.driverDeliveredPayCop || state.settings.driverDeliveredPayCop)}`}
           </p>
         )}
@@ -2939,39 +3048,59 @@ function ManualOrderPanel({
             <option value="warehouse">Bodega</option>
           </select>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
-          {sellerInventory.length > 0 ? (
-            <select
-              className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm"
-              value={productId}
-              onChange={(event) => setProductId(event.target.value)}
-            >
-              <option value="">Producto opcional</option>
-              {availableSellerInventory.map((item) => (
-                <option key={item.id} value={item.id}>{item.name} · {item.sku} · {item.available - item.reserved} libres</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm"
-              placeholder="Producto"
-              value={productName}
-              onChange={(event) => setProductName(event.target.value)}
-            />
+        <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
+        <div className="grid gap-2 rounded-md border border-black/10 p-2">
+          <p className="text-xs font-semibold text-black/60">Productos</p>
+          <datalist id={productListId}>
+            {productSuggestions.map((suggestion) => (
+              <option
+                key={`${suggestion.sku ?? ""}-${suggestion.value}`}
+                value={suggestion.value}
+                label={[suggestion.sku, suggestion.freeStock !== undefined ? `${suggestion.freeStock} libres` : null].filter(Boolean).join(" · ")}
+              />
+            ))}
+          </datalist>
+          {lines.map((line) => (
+            <div key={line.key} className="grid gap-2 sm:grid-cols-[2fr_1fr_auto_auto]">
+              <input
+                className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm"
+                placeholder="Producto"
+                list={productListId}
+                value={line.productName}
+                onChange={(event) => updateLine(line.key, { productName: event.target.value })}
+              />
+              <input
+                className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm"
+                placeholder="SKU opcional"
+                value={line.sku}
+                onChange={(event) => updateLine(line.key, { sku: event.target.value })}
+              />
+              <input
+                className="focus-ring w-20 rounded-md border border-black/10 px-3 py-2 text-sm"
+                placeholder="Cant."
+                inputMode="numeric"
+                value={line.quantity}
+                onChange={(event) => updateLine(line.key, { quantity: event.target.value.replace(/[^\d]/g, "") })}
+              />
+              <button
+                className="focus-ring min-h-10 rounded-md border border-black/10 px-3 py-2 text-xs font-semibold disabled:opacity-40"
+                type="button"
+                onClick={() => removeLine(line.key)}
+                disabled={lines.length === 1}
+              >
+                Quitar
+              </button>
+            </div>
+          ))}
+          {lines.length < 20 && (
+            <button className="focus-ring justify-self-start rounded-md border border-black/10 px-3 py-2 text-xs font-semibold" type="button" onClick={addLine}>
+              Agregar producto
+            </button>
           )}
         </div>
-        {sellerInventory.length === 0 && (
-          <input className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" placeholder="SKU opcional" value={sku} onChange={(event) => setSku(event.target.value)} />
-        )}
-        {sellerInventory.length > 0 && availableSellerInventory.length === 0 && (
-          <p className="rounded-md bg-rust/10 px-3 py-2 text-xs text-rust">No hay productos con stock libre para este vendedor.</p>
-        )}
-        {selectedProduct && (
-          <p className="rounded-md bg-field px-3 py-2 text-xs text-black/60">
-            Libre: {selectedProduct.available - selectedProduct.reserved} · Stock: {selectedProduct.available} · Reservado: {selectedProduct.reserved}
-          </p>
-        )}
+        {stockWarnings.map((warning) => (
+          <p key={warning} className="rounded-md bg-field px-3 py-2 text-xs text-black/60">{warning}</p>
+        ))}
         <button className="focus-ring min-h-10 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit" disabled={state.sellers.length === 0 || submittingOrder || Boolean(duplicateSellerReference)}>
           {submittingOrder ? "Creando pedido..." : "Crear pedido"}
         </button>
@@ -3464,20 +3593,7 @@ function AdminInventoryPanel({ state, setState }: { state: AppState; setState: (
 }
 
 function reconcileInventoryReservationsLocal(state: AppState): AppState {
-  const closedStatuses = new Set(["delivered", "failed", "cancelled", "liquidated"]);
-  const reservedByItem = new Map<string, number>();
-  state.orders.forEach((order) => {
-    if (!order.sku || closedStatuses.has(order.status)) return;
-    const key = `${order.sellerId}::${order.sku.trim().toUpperCase()}`;
-    reservedByItem.set(key, (reservedByItem.get(key) ?? 0) + 1);
-  });
-  return {
-    ...state,
-    inventory: state.inventory.map((item) => ({
-      ...item,
-      reserved: reservedByItem.get(`${item.sellerId}::${item.sku.trim().toUpperCase()}`) ?? 0
-    }))
-  };
+  return { ...state, inventory: recomputeInventoryReservations(state.inventory, state.orders) };
 }
 
 function SupplierProductAdminPanel({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
@@ -4069,10 +4185,6 @@ function getRelatedDriverEntries(wallet: WalletEntry[], orderIds: string[]) {
   return wallet.filter((entry) => entry.ownerType === "driver" && entry.orderId && orderIdSet.has(entry.orderId));
 }
 
-function entriesForOrder(wallet: WalletEntry[], orderId: string) {
-  return wallet.filter((entry) => entry.orderId === orderId);
-}
-
 function netAmountCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
   return entries.filter((entry) => types.includes(entry.type)).reduce((sum, entry) => sum + entry.amountCop, 0);
 }
@@ -4085,7 +4197,7 @@ function netChargeCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
 function orderCashToReturnCop(state: AppState, orderId: string) {
   const sellerEntries = state.wallet.filter((entry) => entry.ownerType === "seller" && entry.orderId === orderId);
   const driverEntries = state.wallet.filter((entry) => entry.ownerType === "driver" && entry.orderId === orderId);
-  const codCop = netAmountCop(sellerEntries, ["cod_revenue"]);
+  const codCop = netAmountCop(sellerEntries, ["cod_revenue", "cod_remittance"]);
   const driverPayCop = netAmountCop(driverEntries, ["driver_earning"]);
   return Math.max(0, codCop - driverPayCop);
 }
@@ -4139,11 +4251,23 @@ function receivedDriverOrderIds(state: AppState) {
 function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = state.wallet): LiquidationOrderAudit[] {
   const orderIds = new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]);
   const codReceivedOrderIds = receivedDriverOrderIds(state);
+  // Indices por id: antes esta funcion escaneaba TODOS los movimientos por cada pedido
+  // (O(pedidos x movimientos) = ~14M iteraciones, ~600 ms por llamada). Con los indices
+  // es O(pedidos + movimientos) y baja a milisegundos.
+  const entriesByOrder = new Map<string, WalletEntry[]>();
+  for (const entry of entries) {
+    if (!entry.orderId) continue;
+    const bucket = entriesByOrder.get(entry.orderId);
+    if (bucket) bucket.push(entry);
+    else entriesByOrder.set(entry.orderId, [entry]);
+  }
+  const sellerById = new Map(state.sellers.map((item) => [item.id, item]));
+  const driverById = new Map(state.drivers.map((item) => [item.id, item]));
   return state.orders
     .flatMap((order): LiquidationOrderAudit[] => {
-      const seller = state.sellers.find((item) => item.id === order.sellerId);
-      const driver = state.drivers.find((item) => item.id === order.driverId);
-      const allOrderEntries = entriesForOrder(entries, order.id);
+      const seller = sellerById.get(order.sellerId);
+      const driver = order.driverId ? driverById.get(order.driverId) : undefined;
+      const allOrderEntries = entriesByOrder.get(order.id) ?? [];
       const hasFinancialEntries = allOrderEntries.some((entry) =>
         ["cod_revenue", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning"].includes(entry.type)
       );
@@ -4152,7 +4276,7 @@ function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = s
       }
       const sellerEntries = allOrderEntries.filter((entry) => entry.ownerType === "seller");
       const driverEntries = allOrderEntries.filter((entry) => entry.ownerType === "driver");
-      const codCop = netAmountCop(sellerEntries, ["cod_revenue"]);
+      const codCop = netAmountCop(sellerEntries, ["cod_revenue", "cod_remittance"]);
       const deliveryFeeCop = netChargeCop(sellerEntries, ["delivery_fee"]);
       const failedFeeCop = netChargeCop(sellerEntries, ["failed_fee"]);
       const fulfillmentCop = netChargeCop(sellerEntries, ["fulfillment_fee"]);
@@ -4417,54 +4541,48 @@ function paymentMethodLabel(method: PaymentMethod) {
   return method === "cod" ? "Contraentrega" : "Pagado";
 }
 
-function downloadDriverHistoryCsv(orders: Order[], state: AppState, driverId: string, startDate: string, endDate: string) {
-  const header = [
-    "guia_knt",
-    "referencia_shopify",
-    "tienda",
-    "cliente",
-    "estado",
-    "mensajero",
-    "fecha_cierre",
-    "metodo_pago",
-    "valor_cod",
-    "categoria_fallido",
-    "motivo",
-    "evidencia",
-    "ultima_nota",
-    "cerrado_por",
-    "id_pedido"
-  ];
+const driverHistoryExportColumns = [
+  "guia_knt",
+  "referencia_shopify",
+  "tienda",
+  "cliente",
+  "estado",
+  "mensajero",
+  "fecha_cierre",
+  "metodo_pago",
+  "valor_cod",
+  "categoria_fallido",
+  "motivo",
+  "evidencia",
+  "ultima_nota",
+  "cerrado_por",
+  "id_pedido"
+] as const;
+
+async function downloadDriverHistoryXlsx(orders: Order[], state: AppState, driverId: string, startDate: string, endDate: string) {
   const rows = orders.map((order) => {
     const seller = state.sellers.find((item) => item.id === order.sellerId);
     const messenger = state.messengers.find((item) => item.id === order.messengerId);
     const closingEvidence = latestClosingEvidence(order);
-    return [
-      order.trackingCode ?? order.id,
-      order.shopifyOrderId,
-      seller?.name ?? knownSellerName(order.sellerId),
-      order.customerName,
-      statusLabel(order.status),
-      messenger?.name ?? (order.messengerId ? order.messengerId : "Lider logistico"),
-      orderClosedAt(order),
-      paymentMethodLabel(order.paymentMethod),
-      order.paymentMethod === "cod" ? order.totalCop : 0,
-      order.status === "failed" ? failedCategoryLabel(order.failedCategory) : "",
-      order.failedReason ?? closingEvidence?.reason ?? "",
-      closingEvidence?.photoUrl ?? closingEvidence?.photoLabel ?? "",
-      closingEvidence?.note ?? "",
-      closingEvidence?.actorId ?? "",
-      order.id
-    ];
+    return {
+      guia_knt: order.trackingCode ?? order.id,
+      referencia_shopify: order.shopifyOrderId,
+      tienda: seller?.name ?? knownSellerName(order.sellerId),
+      cliente: order.customerName,
+      estado: statusLabel(order.status),
+      mensajero: messenger?.name ?? (order.messengerId ? order.messengerId : "Lider logistico"),
+      fecha_cierre: orderClosedAt(order),
+      metodo_pago: paymentMethodLabel(order.paymentMethod),
+      valor_cod: order.paymentMethod === "cod" ? order.totalCop : 0,
+      categoria_fallido: order.status === "failed" ? failedCategoryLabel(order.failedCategory) : "",
+      motivo: order.failedReason ?? closingEvidence?.reason ?? "",
+      evidencia: closingEvidence?.photoUrl ?? closingEvidence?.photoLabel ?? "",
+      ultima_nota: closingEvidence?.note ?? "",
+      cerrado_por: closingEvidence?.actorId ?? "",
+      id_pedido: order.id
+    };
   });
-  const csv = [header, ...rows].map((line) => line.map(csvValue).join(",")).join("\n");
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `historico-flota-${driverId}-${startDate || "inicio"}-${endDate || "hoy"}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  await downloadRowsXlsx("Historico flota", driverHistoryExportColumns, rows, `historico-flota-${driverId}-${startDate || "inicio"}-${endDate || "hoy"}.xlsx`);
 }
 
 function downloadLiquidationsCsv(rows: LiquidationRow[], storeRows: StoreLiquidationRow[], orderAudits: LiquidationOrderAudit[], blockedAudits: LiquidationOrderAudit[], startDate: string, endDate: string) {
@@ -5581,9 +5699,13 @@ function settlementFinancialView(state: AppState, settlement: Settlement) {
   };
 }
 
-function settlementLiquidationRow(state: AppState, settlement: Settlement): LiquidationRow | null {
-  const settlementEntries = state.wallet.filter((entry) => settlement.walletEntryIds.includes(entry.id));
-  const rows = buildLiquidationRows(state, settlementEntries, state.wallet);
+// `audits` se recibe ya calculado: sin el, buildLiquidationRows lo reconstruye por
+// defecto y esta funcion se llama una vez por fila de la tabla, disparando una
+// auditoria completa O(pedidos x movimientos) por cada corte visible.
+function settlementLiquidationRow(state: AppState, settlement: Settlement, audits: LiquidationOrderAudit[]): LiquidationRow | null {
+  const entryIds = new Set(settlement.walletEntryIds);
+  const settlementEntries = state.wallet.filter((entry) => entryIds.has(entry.id));
+  const rows = buildLiquidationRows(state, settlementEntries, state.wallet, audits);
   return rows.find((row) => row.role === settlement.kind && row.id === settlement.ownerId) ?? null;
 }
 
@@ -5627,6 +5749,8 @@ function SettlementsTable({
 }) {
   const { page, setPage, totalPages, visibleItems } = usePaginatedItems(settlements, 10);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Una sola auditoria para toda la tabla: antes cada fila reconstruia la suya.
+  const audits = useMemo(() => buildLiquidationOrderAudits(state, state.wallet), [state]);
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -5663,7 +5787,7 @@ function SettlementsTable({
             <tbody>
               {visibleItems.map((settlement) => {
                 const view = settlementFinancialView(state, settlement);
-                const detailRow = settlementLiquidationRow(state, settlement);
+                const detailRow = settlementLiquidationRow(state, settlement, audits);
                 const expanded = expandedId === settlement.id;
                 const receiptTotal = driverCashReceivedCop(settlement);
                 const cashPendingCop = driverCashPendingCop(state, settlement);
@@ -6317,7 +6441,7 @@ function ShopifySyncIssuesPanel({ issues, sellers }: { issues: ShopifySyncIssue[
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-bold">Pedidos Shopify no sincronizados</h2>
-          <p className="text-xs text-black/50">{openIssues.length} pendientes · pagina {safePage + 1} de {totalPages}</p>
+          <p className="text-xs text-black/50">{openIssues.length} mas recientes · pagina {safePage + 1} de {totalPages}</p>
         </div>
         <div className="flex items-center gap-2">
           <IconButton title="Pagina anterior" disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>
@@ -6793,6 +6917,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
   });
   const pendingMessenger = assigned.filter((order) => order.status === "picked_up" && !order.messengerId);
   const messengerAssigned = assigned.filter((order) => order.messengerId);
+  const messengerReassignable = messengerAssigned.filter((order) => ["picked_up", "call_pending", "scheduled", "in_route", "retry_pending"].includes(order.status));
   const rescheduledPending = assigned.filter((order) => order.status === "retry_pending" || order.callOutcome === "rescheduled");
   const failedOrders = state.orders.filter((order) => order.driverId === driver.id && order.status === "failed");
   const operationOrders = operationTab === "failed" ? failedOrders : operationTab === "rescheduled" ? rescheduledPending : assigned;
@@ -6925,7 +7050,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
             className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
             type="button"
             disabled={visibleFailedOrders.length === 0}
-            onClick={() => downloadFailedOrdersCsv(visibleFailedOrders, state, "", "", driver.id)}
+            onClick={() => void downloadOrdersXlsx(visibleFailedOrders, state, `fallidos-flota-${driver.id}-${new Date().toISOString().slice(0, 10)}.xlsx`)}
           >
             <FileDown size={16} />
             Descargar fallidos ({visibleFailedOrders.length})
@@ -7001,6 +7126,14 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
           onAssigned={(orders) => {
             setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
             setAssignmentMessage(`${orders.length} pedido(s) asignados a mensajero.`);
+          }}
+        />
+        <ReassignMessengerOrdersPanel
+          orders={messengerReassignable}
+          messengers={messengers}
+          onUpdated={(orders, summary) => {
+            setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
+            setAssignmentMessage(summary);
           }}
         />
         {assignmentMessage && <p className="rounded-md bg-field px-3 py-2 text-sm font-semibold text-black/70">{assignmentMessage}</p>}
@@ -7459,10 +7592,10 @@ function DriverHistoryPanel({ state, driver }: { state: AppState; driver: Driver
           className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
           type="button"
           disabled={filtered.length === 0}
-          onClick={() => downloadDriverHistoryCsv(filtered, state, driver.id, filters.startDate, filters.endDate)}
+          onClick={() => void downloadDriverHistoryXlsx(filtered, state, driver.id, filters.startDate, filters.endDate)}
         >
           <FileDown size={16} />
-          Descargar CSV ({filtered.length})
+          Descargar Excel ({filtered.length})
         </button>
       </div>
 
@@ -7697,6 +7830,94 @@ function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders:
             </span>
           </label>
         )}
+      </PaginatedList>
+    </Card>
+  );
+}
+
+function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { orders: Order[]; messengers: Messenger[]; onUpdated: (orders: Order[], summary: string) => void }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [messengerId, setMessengerId] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
+
+  useEffect(() => {
+    if (!messengerId && messengers[0]) setMessengerId(messengers[0].id);
+  }, [messengerId, messengers]);
+
+  async function reassignSelected() {
+    if (!messengerId || selectedOrders.length === 0 || busy) return;
+    setMessage("");
+    setBusy(true);
+    try {
+      if (firebaseEnabled()) {
+        const result = await assignFirebaseMessengerToOrders({ orderIds: selectedOrders.map((order) => order.id), messengerId });
+        onUpdated(result.orders, `${result.orders.length} pedido(s) reasignados de mensajero.`);
+      } else {
+        const now = new Date().toISOString();
+        onUpdated(selectedOrders.map((order) => ({ ...order, messengerId, updatedAt: now })), `${selectedOrders.length} pedido(s) reasignados de mensajero.`);
+      }
+      setSelectedIds([]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo reasignar el mensajero.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unassignSelected() {
+    if (selectedOrders.length === 0 || busy) return;
+    setMessage("");
+    setBusy(true);
+    try {
+      if (firebaseEnabled()) {
+        const result = await unassignFirebaseMessengerFromOrders({ orderIds: selectedOrders.map((order) => order.id) });
+        onUpdated(result.orders, `${result.orders.length} pedido(s) devueltos a pendiente de mensajero.`);
+      } else {
+        const now = new Date().toISOString();
+        onUpdated(selectedOrders.map((order) => ({ ...order, messengerId: undefined, status: "picked_up" as const, callOutcome: undefined, updatedAt: now })), `${selectedOrders.length} pedido(s) devueltos a pendiente de mensajero.`);
+      }
+      setSelectedIds([]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo quitar el mensajero.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="grid gap-3">
+      <div>
+        <h2 className="font-bold">Asignados a mensajero</h2>
+        <p className="text-sm text-black/60">Reasigna pedidos activos a otro mensajero o devuelvelos al listado de pendientes. Los pedidos entregados o fallidos no se pueden mover.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <select className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm" value={messengerId} onChange={(event) => setMessengerId(event.target.value)}>
+          {messengers.length === 0 && <option value="">Sin mensajeros</option>}
+          {messengers.map((messenger) => <option key={messenger.id} value={messenger.id}>{messenger.name}</option>)}
+        </select>
+        <button className="focus-ring rounded-md bg-ink px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={!messengerId || selectedOrders.length === 0 || busy} onClick={() => void reassignSelected()}>
+          Reasignar seleccionados
+        </button>
+        <button className="focus-ring rounded-md border border-black/10 px-3 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={selectedOrders.length === 0 || busy} onClick={() => void unassignSelected()}>
+          Devolver a pendientes
+        </button>
+      </div>
+      {message && <p className="rounded-md bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
+      <PaginatedList items={orders} pageSize={6} empty={<p className="text-sm text-black/60">No hay pedidos activos asignados a mensajeros.</p>}>
+        {(order) => {
+          const messenger = messengers.find((item) => item.id === order.messengerId);
+          return (
+            <label key={order.id} className="flex items-start gap-3 rounded-md border border-black/10 p-3 text-sm">
+              <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [order.id, ...current] : current.filter((id) => id !== order.id))} />
+              <span>
+                <span className="block font-semibold">{order.trackingCode ?? order.shopifyOrderId}</span>
+                <span className="block text-xs text-black/60">{order.customerName} · {messenger?.name ?? order.messengerId} · {statusLabel(order.status)}</span>
+              </span>
+            </label>
+          );
+        }}
       </PaginatedList>
     </Card>
   );

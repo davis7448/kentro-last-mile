@@ -56,7 +56,7 @@ export default function ApiTiendasPage() {
         <section className="grid gap-3">
           <h2 className="text-lg font-bold">1. Obtener tu API key</h2>
           <p className="text-sm leading-6 text-black/70">
-            En la plataforma Kentro, con tu usuario de tienda, ve a tu panel y abre la seccion <b>Conexion Shopify → API de tienda (solo lectura)</b>.
+            En la plataforma Kentro, con tu usuario de tienda, ve a tu panel y abre la tarjeta <b>API de tienda (solo lectura)</b>.
             Presiona <b>Ver mi API key</b>. Desde ahi puedes copiar la key y las URLs de ejemplo. Si crees que tu key se filtro,
             usa <b>Rotar key</b>: la key anterior deja de funcionar de inmediato.
           </p>
@@ -85,7 +85,33 @@ Authorization: Bearer TU_API_KEY`}</Code>
         </section>
 
         <section className="grid gap-3">
-          <h2 className="text-lg font-bold">3. GET /kpis — KPIs operativos</h2>
+          <h2 className="text-lg font-bold">3. GET /resumen — Saldo y pagos (empieza aqui)</h2>
+          <p className="text-sm leading-6 text-black/70">
+            Devuelve el <b>saldo consolidado autoritativo</b> de tu tienda, calculado por Kentro con las mismas reglas del panel de operacion.
+            <b> Usa este numero directamente; no lo reconstruyas sumando pedidos</b>, porque asi evitas descuadres por fletes o abonos.
+          </p>
+          <Code>{`curl "${BASE_URL}/resumen?sellerId=TU_SELLER_ID&key=TU_API_KEY"`}</Code>
+          <Table
+            head={["Campo", "Significado"]}
+            rows={[
+              ["saldoPendiente.disponibleCop", "Lo que Kentro ya te puede pagar ahora (COD recibido del domiciliario o prepago), neto de abonos."],
+              ["saldoPendiente.enLiquidacionCop", "Ya incluido en un corte creado pero aun no pagado."],
+              ["saldoPendiente.bloqueadoCodCop", "Pedidos COD cuyo efectivo aun no se recibe del domiciliario; se habilita al recibirse."],
+              ["saldoPendiente.totalCop", "Suma de los tres anteriores: todo lo que aun se te debe."],
+              ["totales.codCop / cobrosCop / costoProductoCop", "Acumulados: COD a tu favor, cobros operativos (fletes/fallidos/fulfillment) y costo de producto descontado."],
+              ["totales.abonadoCop", "Total de abonos (pagos parciales) que ya te entregamos."],
+              ["totales.liquidadoCop", "Total neto ya liquidado en cortes pagados/conciliados."],
+              ["pagos[]", "Historial de pagos recibidos: tipo (liquidacion|abono), fecha, montoCop, referencia."],
+              ["abonos[]", "Cada abono recibido: fecha, montoCop, nota."]
+            ]}
+          />
+          <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
+            Tu saldo real a favor = <code className="rounded bg-white px-1 font-mono">saldoPendiente.totalCop</code>. Los pagos ya recibidos (liquidaciones + abonos) estan en <code className="rounded bg-white px-1 font-mono">pagos[]</code>.
+          </p>
+        </section>
+
+        <section className="grid gap-3">
+          <h2 className="text-lg font-bold">4. GET /kpis — KPIs operativos</h2>
           <p className="text-sm leading-6 text-black/70">
             Devuelve los indicadores del rango de fechas, calculados <b>exactamente igual</b> que el dashboard de Kentro.
             El rango filtra por la fecha de creacion del pedido (formato <code className="rounded bg-field px-1 font-mono text-xs">YYYY-MM-DD</code>, inclusivo).
@@ -97,19 +123,19 @@ Authorization: Bearer TU_API_KEY`}</Code>
               ["totalPedidos", "Total de pedidos del rango."],
               ["embudo.*", "Conteos excluyentes por etapa: pendienteConfirmar, listoSinLider, asignadoPendienteRecoger, recogidoSinMensajero, enGestionORuta, entregados, fallidos, cancelados, liquidados."],
               ["indicadores.tomadosPorDomiciliario", "Pedidos con domiciliario asignado en estado llamada pendiente, agendado, recogido, en ruta, reintento, entregado, fallido o liquidado."],
-              ["indicadores.despachables", "Tomados por domiciliario menos fallidos sin cobertura y pedido malo / no contesta."],
+              ["indicadores.despachables", "Tomados por domiciliario menos fallidos sin cobertura, pedido malo / no contesta y sin telefono / linea inactiva."],
               ["indicadores.abiertosDespachables", "Despachables menos cerrados (entregados + fallidos con visita + liquidados)."],
               ["indicadores.porcentajeDespacho", "despachables / tomados por domiciliario (entero 0-100)."],
               ["indicadores.porcentajeTerminacion", "(entregados + fallidos con visita + liquidados) / despachables."],
               ["indicadores.porcentajeEntrega", "entregados / despachables."],
               ["indicadores.porcentajeDevolucion", "fallidos con visita / despachables."],
-              ["fallidosPorCategoria.*", "fallidoConVisita, sinCobertura, pedidoMaloNoContesta."]
+              ["fallidosPorCategoria.*", "fallidoConVisita, sinCobertura, pedidoMaloNoContesta, sinTelefonoLineaInactiva."]
             ]}
           />
         </section>
 
         <section className="grid gap-3">
-          <h2 className="text-lg font-bold">4. GET /orders — Pedidos con estado operativo y de pago</h2>
+          <h2 className="text-lg font-bold">5. GET /orders — Pedidos con estado operativo y de pago</h2>
           <Code>{`curl "${BASE_URL}/orders?sellerId=TU_SELLER_ID&key=TU_API_KEY&from=2026-07-01&to=2026-07-31&status=delivered&limit=200"`}</Code>
           <Table
             head={["Parametro", "Descripcion"]}
@@ -125,9 +151,12 @@ Authorization: Bearer TU_API_KEY`}</Code>
             rows={[
               ["datos", "id, trackingCode, shopifyOrderId, status, failedCategory, failedReason, paymentMethod (cod/prepaid), totalCop, customerName, createdAt, fecha."],
               ["operacion", "takenByDriver (tomado por domiciliario), dispatchable (despachable), delivered, failed, chargeableFailed (fallido con visita), noCoverageFailed, badOrderFailed, closed. Mismos criterios de los KPIs."],
-              ["pago", "estado, pagado (true/false), habilitadoParaPago, netoCop (neto a favor/en contra por el pedido), movimientos, movimientosSinLiquidar, settlements[] (id, status, paidAt)."]
+              ["pago", "estado, pagado (true/false), habilitadoParaPago, netoCop, desglose (codCop, fleteCop, failedFeeCop, fulfillmentCop, costoProductoCop) con el flete REAL cobrado, movimientos, movimientosSinLiquidar, settlements[] (id, status, paidAt)."]
             ]}
           />
+          <p className="rounded-md bg-field px-3 py-2 text-xs font-semibold text-black/60">
+            El campo <code className="rounded bg-white px-1 font-mono">pago.desglose.fleteCop</code> es el flete real que Kentro cobro por ese pedido. No asumas una tarifa: usa este valor.
+          </p>
           <p className="text-sm leading-6 text-black/70">Valores de <code className="rounded bg-field px-1 font-mono text-xs">pago.estado</code>:</p>
           <Table
             head={["Estado", "Significado"]}
@@ -142,7 +171,7 @@ Authorization: Bearer TU_API_KEY`}</Code>
         </section>
 
         <section className="grid gap-3">
-          <h2 className="text-lg font-bold">5. GET /settlements — Liquidaciones (pagos a tu tienda)</h2>
+          <h2 className="text-lg font-bold">6. GET /settlements — Liquidaciones (pagos a tu tienda)</h2>
           <Code>{`curl "${BASE_URL}/settlements?sellerId=TU_SELLER_ID&key=TU_API_KEY"`}</Code>
           <Table
             head={["Campo", "Significado"]}
@@ -164,20 +193,20 @@ Authorization: Bearer TU_API_KEY`}</Code>
         </section>
 
         <section className="grid gap-3">
-          <h2 className="text-lg font-bold">6. Errores</h2>
+          <h2 className="text-lg font-bold">7. Errores</h2>
           <Table
             head={["Codigo", "Causa"]}
             rows={[
               ["401 missing_credentials", "Falta sellerId o key."],
               ["401 invalid_key", "La key no corresponde al sellerId, esta inactiva o fue rotada."],
-              ["404 unknown_resource", "Ruta invalida. Recursos validos: /kpis, /orders, /settlements."],
+              ["404 unknown_resource", "Ruta invalida. Recursos validos: /resumen, /kpis, /orders, /settlements."],
               ["405 method_not_allowed", "Solo se acepta GET."]
             ]}
           />
         </section>
 
         <section className="grid gap-3">
-          <h2 className="text-lg font-bold">7. Buenas practicas</h2>
+          <h2 className="text-lg font-bold">8. Buenas practicas</h2>
           <div className="grid gap-2">
             <p className="text-sm leading-6 text-black/70">• Llama la API desde tu servidor o herramienta de integracion (Make, n8n, Zapier, Google Sheets vía Apps Script), nunca desde el navegador de tus clientes.</p>
             <p className="text-sm leading-6 text-black/70">• Consulta por rangos de fechas acotados y cachea resultados; los datos operativos cambian durante el dia, las liquidaciones cambian solo cuando hay un corte.</p>

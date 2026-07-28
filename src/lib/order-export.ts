@@ -87,6 +87,7 @@ const failedCategoryLabels: Record<FailedCategory, string> = {
   failed_visit: "Fallido real con visita",
   no_coverage: "Sin cobertura",
   bad_order_or_no_contact: "Pedido malo / no contesta",
+  bad_phone: "Sin telefono / linea inactiva",
   pending_review: "Pendiente revisar"
 };
 

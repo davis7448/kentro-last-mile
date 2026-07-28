@@ -100,6 +100,8 @@ export async function createManualFirebaseOrder(input: {
   totalCop: number;
   productName?: string;
   sku?: string;
+  quantity?: number;
+  lineItems?: Array<{ productName?: string; sku?: string; quantity: number }>;
   addressRisk: Extract<AddressRisk, "accepted" | "review">;
 }) {
   const client = getFirebaseClient();
@@ -216,6 +218,15 @@ export async function assignFirebaseMessengerToOrders(input: { orderIds: string[
   if (!client) throw new Error("Firebase no esta configurado.");
   const functions = getFunctions(client.app, "us-central1");
   const callable = httpsCallable(functions, "assignMessengerToOrders");
+  const result = await callable(input);
+  return result.data as { orders: Order[] };
+}
+
+export async function unassignFirebaseMessengerFromOrders(input: { orderIds: string[] }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "unassignMessengerFromOrders");
   const result = await callable(input);
   return result.data as { orders: Order[] };
 }

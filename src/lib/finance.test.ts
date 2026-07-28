@@ -152,7 +152,8 @@ describe("wallet calculations", () => {
       status: "delivered" as const,
       paymentMethod: "prepaid" as const,
       fulfillmentMode: "seller_pickup" as const,
-      driverId: "driver-1"
+      driverId: "driver-1",
+      updatedAt: "2026-07-17T04:59:59.999Z"
     };
     const failedOrder = {
       ...deliveredOrder,
@@ -169,6 +170,36 @@ describe("wallet calculations", () => {
     expect(failedEntries.some((entry) => entry.type === "driver_earning")).toBe(false);
   });
 
+  it("charges DANDA 13.500 for orders delivered from July 17, 2026 Colombia time", () => {
+    const state = seedState();
+    const baseOrder = {
+      ...state.orders[0],
+      sellerId: "seller-1779315416119",
+      status: "delivered" as const,
+      paymentMethod: "prepaid" as const,
+      fulfillmentMode: "seller_pickup" as const,
+      driverId: "driver-1778271901513",
+      pickedUpAt: "2026-07-17T05:00:00.000Z",
+      // Creado antes del corte: la tarifa se decide por la fecha de ENTREGA.
+      createdAt: "2026-07-01T05:00:00.000Z"
+    };
+    const beforeCutoff = entriesForClosedOrder({
+      ...baseOrder,
+      id: "ord-danda-before-seller-fee-cutoff",
+      updatedAt: "2026-07-17T04:59:59.999Z"
+    }, state);
+    const atCutoff = entriesForClosedOrder({
+      ...baseOrder,
+      id: "ord-danda-at-seller-fee-cutoff",
+      updatedAt: "2026-07-17T05:00:00.000Z"
+    }, state);
+
+    expect(beforeCutoff.some((entry) => entry.type === "delivery_fee" && entry.amountCop === -12000)).toBe(true);
+    expect(atCutoff.some((entry) => entry.type === "delivery_fee" && entry.amountCop === -13500)).toBe(true);
+    expect(beforeCutoff.some((entry) => entry.type === "driver_earning" && entry.amountCop === 11000)).toBe(true);
+    expect(atCutoff.some((entry) => entry.type === "driver_earning" && entry.amountCop === 11000)).toBe(true);
+  });
+
   it("pays the current driver 11.000 for DANDA orders picked up from June 9, 2026", () => {
     const state = seedState();
     const order = {
@@ -179,7 +210,8 @@ describe("wallet calculations", () => {
       paymentMethod: "prepaid" as const,
       fulfillmentMode: "seller_pickup" as const,
       driverId: "driver-1778271901513",
-      pickedUpAt: "2026-06-09T05:00:00.000Z"
+      pickedUpAt: "2026-06-09T05:00:00.000Z",
+      updatedAt: "2026-07-17T04:59:59.999Z"
     };
 
     const entries = entriesForClosedOrder(order, state);

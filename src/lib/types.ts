@@ -2,7 +2,7 @@ export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messeng
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
-export type FailedCategory = "failed_visit" | "no_coverage" | "bad_order_or_no_contact" | "pending_review";
+export type FailedCategory = "failed_visit" | "no_coverage" | "bad_order_or_no_contact" | "bad_phone" | "pending_review";
 export type OrderStatus =
   | "imported"
   | "address_risk"
@@ -217,6 +217,8 @@ export type Order = {
   sku?: string;
   quantity?: number;
   lineItems?: OrderLineItem[];
+  /** Marcador: este pedido reservo inventario y por tanto debe liberarlo al cerrarse. */
+  inventoryReserved?: boolean;
   labelPrintedAt?: string;
   labelPrintedBy?: string;
   labelPrintCount?: number;

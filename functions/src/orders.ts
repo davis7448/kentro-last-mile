@@ -1,7 +1,17 @@
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, type QuerySnapshot, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
+import {
+  applyInventoryMovements,
+  type InventoryIndex,
+  inventoryMovementsForOrder,
+  normalizeOrderLines,
+  orderOwnsInventoryReservation,
+  readSellerInventoryIndex,
+  skuKeyOf,
+  summarizeOrderLines
+} from "./inventory-movements";
 
 const requiredText = (label: string) => z.string().trim().min(1, `${label} es obligatorio.`);
 const optionalText = z.preprocess((value) => {
@@ -9,6 +19,12 @@ const optionalText = z.preprocess((value) => {
   if (typeof value === "string" && value.trim() === "") return undefined;
   return value;
 }, z.string().trim().min(1).optional());
+
+const manualOrderLineSchema = z.object({
+  productName: optionalText,
+  sku: optionalText,
+  quantity: z.number().int().positive().max(999).optional()
+});
 
 const manualOrderSchema = z.object({
   sellerId: requiredText("La tienda"),
@@ -22,14 +38,18 @@ const manualOrderSchema = z.object({
   fulfillmentMode: z.enum(["seller_pickup", "warehouse"]),
   totalCop: z.number().positive("El valor del pedido debe ser mayor a cero."),
   productId: optionalText,
+  // productName/sku/quantity planos se conservan por compatibilidad: un navegador con el
+  // bundle viejo en cache sigue enviandolos y normalizeOrderLines los convierte en una linea.
   productName: optionalText,
   sku: optionalText,
+  quantity: z.number().int().positive().max(999).optional(),
+  lineItems: z.array(manualOrderLineSchema).max(20).optional(),
   addressRisk: z.enum(["accepted", "review"])
 });
 
 const optionalString = z.preprocess((value) => (value === null ? undefined : value), z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => (value === null ? undefined : value), z.string().min(1).optional());
-const failedCategorySchema = z.enum(["failed_visit", "no_coverage", "bad_order_or_no_contact", "pending_review"]);
+const failedCategorySchema = z.enum(["failed_visit", "no_coverage", "bad_order_or_no_contact", "bad_phone", "pending_review"]);
 
 const closeOrderSchema = z.object({
   orderId: z.string().min(1),
@@ -132,6 +152,10 @@ const assignMessengerSchema = z.object({
   messengerId: z.string().min(1)
 });
 
+const unassignMessengerSchema = z.object({
+  orderIds: z.array(z.string().min(1)).min(1)
+});
+
 const defaultSettings = {
   sellerDeliveredFeeCop: 12000,
   sellerFailedFeeCop: 12000,
@@ -151,13 +175,22 @@ const tariffFields = [
 const dandaSellerIds = new Set(["seller-1779315416119"]);
 const dandaPreferredDriverId = "driver-1778271901513";
 const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
+const dandaSellerFeeCutoff = Date.parse("2026-07-17T05:00:00.000Z");
+
+// La tarifa de flete de DANDA subio a $13.500 para pedidos ENTREGADOS desde el
+// 17-jul-2026 (sin importar la fecha de creacion). En closeOrder, deliveredAtIso
+// es el momento del cierre (= fecha de entrega).
+function dandaDeliveredFeeCop(deliveredAtIso: string): number {
+  const deliveredAt = typeof deliveredAtIso === "string" ? Date.parse(deliveredAtIso) : Number.NaN;
+  return Number.isFinite(deliveredAt) && deliveredAt >= dandaSellerFeeCutoff ? 13500 : 12000;
+}
 
 type WalletEntryDoc = {
   id: string;
   ownerType: "seller" | "driver" | "admin";
   ownerId: string;
   orderId: string;
-  type: "cod_revenue" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage" | "seller_abono";
+  type: "cod_revenue" | "cod_remittance" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage" | "seller_abono";
   amountCop: number;
   description: string;
   createdAt: string;
@@ -266,24 +299,21 @@ export const createManualOrder = onCall(async (request) => {
 
   const now = new Date().toISOString();
   const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const lines = normalizeOrderLines(input);
+  const collapsed = summarizeOrderLines(lines);
+  const movements = inventoryMovementsForOrder(collapsed);
   const order = await db.runTransaction(async (transaction) => {
-    const inventorySnap = input.sku?.trim()
-      ? await transaction.get(db.collection("inventory").where("sellerId", "==", input.sellerId).where("sku", "==", input.sku.trim()).limit(1))
+    // Todas las lecturas antes de cualquier escritura (requisito de las transacciones).
+    const inventoryIndex = movements.length > 0
+      ? await readSellerInventoryIndex(transaction, db.collection("inventory"), input.sellerId)
       : null;
     const nextTracking = await nextTrackingCode(transaction);
     const trackingCode = nextTracking.code;
     const orderId = `ord-${trackingCode.toLowerCase()}`;
     const orderNumber = formattedRequestedNumber || `MAN-${trackingCode}`;
-    const inventoryDoc = inventorySnap && !inventorySnap.empty ? inventorySnap.docs[0] : null;
-    if (inventoryDoc) {
-      const inventory = inventoryDoc.data();
-      const available = Number(inventory.available) || 0;
-      const reserved = Number(inventory.reserved) || 0;
-      if (available - reserved <= 0) {
-        throw new HttpsError("failed-precondition", "El producto seleccionado no tiene stock disponible.");
-      }
-      transaction.set(inventoryDoc.ref, { reserved: reserved + 1, updatedAt: now }, { merge: true });
-    }
+    // Se reserva lo que exista en inventario; los SKU sin ficha no bloquean el pedido.
+    const reservedSomething = Boolean(inventoryIndex && movements.some((movement) => inventoryIndex.has(movement.skuKey)));
+    if (inventoryIndex) applyInventoryMovements(transaction, inventoryIndex, movements, "reserve", now);
     transaction.set(nextTracking.ref, { next: nextTracking.next + 1, prefix: "KNT", updatedAt: now }, { merge: true });
     const orderDoc = stripUndefined({
       id: orderId,
@@ -303,8 +333,12 @@ export const createManualOrder = onCall(async (request) => {
       fulfillmentMode: input.fulfillmentMode,
       totalCop: input.totalCop,
       productId: input.productId?.trim() || undefined,
-      productName: input.productName?.trim() || undefined,
-      sku: input.sku?.trim() || undefined,
+      productName: collapsed.productName,
+      sku: collapsed.sku,
+      quantity: collapsed.quantity,
+      lineItems: collapsed.lineItems.length > 0 ? collapsed.lineItems : undefined,
+      // Marcador: solo los pedidos que reservaron algo pueden liberarlo al cerrarse.
+      inventoryReserved: reservedSomething ? true : undefined,
       pickupPointName: typeof sellerData.pickupPointName === "string" && sellerData.pickupPointName.trim() ? sellerData.pickupPointName.trim() : String(sellerData.name ?? "Punto de recogida"),
       pickupAddress: typeof sellerData.pickupAddress === "string" ? sellerData.pickupAddress.trim() : "",
       evidence: [],
@@ -319,7 +353,9 @@ export const createManualOrder = onCall(async (request) => {
       action: "order.manual_created",
       entity: "order",
       entityId: orderDoc.id,
-      summary: `Pedido manual ${orderDoc.trackingCode} creado`,
+      summary: lines.length > 0
+        ? `Pedido manual ${orderDoc.trackingCode} creado (${lines.length} linea${lines.length === 1 ? "" : "s"}, ${collapsed.quantity} unidad${collapsed.quantity === 1 ? "" : "es"})`
+        : `Pedido manual ${orderDoc.trackingCode} creado`,
       createdAt: now
     });
     return orderDoc;
@@ -404,6 +440,17 @@ export const updateImportedOrder = onCall(async (request) => {
     if (current.status !== "imported") {
       throw new HttpsError("failed-precondition", "Only imported orders pending confirmation can be edited.");
     }
+    // Edicion manual de producto: reconstruye una linea desde los campos colapsados ya
+    // fusionados con lo que habia, para que la forma canonica sea siempre "hay lineItems".
+    // Un pedido `imported` nunca reservo inventario, asi que aqui no hay delta que aplicar.
+    const editedProduct = input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined;
+    const editedLineItems = editedProduct
+      ? summarizeOrderLines(normalizeOrderLines({
+        productName: input.productName ?? current.productName,
+        sku: input.sku ?? current.sku,
+        quantity: input.quantity ?? current.quantity
+      })).lineItems
+      : undefined;
     const updated = stripUndefined({
       ...current,
       customerName: input.customerName.trim(),
@@ -418,8 +465,7 @@ export const updateImportedOrder = onCall(async (request) => {
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
-      // Edicion manual de producto: prima sobre lineItems del webhook (se recalcula por los campos colapsados).
-      lineItems: (input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined) ? [] : undefined,
+      lineItems: editedLineItems,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
@@ -588,6 +634,28 @@ export const updateOrderAdjustments = onCall(async (request) => {
     if (["delivered", "failed", "cancelled", "liquidated"].includes(String(current.status))) {
       throw new HttpsError("failed-precondition", "Closed, cancelled or liquidated orders cannot be adjusted from this form.");
     }
+    // Edicion manual de producto: reconstruye una linea desde los campos colapsados ya
+    // fusionados con lo que habia, para que la forma canonica sea siempre "hay lineItems".
+    const editedProduct = input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined;
+    const editedSummary = editedProduct
+      ? summarizeOrderLines(normalizeOrderLines({
+        productName: input.productName ?? current.productName,
+        sku: input.sku ?? current.sku,
+        quantity: input.quantity ?? current.quantity
+      }))
+      : null;
+    // Si el pedido tenia reserva viva, cambiar producto/cantidad debe mover el stock en el
+    // acto; si no, `reserved` queda desfasado hasta que alguien reconcilie.
+    const sellerId = String(current.sellerId ?? "");
+    const adjustsReservation = Boolean(editedSummary) && orderOwnsInventoryReservation(current) && Boolean(sellerId);
+    const inventoryIndex = adjustsReservation
+      ? await readSellerInventoryIndex(transaction, db.collection("inventory"), sellerId)
+      : null;
+    const nextMovements = editedSummary ? inventoryMovementsForOrder(editedSummary) : [];
+    if (inventoryIndex) {
+      applyInventoryMovements(transaction, inventoryIndex, inventoryMovementsForOrder(current), "release", now);
+      applyInventoryMovements(transaction, inventoryIndex, nextMovements, "reserve", now);
+    }
     const updated = stripUndefined({
       ...current,
       totalCop: input.totalCop,
@@ -595,8 +663,9 @@ export const updateOrderAdjustments = onCall(async (request) => {
       productName: input.productName?.trim(),
       sku: input.sku?.trim(),
       quantity: input.quantity,
-      // Edicion manual de producto: prima sobre lineItems del webhook (se recalcula por los campos colapsados).
-      lineItems: (input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined) ? [] : undefined,
+      lineItems: editedSummary?.lineItems,
+      // El marcador sigue al stock: si el producto nuevo no tiene ficha, ya no hay nada que liberar.
+      inventoryReserved: inventoryIndex ? nextMovements.some((movement) => inventoryIndex.has(movement.skuKey)) : undefined,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
@@ -769,10 +838,11 @@ export const assignMessengerToOrders = onCall(async (request) => {
     const refs = orderIds.map((orderId) => db.collection("orders").doc(orderId));
     const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
     const orders = snaps.map((snap) => ({ snap, data: snap.data() ?? {} }));
-    const invalid = orders.find(({ snap, data }) => !snap.exists || String(data.driverId ?? "") !== driverClaim || !["picked_up", "scheduled", "call_pending", "in_route"].includes(String(data.status ?? "")));
+    const invalid = orders.find(({ snap, data }) => !snap.exists || String(data.driverId ?? "") !== driverClaim || !["picked_up", "scheduled", "call_pending", "in_route", "retry_pending"].includes(String(data.status ?? "")));
     if (invalid) throw new HttpsError("failed-precondition", "Only picked up or active orders assigned to this leader can be assigned to a messenger.");
 
     const updatedOrders = orders.map(({ snap, data }) => {
+      const previousMessengerId = typeof data.messengerId === "string" && data.messengerId ? data.messengerId : undefined;
       const nextStatus = String(data.status ?? "") === "picked_up" ? "call_pending" : String(data.status ?? "");
       const updated = {
         id: snap.id,
@@ -783,6 +853,72 @@ export const assignMessengerToOrders = onCall(async (request) => {
         updatedAt: now
       };
       transaction.set(snap.ref, updated, { merge: true });
+      if (previousMessengerId && previousMessengerId !== parsed.data.messengerId) {
+        const auditId = `audit-${Date.now()}-${snap.id}`;
+        transaction.set(db.collection("auditEvents").doc(auditId), {
+          id: auditId,
+          actorId: request.auth?.uid,
+          actorRole: role,
+          action: "order.messenger_reassigned",
+          entity: "order",
+          entityId: snap.id,
+          summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} reasignado de mensajero ${previousMessengerId} a ${parsed.data.messengerId} por el lider logistico`,
+          createdAt: now
+        });
+      }
+      return updated;
+    });
+    return { orders: updatedOrders };
+  });
+});
+
+export const unassignMessengerFromOrders = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  const driverClaim = typeof request.auth?.token.driverId === "string" ? request.auth.token.driverId : undefined;
+  if (!request.auth || role !== "driver" || !driverClaim) {
+    throw new HttpsError("permission-denied", "Only logistics leaders can unassign messengers.");
+  }
+
+  const parsed = unassignMessengerSchema.safeParse(request.data);
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Invalid unassignment data.", parsed.error.flatten());
+
+  const db = getFirestore();
+  const now = new Date().toISOString();
+  return db.runTransaction(async (transaction) => {
+    const orderIds = Array.from(new Set(parsed.data.orderIds));
+    const refs = orderIds.map((orderId) => db.collection("orders").doc(orderId));
+    const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
+    const orders = snaps.map((snap) => ({ snap, data: snap.data() ?? {} }));
+    const invalid = orders.find(({ snap, data }) =>
+      !snap.exists
+      || String(data.driverId ?? "") !== driverClaim
+      || !data.messengerId
+      || !["picked_up", "scheduled", "call_pending", "in_route", "retry_pending"].includes(String(data.status ?? ""))
+    );
+    if (invalid) throw new HttpsError("failed-precondition", "Only active orders of this leader with a messenger assigned can be reverted.");
+
+    const updatedOrders = orders.map(({ snap, data }) => {
+      const previousMessengerId = String(data.messengerId ?? "");
+      const updated = {
+        id: snap.id,
+        ...data,
+        messengerId: null,
+        status: "picked_up",
+        callOutcome: null,
+        updatedAt: now
+      };
+      transaction.set(snap.ref, updated, { merge: true });
+      const auditId = `audit-${Date.now()}-${snap.id}`;
+      transaction.set(db.collection("auditEvents").doc(auditId), {
+        id: auditId,
+        actorId: request.auth?.uid,
+        actorRole: role,
+        action: "order.messenger_unassigned",
+        entity: "order",
+        entityId: snap.id,
+        summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} devuelto a pendiente de mensajero (antes: ${previousMessengerId}) por el lider logistico`,
+        createdAt: now
+      });
       return updated;
     });
     return { orders: updatedOrders };
@@ -823,16 +959,14 @@ export const cancelOrder = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "This order was already collected. Only an admin can cancel it.");
     }
 
-    const inventoryQuery = typeof current.sku === "string" && sellerId
-      ? db.collection("inventory").where("sellerId", "==", sellerId).where("sku", "==", current.sku).limit(1)
+    // Solo libera quien reservo. Un pedido `imported` nunca reservo (cinturon y tirantes).
+    const movements = orderOwnsInventoryReservation(current) && status !== "imported"
+      ? inventoryMovementsForOrder(current)
+      : [];
+    const inventoryIndex = movements.length > 0 && sellerId
+      ? await readSellerInventoryIndex(transaction, db.collection("inventory"), sellerId)
       : null;
-    const inventorySnap = inventoryQuery ? await transaction.get(inventoryQuery) : null;
-    if (inventorySnap && !inventorySnap.empty && status !== "imported") {
-      const inventoryDoc = inventorySnap.docs[0];
-      const inventory = inventoryDoc.data();
-      const reserved = Number(inventory.reserved) || 0;
-      transaction.set(inventoryDoc.ref, { reserved: Math.max(0, reserved - 1), updatedAt: now }, { merge: true });
-    }
+    if (inventoryIndex) applyInventoryMovements(transaction, inventoryIndex, movements, "release", now);
 
     const updated = stripUndefined({
       ...current,
@@ -872,14 +1006,17 @@ export const reconcileInventoryReservations = onCall(async (request) => {
   const closedStatuses = new Set(["delivered", "failed", "cancelled", "liquidated"]);
   const reservedByItem = new Map<string, number>();
 
+  // Solo cuentan los pedidos abiertos que poseen su reserva, y por CANTIDAD de cada linea.
+  // Si crear/cancelar/cerrar estan bien, correr esto no debe mover ningun numero.
   ordersSnap.docs.forEach((doc) => {
     const order = doc.data();
     const sellerId = typeof order.sellerId === "string" ? order.sellerId : "";
-    const sku = typeof order.sku === "string" ? order.sku.trim().toUpperCase() : "";
     const status = typeof order.status === "string" ? order.status : "";
-    if (!sellerId || !sku || closedStatuses.has(status)) return;
-    const key = `${sellerId}::${sku}`;
-    reservedByItem.set(key, (reservedByItem.get(key) ?? 0) + 1);
+    if (!sellerId || closedStatuses.has(status) || !orderOwnsInventoryReservation(order)) return;
+    for (const movement of inventoryMovementsForOrder(order)) {
+      const key = `${sellerId}::${movement.skuKey}`;
+      reservedByItem.set(key, (reservedByItem.get(key) ?? 0) + movement.quantity);
+    }
   });
 
   const now = new Date().toISOString();
@@ -887,8 +1024,7 @@ export const reconcileInventoryReservations = onCall(async (request) => {
   const inventory = inventorySnap.docs.map((doc) => {
     const item = doc.data();
     const sellerId = typeof item.sellerId === "string" ? item.sellerId : "";
-    const sku = typeof item.sku === "string" ? item.sku.trim().toUpperCase() : "";
-    const reserved = reservedByItem.get(`${sellerId}::${sku}`) ?? 0;
+    const reserved = reservedByItem.get(`${sellerId}::${skuKeyOf(item.sku) ?? ""}`) ?? 0;
     batch.set(doc.ref, { reserved, updatedAt: now }, { merge: true });
     return { id: doc.id, ...item, reserved };
   });
@@ -950,15 +1086,13 @@ export const closeOrder = onCall(async (request) => {
     }
 
     const zoneId = typeof order.zoneId === "string" ? order.zoneId : undefined;
-    const inventoryQuery = typeof order.sku === "string" && typeof order.sellerId === "string"
-      ? db.collection("inventory").where("sellerId", "==", order.sellerId).where("sku", "==", order.sku).limit(1)
-      : null;
+    const needsInventory = orderOwnsInventoryReservation(order) && typeof order.sellerId === "string" && Boolean(order.sellerId);
     const catalogQuery = typeof order.sellerId === "string" && order.sellerId
       ? db.collection("productCatalog").where("sellerId", "==", order.sellerId)
       : null;
-    const [zoneSnap, inventorySnap, catalogSnap] = await Promise.all([
+    const [zoneSnap, inventoryIndex, catalogSnap] = await Promise.all([
       zoneId ? transaction.get(db.collection("zones").doc(zoneId)) : Promise.resolve(null),
-      inventoryQuery ? transaction.get(inventoryQuery) : Promise.resolve(null),
+      needsInventory ? readSellerInventoryIndex(transaction, db.collection("inventory"), String(order.sellerId)) : Promise.resolve(null),
       catalogQuery ? transaction.get(catalogQuery) : Promise.resolve(null)
     ]);
     const sellerCatalog = catalogSnap ? catalogSnap.docs.map((catalogDoc) => ({ id: catalogDoc.id, ...catalogDoc.data() } as Record<string, any>)) : [];
@@ -996,7 +1130,7 @@ export const closeOrder = onCall(async (request) => {
 
     transaction.set(orderRef, nextOrder, { merge: true });
 
-    settleInventoryForOrder(transaction, inventorySnap, input.outcome, isVisitRescheduled, now);
+    settleInventoryForOrder(transaction, inventoryIndex, nextOrder, input.outcome, isVisitRescheduled, now);
     const productCostLines = resolveProductCostLinesForOrder(nextOrder, sellerCatalog);
     const walletEntries = isVisitRescheduled ? [] : buildWalletEntries(nextOrder, resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()), now, productCostLines);
     for (const entry of walletEntries) {
@@ -1471,7 +1605,9 @@ async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, s
     const entry = doc.data() as WalletEntryDoc;
     const orderId = String(entry.orderId ?? "");
     if (!orderIdSet.has(orderId)) continue;
-    if (entry.type === "cod_revenue") {
+    // cod_remittance neteado: una reversa de COD (pedido revertido a fallido) deja
+    // el COD del pedido en 0 y no debe figurar como efectivo esperado del domiciliario.
+    if (entry.type === "cod_revenue" || entry.type === "cod_remittance") {
       codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
     }
     if (["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type)) {
@@ -1533,7 +1669,7 @@ function buildSettlement(
   relatedSellerEntries: WalletEntryDoc[] = []
 ): SettlementDoc {
   const financialEntries = kind === "driver" ? relatedSellerEntries : entries;
-  const codCop = financialEntries.filter((entry) => entry.type === "cod_revenue").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
+  const codCop = financialEntries.filter((entry) => entry.type === "cod_revenue" || entry.type === "cod_remittance").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
   const feesCop = Math.max(0, -financialEntries
     .filter((entry) => entry.ownerType === "seller" && ["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type))
     .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
@@ -1601,25 +1737,20 @@ function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any
   return values;
 }
 
+// Entregado consume stock; fallido definitivo solo libera la reserva; reagendado no toca nada
+// (la reserva sigue viva porque el pedido sigue abierto). Solo actua si el pedido reservo.
 function settleInventoryForOrder(
   transaction: Transaction,
-  inventorySnap: QuerySnapshot | null,
+  inventoryIndex: InventoryIndex | null,
+  order: Record<string, any>,
   outcome: "delivered" | "failed",
   retry: boolean,
   now: string
 ) {
-  if (!inventorySnap || inventorySnap.empty) return;
-  const inventoryDoc = inventorySnap.docs[0];
-  const inventory = inventoryDoc.data();
-  const available = Number(inventory.available) || 0;
-  const reserved = Number(inventory.reserved) || 0;
-  if (outcome === "delivered") {
-    transaction.set(inventoryDoc.ref, { available: Math.max(0, available - 1), reserved: Math.max(0, reserved - 1), updatedAt: now }, { merge: true });
-    return;
-  }
-  if (!retry) {
-    transaction.set(inventoryDoc.ref, { reserved: Math.max(0, reserved - 1), updatedAt: now }, { merge: true });
-  }
+  if (!inventoryIndex || !orderOwnsInventoryReservation(order)) return;
+  if (outcome === "failed" && retry) return;
+  const movements = inventoryMovementsForOrder(order);
+  applyInventoryMovements(transaction, inventoryIndex, movements, outcome === "delivered" ? "consume" : "release", now);
 }
 
 // Transicion operativa validada en el servidor. Reemplaza las escrituras optimistas del cliente
@@ -1793,7 +1924,7 @@ function buildWalletEntries(order: Record<string, any>, settings: Record<string,
     ? {
         ...defaultSettings,
         ...settings,
-        sellerDeliveredFeeCop: 12000,
+        sellerDeliveredFeeCop: dandaDeliveredFeeCop(now),
         sellerFailedFeeCop: 0,
         driverDeliveredPayCop: usesNewDandaDriverPay ? 11000 : 10000,
         driverFailedPayCop: 0

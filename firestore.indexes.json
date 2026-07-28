@@ -114,6 +114,14 @@
         { "fieldPath": "sellerId", "order": "ASCENDING" },
         { "fieldPath": "shopDomain", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "shopifySyncIssues",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

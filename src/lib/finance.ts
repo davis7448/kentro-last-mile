@@ -3,6 +3,7 @@ import type { AppState, CashReceipt, Order, Settlement, WalletEntry } from "./ty
 const dandaSellerIds = new Set(["seller-1779315416119"]);
 const dandaPreferredDriverId = "driver-1778271901513";
 const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
+const dandaSellerFeeCutoff = Date.parse("2026-07-17T05:00:00.000Z");
 
 type Tariffs = {
   sellerDeliveredFeeCop: number;
@@ -28,9 +29,14 @@ function applySellerTariffOverrides(order: Order, tariffs: Tariffs): Tariffs {
     order.driverId === dandaPreferredDriverId &&
     Number.isFinite(pickedUpAt) &&
     pickedUpAt >= dandaDriverPayCutoff;
+  // La tarifa de $13.500 aplica por fecha de ENTREGA (no de creacion): se toma de
+  // la evidencia de entrega y, si aun no existe, del cierre/actualizacion del pedido.
+  const deliveryEvidence = [...(order.evidence ?? [])].reverse().find((item) => item.type === "delivery");
+  const deliveredAt = Date.parse(deliveryEvidence?.createdAt ?? order.updatedAt ?? order.createdAt);
+  const sellerDeliveredFeeCop = Number.isFinite(deliveredAt) && deliveredAt >= dandaSellerFeeCutoff ? 13500 : 12000;
   return {
     ...tariffs,
-    sellerDeliveredFeeCop: 12000,
+    sellerDeliveredFeeCop,
     sellerFailedFeeCop: 0,
     driverDeliveredPayCop: usesNewDriverPay ? 11000 : 10000,
     driverFailedPayCop: 0
@@ -377,6 +383,15 @@ function driverPayForOrder(wallet: WalletEntry[], driverId: string, orderId: str
     .filter((entry) => entry.ownerType === "driver" && entry.ownerId === driverId && entry.orderId === orderId && entry.type === "driver_earning")
     .reduce((sum, entry) => sum + entry.amountCop, 0);
 }
+// COD que el domiciliario debe entregar por un pedido: solo aplica a entregados/
+// liquidados. Un pedido fallido (aunque sea cobrable) no recauda efectivo, asi que
+// da 0. Se calcula con el estado del pedido porque el domiciliario no ve los
+// asientos del vendedor (cod_revenue es ownerType "seller", fuera de su scope).
+function orderCollectedCodCop(order: Order | undefined) {
+  if (!order || order.paymentMethod !== "cod") return 0;
+  if (order.status !== "delivered" && order.status !== "liquidated") return 0;
+  return Math.max(0, Number(order.totalCop) || 0);
+}
 
 function cashExpectedForSettlement(state: AppState, settlement: Settlement, orderIds: string[]) {
   const orderIdSet = new Set(orderIds);
@@ -424,7 +439,7 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
     const orders: DriverUnsettledCashOrderRow[] = orderIds.map((orderId) => {
       const order = state.orders.find((item) => item.id === orderId);
       const orderDriverPayCop = driverPayForOrder(state.wallet, driverId, orderId);
-      const codCop = order && order.paymentMethod === "cod" ? Math.max(0, Number(order.totalCop) || 0) : 0;
+      const codCop = orderCollectedCodCop(order);
       return {
         orderId,
         trackingCode: order?.trackingCode ?? orderId,
@@ -512,7 +527,7 @@ export function weeklyFailedRate(state: AppState, driverId: string) {
     const closedStatus = order.status === "delivered" || order.status === "failed";
     return order.driverId === driverId && closedStatus && new Date(order.updatedAt).getTime() >= weekAgo;
   });
-  const excluded = closed.filter((order) => order.status === "failed" && (order.failedCategory === "no_coverage" || order.failedCategory === "bad_order_or_no_contact")).length;
+  const excluded = closed.filter((order) => order.status === "failed" && (order.failedCategory === "no_coverage" || order.failedCategory === "bad_order_or_no_contact" || order.failedCategory === "bad_phone")).length;
   const total = Math.max(0, closed.length - excluded);
   const failed = closed.filter(isChargeableFailedOrder).length;
   return { total, failed, rate: total === 0 ? 0 : Math.round((failed / total) * 100) };

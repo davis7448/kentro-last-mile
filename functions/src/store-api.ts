@@ -108,7 +108,8 @@ function classifyOrder(order: OrderDoc) {
   const takenByDriver = Boolean(order.driverId) && PICKED_BY_DRIVER_STATUSES.has(String(order.status));
   const noCoverageFailed = order.status === "failed" && order.failedCategory === "no_coverage";
   const badOrderFailed = order.status === "failed" && order.failedCategory === "bad_order_or_no_contact";
-  const dispatchable = takenByDriver && !noCoverageFailed && !badOrderFailed;
+  const badPhoneFailed = order.status === "failed" && order.failedCategory === "bad_phone";
+  const dispatchable = takenByDriver && !noCoverageFailed && !badOrderFailed && !badPhoneFailed;
   return {
     takenByDriver,
     dispatchable,
@@ -117,6 +118,7 @@ function classifyOrder(order: OrderDoc) {
     chargeableFailed: isChargeableFailed(order),
     noCoverageFailed,
     badOrderFailed,
+    badPhoneFailed,
     closed: ["delivered", "failed", "cancelled", "liquidated"].includes(String(order.status))
   };
 }
@@ -134,10 +136,11 @@ function computeKpis(orders: OrderDoc[]) {
   const chargeableFailed = orders.filter(isChargeableFailed).length;
   const noCoverageFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "no_coverage").length;
   const badOrderFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "bad_order_or_no_contact").length;
+  const badPhoneFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "bad_phone").length;
   const cancelled = orders.filter((o) => o.status === "cancelled").length;
   const liquidated = orders.filter((o) => o.status === "liquidated").length;
   const pickedByDriver = orders.filter((o) => o.driverId && PICKED_BY_DRIVER_STATUSES.has(String(o.status))).length;
-  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed);
+  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed - badPhoneFailed);
   const dispatchRate = pickedByDriver > 0 ? Math.round((dispatchable / pickedByDriver) * 100) : 0;
   const closedDispatchable = delivered + chargeableFailed + liquidated;
   const openDispatchable = Math.max(0, dispatchable - closedDispatchable);
@@ -169,11 +172,12 @@ function computeKpis(orders: OrderDoc[]) {
     fallidosPorCategoria: {
       fallidoConVisita: chargeableFailed,
       sinCobertura: noCoverageFailed,
-      pedidoMaloNoContesta: badOrderFailed
+      pedidoMaloNoContesta: badOrderFailed,
+      sinTelefonoLineaInactiva: badPhoneFailed
     },
     formulas: {
       tomadosPorDomiciliario: "pedidos con domiciliario asignado en estado llamada/agendado/recogido/en ruta/reintento/entregado/fallido/liquidado",
-      despachables: "tomados por domiciliario menos fallidos sin cobertura y pedido malo/no contesta",
+      despachables: "tomados por domiciliario menos fallidos sin cobertura, pedido malo/no contesta y sin telefono/linea inactiva",
       porcentajeDespacho: "despachables / tomados por domiciliario",
       porcentajeTerminacion: "(entregados + fallidos con visita + liquidados) / despachables",
       porcentajeEntrega: "entregados / despachables",
@@ -198,6 +202,89 @@ function buildCodReceivedSet(settlements: SettlementDoc[]) {
     }
   }
   return codReceived;
+}
+
+// Tipos de asiento del seller que cuentan para la liquidacion/saldo (misma lista
+// que isLiquidationWalletType en functions/src/orders.ts, sin driver_earning).
+const SELLER_LIQUIDATION_TYPES = new Set(["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "seller_abono"]);
+
+// Elegibilidad para pago, misma compuerta que createSettlement (orders.ts):
+// los abonos siempre; si no, el pedido debe existir y ser prepago o tener el COD ya recibido.
+function isSellerEntryEligible(entry: WalletEntryDoc, ordersById: Map<string, OrderDoc>, codReceived: Set<string>) {
+  if (entry.type === "seller_abono") return true;
+  if (!entry.orderId) return false;
+  const order = ordersById.get(String(entry.orderId));
+  if (!order) return false;
+  return order.paymentMethod === "prepaid" || codReceived.has(String(entry.orderId));
+}
+
+// Suma de delivery_fee/failed_fee/etc como magnitud positiva de cobro (igual que netChargeCop de la UI).
+function chargeMagnitude(entries: WalletEntryDoc[], types: string[]) {
+  return Math.max(0, -entries.filter((e) => types.includes(e.type)).reduce((sum, e) => sum + Number(e.amountCop || 0), 0));
+}
+
+function sumType(entries: WalletEntryDoc[], types: string[]) {
+  return Math.round(entries.filter((e) => types.includes(e.type)).reduce((sum, e) => sum + Number(e.amountCop || 0), 0));
+}
+
+// Resumen financiero consolidado de la tienda, autoritativo (mismos criterios del admin).
+function buildStoreSummary(
+  sellerEntries: WalletEntryDoc[],
+  settlementsById: Map<string, SettlementDoc>,
+  ordersById: Map<string, OrderDoc>,
+  codReceived: Set<string>,
+  sellerSettlements: SettlementDoc[]
+) {
+  const liq = sellerEntries.filter((e) => SELLER_LIQUIDATION_TYPES.has(e.type));
+  let disponibleCop = 0, enLiquidacionCop = 0, bloqueadoCodCop = 0, liquidadoCop = 0;
+  for (const entry of liq) {
+    const amount = Number(entry.amountCop || 0);
+    if (entry.settlementId) {
+      const status = String(settlementsById.get(String(entry.settlementId))?.status ?? "");
+      if (status === "paid" || status === "reconciled") liquidadoCop += amount;
+      else enLiquidacionCop += amount; // corte pendiente
+    } else if (isSellerEntryEligible(entry, ordersById, codReceived)) {
+      disponibleCop += amount;
+    } else {
+      bloqueadoCodCop += amount;
+    }
+  }
+  const abonos = sellerEntries
+    .filter((e) => e.type === "seller_abono")
+    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(Math.abs(Number(e.amountCop || 0))), nota: e.description ?? null }))
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const totalAbonadoCop = abonos.reduce((sum, a) => sum + a.montoCop, 0);
+
+  const pagosLiquidaciones = sellerSettlements
+    .filter((s) => s.status === "paid" || s.status === "reconciled")
+    .map((s) => ({ tipo: "liquidacion" as const, fecha: s.paidAt ?? s.reconciledAt ?? s.createdAt ?? null, montoCop: Math.round(Number(s.netCop || 0)), referencia: String(s.id) }));
+  const pagosAbonos = abonos.map((a) => ({ tipo: "abono" as const, fecha: a.fecha, montoCop: a.montoCop, referencia: "abono" }));
+  const pagos = [...pagosLiquidaciones, ...pagosAbonos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+  return {
+    saldoPendiente: {
+      disponibleCop: Math.round(disponibleCop),
+      enLiquidacionCop: Math.round(enLiquidacionCop),
+      bloqueadoCodCop: Math.round(bloqueadoCodCop),
+      totalCop: Math.round(disponibleCop + enLiquidacionCop + bloqueadoCodCop)
+    },
+    totales: {
+      codCop: sumType(liq, ["cod_revenue", "cod_remittance"]),
+      cobrosCop: chargeMagnitude(liq, ["delivery_fee", "failed_fee", "fulfillment_fee"]),
+      costoProductoCop: chargeMagnitude(liq, ["product_cost"]),
+      abonadoCop: totalAbonadoCop,
+      liquidadoCop: Math.round(liquidadoCop)
+    },
+    pagos,
+    abonos,
+    significado: {
+      disponibleCop: "Saldo que la plataforma ya te puede pagar (COD recibido del domiciliario o prepago), neto de abonos.",
+      enLiquidacionCop: "Ya incluido en un corte creado pero aun no pagado.",
+      bloqueadoCodCop: "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
+      liquidadoCop: "Total neto ya liquidado en cortes pagados/conciliados.",
+      abonadoCop: "Total de abonos (pagos parciales) que ya te hemos entregado."
+    }
+  };
 }
 
 function buildPaymentInfo(
@@ -228,6 +315,14 @@ function buildPaymentInfo(
     pagado: allPaid,
     habilitadoParaPago: eligible,
     netoCop: netCop,
+    // Desglose real por pedido para que la tienda no asuma el flete (13.500/12.000).
+    desglose: {
+      codCop: sumType(entries, ["cod_revenue", "cod_remittance"]),
+      fleteCop: chargeMagnitude(entries, ["delivery_fee"]),
+      failedFeeCop: chargeMagnitude(entries, ["failed_fee"]),
+      fulfillmentCop: chargeMagnitude(entries, ["fulfillment_fee"]),
+      costoProductoCop: chargeMagnitude(entries, ["product_cost"])
+    },
     movimientos: entries.length,
     movimientosSinLiquidar: unsettledCount,
     settlementIds,
@@ -293,8 +388,9 @@ export const storeApi = onRequest(async (request, response) => {
       ok: true,
       tienda: config.sellerName ?? sellerId,
       endpoints: {
+        "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponible/en_liquidacion/bloqueado_cod), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
         "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
-        "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa y estado de pago por pedido (pagado / en_liquidacion / pendiente_habilitado / pendiente_bloqueado_cod).",
+        "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa, estado de pago y desglose financiero real por pedido (cod, flete, costo producto, neto).",
         "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
       },
       autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>."
@@ -317,7 +413,7 @@ export const storeApi = onRequest(async (request, response) => {
     return;
   }
 
-  if (resource === "orders" || resource === "settlements") {
+  if (resource === "orders" || resource === "settlements" || resource === "resumen") {
     const [entriesSnap, settlementsSnap] = await Promise.all([
       db.collection("walletEntries").where("ownerType", "==", "seller").where("ownerId", "==", sellerId).get(),
       db.collection("settlements").get()
@@ -326,6 +422,17 @@ export const storeApi = onRequest(async (request, response) => {
     const allSettlements = settlementsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
     const settlementsById = new Map(allSettlements.map((settlement) => [String(settlement.id), settlement]));
     const codReceived = buildCodReceivedSet(allSettlements);
+    const ordersByIdAll = new Map(allOrders.map((order) => [String(order.id), order]));
+
+    if (resource === "resumen") {
+      const sellerSettlements = allSettlements.filter((s) => s.kind === "seller" && s.ownerId === sellerId);
+      response.status(200).json({
+        ok: true,
+        tienda: config.sellerName ?? sellerId,
+        ...buildStoreSummary(sellerEntries, settlementsById, ordersByIdAll, codReceived, sellerSettlements)
+      });
+      return;
+    }
 
     if (resource === "orders") {
       const filtered = rangeOrders
@@ -377,5 +484,5 @@ export const storeApi = onRequest(async (request, response) => {
     return;
   }
 
-  response.status(404).json({ ok: false, error: "unknown_resource", recursos: ["/kpis", "/orders", "/settlements"] });
+  response.status(404).json({ ok: false, error: "unknown_resource", recursos: ["/resumen", "/kpis", "/orders", "/settlements"] });
 });
