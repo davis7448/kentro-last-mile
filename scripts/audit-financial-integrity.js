@@ -4,8 +4,9 @@
  * Cruza orders × walletEntries × settlements × sellers/drivers buscando anomalías.
  *
  * Filtra falsos positivos conocidos:
- *  - platform_margin: su orderId es el id del settlement (por diseño); se excluye de
- *    "entry sin pedido" y de la suma al comparar netCop del settlement.
+ *  - platform_margin y gmf_tax: su orderId es el id del settlement (por diseño), no el de un
+ *    pedido; se excluyen de "entry sin pedido". platform_margin ademas se excluye de la suma al
+ *    comparar netCop del settlement.
  *  - Correcciones que netean a 0 por pedido (reversas cod_remittance / correction-*).
  *  - Pagos legítimos por visita fallida ("Pago transportista fallido").
  *
@@ -55,7 +56,7 @@ const LIQ_TYPES = ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee"
   f.orphanSupplierSettlementId = cut(wallet.filter((e) => e.supplierSettlementId && !settlements.has(e.supplierSettlementId)).map((e) => ({ id: e.id })));
 
   // 2) referencias a entidades inexistentes (platform_margin/abono/cash_shortage usan settlement/‑ como orderId)
-  f.entryMissingOrder = cut(wallet.filter((e) => e.orderId && !orders.has(e.orderId) && !["platform_margin", "cash_shortage", "seller_abono"].includes(e.type) && !String(e.id).startsWith("we-abono")).map((e) => ({ id: e.id, type: e.type, orderId: e.orderId })));
+  f.entryMissingOrder = cut(wallet.filter((e) => e.orderId && !orders.has(e.orderId) && !["platform_margin", "cash_shortage", "seller_abono", "gmf_tax"].includes(e.type) && !String(e.id).startsWith("we-abono")).map((e) => ({ id: e.id, type: e.type, orderId: e.orderId })));
   f.sellerEntryMissingSeller = cut(wallet.filter((e) => e.ownerType === "seller" && !sellerIds.has(e.ownerId)).map((e) => ({ id: e.id, ownerId: e.ownerId })));
   f.driverEntryMissingDriver = cut(wallet.filter((e) => e.ownerType === "driver" && e.ownerId !== "unassigned" && !driverIds.has(e.ownerId)).map((e) => ({ id: e.id, ownerId: e.ownerId })));
 

@@ -14,10 +14,11 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 - `src/lib/finance.ts` — cálculo financiero cliente (costo por línea/SKU, fees, saldos).
 - `src/lib/actions.ts` — funciones puras de estado (assignOrder, advanceOrder, resolveAddress…).
 - `src/lib/order-export.ts` — export a Excel (pedidos y wallet).
-- `src/lib/firebase/state-store.ts` — carga/suscripción de estado Firestore (scoping por rol) + escrituras.
+- `src/lib/firebase/state-store.ts` — carga/suscripción de estado Firestore (scoping por rol) + escrituras. **Ningún rol baja su historial completo**: los pedidos activos van enteros y los cerrados solo dentro de una ventana (`orderTargets` en la suscripción, `getWindowedOrders` en la carga inicial — hay que tocar los dos o el primer pintado diverge del listener). Lo que queda fuera de la ventana y hace falta para el dinero se rescata por id (`pinOrders`).
 - `src/lib/firebase/auth.ts` — wrappers de callables.
 - `functions/src/` — backend: `orders.ts` (callables de ciclo de vida: confirm/close/cancel/adjust/**applyOrderTransition**…), `roles.ts`, `shopify.ts`, `index.ts` (webhook Shopify; tiene su PROPIA copia de helpers `summarizeShopifyLineItems`/offers), `onstock-webhook.ts`, `store-webhook.ts`, `uchat-pull.ts` (**confirmación de pedidos vía ChatBy/UChat, enfoque PULL**: callable `setStoreUchatConfig` guarda token en `storeUchatSecrets` (sin acceso cliente); scheduled `pullUchatConfirmations` cada 3 min consulta la API de UChat por teléfono E.164 y pasa `imported`→`ready_to_assign` los pedidos con `lead_status=CONFIRMADO` o tag `PED-Confirmado`), `uchat-webhook.ts` (`uchatConfirmWebhook`: webhook entrante alternativo/secundario).
 - `functions/src/order-stats.ts` — callable `getOrderStats`: indicadores de un periodo **agregando en Firestore**, sin descargar pedidos. Lo usa la UI cuando el rango elegido se sale de la ventana descargada (atajos "Mes pasado"/"Acumulado"). Devuelve solo contadores exactos; el embudo por mensajero y el recaudo neto siguen en cliente porque no son agregables (ver el comentario del archivo).
+- `functions/src/platform-position.ts` — callable `getPlatformPosition` + `computePlatformPosition` (puro): las quince cifras de caja, activos, pasivos y utilidad de la plataforma, calculadas EN SERVIDOR. Existe para que el admin deje de bajarse `walletEntries` entera (10.452 asientos, 3,58 MB, el 68% de su carga) solo para derivarlas. **La suscripción todavía no se recorta**: ver "Pendiente" en `docs/rendimiento.md`. `src/lib/platform-position.test.ts` ata su aritmética a la del cliente para que no puedan divergir.
 - `functions/src/wallet-entries.ts` — **la unica fuente de verdad sobre cuanta plata genera un pedido**: `buildWalletEntries`, `resolveTariffs`, costo de producto y las reglas de tarifa de DANDA. Puro (sin firebase-admin) para que lo reusen el cierre y las correcciones sin copiarlo.
 - `functions/src/settlement-math.ts` — aritmetica de cortes sin Firestore: `computeDriverCashSummary` (cuanto efectivo debe un domiciliario), `settlementTotals`. `orders.ts` conserva `loadDriverCashInputs`, que es la parte que lee. Se separo para poder responder "como queda el corte DESPUES del cambio" sin escribir primero.
 - `functions/src/order-corrections-plan.ts` + `order-corrections.ts` — **correccion administrativa de estados terminales desde la UI** (callable `correctOrderStatus`): fallido→entregado, entregado→fallido, anulado→operativo, fallido→nueva visita. Sustituye a los ocho scripts one-off que se corrian a mano (`correct-*.js`, `clawback-*.js`, `reopen-order-for-retry.js`), cuyo razonamiento esta recogido en la cabecera del planificador. El planificador es PURO, asi que `dryRun: true` devuelve exactamente lo que se va a escribir: la previsualizacion y la aplicacion no pueden divergir. Regla central: un corte ya pagado o conciliado NO se toca — se compensa con asientos `-correction-reverse-*` en el periodo abierto; uno pendiente si se recalcula. Usa batch con precondiciones `lastUpdateTime` (no transaccion) porque recalcular un corte necesita las colecciones de asientos completas.
@@ -33,6 +34,24 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 3. **No re-introducir dependencias de cálculo frágiles** (ej. el viejo `unitsPerSoldUnit` del 2x1 de Kovia se eliminó).
 4. **`failedCategory` tiene CINCO valores, no cuatro**: `failed_visit`, `no_coverage`, `bad_order_or_no_contact`, `bad_phone` y `pending_review`. Cobrable = `failed_visit` **o campo ausente**; despachable excluye solo los tres del medio (`pending_review` SÍ es despachable). Contar cobrables **restando** las no-cobrables es un error: se hizo así y `pending_review` desviaba 44 pedidos. Contar `failed_visit` en positivo, que además absorbe categorías futuras sin tocar nada.
 
+5. **Al acotar una descarga, comprobar primero qué cifras de dinero dependen de lo que se recorta.**
+   El saldo "Pendiente por entregar" del líder sale de pedidos entregados en efectivo aún sin cortar,
+   que pueden ser muy anteriores a la ventana: acotar sin rescatarlos por id le bajaba el saldo
+   **$1.135.720 en silencio** (medido forzando una ventana de un día). No falla, no avisa: solo
+   muestra menos dinero del que se debe.
+6. **Leer pedidos por id: el admin puede por lotes, el líder y el mensajero NO.** Comprobado con una
+   sesión real contra producción: `where(documentId(), "in", [...])` **sí** pasa las reglas para un
+   domiciliario mientras todos los ids sean suyos, pero un solo id ajeno o inexistente devuelve 403 y
+   **tumba el lote entero** — y `getDocumentsByIds` se traga el error, así que la pérdida sería
+   silenciosa justo en el saldo. Por eso existe `getDocumentsOneByOne`. No devolverlo al lote.
+
+## Rendimiento
+**Antes de tocar nada por lentitud, leer `docs/rendimiento.md`.** Trae el presupuesto de carga
+medido por rol, cómo medirlo (`localStorage.setItem("kentro-perf","1")`), las trampas comprobadas
+(ejes de fecha que no coinciden, `localeCompare`, `React.memo` inerte con `state` entero, índices
+antes que hosting) y lo que queda pendiente. La lentitud de esta app nunca ha estado en el pintado,
+sino en cuántos documentos baja el navegador antes de mostrar algo.
+
 ## Diseno
 Sistema "Acid Glass": tema oscuro, verde acido `#c6f24e` como unico acento, Plus Jakarta Sans,
 pildoras y tarjetas redondeadas, glassmorfismo solo en controles y una tarjeta heroe.
@@ -42,6 +61,12 @@ progresiva), las trampas comprobadas (pildoras en bloques, regex sobre clases, c
 y un checklist de cierre.
 
 ## Deploy
+- **Orden cuando el cambio toca consultas nuevas: índices → functions → hosting.** Una consulta sin
+  índice falla EN DURO, no en silencio: el rol afectado se queda sin pedidos. Desplegar
+  `firebase deploy --only firestore:indexes` y esperar a que estén `READY` (varios minutos en
+  `orders`) ANTES de subir el cliente que los usa.
+- **Los índices se AÑADEN, nunca se reemplazan**: desplegar borra los que falten en el archivo.
+  Comparar contra prod antes (`firebase firestore:indexes`).
 - Reglas: `firebase deploy --only firestore:rules --project kentro-last-mile`
 - Hosting: `firebase deploy --only hosting --project kentro-last-mile`
 - **Caché (no tocar sin pensar):** `firebase.json` fija `no-cache` para el HTML y `immutable` un año para `/_next/static/**`. Firebase por defecto pone `max-age=3600` a TODO, y eso rompía la app en móviles tras cada despliegue: el navegador conservaba el índice viejo pidiendo chunks con hash que el despliegue ya había borrado, y el JS no arrancaba (pantalla en blanco / "this page couldn't load"). El HTML debe revalidar siempre; los assets con hash en el nombre nunca.
