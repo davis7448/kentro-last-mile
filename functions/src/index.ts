@@ -15,6 +15,7 @@ export { uchatConfirmWebhook } from "./uchat-webhook";
 export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
 export { cleanupShopifySyncIssues } from "./sync-issues-cleanup";
 export { getOrderStats } from "./order-stats";
+export { getPlatformPosition } from "./platform-position";
 export { correctOrderStatus } from "./order-corrections";
 
 initializeApp();

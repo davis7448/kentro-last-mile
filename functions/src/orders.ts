@@ -329,7 +329,11 @@ export const createManualOrder = onCall(async (request) => {
   return { order };
 });
 
-export const confirmImportedOrder = onCall(async (request) => {
+// 512 MiB no es por memoria sino por CPU: en Cloud Functions la CPU va atada a la memoria, y
+// el arranque en frio medido contra produccion era de 2,33 s incluso en una funcion trivial.
+// Esta esta en la ruta caliente del domiciliario, que lo paga al cerrar el primer pedido del
+// dia. Sin `minInstances`: eso si tendria coste fijo mensual.
+export const confirmImportedOrder = onCall({ memory: "512MiB" }, async (request) => {
   const role = request.auth?.token.role;
   const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
   if (!request.auth || (role !== "admin" && role !== "seller" && role !== "seller_logistics")) {
@@ -1034,7 +1038,11 @@ async function nextTrackingCode(transaction: Transaction) {
   return { code: `KNT-${String(next).padStart(6, "0")}`, next, ref: counterRef };
 }
 
-export const closeOrder = onCall(async (request) => {
+// 512 MiB no es por memoria sino por CPU: en Cloud Functions la CPU va atada a la memoria, y
+// el arranque en frio medido contra produccion era de 2,33 s incluso en una funcion trivial.
+// Esta esta en la ruta caliente del domiciliario, que lo paga al cerrar el primer pedido del
+// dia. Sin `minInstances`: eso si tendria coste fijo mensual.
+export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
   const role = request.auth?.token.role;
   const driverClaim = typeof request.auth?.token.driverId === "string" ? request.auth.token.driverId : undefined;
   const messengerClaim = typeof request.auth?.token.messengerId === "string" ? request.auth.token.messengerId : undefined;
@@ -1974,7 +1982,11 @@ export const OPERATIONAL_TARGET_STATUSES = ["address_risk", "ready_to_assign", "
 const OPERATIONAL_TARGET_STATUS = new Set<string>(OPERATIONAL_TARGET_STATUSES);
 const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
 
-export const applyOrderTransition = onCall(async (request) => {
+// 512 MiB no es por memoria sino por CPU: en Cloud Functions la CPU va atada a la memoria, y
+// el arranque en frio medido contra produccion era de 2,33 s incluso en una funcion trivial.
+// Esta esta en la ruta caliente del domiciliario, que lo paga al cerrar el primer pedido del
+// dia. Sin `minInstances`: eso si tendria coste fijo mensual.
+export const applyOrderTransition = onCall({ memory: "512MiB" }, async (request) => {
   const role = request.auth?.token.role;
   if (!request.auth || (role !== "admin" && role !== "driver" && role !== "messenger")) {
     throw new HttpsError("permission-denied", "No autorizado para operar pedidos.");

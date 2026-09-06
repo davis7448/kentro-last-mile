@@ -151,7 +151,10 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
     skipped("shopifyStores", () => storeRole && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([])),
     skipped("storeWebhookConfigs", () => storeRole && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([])),
     skipped("shopifyInstallRequests", () => storeRole && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([])),
-    skipped("shopifySyncIssues", () => storeRole && context ? getCollection<ShopifySyncIssue>("shopifySyncIssues", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true, SYNC_ISSUES_LIMIT) : Promise.resolve([])),
+    // La rama de tienda llevaba la consulta SIN limite mientras la de admin si lo tenia. Hoy no se
+    // ejecuta (la suscripcion observa esta clave, asi que llega en `skip`), pero pediria 19.321
+    // documentos / 7,28 MB el dia que alguien la saque de los targets, para un panel de 5 filas.
+    skipped("shopifySyncIssues", () => storeRole && context ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true, SYNC_ISSUES_LIMIT, where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifySyncIssue>("shopifySyncIssues", true, SYNC_ISSUES_LIMIT) : Promise.resolve([])),
     role === "driver" && context ? getOwnDocument<Driver>("drivers", context.profileId) : role === "admin" ? getCollection<Driver>("drivers") : Promise.resolve([]),
     skipped("messengers", () => role === "messenger" && context ? getOwnDocument<Messenger>("messengers", context.profileId) : role === "driver" && context ? getCollection<Messenger>("messengers", where("leaderDriverId", "==", context.profileId)) : role === "admin" ? getCollection<Messenger>("messengers") : Promise.resolve([])),
     skipped("pickupBatches", () => role === "driver" && context ? getCollection<PickupBatch>("pickupBatches", where("driverId", "==", context.profileId)) : role === "admin" ? getCollection<PickupBatch>("pickupBatches") : Promise.resolve([])),
@@ -444,7 +447,11 @@ export function subscribeFirestoreState(
         ]
       : context?.role === "driver"
         ? [
-          { key: "orders", target: query(orderRef, where("driverId", "==", context.profileId)) },
+          // El lider bajaba 4.127 pedidos (~6,9 MB) — el 95% de la coleccion entera — en un movil
+          // y SIN cache persistente, asi que los repetia enteros en cada apertura. Con la misma
+          // particion que ya usaban admin y tienda son ~289 (~0,5 MB). Lo que queda fuera de la
+          // ventana y hace falta para el saldo se trae por id: ver pinDriverOrders.
+          ...orderTargets(where("driverId", "==", context.profileId)),
           { key: "orders", target: query(orderRef, where("driverId", "==", null), where("status", "==", "ready_to_assign")) },
           { key: "messengers", target: query(messengerRef, where("leaderDriverId", "==", context.profileId)) },
           { key: "pickupBatches", target: query(pickupBatchRef, where("driverId", "==", context.profileId)) },
@@ -455,7 +462,9 @@ export function subscribeFirestoreState(
         ]
         : context?.role === "messenger"
           ? [
-              { key: "orders", target: query(orderRef, where("messengerId", "==", context.profileId)) },
+              // Mismo motivo que el lider: el mensajero con mas ruta bajaba sus 896 pedidos
+              // historicos para trabajar sobre los de hoy.
+              ...orderTargets(where("messengerId", "==", context.profileId)),
               { key: "messengers", target: query(messengerRef, where("__name__", "==", context.profileId)) }
             ]
           : [
@@ -525,7 +534,11 @@ export function subscribeFirestoreState(
       .slice(0, MAX_PINNED_ORDERS);
     if (missing.length === 0) return;
     for (const id of missing) pinnedRequested.add(id);
-    const fetched = await getDocumentsByIds<Order>("orders", missing);
+    // El admin va por lotes; el lider y el mensajero de uno en uno, para que un id borrado o
+    // reasignado no tumbe el lote entero y les baje el saldo sin avisar. Ver getDocumentsOneByOne.
+    const fetched = context?.role === "admin"
+      ? await getDocumentsByIds<Order>("orders", missing)
+      : await getDocumentsOneByOne<Order>("orders", missing);
     if (stopped || fetched.length === 0) return;
     for (const order of fetched) pinnedOrders.set(order.id, order as unknown as Record<string, unknown>);
     perfLog(`pedidos fijados fuera de ventana: ${fetched.length} (acumulado ${pinnedOrders.size})`);
@@ -575,11 +588,15 @@ export function subscribeFirestoreState(
     if (context?.role === "driver" && next.sellers.length === 0 && next.orders.length > 0) {
       next.sellers = sellerReferencesFromOrders(next.orders);
     }
-    // Liquidaciones necesita el pedido detras de cada movimiento sin liquidar, y esos pueden ser
-    // muy anteriores a la ventana. Se piden por id, una sola vez, en cuanto la wallet esta viva.
-    // Solo para el admin: es el unico rol con vista de liquidaciones, y ademas la consulta por
-    // `documentId() in` no lleva `sellerId`, asi que solo las reglas de admin la admiten.
-    if (context?.role === "admin" && watchedKeys.has("wallet") && keyIsLive("wallet")) {
+    // El pedido detras de cada movimiento sin liquidar puede ser muy anterior a la ventana. Se
+    // piden por id, una sola vez, en cuanto la wallet esta viva.
+    //
+    // Vale para el admin (liquidaciones) y para el LIDER: `calculateDriverFinancialSummary` deriva
+    // su "Pendiente por entregar" de los pedidos entregados en efectivo que aun no entraron en
+    // ningun corte, y esos son justo los que pueden quedar fuera de la ventana. Sin esto, acotar
+    // la descarga le bajaria el saldo en silencio, que es un error financiero y no cosmetico.
+    // Su wallet se sigue suscribiendo sin recorte, asi que la semilla esta completa.
+    if ((context?.role === "admin" || context?.role === "driver") && watchedKeys.has("wallet") && keyIsLive("wallet")) {
       const openOrderIds = selectUnsettledWalletEntries(next.wallet)
         .map((entry) => entry.orderId)
         .filter((orderId): orderId is string => Boolean(orderId));
@@ -812,6 +829,44 @@ async function getDocumentsByIds<T extends { id: string }>(name: string, ids: st
   return mergeById(...groups);
 }
 
+/**
+ * Igual que `getDocumentsByIds`, pero leyendo documento a documento.
+ *
+ * NO es porque las reglas prohiban el lote: se comprobo contra produccion con una sesion real de
+ * domiciliario y `where(documentId(), "in", [...])` devuelve 200 mientras TODOS los ids del lote
+ * sean legibles. El problema es lo que pasa cuando uno no lo es:
+ *
+ *   lote de 5 pedidos propios          -> 200
+ *   lote de 4 propios + 1 ajeno        -> 403  (cae el lote ENTERO)
+ *   lote de 4 propios + 1 inexistente  -> 403  (cae el lote ENTERO)
+ *
+ * Y los ids de esta via salen de los asientos de wallet, asi que basta con que un pedido se haya
+ * borrado o reasignado a otro domiciliario para tumbar hasta 30 rescates de golpe. Como
+ * `getDocumentsByIds` ademas se traga el error con `.catch(() => [])`, la perdida seria SILENCIOSA,
+ * y estos son justo los pedidos que sostienen el saldo pendiente del lider: se veria menos dinero
+ * del que realmente se debe, sin un solo aviso.
+ *
+ * Leyendo de uno en uno, un id malo se queda en un id malo. Y el fallo se registra, no se traga.
+ */
+async function getDocumentsOneByOne<T extends { id: string }>(name: string, ids: string[]): Promise<T[]> {
+  const client = getFirebaseClient();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!client || unique.length === 0) return [];
+
+  const found: T[] = [];
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const snapshot = await getDoc(doc(client.db, name, id));
+        if (snapshot.exists()) found.push({ id: snapshot.id, ...snapshot.data() } as T);
+      } catch (error) {
+        console.warn(`No se pudo leer ${name}/${id}; puede faltar informacion en el saldo.`, error);
+      }
+    })
+  );
+  return found;
+}
+
 function sellerReferencesFromOrders(orders: Order[]): Seller[] {
   const sellers = new Map<string, Seller>();
   for (const order of orders) {
@@ -855,12 +910,14 @@ async function getOrdersForContext(context?: FirestoreStateContext): Promise<Ord
   if (context?.role === "seller" || context?.role === "seller_logistics") return getWindowedOrders(context, where("sellerId", "==", context.profileId));
   if (context?.role === "driver") {
     const [assigned, free] = await Promise.all([
-      getCollection<Order>("orders", where("driverId", "==", context.profileId)),
+      getWindowedOrders(context, where("driverId", "==", context.profileId)),
       getCollection<Order>("orders", where("driverId", "==", null), where("status", "==", "ready_to_assign"))
     ]);
-    return [...assigned, ...free].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // ISO 8601 ordena bien con comparacion directa; localeCompare (Intl) es un orden de magnitud
+    // mas lento y aqui se ejecuta sobre cientos de pedidos.
+    return mergeById(assigned, free).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
   }
-  if (context?.role === "messenger") return getCollection<Order>("orders", where("messengerId", "==", context.profileId));
+  if (context?.role === "messenger") return getWindowedOrders(context, where("messengerId", "==", context.profileId));
   return context ? getWindowedOrders(context) : getCollection<Order>("orders");
 }
 

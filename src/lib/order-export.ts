@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import { isChargeableFailedOrder } from "./finance";
 import type { AppState, FailedCategory, Order, OrderStatus, WalletEntry } from "./types";
 
@@ -259,7 +258,13 @@ function worksheetXml(columns: readonly string[], rows: OrderExportCell[][]) {
 }
 
 // Genera y descarga un .xlsx generico a partir de columnas + filas de datos.
+//
+// JSZip se carga aqui dentro, no en la cabecera: es la unica puerta de entrada a la libreria en
+// toda la app (las tres funciones de descarga pasan por esta) y solo se cruza cuando alguien pulsa
+// "Descargar". Importarla arriba la metia en el bundle inicial de TODOS los roles, incluido el
+// mensajero, que no exporta nada.
 async function downloadXlsx(sheetName: string, columns: readonly string[], dataRows: OrderExportCell[][], filename: string) {
+  const { default: JSZip } = await import("jszip");
   const sheetRows = [[...columns], ...dataRows];
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

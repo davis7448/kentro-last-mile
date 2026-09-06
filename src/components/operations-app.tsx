@@ -28,8 +28,6 @@ import {
   Wrench,
   X
 } from "lucide-react";
-import jsQR from "jsqr";
-import QRCode from "qrcode";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { renderCode128Svg } from "@/lib/barcode";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
@@ -887,6 +885,8 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
     const address = order.normalizedAddress ?? order.addressRaw;
     const codText = order.paymentMethod === "cod" ? `COBRAR ${formatCop(order.totalCop)}` : "PAGADO";
     const lookupUrl = orderLookupUrl(order);
+    // QRCode se carga aqui: solo hace falta al imprimir un rotulo, no al arrancar la app.
+    const { default: QRCode } = await import("qrcode");
     const qrDataUrl = await QRCode.toDataURL(lookupUrl, { errorCorrectionLevel: "M", margin: 1, width: 180 });
     // El map corre dentro de un Promise.all: si un codigo raro no fuera codificable en Code128,
     // el throw tumbaria la impresion del lote entero. Sin barras, pero con QR, mejor que sin rotulo.
@@ -3545,6 +3545,9 @@ function OrderLookupBar({ value, onChange, searchingHistory = false }: { value: 
         setMessage("No se pudo preparar el lector QR. Escribe o pega el codigo KNT.");
         return;
       }
+      // El lector solo se carga cuando alguien abre la camara. Se resuelve ANTES del bucle: el
+      // modulo queda cacheado, pero esperarlo en cada fotograma seria trabajo por gusto.
+      const { default: jsQR } = await import("jsqr");
       const startedAt = Date.now();
       const scan = async (): Promise<string | null> => {
         if (stopScanRef.current) return null;
@@ -3718,6 +3721,7 @@ function PickupScanModal({ state, driver, onClose, onCommit }: { state: AppState
         stopQrScan();
         return;
       }
+      const { default: jsQR } = await import("jsqr");
       const scan = async (): Promise<void> => {
         if (stopScanRef.current) return;
         const width = video.videoWidth;
@@ -5465,7 +5469,9 @@ function DashboardWalletCard({ state, ownerType, ownerId, title, collapsible = f
   const [open, setOpen] = useState(!collapsible);
   const entries = state.wallet
     .filter((entry) => entry.ownerType === ownerType && entry.ownerId === ownerId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // ISO 8601 ordena bien comparando directamente; localeCompare (Intl) es un orden de magnitud
+    // mas lento y aqui recorre el ledger completo en cada render.
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
   const balance = entries.reduce((sum, entry) => sum + entry.amountCop, 0);
   const income = entries.filter((entry) => entry.amountCop > 0).reduce((sum, entry) => sum + entry.amountCop, 0);
   const charges = Math.abs(entries.filter((entry) => entry.amountCop < 0).reduce((sum, entry) => sum + entry.amountCop, 0));
@@ -5532,7 +5538,7 @@ function WalletHistoryPanel({
   title: string;
   entriesOverride?: WalletEntry[];
 }) {
-  const entries = (entriesOverride ?? state.wallet.filter((entry) => (!ownerType || entry.ownerType === ownerType) && (!ownerId || entry.ownerId === ownerId))).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const entries = (entriesOverride ?? state.wallet.filter((entry) => (!ownerType || entry.ownerType === ownerType) && (!ownerId || entry.ownerId === ownerId))).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
   const balance = entries.reduce((sum, entry) => sum + entry.amountCop, 0);
   return (
     <Card>
@@ -8150,7 +8156,11 @@ function CashReconciliationCard({ state, setState }: { state: AppState; setState
 }
 
 function settlementFinancialView(state: AppState, settlement: Settlement) {
-  const settlementEntries = state.wallet.filter((entry) => settlement.walletEntryIds.includes(entry.id));
+  // Set, no `includes`: esto es una busqueda lineal dentro de otra sobre el ledger entero (10.452
+  // asientos por ~162 ids de media, con cortes de hasta 1.352). Las diez filas visibles costaban
+  // 53 ms medidos, y un movil de gama media va entre tres y seis veces mas lento.
+  const settlementEntryIds = new Set(settlement.walletEntryIds);
+  const settlementEntries = state.wallet.filter((entry) => settlementEntryIds.has(entry.id));
   const sumEntries = (types: WalletEntry["type"][]) => settlementEntries
     .filter((entry) => types.includes(entry.type))
     .reduce((sum, entry) => sum + entry.amountCop, 0);
@@ -8567,14 +8577,27 @@ function walletEntryTypeLabel(type: WalletEntry["type"]) {
 }
 
 function ClosedSettlementDetail({ state, settlement, detailRow }: { state: AppState; settlement: Settlement; detailRow: LiquidationRow | null }) {
-  const settlementEntries = state.wallet
-    .filter((entry) => settlement.walletEntryIds.includes(entry.id))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const orderIds = settlement.orderIds.length > 0
-    ? settlement.orderIds
-    : Array.from(new Set(settlementEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
-  const relatedOrderEntries = state.wallet.filter((entry) => entry.orderId && orderIds.includes(entry.orderId));
-  const audits = buildLiquidationOrderAudits(state, relatedOrderEntries).filter((audit) => orderIds.includes(audit.orderId));
+  // Todo esto barre el ledger entero, y antes vivia suelto en el cuerpo del componente: se repetia
+  // en CADA render, incluida cada tecla escrita dentro del detalle abierto. Con `includes` sobre
+  // arrays de hasta 1.352 ids ademas era cuadratico; los Set lo dejan lineal.
+  const { settlementEntries, orderIds, audits } = useMemo(() => {
+    const entryIds = new Set(settlement.walletEntryIds);
+    // ISO 8601 ordena bien con comparacion directa; localeCompare (Intl) es un orden de magnitud
+    // mas lento y aqui recorre miles de asientos.
+    const entries = state.wallet
+      .filter((entry) => entryIds.has(entry.id))
+      .sort((left, right) => (left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0));
+    const ids = settlement.orderIds.length > 0
+      ? settlement.orderIds
+      : Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]));
+    const idSet = new Set(ids);
+    const related = state.wallet.filter((entry) => entry.orderId && idSet.has(entry.orderId));
+    return {
+      settlementEntries: entries,
+      orderIds: ids,
+      audits: buildLiquidationOrderAudits(state, related).filter((audit) => idSet.has(audit.orderId))
+    };
+  }, [state, settlement]);
   const title = settlement.kind === "seller" ? "Detalle de pago a tienda" : "Detalle de corte del domiciliario";
   const view = settlementFinancialView(state, settlement);
   const receiptTotal = driverCashReceivedCop(settlement);
@@ -9820,7 +9843,7 @@ const DRIVER_VIEW_TITLES: Partial<Record<AppView, { title: string; hint: string 
   history: { title: "Historico", hint: "Pedidos cerrados y lectura de la flota." }
 };
 
-function DriverView({ state, setState, session, orderSearch, onOrderSearchChange, view }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; view: AppView }) {
+function DriverView({ state, setState, session, orderSearch, onOrderSearchChange, view, historyStart, onWidenHistory }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; view: AppView; historyStart?: string; onWidenHistory?: (startDate: string) => void }) {
   const driver = state.drivers.find((item) => item.id === session.profileId);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [operationTab, setOperationTab] = useState<"all" | "rescheduled" | "failed">("all");
@@ -10066,6 +10089,11 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
             Descargar fallidos ({visibleFailedOrders.length})
           </button>
         </div>
+        {/* El tab de fallidos ya no es el historico completo: sale de la ventana descargada. Los
+            otros dos tabs son pedidos en curso, que siempre estan completos. */}
+        {operationTab === "failed" && historyStart && (
+          <p className="text-xs text-ink-60">Fallidos desde el {historyStart}. El historico completo esta en la pestana Historico.</p>
+        )}
         {(callRescheduled.length > 0 || deliveryScheduled.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {callRescheduled.length > 0 && (
@@ -10156,13 +10184,13 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
       {view === "history" && (
       <section id="historico" className="scroll-mt-32 grid content-start gap-3">
         <SectionHeader title="Historico" description="Fuente de verdad de pedidos entregados y fallidos." />
-        <DriverHistoryPanel state={state} driver={driver} />
+        <DriverHistoryPanel state={state} driver={driver} historyStart={historyStart} onWidenHistory={onWidenHistory} />
       </section>
       )}
       {view === "history" && (
       <section id="reportes" className="scroll-mt-32 grid gap-3">
         <SectionHeader title="Reportes" description="Lectura compacta de la flota y los mensajeros." />
-        <FleetReportsPanel state={state} driver={driver} financialSummary={financialSummary} />
+        <FleetReportsPanel state={state} driver={driver} financialSummary={financialSummary} historyStart={historyStart} />
       </section>
       )}
     </main>
@@ -10549,7 +10577,7 @@ function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSumm
   );
 }
 
-function DriverHistoryPanel({ state, driver }: { state: AppState; driver: Driver }) {
+function DriverHistoryPanel({ state, driver, historyStart, onWidenHistory }: { state: AppState; driver: Driver; historyStart?: string; onWidenHistory?: (startDate: string) => void }) {
   const allHistory = useMemo(() => driverFleetClosedOrders(state, driver.id), [state, driver.id]);
   const [filters, setFilters] = useState<DriverHistoryFilters>({
     search: "",
@@ -10564,6 +10592,23 @@ function DriverHistoryPanel({ state, driver }: { state: AppState; driver: Driver
   const sellers = state.sellers.filter((seller) => allHistory.some((order) => order.sellerId === seller.id));
   const filtered = useMemo(() => filterDriverHistoryOrders(allHistory, filters), [allHistory, filters]);
   const page = usePaginatedItems(filtered, 10);
+
+  // Pedir hacia atras NO puede quedarse en filtrar lo que ya hay en memoria: los pedidos cerrados
+  // se descargan por ventana, asi que elegir una fecha anterior tiene que ensanchar la descarga.
+  //
+  // El margen de 30 dias no es prudencia vaga: este panel filtra por fecha de CIERRE
+  // (`orderClosedAt`, que es la evidencia o `updatedAt`) mientras la ventana de descarga corta por
+  // `createdAt`. No son el mismo eje — un pedido creado el 28 de julio y cerrado el 3 de agosto
+  // entra en "desde el 1 de agosto" pero se habria quedado fuera de la descarga.
+  const HISTORY_WINDOW_MARGIN_DAYS = 30;
+  useEffect(() => {
+    if (!onWidenHistory || !filters.startDate || !historyStart) return;
+    if (filters.startDate >= historyStart) return;
+    const widened = dateValue(new Date(new Date(`${filters.startDate}T00:00:00.000Z`).getTime() - HISTORY_WINDOW_MARGIN_DAYS * 24 * 60 * 60 * 1000));
+    const timer = setTimeout(() => onWidenHistory(widened), 600);
+    return () => clearTimeout(timer);
+  }, [filters.startDate, historyStart, onWidenHistory]);
+
   const setFilter = <K extends keyof DriverHistoryFilters>(key: K, value: DriverHistoryFilters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
@@ -10625,6 +10670,12 @@ function DriverHistoryPanel({ state, driver }: { state: AppState; driver: Driver
           </label>
         </div>
       </div>
+
+      {historyStart && (
+        <p className="text-xs text-ink-60">
+          Los pedidos en curso siempre estan completos. Los cerrados se descargan desde el {historyStart}; si eliges una fecha de cierre anterior se amplia sola.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="w-full min-w-[833px] text-left text-sm">
@@ -10700,7 +10751,7 @@ function DriverHistoryPanel({ state, driver }: { state: AppState; driver: Driver
   );
 }
 
-function FleetReportsPanel({ state, driver, financialSummary }: { state: AppState; driver: Driver; financialSummary: DriverFinancialSummary }) {
+function FleetReportsPanel({ state, driver, financialSummary, historyStart }: { state: AppState; driver: Driver; financialSummary: DriverFinancialSummary; historyStart?: string }) {
   const orders = state.orders.filter((order) => order.driverId === driver.id);
   const messengers = state.messengers.filter((messenger) => messenger.leaderDriverId === driver.id);
   const closed = orders.filter((order) => order.status === "delivered" || order.status === "failed");
@@ -10719,6 +10770,12 @@ function FleetReportsPanel({ state, driver, financialSummary }: { state: AppStat
       <div>
         <h2 className="font-bold">Reporte de flota</h2>
         <p className="text-sm text-ink-60">El saldo financiero usa cortes, abonos y pedidos COD entregados todavia sin corte.</p>
+        {/* Los conteos de pedidos salen de lo descargado, que ya no es todo el historico; el saldo
+            NO, porque se deriva de cortes y asientos, que siguen completos. Decirlo evita leer
+            "Pedidos flota" como un acumulado de toda la vida. */}
+        {historyStart && (
+          <p className="mt-1 text-xs text-ink-60">Los conteos de pedidos cubren desde el {historyStart}. Las cifras de dinero son totales y no dependen de esa fecha.</p>
+        )}
       </div>
       <div className="grid gap-3 md:grid-cols-4">
         <StatTile icon={<PackageCheck size={16} />} label="Pedidos flota" value={String(orders.length)} />
@@ -10728,7 +10785,7 @@ function FleetReportsPanel({ state, driver, financialSummary }: { state: AppStat
         <StatTile icon={<AlertTriangle size={16} />} label="Pendiente sin cortar" value={formatCop(financialSummary.unsettledCashCop)} tone={financialSummary.unsettledCashCop > 0 ? "rust" : "default"} />
         <StatTile icon={<ClipboardList size={16} />} label="Cortes incompletos" value={formatCop(financialSummary.incompleteSettlementsCop)} tone={financialSummary.incompleteSettlementsCop > 0 ? "rust" : "default"} />
       </div>
-      <p className="text-xs text-ink-60">Recaudo COD historico de la flota: <span className="tabular">{formatCop(codCollected)}</span>.</p>
+      <p className="text-xs text-ink-60">Recaudo COD de la flota{historyStart ? ` desde el ${historyStart}` : " (historico)"}: <span className="tabular">{formatCop(codCollected)}</span>.</p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[680px] text-left text-sm">
           <thead className="text-xs uppercase text-ink-60">
@@ -10910,7 +10967,7 @@ function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { order
   );
 }
 
-function MessengerView({ state, setState, session, orderSearch, onOrderSearchChange }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void }) {
+function MessengerView({ state, setState, session, orderSearch, onOrderSearchChange, historyStart }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; historyStart?: string }) {
   const messenger = state.messengers.find((item) => item.id === session.profileId);
   const messengerId = messenger?.id ?? "";
   // Antes eran cuatro recorridos completos de `state.orders` por render, en el rol que corre en
@@ -10968,6 +11025,11 @@ function MessengerView({ state, setState, session, orderSearch, onOrderSearchCha
           <p className={`tabular text-2xl font-bold ${failed > 0 ? "text-rust" : ""}`}>{failed}</p>
         </div>
       </div>
+      {/* "Activos" siempre esta completo; los dos cerrados salen de la ventana descargada, asi que
+          dejarlos sin fecha los haria leer como un acumulado de toda la vida, que es lo que eran. */}
+      {historyStart && (
+        <p className="-mt-1 text-center text-[11px] text-ink-60">Entregados y fallidos desde el {historyStart}.</p>
+      )}
 
       <EvidenceQueuePanel state={state} setState={setState} />
       <section className="grid gap-3">
@@ -11047,6 +11109,17 @@ export function OperationsApp() {
     const timer = setTimeout(() => setHistoryStart(orderStartDate), 600);
     return () => clearTimeout(timer);
   }, [windowFollowsRange, orderStartDate, historyStart]);
+
+  // Ensanchado directo de la ventana, sin pasar por el rango de la tabla. Lo usa el historico del
+  // lider, que filtra por fecha de CIERRE y por tanto no puede compartir `orderStartDate`.
+  // Igual que arriba: solo ensancha. Una cadena vacia significa "sin limite inferior", que es el
+  // limite MAS ancho, no el mas estrecho.
+  const widenHistoryWindow = useCallback((startDate: string) => {
+    setHistoryStart((current) => {
+      if (current === "") return current;
+      return startDate === "" || startDate < current ? startDate : current;
+    });
+  }, []);
 
   const setOrderStartDateManual = useCallback((value: string) => {
     setWindowFollowsRange(true);
@@ -11263,10 +11336,10 @@ export function OperationsApp() {
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={viewState} setState={setState} />;
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
     if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} />;
-    if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} />;
-    if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} />;
+    if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
+    if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
     return <AdminView view={activeView} state={viewState} setState={setState} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
-  }, [activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState]);
+  }, [activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;
 
