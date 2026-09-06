@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; background: #f7f8f4; color: #17201d; -webkit-font-smoothing: antialiased; }
+    a { color: #2b5f4b; } a:hover { color: #17201d; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .disp { font-family: 'Archivo', 'IBM Plex Sans', sans-serif; }
+  </style>
+</helmet>
+
+<div style="width: 390px; min-height: 1000px; background: #f7f8f4; box-sizing: border-box;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: #17201d;">
+    <span class="disp" style="font-size: 16px; font-weight: 800; color: #f7f8f4;">CUADRE DE CAJA</span>
+    <span class="mono" style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; color: #d9ed5a;">18&ndash;20 AGO</span>
+  </div>
+
+  <div style="padding: 18px;">
+    <div style="border: 2px solid #17201d; background: #fff;">
+      <div style="display: flex; border-bottom: 1px solid rgba(23,32,29,0.14);">
+        <div style="flex-grow: 1; padding: 14px 16px; border-right: 1px solid rgba(23,32,29,0.12);">
+          <p class="mono" style="margin: 0 0 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">ESPERADO</p>
+          <p class="mono" style="margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em;">$ 8.208.225</p>
+        </div>
+        <div style="flex-grow: 1; padding: 14px 16px;">
+          <p class="mono" style="margin: 0 0 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">RECIBIDO</p>
+          <p class="mono" style="margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: #2b5f4b;">$ 8.208.225</p>
+        </div>
+      </div>
+      <div style="padding: 18px 16px; background: #2b5f4b;">
+        <p class="mono" style="margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: rgba(247,248,244,0.8);">PENDIENTE POR ENTREGAR</p>
+        <p class="mono" style="margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: #f7f8f4;">$ 0</p>
+        <p style="margin: 8px 0 0; font-size: 14px; color: rgba(247,248,244,0.82);">Corte al dia. Nada pendiente de recaudo.</p>
+      </div>
+    </div>
+
+    <button type="button" style="width: 100%; min-height: 56px; margin-top: 14px; border: 2px solid #17201d; border-radius: 3px; background: #d9ed5a; color: #17201d; font-family: 'Archivo', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;">REGISTRAR RECAUDO</button>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin: 24px 0 12px;">
+      <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.18em; color: #56605b; white-space: nowrap;">ABONOS ENTREGADOS</span>
+      <span style="flex-grow: 1; height: 0; border-top: 1px dashed rgba(23,32,29,0.28);"></span>
+      <span class="mono" style="font-size: 11px; color: #56605b;">4</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <sc-for list="{{receipts}}" as="r" hint-placeholder-count="4">
+        <div style="border: 1px solid rgba(23,32,29,0.18); border-left: 4px solid #2b5f4b; border-radius: 3px; background: #fff; padding: 13px 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span class="mono" style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #2b5f4b;">{{r.amount}}</span>
+            <span class="mono" style="font-size: 12px; color: #56605b;">{{r.date}}</span>
+          </div>
+          <p style="margin: 8px 0 0; font-size: 15px; line-height: 1.45; color: #454f4a;">{{r.note}}</p>
+          <div style="display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; padding-top: 9px; border-top: 1px dashed rgba(23,32,29,0.18);">
+            <span style="font-size: 13px; color: #56605b;">Quedaba pendiente</span>
+            <span class="mono" style="font-size: 14px; font-weight: 600;">{{r.after}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin: 26px 0 12px;">
+      <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.18em; color: #56605b; white-space: nowrap;">RECOGIDA POR LOTE</span>
+      <span style="flex-grow: 1; height: 0; border-top: 1px dashed rgba(23,32,29,0.28);"></span>
+    </div>
+
+    <div style="border: 2px dashed rgba(23,32,29,0.35); border-radius: 3px; background: #efe9dc; padding: 20px 16px; text-align: center;">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#17201d" stroke-width="1.8" stroke-linecap="square" style="margin-bottom: 10px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 19h2v2h-2z"/></svg>
+      <p style="margin: 0 0 4px; font-size: 17px; font-weight: 600;">Escanear rotulos</p>
+      <p style="margin: 0 0 14px; font-size: 14px; color: #56605b; line-height: 1.45;">12 pedidos listos en el punto DANDA</p>
+      <button type="button" style="width: 100%; min-height: 56px; border: none; border-radius: 3px; background: #17201d; color: #f7f8f4; font-family: 'IBM Plex Sans', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer;">Abrir camara</button>
+    </div>
+
+    <div style="margin-top: 16px; border: 1px solid rgba(23,32,29,0.18); border-radius: 3px; background: #fff; padding: 14px;">
+      <p class="mono" style="margin: 0 0 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">MENSAJEROS EN RUTA</p>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <sc-for list="{{crew}}" as="c" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px;">
+            <span style="font-size: 16px; font-weight: 500;">{{c.name}}</span>
+            <span class="mono" style="display: inline-flex; padding: 5px 10px; border: 1.5px solid #2f6d92; border-radius: 2px; color: #2f6d92; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;">{{c.count}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      receipts: [
+        { amount: '$ 2.022.682', date: '20 ago 1:01 a.m.', after: '$ 6.185.543', note: 'abono efectivo correspondiente a agosto 18 del 2026' },
+        { amount: '$ 464.300', date: '20 ago 1:02 a.m.', after: '$ 5.721.243', note: 'abono recaudo nequi Martha correspondiente a agosto 18' },
+        { amount: '$ 4.735.000', date: '20 ago 4:05 p.m.', after: '$ 986.243', note: 'abono recaudo efectivo correspondiente a agosto 19' },
+        { amount: '$ 986.243', date: '21 ago 1:58 p.m.', after: '$ 0', note: 'abono recaudo nequi martha correspondiente al dia agosto 19' }
+      ],
+      crew: [
+        { name: 'Martha Ospina', count: '6 PEDIDOS' },
+        { name: 'Jhon Restrepo', count: '4 PEDIDOS' },
+        { name: 'Yeison Carabali', count: '2 PEDIDOS' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

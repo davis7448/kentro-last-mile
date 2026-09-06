@@ -268,49 +268,17 @@ export function closeFailed(state: AppState, orderId: string, input: FailedEvide
   };
 }
 
-export function requestPayout(state: AppState, sellerId: string): AppState {
-  const balance = sellerBalance(state, sellerId);
-  if (balance.availableCop <= 0) return state;
-  return {
-    ...state,
-    payouts: [
-      {
-        id: `pay-${Date.now()}`,
-        sellerId,
-        amountCop: balance.availableCop,
-        status: "requested",
-        createdAt: new Date().toISOString()
-      },
-      ...state.payouts
-    ],
-    audit: [
-      audit(state, "payout.request", "seller", sellerId, `Solicitud automatica por ${balance.availableCop} COP`),
-      ...state.audit
-    ]
-  };
-}
-
-export function approvePayout(state: AppState, payoutId: string): AppState {
-  const payout = state.payouts.find((item) => item.id === payoutId);
-  if (!payout) return state;
-  return {
-    ...state,
-    payouts: state.payouts.map((item) => (item.id === payoutId ? { ...item, status: "paid" } : item)),
-    wallet: [
-      {
-        id: `we-${payoutId}`,
-        ownerType: "seller",
-        ownerId: payout.sellerId,
-        type: "payout",
-        amountCop: -payout.amountCop,
-        description: `Liquidacion pagada ${payoutId}`,
-        createdAt: new Date().toISOString()
-      },
-      ...state.wallet
-    ],
-    audit: [audit(state, "payout.paid", "payout", payoutId, "Liquidacion marcada como pagada"), ...state.audit]
-  };
-}
+// requestPayout / approvePayout se eliminaron a proposito.
+//
+// requestPayout era una funcion pura: agregaba la solicitud al estado de React y nada mas, y el
+// efecto que persiste el estado se salia para todo rol que no fuera admin, asi que la tienda veia
+// "requested" en pantalla y el documento nunca llegaba a Firestore. Ahora va por el callable
+// requestSellerPayout, que calcula el monto en el servidor.
+//
+// approvePayout escribia un asiento de wallet `type: "payout"` en negativo. Ese tipo no cuenta
+// para los cortes (SELLER_LIQUIDATION_TYPES), asi que bajaba el saldo en pantalla sin estampar
+// settlementId en los asientos originales: el siguiente corte los volvia a pagar. Una solicitud
+// ahora se cierra sola cuando createSettlement crea el corte real, o con rejectSellerPayout.
 
 export function createManualOrder(
   state: AppState,

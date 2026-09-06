@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Panel de Operación - Logística Consola</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&amp;family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-surface": "#2e312f",
+                        "inverse-on-surface": "#f0f1ed",
+                        "secondary": "#346853",
+                        "on-surface": "#1a1c1a",
+                        "inverse-primary": "#bfc9c4",
+                        "on-tertiary-fixed-variant": "#7e2c11",
+                        "outline-variant": "#c3c8c4",
+                        "tertiary-container": "#3f0c00",
+                        "outline": "#737875",
+                        "on-secondary": "#ffffff",
+                        "verde-success": "#2b5f4b",
+                        "background": "#f9faf6",
+                        "on-primary-container": "#7e8884",
+                        "on-primary-fixed-variant": "#3f4945",
+                        "primary": "#010604",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f9faf6",
+                        "on-tertiary-container": "#cf6949",
+                        "tertiary": "#120100",
+                        "manila-container": "#efe9dc",
+                        "on-error": "#ffffff",
+                        "on-background": "#1a1c1a",
+                        "surface-container-low": "#f3f4f0",
+                        "on-primary": "#ffffff",
+                        "ink-black": "#17201d",
+                        "surface": "#f9faf6",
+                        "surface-container-high": "#e7e9e5",
+                        "secondary-container": "#b7efd4",
+                        "surface-dim": "#d9dad7",
+                        "on-surface-variant": "#434846",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed": "#b7efd4",
+                        "on-tertiary-fixed": "#3a0a00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#edeeea",
+                        "surface-container-highest": "#e2e3df",
+                        "on-secondary-container": "#3a6e59",
+                        "tertiary-fixed": "#ffdbd0",
+                        "surface-variant": "#e2e3df",
+                        "on-secondary-fixed-variant": "#1a503d",
+                        "primary-fixed": "#dbe5e0",
+                        "primary-container": "#17201d",
+                        "rojo-error": "#b45436",
+                        "tertiary-fixed-dim": "#ffb59f",
+                        "secondary-fixed-dim": "#9cd2b9",
+                        "on-primary-fixed": "#141d1a",
+                        "primary-fixed-dim": "#bfc9c4",
+                        "surface-tint": "#57605d",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#002116"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "touch-target": "44px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Archivo Narrow"],
+                        "headline-md": ["Archivo Narrow"],
+                        "body-lg": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "data-mono": ["JetBrains Mono"],
+                        "headline-sm": ["Archivo Narrow"],
+                        "headline-lg": ["Archivo Narrow"],
+                        "price-display": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "data-mono": ["14px", { "lineHeight": "20px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "price-display": ["18px", { "lineHeight": "24px", "fontWeight": "700" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f7f8f4;
+        }
+        .stamp-entregado {
+            border: 1px solid theme('colors.verde-success');
+            color: theme('colors.verde-success');
+            background-color: rgba(43, 95, 75, 0.1);
+        }
+        .stamp-en-ruta {
+            border: 1px solid theme('colors.ink-black');
+            color: theme('colors.ink-black');
+            background-color: rgba(23, 32, 29, 0.1);
+        }
+        .stamp-novedad {
+            border: 1px solid theme('colors.rojo-error');
+            color: theme('colors.rojo-error');
+            background-color: rgba(180, 84, 54, 0.1);
+        }
+        .double-border {
+            box-shadow: inset 0 0 0 1px theme('colors.ink-black'), inset 0 0 0 2px theme('colors.surface');
+        }
+        .input-industrial {
+            border: 1px solid theme('colors.ink-black');
+            background-color: theme('colors.surface');
+            height: theme('spacing.touch-target');
+            border-radius: 2px;
+        }
+        .input-industrial:focus {
+            outline: none;
+            box-shadow: inset 0 0 0 1px theme('colors.ink-black'), inset 0 0 0 2px theme('colors.surface');
+            border-color: theme('colors.ink-black');
+        }
+        .btn-industrial-primary {
+            border: 1px solid theme('colors.ink-black');
+            background-color: theme('colors.ink-black');
+            color: theme('colors.surface');
+            height: theme('spacing.touch-target');
+            border-radius: 2px;
+            transition: all 75ms;
+        }
+        .btn-industrial-primary:active {
+            box-shadow: inset 0 0 0 1px theme('colors.ink-black'), inset 0 0 0 2px theme('colors.surface');
+        }
+        .btn-industrial-secondary {
+            border: 1px solid theme('colors.ink-black');
+            background-color: theme('colors.surface');
+            color: theme('colors.ink-black');
+            height: theme('spacing.touch-target');
+            border-radius: 2px;
+            transition: all 75ms;
+        }
+        .btn-industrial-secondary:active {
+            box-shadow: inset 0 0 0 1px theme('colors.ink-black'), inset 0 0 0 2px theme('colors.surface');
+        }
+        .perforated-border {
+            border-bottom: 1px dashed theme('colors.ink-black');
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-lg min-h-screen flex selection:bg-ink-black selection:text-surface">
+<!-- SideNavBar -->
+<nav class="hidden md:flex bg-manila-container border-r border-outline text-primary font-body-md docked left-0 h-full w-64 fixed left-0 top-0 flex-col pt-touch-target border-r border-ink-black z-40">
+<div class="px-4 mb-8">
+<div class="text-headline-sm font-headline-sm font-bold text-ink-black mb-6">
+                Despachador Central
+                <div class="text-body-md font-normal text-on-surface-variant">Bogotá, DC</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1">
+<a class="bg-ink-black text-on-primary font-bold flex items-center gap-4 px-4 py-3 border-2 border-primary border-double transition-all duration-75" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">local_shipping</span>
+<span class="font-label-caps text-label-caps">Operación</span>
+</a>
+<a class="text-on-surface-variant flex items-center gap-4 px-4 py-3 hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">groups</span>
+<span class="font-label-caps text-label-caps">Flota</span>
+</a>
+<a class="text-on-surface-variant flex items-center gap-4 px-4 py-3 hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">payments</span>
+<span class="font-label-caps text-label-caps">Liquidaciones</span>
+</a>
+<a class="text-on-surface-variant flex items-center gap-4 px-4 py-3 hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">analytics</span>
+<span class="font-label-caps text-label-caps">Reportes</span>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-1 pb-4">
+<a class="text-on-surface-variant flex items-center gap-4 px-4 py-3 hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-label-caps text-label-caps">Configuración</span>
+</a>
+<a class="text-on-surface-variant flex items-center gap-4 px-4 py-3 hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help</span>
+<span class="font-label-caps text-label-caps">Soporte</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col w-full md:ml-64 min-h-screen">
+<!-- TopNavBar -->
+<header class="bg-surface text-primary border-b border-outline docked full-width top-0 flex justify-between items-center w-full px-margin-desktop h-touch-target sticky top-0 z-50">
+<div class="flex items-center gap-4">
+<div class="text-headline-sm font-headline-sm font-bold text-ink-black md:hidden">LOGÍSTICA_CONSOLA</div>
+<div class="hidden md:block font-data-mono text-data-mono text-ink-black opacity-70">
+                    SISTEMA DE CONTROL // V. 2.4.1
+                </div>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label-caps text-label-caps text-ink-black hover:bg-surface-container-high transition-colors px-2 py-1 border border-transparent hover:border-ink-black rounded-[2px] flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+                    Scan QR
+                </button>
+<div class="flex items-center gap-2 border-l border-ink-black pl-4 ml-2">
+<button class="text-on-surface-variant hover:bg-surface-container-high transition-colors p-1 rounded-[2px]">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container-high transition-colors p-1 rounded-[2px]">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<div class="p-gutter md:p-margin-desktop flex-1 flex flex-col gap-6">
+<!-- Controls Section -->
+<section class="bg-manila-container border border-ink-black p-4 rounded-[2px] flex flex-col gap-4">
+<h1 class="font-headline-md text-headline-md text-ink-black uppercase border-b border-ink-black pb-2 mb-2">Panel de Control Operativo</h1>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="flex flex-col gap-1">
+<label class="font-label-caps text-label-caps text-ink-black">Fecha Desde</label>
+<input class="input-industrial font-data-mono text-data-mono px-3" type="date" value="2023-10-24"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-caps text-label-caps text-ink-black">Fecha Hasta</label>
+<input class="input-industrial font-data-mono text-data-mono px-3" type="date" value="2023-10-24"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-caps text-label-caps text-ink-black">Estado</label>
+<select class="input-industrial font-body-md text-body-md px-3">
+<option>Todos los estados</option>
+<option>En Ruta</option>
+<option>Entregado</option>
+<option>Novedad</option>
+</select>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-caps text-label-caps text-ink-black">Tienda</label>
+<select class="input-industrial font-body-md text-body-md px-3">
+<option>Todas las tiendas</option>
+<option>DANDA</option>
+<option>KNT STORE</option>
+</select>
+</div>
+</div>
+<div class="flex flex-col md:flex-row gap-4 border-t border-ink-black pt-4 mt-2">
+<div class="flex-1 flex flex-col gap-1">
+<label class="font-label-caps text-label-caps text-ink-black">Búsqueda Rápida</label>
+<div class="flex gap-2">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="input-industrial w-full pl-10 font-data-mono text-data-mono" placeholder="Guía KNT o Shopify..." type="text"/>
+</div>
+<button class="btn-industrial-secondary px-6 font-label-caps text-label-caps flex items-center gap-2 whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+                                ESCANEAR QR
+                            </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Funnel Indicators -->
+<section class="grid grid-cols-2 md:grid-cols-6 gap-2">
+<div class="border border-ink-black bg-surface p-3 flex flex-col items-center justify-center text-center rounded-[2px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Total filtrado</span>
+<span class="font-data-mono text-headline-sm text-ink-black font-bold">3.510</span>
+</div>
+<div class="border border-ink-black bg-manila-container p-3 flex flex-col items-center justify-center text-center rounded-[2px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Pendiente conf.</span>
+<span class="font-data-mono text-headline-sm text-ink-black font-bold">50</span>
+</div>
+<div class="border border-ink-black bg-surface p-3 flex flex-col items-center justify-center text-center rounded-[2px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Listo sin lider</span>
+<span class="font-data-mono text-headline-sm text-ink-black font-bold">74</span>
+</div>
+<div class="border border-ink-black bg-surface p-3 flex flex-col items-center justify-center text-center rounded-[2px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Recogidos</span>
+<span class="font-data-mono text-headline-sm text-ink-black font-bold">117</span>
+</div>
+<div class="border border-ink-black bg-surface p-3 flex flex-col items-center justify-center text-center rounded-[2px] double-border">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-1">Entregados</span>
+<span class="font-data-mono text-headline-sm text-ink-black font-bold">1.999</span>
+</div>
+<div class="border border-ink-black bg-surface p-3 flex flex-col items-center justify-center text-center rounded-[2px]">
+<span class="font-label-caps text-label-caps text-rojo-error uppercase mb-1">Fallidos</span>
+<span class="font-data-mono text-headline-sm text-rojo-error font-bold">1.210</span>
+</div>
+</section>
+<!-- Orders List -->
+<section class="border border-ink-black bg-surface rounded-[2px] flex flex-col overflow-hidden">
+<div class="bg-ink-black text-surface font-label-caps text-label-caps px-4 py-2 flex items-center justify-between">
+<span>REGISTRO DE MANIFIESTOS</span>
+<span class="font-data-mono opacity-80">MOSTRANDO 1-50 DE 3.510</span>
+</div>
+<div class="flex flex-col divide-y divide-ink-black border-t border-ink-black">
+<!-- Order Item 1 -->
+<div class="p-4 flex flex-col md:flex-row gap-4 hover:bg-surface-container-high transition-colors items-start md:items-center">
+<div class="flex-shrink-0 w-full md:w-32 flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Guía</span>
+<span class="font-data-mono text-body-md font-bold text-ink-black">KNT-882910</span>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Tienda</span>
+<span class="font-body-md text-ink-black uppercase">DANDA</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Cliente</span>
+<span class="font-body-md text-ink-black">Carlos Restrepo</span>
+</div>
+<div class="flex flex-col md:col-span-2">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Dirección</span>
+<span class="font-body-md text-ink-black truncate">Carrera 66 #13-40, Cali</span>
+</div>
+</div>
+<div class="flex-shrink-0 w-full md:w-auto flex items-center justify-between md:justify-end gap-6 mt-2 md:mt-0">
+<div class="flex flex-col items-start md:items-end">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Valor COD</span>
+<span class="font-price-display text-price-display text-ink-black whitespace-nowrap">$ 148.000</span>
+</div>
+<div class="flex flex-col items-center min-w-[100px]">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">Estado</span>
+<div class="stamp-en-ruta font-label-caps text-[10px] px-2 py-1 rounded-[2px] uppercase font-bold tracking-widest text-center w-full">EN RUTA</div>
+</div>
+</div>
+</div>
+<!-- Order Item 2 -->
+<div class="p-4 flex flex-col md:flex-row gap-4 hover:bg-surface-container-high transition-colors items-start md:items-center bg-manila-container bg-opacity-30">
+<div class="flex-shrink-0 w-full md:w-32 flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Guía</span>
+<span class="font-data-mono text-body-md font-bold text-ink-black">SHP-991022</span>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Tienda</span>
+<span class="font-body-md text-ink-black uppercase">KNT STORE</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Cliente</span>
+<span class="font-body-md text-ink-black">Maria Gomez</span>
+</div>
+<div class="flex flex-col md:col-span-2">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Dirección</span>
+<span class="font-body-md text-ink-black truncate">Calle 100 #15-20, Bogotá</span>
+</div>
+</div>
+<div class="flex-shrink-0 w-full md:w-auto flex items-center justify-between md:justify-end gap-6 mt-2 md:mt-0">
+<div class="flex flex-col items-start md:items-end">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Valor COD</span>
+<span class="font-price-display text-price-display text-ink-black whitespace-nowrap">$ 85.500</span>
+</div>
+<div class="flex flex-col items-center min-w-[100px]">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">Estado</span>
+<div class="stamp-entregado font-label-caps text-[10px] px-2 py-1 rounded-[2px] uppercase font-bold tracking-widest text-center w-full">ENTREGADO</div>
+</div>
+</div>
+</div>
+<!-- Order Item 3 -->
+<div class="p-4 flex flex-col md:flex-row gap-4 hover:bg-surface-container-high transition-colors items-start md:items-center border-l-4 border-l-rojo-error">
+<div class="flex-shrink-0 w-full md:w-32 flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Guía</span>
+<span class="font-data-mono text-body-md font-bold text-ink-black">KNT-882915</span>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Tienda</span>
+<span class="font-body-md text-ink-black uppercase">DANDA</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Cliente</span>
+<span class="font-body-md text-ink-black">Luis Rodriguez</span>
+</div>
+<div class="flex flex-col md:col-span-2">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Dirección</span>
+<span class="font-body-md text-ink-black truncate">Av Poblado #4sur-50, Medellín</span>
+</div>
+</div>
+<div class="flex-shrink-0 w-full md:w-auto flex items-center justify-between md:justify-end gap-6 mt-2 md:mt-0">
+<div class="flex flex-col items-start md:items-end">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Valor COD</span>
+<span class="font-price-display text-price-display text-ink-black whitespace-nowrap">$ 210.000</span>
+</div>
+<div class="flex flex-col items-center min-w-[100px]">
+<span class="font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">Estado</span>
+<div class="stamp-novedad font-label-caps text-[10px] px-2 py-1 rounded-[2px] uppercase font-bold tracking-widest text-center w-full">NOVEDAD</div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high border-t border-ink-black p-3 flex justify-between items-center">
+<button class="btn-industrial-secondary px-4 h-8 text-label-caps font-label-caps flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span> ANTERIOR
+                    </button>
+<span class="font-data-mono text-data-mono">PÁGINA 1 DE 71</span>
+<button class="btn-industrial-secondary px-4 h-8 text-label-caps font-label-caps flex items-center gap-1">
+                        SIGUIENTE <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</section>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kentro - diagnostico</title>
+<style>
+  body{margin:0;padding:16px;background:#0d0f0e;color:#e8ece9;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+       font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+  h1{font-size:20px;margin:0 0 4px;color:#c6f24e}
+  p.sub{margin:0 0 16px;color:#9aa39d;font-size:14px}
+  .row{padding:8px 0;border-bottom:1px solid #222826;display:flex;justify-content:space-between;gap:12px}
+  .k{color:#9aa39d}
+  .v{font-weight:700;text-align:right;word-break:break-word}
+  .ok{color:#c6f24e}
+  .no{color:#ff6b6b}
+  pre{background:#151917;padding:12px;border-radius:8px;white-space:pre-wrap;
+      word-break:break-all;font-size:12px;color:#cfd6d1;margin:12px 0}
+  button{width:100%;padding:16px;font-size:17px;font-weight:700;border:0;border-radius:999px;
+         background:#c6f24e;color:#0d0f0e;margin-top:12px}
+  h2{font-size:15px;margin:20px 0 4px;color:#c6f24e}
+</style>
+</head>
+<body>
+<h1>Diagnostico Kentro</h1>
+<p class="sub">Si ves esta pagina, el telefono SI llega al servidor.</p>
+<div id="out"></div>
+<h2>Copia esto y pegamelo</h2>
+<pre id="dump">...</pre>
+<button id="copy" type="button">Copiar todo</button>
+
+<script>
+/* ES5 estricto a proposito: esta pagina tiene que funcionar en navegadores viejos,
+   que es justo lo que estamos intentando descartar. Sin let/const/arrow/template. */
+(function () {
+  var lines = [];
+  var out = document.getElementById("out");
+
+  function row(k, v, good) {
+    lines.push(k + ": " + v);
+    var d = document.createElement("div");
+    d.className = "row";
+    var a = document.createElement("span"); a.className = "k"; a.appendChild(document.createTextNode(k));
+    var b = document.createElement("span");
+    b.className = "v" + (good === true ? " ok" : good === false ? " no" : "");
+    b.appendChild(document.createTextNode(String(v)));
+    d.appendChild(a); d.appendChild(b); out.appendChild(d);
+  }
+
+  function syntaxWorks(src) {
+    try { new Function(src); return true; } catch (e) { return false; }
+  }
+
+  row("Navegador", navigator.userAgent);
+  row("Pantalla", window.innerWidth + " x " + window.innerHeight);
+  row("Idioma", navigator.language || "?");
+  row("Online", navigator.onLine ? "si" : "no", navigator.onLine);
+  if (navigator.deviceMemory) row("Memoria del equipo", navigator.deviceMemory + " GB");
+
+  row("class static block", syntaxWorks("class A{static{}}") ? "si" : "NO", syntaxWorks("class A{static{}}"));
+  row("optional chaining", syntaxWorks("var a={};a?.b") ? "si" : "NO", syntaxWorks("var a={};a?.b"));
+  row("nullish ??", syntaxWorks("var a=null??1") ? "si" : "NO", syntaxWorks("var a=null??1"));
+  row("logical assign", syntaxWorks("var a=1;a??=2") ? "si" : "NO", syntaxWorks("var a=1;a??=2"));
+  row("campos de clase", syntaxWorks("class A{x=1}") ? "si" : "NO", syntaxWorks("class A{x=1}"));
+  row("async/await", syntaxWorks("(async function(){await 1})") ? "si" : "NO", syntaxWorks("(async function(){await 1})"));
+
+  row("Object.hasOwn", typeof Object.hasOwn === "function" ? "si" : "NO", typeof Object.hasOwn === "function");
+  row("Array.at", typeof Array.prototype.at === "function" ? "si" : "NO", typeof Array.prototype.at === "function");
+  row("Promise.allSettled", typeof Promise !== "undefined" && typeof Promise.allSettled === "function" ? "si" : "NO", typeof Promise !== "undefined" && typeof Promise.allSettled === "function");
+  row("fetch", typeof fetch === "function" ? "si" : "NO", typeof fetch === "function");
+  row("IndexedDB", typeof indexedDB !== "undefined" ? "si" : "NO", typeof indexedDB !== "undefined");
+  row("localStorage", (function(){ try { localStorage.setItem("_t","1"); localStorage.removeItem("_t"); return true; } catch (e) { return false; } })() ? "si" : "NO");
+
+  function dump() { document.getElementById("dump").firstChild.nodeValue = lines.join("\n"); }
+  dump();
+
+  /* Puede el telefono descargar el bundle real de la app? Esto separa "no llega la red"
+     de "llega pero el navegador no puede con el codigo". */
+  if (typeof fetch === "function") {
+    fetch("/", { cache: "no-store" }).then(function (r) {
+      return r.text();
+    }).then(function (html) {
+      var m = html.match(/\/_next\/static\/chunks\/[^"]+\.js/);
+      row("Descarga el HTML", "si (" + html.length + " bytes)", true);
+      if (!m) { dump(); return; }
+      return fetch(m[0], { cache: "no-store" }).then(function (r2) {
+        row("Descarga el JS", r2.status === 200 ? "si" : "NO (" + r2.status + ")", r2.status === 200);
+        dump();
+      });
+    })["catch"](function (e) {
+      row("Descarga el HTML", "FALLA: " + e.message, false);
+      dump();
+    });
+  }
+
+  document.getElementById("copy").onclick = function () {
+    var t = document.createElement("textarea");
+    t.value = lines.join("\n");
+    document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); this.innerHTML = "Copiado"; } catch (e) { this.innerHTML = "Selecciona el texto de arriba"; }
+    document.body.removeChild(t);
+  };
+})();
+</script>
+</body>
+</html>

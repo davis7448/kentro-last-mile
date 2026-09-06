@@ -181,16 +181,27 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Solicitudes de liquidacion. El vendedor YA NO crea el documento: el monto es una cifra
+    // financiera derivada de walletEntries y las reglas no pueden validarla, asi que un create
+    // desde el cliente permitia pedir cualquier cantidad. Se crean por el callable
+    // requestSellerPayout (Admin SDK, no pasa por reglas). La tienda solo lee las suyas.
     match /payouts/{payoutId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
-      allow create: if isAdmin() || isSeller(request.resource.data.sellerId);
-      allow update: if isAdmin();
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /auditEvents/{eventId} {
       allow read: if isAdmin();
       allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // Cuadre de caja: saldo real de las cuentas de la operacion, para contrastarlo
+    // contra el saldo teorico. Solo el admin lo ve y lo registra; nunca se edita ni
+    // se borra, para que el historico de desfases sea confiable.
+    match /cashSnapshots/{snapshotId} {
+      allow read, create: if isAdmin();
       allow update, delete: if false;
     }
 

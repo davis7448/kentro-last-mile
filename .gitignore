@@ -9,3 +9,9 @@ coverage
 *.tsbuildinfo
 npm-debug.log*
 .firebase
+
+# Respaldos que genera scripts/purge-shopify-sync-issues.js (varios MB)
+shopify-sync-issues-backup-*.jsonl
+
+# Respaldos locales de datos de Firestore (no versionar)
+backups/

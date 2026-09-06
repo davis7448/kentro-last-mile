@@ -3,6 +3,14 @@ import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
+import {
+  buildCodReceivedSet,
+  isSellerEntryEligible,
+  type OrderDoc,
+  SELLER_LIQUIDATION_TYPES,
+  type SettlementDoc,
+  type WalletEntryDoc
+} from "./seller-ledger";
 
 /**
  * API de solo lectura para tiendas (sellers).
@@ -59,8 +67,12 @@ export const createStoreApiKey = onCall(async (request) => {
     updatedAt: now
   };
   await ref.set(config, { merge: true });
-  await db.collection("auditEvents").doc(`audit-storeapi-${Date.now()}`).set({
-    id: `audit-storeapi-${Date.now()}`,
+  // ID autogenerado: `audit-storeapi-${Date.now()}` colisionaba entre llamadas del mismo
+  // milisegundo, y las dos invocaciones separadas de Date.now() podian dejar el campo `id`
+  // sin coincidir con el ID del documento.
+  const auditRef = db.collection("auditEvents").doc();
+  await auditRef.set({
+    id: auditRef.id,
     actorId: request.auth?.uid,
     actorRole: role,
     action: keepKey ? "store_api_key.viewed" : "store_api_key.created",
@@ -80,9 +92,7 @@ export const createStoreApiKey = onCall(async (request) => {
   };
 });
 
-type OrderDoc = Record<string, any>;
-type WalletEntryDoc = Record<string, any>;
-type SettlementDoc = Record<string, any>;
+
 
 // Misma semántica que orderDateValue() de la UI.
 function orderDateValue(order: OrderDoc) {
@@ -186,37 +196,6 @@ function computeKpis(orders: OrderDoc[]) {
   };
 }
 
-// COD recibido del domiciliario, misma fuente autoritativa que createSettlement.
-function buildCodReceivedSet(settlements: SettlementDoc[]) {
-  const codReceived = new Set<string>();
-  for (const settlement of settlements) {
-    if (settlement.kind !== "driver") continue;
-    if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
-      for (const allocation of settlement.cashAllocations) {
-        if (allocation.covered && allocation.orderId) codReceived.add(String(allocation.orderId));
-      }
-      continue;
-    }
-    if (settlement.status === "paid" || settlement.status === "reconciled" || settlement.cashPendingCop === 0) {
-      for (const orderId of settlement.orderIds ?? []) codReceived.add(String(orderId));
-    }
-  }
-  return codReceived;
-}
-
-// Tipos de asiento del seller que cuentan para la liquidacion/saldo (misma lista
-// que isLiquidationWalletType en functions/src/orders.ts, sin driver_earning).
-const SELLER_LIQUIDATION_TYPES = new Set(["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "seller_abono"]);
-
-// Elegibilidad para pago, misma compuerta que createSettlement (orders.ts):
-// los abonos siempre; si no, el pedido debe existir y ser prepago o tener el COD ya recibido.
-function isSellerEntryEligible(entry: WalletEntryDoc, ordersById: Map<string, OrderDoc>, codReceived: Set<string>) {
-  if (entry.type === "seller_abono") return true;
-  if (!entry.orderId) return false;
-  const order = ordersById.get(String(entry.orderId));
-  if (!order) return false;
-  return order.paymentMethod === "prepaid" || codReceived.has(String(entry.orderId));
-}
 
 // Suma de delivery_fee/failed_fee/etc como magnitud positiva de cobro (igual que netChargeCop de la UI).
 function chargeMagnitude(entries: WalletEntryDoc[], types: string[]) {
@@ -249,16 +228,32 @@ function buildStoreSummary(
       bloqueadoCodCop += amount;
     }
   }
+  // Un `seller_abono` NEGATIVO es plata que salio hacia la tienda (un abono real).
+  // Uno POSITIVO restituye deuda: es un ajuste, no un pago, y meterlo aqui inflaba
+  // el historial de pagos de la tienda por el doble de la diferencia.
   const abonos = sellerEntries
-    .filter((e) => e.type === "seller_abono")
-    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(Math.abs(Number(e.amountCop || 0))), nota: e.description ?? null }))
+    .filter((e) => e.type === "seller_abono" && Number(e.amountCop || 0) < 0)
+    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(-Number(e.amountCop || 0)), nota: e.description ?? null }))
     .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   const totalAbonadoCop = abonos.reduce((sum, a) => sum + a.montoCop, 0);
 
+  const ajustes = sellerEntries
+    .filter((e) => e.type === "seller_abono" && Number(e.amountCop || 0) > 0)
+    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(Number(e.amountCop || 0)), nota: e.description ?? null }))
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+  // Un corte puede haberse cerrado pagando menos de su neto: lo que vale como pago
+  // es lo realmente transferido, no el neto del corte.
   const pagosLiquidaciones = sellerSettlements
     .filter((s) => s.status === "paid" || s.status === "reconciled")
-    .map((s) => ({ tipo: "liquidacion" as const, fecha: s.paidAt ?? s.reconciledAt ?? s.createdAt ?? null, montoCop: Math.round(Number(s.netCop || 0)), referencia: String(s.id) }));
-  const pagosAbonos = abonos.map((a) => ({ tipo: "abono" as const, fecha: a.fecha, montoCop: a.montoCop, referencia: "abono" }));
+    .map((s) => ({
+      tipo: "liquidacion" as const,
+      fecha: s.paidAt ?? s.reconciledAt ?? s.createdAt ?? null,
+      montoCop: Math.round(Number(typeof s.paidAmountCop === "number" ? s.paidAmountCop : s.netCop) || 0),
+      referencia: String(s.id),
+      nota: s.note ?? null
+    }));
+  const pagosAbonos = abonos.map((a) => ({ tipo: "abono" as const, fecha: a.fecha, montoCop: a.montoCop, referencia: "abono", nota: a.nota }));
   const pagos = [...pagosLiquidaciones, ...pagosAbonos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 
   return {
@@ -277,12 +272,14 @@ function buildStoreSummary(
     },
     pagos,
     abonos,
+    ajustes,
     significado: {
       disponibleCop: "Saldo que la plataforma ya te puede pagar (COD recibido del domiciliario o prepago), neto de abonos.",
       enLiquidacionCop: "Ya incluido en un corte creado pero aun no pagado.",
       bloqueadoCodCop: "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
       liquidadoCop: "Total neto ya liquidado en cortes pagados/conciliados.",
-      abonadoCop: "Total de abonos (pagos parciales) que ya te hemos entregado."
+      abonadoCop: "Total de abonos (pagos parciales) que ya te hemos entregado.",
+      ajustes: "Correcciones que reabren saldo a tu favor (por ejemplo, un corte cerrado por menos de lo transferido). No son pagos recibidos."
     }
   };
 }
@@ -462,15 +459,26 @@ export const storeApi = onRequest(async (request, response) => {
       ok: true,
       tienda: config.sellerName ?? sellerId,
       total: sellerSettlements.length,
+      significado: {
+        netoCop: "Valor liquidado del corte segun los pedidos incluidos.",
+        pagadoCop: "Valor realmente transferido por ese corte.",
+        saldoDelCorteCop: "Diferencia entre el neto y lo transferido. Si es 0, el corte quedo saldado.",
+        nota: "Aclaracion del corte cuando el pago no fue en un solo giro."
+      },
       liquidaciones: sellerSettlements.map((settlement) => ({
         id: settlement.id,
         status: settlement.status,
         desde: settlement.startDate,
         hasta: settlement.endDate,
         netoCop: Math.round(Number(settlement.netCop || 0)),
+        // Lo realmente transferido. Si un corte se cerro pagando menos que su neto,
+        // aqui se ve la diferencia en vez de dar por hecho que salio el neto completo.
+        pagadoCop: Math.round(Number(typeof settlement.paidAmountCop === "number" ? settlement.paidAmountCop : settlement.netCop) || 0),
+        saldoDelCorteCop: Math.max(0, Math.round(Number(settlement.netCop || 0)) - Math.round(Number(typeof settlement.paidAmountCop === "number" ? settlement.paidAmountCop : settlement.netCop) || 0)),
         codCop: Math.round(Number(settlement.codCop || 0)),
         cobrosCop: Math.round(Number(settlement.feesCop || 0)),
         costoProductoCop: Math.round(Number(settlement.productCostCop || 0)),
+        nota: settlement.note ?? null,
         createdAt: settlement.createdAt ?? null,
         paidAt: settlement.paidAt ?? null,
         reconciledAt: settlement.reconciledAt ?? null,

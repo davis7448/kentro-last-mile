@@ -3,6 +3,7 @@
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit as limitTo,
@@ -17,8 +18,9 @@ import {
   type DocumentData,
   type Query
 } from "firebase/firestore";
+import { selectUnsettledWalletEntries } from "@/lib/finance";
 import { emptyState } from "@/lib/seed";
-import type { AppState, AuditEvent, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
+import type { AppState, AuditEvent, CashSnapshot, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 const settingsPath = ["settings", "global"] as const;
@@ -46,7 +48,43 @@ const collectionNames = [
 export type FirestoreStateContext = {
   role: Role;
   profileId: string;
+  /** Fecha (YYYY-MM-DD) desde la que se traen los pedidos ya cerrados. Los activos NO se
+   *  acotan nunca: son la operacion del dia y tienen que estar completos siempre. */
+  historyStart?: string;
 };
+
+// Un pedido abierto siempre viaja al cliente; uno cerrado solo si cae en la ventana o si algo
+// lo necesita explicitamente (liquidaciones, busqueda). Juntas cubren OrderStatus completo.
+const ACTIVE_ORDER_STATUSES = [
+  "imported",
+  "address_risk",
+  "ready_to_assign",
+  "assigned",
+  "call_pending",
+  "scheduled",
+  "pickup_pending",
+  "picked_up",
+  "in_route",
+  "retry_pending"
+] as const;
+
+const CLOSED_ORDER_STATUSES = ["delivered", "failed", "cancelled", "liquidated"] as const;
+
+/** `createdAt` se guarda como ISO en UTC y la ventana llega como fecha local. Se ancla al inicio
+ *  del dia UTC, que en Colombia (UTC-5) abre la ventana 5 horas antes: se trae de mas, nunca de
+ *  menos. El filtro fino lo hace la UI. */
+function historyStartBoundary(historyStart?: string) {
+  return historyStart ? `${historyStart}T00:00:00.000Z` : "";
+}
+
+// Tope de valores por consulta `in` en Firestore.
+const IN_QUERY_LIMIT = 30;
+
+// Tope defensivo de pedidos traidos por id fuera de la ventana. Hoy liquidaciones necesita ~420.
+const MAX_PINNED_ORDERS = 800;
+
+// Tope duro de Firestore por writeBatch.
+const BATCH_WRITE_LIMIT = 500;
 
 // Colecciones que se sirven por listener incremental. Cuando la suscripcion esta
 // activa, loadFirestoreState las omite: el snapshot inicial del listener ya trae
@@ -63,7 +101,8 @@ type WatchedKey =
   | "messengers"
   | "pickupBatches"
   | "wallet"
-  | "settlements";
+  | "settlements"
+  | "payouts";
 
 type LoadOptions = { skip?: ReadonlySet<WatchedKey> };
 
@@ -75,6 +114,9 @@ const AUDIT_LIMIT = 50;
 // los 45.000 documentos (~17 MB, el 79% de la descarga inicial) y crece ~20.000 al
 // mes, mientras el panel que lo consume solo muestra 5 filas paginadas.
 const SYNC_ISSUES_LIMIT = 200;
+
+// Historial de cuadres de caja: basta con los ultimos para ver la tendencia del desfase.
+const CASH_SNAPSHOT_LIMIT = 60;
 
 // Diagnostico de carga, apagado por defecto. Para activarlo en el navegador:
 //   localStorage.setItem("kentro-perf", "1")  y recargar.
@@ -101,7 +143,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
   const skipped = <T,>(key: WatchedKey, load: () => Promise<T[]>): Promise<T[]> => (skip?.has(key) ? Promise.resolve([]) : load());
   // seller_logistics ve lo operativo de su tienda igual que el vendedor, pero sin datos financieros.
   const storeRole = role === "seller" || role === "seller_logistics";
-  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit] = await Promise.all([
+  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit, cashSnapshots] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
@@ -120,7 +162,8 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
     skipped("wallet", () => getWalletForContext(context)),
     skipped("settlements", () => getSettlementsForContext(context)),
     role === "seller" && context ? getCollection<PayoutRequest>("payouts", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<PayoutRequest>("payouts") : Promise.resolve([]),
-    role === "admin" ? getCollection<AuditEvent>("auditEvents", true, AUDIT_LIMIT) : Promise.resolve([])
+    role === "admin" ? getCollection<AuditEvent>("auditEvents", true, AUDIT_LIMIT) : Promise.resolve([]),
+    role === "admin" ? getCollection<CashSnapshot>("cashSnapshots", true, CASH_SNAPSHOT_LIMIT) : Promise.resolve([])
   ]);
 
   const resolvedSellers =
@@ -162,17 +205,48 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
     settlements: settlements ?? [],
     payouts: payouts ?? [],
     audit: audit ?? [],
+    cashSnapshots: cashSnapshots ?? [],
     settings: settingsSnapshot.exists() ? { ...base.settings, ...settingsSnapshot.data() } : base.settings
   };
+}
+
+// Colecciones que el autoguardado del admin persiste, en orden de escritura. `payouts` NO esta:
+// los gestiona el servidor (requestSellerPayout, rejectSellerPayout, createSettlement) y
+// reescribirlos desde el estado del admin pisaria una solicitud creada entre carga y guardado.
+const AUTOSAVED_COLLECTIONS = [
+  "cities",
+  "zones",
+  "sellers",
+  "shopifyStores",
+  "storeWebhookConfigs",
+  "shopifyInstallRequests",
+  "drivers",
+  "messengers",
+  "pickupBatches",
+  "suppliers",
+  "productCatalog",
+  "inventory"
+] as const;
+
+// Ultimo estado que vino del servidor. El autoguardado compara contra esto para escribir solo lo
+// que el admin cambio de verdad: antes reescribia las 12 colecciones enteras en CADA setState
+// (331 operaciones hoy, con pickupBatches creciendo sin techo) y el writeBatch se corta en 500.
+let lastRemoteCollections: Partial<Record<(typeof AUTOSAVED_COLLECTIONS)[number] | "settings", unknown>> | null = null;
+
+function rememberRemoteCollections(state: AppState) {
+  const snapshot: Record<string, unknown> = { settings: state.settings };
+  for (const name of AUTOSAVED_COLLECTIONS) snapshot[name] = state[name];
+  lastRemoteCollections = snapshot;
 }
 
 export async function saveFirestoreState(state: AppState, context?: FirestoreStateContext): Promise<void> {
   const client = getFirebaseClient();
   if (!client) return;
-  const batch = writeBatch(client.db);
+  // El vendedor no persiste nada desde el cliente. Aqui vivia una rama que escribia sus payouts,
+  // pero nunca se llamaba (el efecto que guarda el estado se sale para todo rol que no sea admin),
+  // y hoy las solicitudes van por el callable requestSellerPayout con el monto calculado en el
+  // servidor. Reactivar una escritura financiera desde el navegador seria un retroceso.
   if (context?.role === "seller") {
-    writeEntities(batch, "payouts", state.payouts.filter((payout) => payout.sellerId === context.profileId));
-    await batch.commit();
     return;
   }
   if (context?.role === "driver") {
@@ -186,21 +260,29 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
     return;
   }
 
-  batch.set(doc(client.db, ...settingsPath), { ...state.settings, updatedAt: serverTimestamp() }, { merge: true });
-  writeEntities(batch, "cities", state.cities);
-  writeEntities(batch, "zones", state.zones);
-  writeEntities(batch, "sellers", state.sellers);
-  writeEntities(batch, "shopifyStores", state.shopifyStores);
-  writeEntities(batch, "storeWebhookConfigs", state.storeWebhookConfigs);
-  writeEntities(batch, "shopifyInstallRequests", state.shopifyInstallRequests);
-  writeEntities(batch, "drivers", state.drivers);
-  writeEntities(batch, "messengers", state.messengers);
-  writeEntities(batch, "pickupBatches", state.pickupBatches);
-  writeEntities(batch, "suppliers", state.suppliers);
-  writeEntities(batch, "productCatalog", state.productCatalog);
-  writeEntities(batch, "inventory", state.inventory);
-  writeEntities(batch, "payouts", state.payouts);
+  // Sin referencia previa (arranque en frio o base vacia) se escribe todo; con ella, solo lo que
+  // cambio. La comparacion es por identidad de array, que se conserva entre emisiones: el emit
+  // solo rearma las claves marcadas como sucias.
+  const baseline = lastRemoteCollections;
+  const changed = AUTOSAVED_COLLECTIONS.filter((name) => !baseline || state[name] !== baseline[name]);
+  const settingsChanged = !baseline || state.settings !== baseline.settings;
+  if (!settingsChanged && changed.length === 0) return;
+
+  const pendingWrites = changed.reduce((total, name) => total + state[name].length, 0) + (settingsChanged ? 1 : 0);
+  if (pendingWrites > BATCH_WRITE_LIMIT) {
+    throw new Error(`El guardado supera el limite de ${BATCH_WRITE_LIMIT} operaciones por lote (${pendingWrites}).`);
+  }
+
+  const batch = writeBatch(client.db);
+  if (settingsChanged) {
+    batch.set(doc(client.db, ...settingsPath), { ...state.settings, updatedAt: serverTimestamp() }, { merge: true });
+  }
+  // El tipo del array se pierde al iterar la union de colecciones; `writeEntities` solo usa
+  // `entity.id`, que todas comparten.
+  for (const name of changed) writeEntities(batch, name, state[name] as Array<{ id: string }>);
   await batch.commit();
+  perfLog(`autoguardado: ${pendingWrites} escrituras (${changed.join(", ") || "solo settings"})`);
+  rememberRemoteCollections(state);
 }
 
 export async function saveFirestoreOrder(order: Order): Promise<void> {
@@ -220,11 +302,23 @@ export async function saveFirestoreOrderLabelPrint(order: Pick<Order, "id" | "la
   });
 }
 
+/** Deja `settlementId` (y `supplierSettlementId` en costos de producto) presente y vacio en los
+ *  asientos que nacen sin liquidar: Firestore no puede filtrar por campo AUSENTE, y de ese filtro
+ *  depende que la app traiga solo lo pendiente en vez de la coleccion entera. Espeja
+ *  `withOpenSettlementFlags` de functions/src/orders.ts. */
+function withOpenSettlementFlags(entry: WalletEntry): WalletEntry {
+  const normalized: WalletEntry = { ...entry, settlementId: entry.settlementId ?? "" };
+  if (normalized.type === "product_cost") {
+    normalized.supplierSettlementId = normalized.supplierSettlementId ?? "";
+  }
+  return normalized;
+}
+
 export async function saveFirestoreWalletEntries(entries: WalletEntry[]): Promise<void> {
   const client = getFirebaseClient();
   if (!client || entries.length === 0) return;
   const batch = writeBatch(client.db);
-  writeEntities(batch, "walletEntries", entries);
+  writeEntities(batch, "walletEntries", entries.map(withOpenSettlementFlags));
   await batch.commit();
 }
 
@@ -244,6 +338,29 @@ export async function saveFirestoreSupplier(supplier: Supplier): Promise<void> {
   const client = getFirebaseClient();
   if (!client) return;
   await setDoc(doc(client.db, "suppliers", supplier.id), sanitizeFirestoreValue(supplier), { merge: true });
+}
+
+/**
+ * Marca de forma de pago de una cuenta. Se escribe con `merge` y un solo campo a proposito: el
+ * resto del documento (tarifas, datos de recogida, bancarios) no debe viajar en una operacion
+ * que solo cambia como se le paga.
+ */
+export async function saveFirestorePaysInCash(
+  collectionName: "sellers" | "drivers" | "suppliers",
+  id: string,
+  paysInCash: boolean
+): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, collectionName, id), { paysInCash }, { merge: true });
+}
+
+/** Registra el saldo real de las cuentas de la operacion. Nunca se edita ni se borra
+ *  (las reglas lo impiden): el historico de desfases solo sirve si es inmutable. */
+export async function saveFirestoreCashSnapshot(snapshot: CashSnapshot): Promise<void> {
+  const client = getFirebaseClient();
+  if (!client) return;
+  await setDoc(doc(client.db, "cashSnapshots", snapshot.id), sanitizeFirestoreValue(snapshot));
 }
 
 export async function saveFirestoreProductCatalogItem(item: ProductCatalogItem): Promise<void> {
@@ -283,10 +400,28 @@ export function subscribeFirestoreState(
   const pickupBatchRef = collection(client.db, "pickupBatches");
   const supplierRef = collection(client.db, "suppliers");
   const productCatalogRef = collection(client.db, "productCatalog");
+  const payoutRef = collection(client.db, "payouts");
+  // Dos consultas por rol en vez de la coleccion entera: los activos siempre completos, los
+  // cerrados solo dentro de la ventana. El admin bajaba 3.495 pedidos (~5,3 MB) en cada sesion
+  // para trabajar sobre 240 activos.
+  const orderTargets = (scope: Parameters<typeof query>[1] | null) => {
+    const scoped = scope ? [scope] : [];
+    const boundary = historyStartBoundary(context?.historyStart);
+    return [
+      { key: "orders" as const, target: query(orderRef, ...scoped, where("status", "in", [...ACTIVE_ORDER_STATUSES])) },
+      {
+        key: "orders" as const,
+        target: boundary
+          ? query(orderRef, ...scoped, where("status", "in", [...CLOSED_ORDER_STATUSES]), where("createdAt", ">=", boundary))
+          : query(orderRef, ...scoped, where("status", "in", [...CLOSED_ORDER_STATUSES]))
+      }
+    ];
+  };
+
   const targets: Array<{ key: WatchedKey; target: Query<DocumentData, DocumentData> }> =
     context?.role === "seller_logistics"
       ? [
-          { key: "orders", target: query(orderRef, where("sellerId", "==", context.profileId)) },
+          ...orderTargets(where("sellerId", "==", context.profileId)),
           { key: "inventory", target: query(inventoryRef, where("sellerId", "==", context.profileId)) },
           { key: "shopifyStores", target: query(shopifyStoreRef, where("sellerId", "==", context.profileId)) },
           { key: "storeWebhookConfigs", target: query(storeWebhookConfigRef, where("sellerId", "==", context.profileId)) },
@@ -296,15 +431,16 @@ export function subscribeFirestoreState(
         ]
       : context?.role === "seller"
       ? [
-          { key: "orders", target: query(orderRef, where("sellerId", "==", context.profileId)) },
+          ...orderTargets(where("sellerId", "==", context.profileId)),
           { key: "inventory", target: query(inventoryRef, where("sellerId", "==", context.profileId)) },
           { key: "shopifyStores", target: query(shopifyStoreRef, where("sellerId", "==", context.profileId)) },
           { key: "storeWebhookConfigs", target: query(storeWebhookConfigRef, where("sellerId", "==", context.profileId)) },
           { key: "shopifyInstallRequests", target: query(shopifyInstallRequestRef, where("sellerId", "==", context.profileId)) },
           { key: "shopifySyncIssues", target: query(shopifySyncIssueRef, where("sellerId", "==", context.profileId), orderBy("createdAt", "desc"), limitTo(SYNC_ISSUES_LIMIT)) },
           { key: "productCatalog", target: query(productCatalogRef, where("sellerId", "==", context.profileId)) },
-          { key: "wallet", target: query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId)) },
-          { key: "settlements", target: query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId)) }
+          { key: "wallet", target: query(walletRef, where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId), where("settlementId", "==", "")) },
+          { key: "settlements", target: query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId)) },
+          { key: "payouts", target: query(payoutRef, where("sellerId", "==", context.profileId)) }
         ]
       : context?.role === "driver"
         ? [
@@ -312,6 +448,8 @@ export function subscribeFirestoreState(
           { key: "orders", target: query(orderRef, where("driverId", "==", null), where("status", "==", "ready_to_assign")) },
           { key: "messengers", target: query(messengerRef, where("leaderDriverId", "==", context.profileId)) },
           { key: "pickupBatches", target: query(pickupBatchRef, where("driverId", "==", context.profileId)) },
+          // Sin recortar: calculateDriverFinancialSummary desglosa cada corte cerrado pedido a
+          // pedido leyendo sus asientos driver_earning, que ya tienen settlementId.
           { key: "wallet", target: query(walletRef, where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId)) },
           { key: "settlements", target: query(settlementRef, where("kind", "==", "driver"), where("ownerId", "==", context.profileId)) }
         ]
@@ -321,7 +459,7 @@ export function subscribeFirestoreState(
               { key: "messengers", target: query(messengerRef, where("__name__", "==", context.profileId)) }
             ]
           : [
-              { key: "orders", target: orderRef },
+              ...orderTargets(null),
               { key: "inventory", target: inventoryRef },
               { key: "suppliers", target: supplierRef },
               { key: "productCatalog", target: productCatalogRef },
@@ -331,8 +469,17 @@ export function subscribeFirestoreState(
               { key: "shopifySyncIssues", target: query(shopifySyncIssueRef, orderBy("createdAt", "desc"), limitTo(SYNC_ISSUES_LIMIT)) },
               { key: "messengers", target: messengerRef },
               { key: "pickupBatches", target: pickupBatchRef },
+              // El admin SI necesita el ledger completo: calculatePlatformPosition deriva caja,
+              // activos, pasivos y utilidad de los movimientos YA liquidados (lo pagado en cortes
+              // cerrados, los abonos, los fees historicos), y receivedDriverOrderIds tiene un
+              // fallback que lee asientos de cortes aun no cerrados. Recortarlo a lo pendiente
+              // daba cifras mal. El coste queda amortizado por la cache persistente: se baja una
+              // vez por dispositivo y despues solo llegan los cambios.
               { key: "wallet", target: walletRef },
-              { key: "settlements", target: settlementRef }
+              { key: "settlements", target: settlementRef },
+              // Sin esto una solicitud de liquidacion nueva no le aparece al admin hasta que
+              // recargue: exactamente el sintoma que este flujo venia a arreglar.
+              { key: "payouts", target: payoutRef }
             ];
 
   // Antes cada snapshot disparaba una recarga COMPLETA del estado (19 lecturas de
@@ -347,13 +494,43 @@ export function subscribeFirestoreState(
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
+  // Pedidos traidos por id que caen FUERA de la ventana: los que necesita liquidaciones (un
+  // movimiento sin liquidar de mayo apunta a un pedido de mayo) y los que devuelve la busqueda
+  // en servidor. Sin esto, acotar la ventana perderia informacion en vez de solo diferirla.
+  const pinnedOrders = new Map<string, Record<string, unknown>>();
+  const pinnedRequested = new Set<string>();
+
   const collect = (key: WatchedKey) => {
     const merged = new Map<string, Record<string, unknown>>();
     targets.forEach((entry, index) => {
       if (entry.key !== key) return;
       for (const [id, value] of caches[index]) merged.set(id, value);
     });
+    if (key === "orders") {
+      for (const [id, value] of pinnedOrders) if (!merged.has(id)) merged.set(id, value);
+    }
     return Array.from(merged.values());
+  };
+
+  /** Trae por id los pedidos que faltan y los deja fijados. Idempotente: cada id se pide una
+   *  sola vez por sesion, aunque el pedido no exista. */
+  const pinOrders = async (orderIds: string[]) => {
+    const known = new Set<string>();
+    targets.forEach((entry, index) => {
+      if (entry.key !== "orders") return;
+      for (const id of caches[index].keys()) known.add(id);
+    });
+    const missing = orderIds
+      .filter((id) => id && !known.has(id) && !pinnedRequested.has(id))
+      .slice(0, MAX_PINNED_ORDERS);
+    if (missing.length === 0) return;
+    for (const id of missing) pinnedRequested.add(id);
+    const fetched = await getDocumentsByIds<Order>("orders", missing);
+    if (stopped || fetched.length === 0) return;
+    for (const order of fetched) pinnedOrders.set(order.id, order as unknown as Record<string, unknown>);
+    perfLog(`pedidos fijados fuera de ventana: ${fetched.length} (acumulado ${pinnedOrders.size})`);
+    dirty.add("orders");
+    scheduleEmit();
   };
 
   // Una clave solo pasa a servirse desde las caches cuando TODOS sus listeners
@@ -398,6 +575,25 @@ export function subscribeFirestoreState(
     if (context?.role === "driver" && next.sellers.length === 0 && next.orders.length > 0) {
       next.sellers = sellerReferencesFromOrders(next.orders);
     }
+    // Liquidaciones necesita el pedido detras de cada movimiento sin liquidar, y esos pueden ser
+    // muy anteriores a la ventana. Se piden por id, una sola vez, en cuanto la wallet esta viva.
+    // Solo para el admin: es el unico rol con vista de liquidaciones, y ademas la consulta por
+    // `documentId() in` no lleva `sellerId`, asi que solo las reglas de admin la admiten.
+    if (context?.role === "admin" && watchedKeys.has("wallet") && keyIsLive("wallet")) {
+      const openOrderIds = selectUnsettledWalletEntries(next.wallet)
+        .map((entry) => entry.orderId)
+        .filter((orderId): orderId is string => Boolean(orderId));
+      if (openOrderIds.length > 0) {
+        void pinOrders(Array.from(new Set(openOrderIds))).catch((error) =>
+          console.warn("No se pudieron traer los pedidos de liquidacion.", error)
+        );
+      }
+    }
+
+    // Referencia para el autoguardado: a partir de aqui solo se escribe lo que el admin cambie
+    // sobre este estado, no las 12 colecciones enteras.
+    rememberRemoteCollections(next);
+
     const paintedAt = Date.now();
     onState(next);
     // React renderiza de forma sincrona dentro de setState, asi que este delta
@@ -479,7 +675,12 @@ async function getCollection<T extends { id: string }>(
   name: string,
   ...constraints: Parameters<typeof query>[1][]
 ): Promise<T[]>;
-async function getCollection<T extends { id: string }>(name: string, newestFirst: boolean, max?: number): Promise<T[]>;
+async function getCollection<T extends { id: string }>(
+  name: string,
+  newestFirst: boolean,
+  max?: number,
+  ...constraints: Parameters<typeof query>[1][]
+): Promise<T[]>;
 async function getCollection<T extends { id: string }>(
   name: string,
   newestFirstOrConstraint: boolean | Parameters<typeof query>[1] = false,
@@ -513,6 +714,74 @@ function normalizeOrder(order: Order): Order {
   };
 }
 
+/**
+ * Busca pedidos en el servidor por guia, numero de Shopify o telefono.
+ *
+ * El cliente ya no tiene todo el historial en memoria, asi que la busqueda no puede resolverse
+ * solo con lo cargado: un pedido entregado hace tres meses debe seguir siendo encontrable. Se
+ * consulta por igualdad exacta en los tres campos con los que la operacion identifica un pedido
+ * (los indices de campo unico son automaticos en Firestore). Las tiendas solo pueden consultar lo
+ * suyo, asi que la consulta lleva `sellerId` y respeta las reglas.
+ */
+export async function findFirestoreOrders(term: string, context?: FirestoreStateContext): Promise<Order[]> {
+  const client = getFirebaseClient();
+  const trimmed = term.trim();
+  if (!client || trimmed.length < 3) return [];
+
+  const scoped = context?.role === "seller" || context?.role === "seller_logistics"
+    ? [where("sellerId", "==", context.profileId)]
+    : context?.role === "driver"
+      ? [where("driverId", "==", context.profileId)]
+      : context?.role === "messenger"
+        ? [where("messengerId", "==", context.profileId)]
+        : [];
+
+  const upper = trimmed.toUpperCase();
+  const digits = trimmed.replace(/[^\d]/g, "");
+  const shopifyVariants = Array.from(new Set([trimmed, upper, upper.startsWith("#") ? upper : `#${upper}`]));
+
+  const lookups: Array<Promise<Order[]>> = [
+    getCollection<Order>("orders", ...scoped, where("trackingCode", "==", upper)),
+    getCollection<Order>("orders", ...scoped, where("shopifyOrderId", "in", shopifyVariants.slice(0, IN_QUERY_LIMIT)))
+  ];
+  if (digits.length >= 7) {
+    lookups.push(getCollection<Order>("orders", ...scoped, where("customerPhone", "==", digits)));
+    lookups.push(getCollection<Order>("orders", ...scoped, where("customerPhone", "==", trimmed)));
+  }
+
+  // Una consulta puede fallar por indice ausente o por reglas; el resto sigue sirviendo.
+  const results = await Promise.all(
+    lookups.map((lookup) => lookup.catch(() => [] as Order[]))
+  );
+  return mergeById(...results).map(normalizeOrder);
+}
+
+/** Trae pedidos por id, sin pasar por la ventana de descarga. Lo usa el detalle de una
+ *  liquidacion cerrada: sus pedidos suelen ser muy anteriores al historial cargado, y sin ellos
+ *  el desglose por pedido y el margen de la fila salen incompletos. Solo admin (la consulta no
+ *  lleva `sellerId`, asi que solo sus reglas la admiten). */
+export async function fetchOrdersByIds(orderIds: string[]): Promise<Order[]> {
+  const orders = await getDocumentsByIds<Order>("orders", orderIds);
+  return orders.map(normalizeOrder);
+}
+
+/** Historial completo de movimientos de una cuenta, paginado desde el mas reciente. El estado
+ *  solo trae lo pendiente; esto es para la vista de wallet, que si mira hacia atras. */
+export async function fetchWalletHistoryPage(
+  ownerType: WalletEntry["ownerType"],
+  ownerId: string,
+  max: number
+): Promise<WalletEntry[]> {
+  if (!getFirebaseClient() || !ownerId) return [];
+  return getCollection<WalletEntry>(
+    "walletEntries",
+    true,
+    max,
+    where("ownerType", "==", ownerType),
+    where("ownerId", "==", ownerId)
+  );
+}
+
 async function getOwnDocument<T extends { id: string }>(name: string, id: string): Promise<T[]> {
   const client = getFirebaseClient();
   if (!client) return [];
@@ -520,13 +789,27 @@ async function getOwnDocument<T extends { id: string }>(name: string, id: string
   return snapshot.exists() ? [({ id: snapshot.id, ...snapshot.data() } as T)] : [];
 }
 
+/** Trae documentos por id en lotes de 30 con `documentId() in`. Uno por `getDoc` costaba una
+ *  peticion por documento: para los ~420 pedidos que necesita liquidaciones eran 420 idas y
+ *  vueltas, y asi son 14 consultas. */
 async function getDocumentsByIds<T extends { id: string }>(name: string, ids: string[]): Promise<T[]> {
   const client = getFirebaseClient();
-  if (!client || ids.length === 0) return [];
-  const docs = await Promise.all(ids.map((id) => getDoc(doc(client.db, name, id)).catch(() => null)));
-  return docs
-    .filter((snapshot): snapshot is NonNullable<typeof snapshot> => Boolean(snapshot?.exists()))
-    .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }) as T);
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!client || unique.length === 0) return [];
+
+  const chunks: string[][] = [];
+  for (let index = 0; index < unique.length; index += IN_QUERY_LIMIT) {
+    chunks.push(unique.slice(index, index + IN_QUERY_LIMIT));
+  }
+  const groups = await Promise.all(
+    chunks.map((chunk) =>
+      getDocs(query(collection(client.db, name), where(documentId(), "in", chunk)))
+        .then((snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as T))
+        // Un lote que falle (permisos, indice) no puede tumbar al resto.
+        .catch(() => [] as T[])
+    )
+  );
+  return mergeById(...groups);
 }
 
 function sellerReferencesFromOrders(orders: Order[]): Seller[] {
@@ -546,8 +829,30 @@ function sellerReferencesFromOrders(orders: Order[]): Seller[] {
   return Array.from(sellers.values());
 }
 
+// Espejo de orderTargets para la carga inicial (solo se usa cuando la suscripcion no cubre
+// "orders", p.ej. en una llamada suelta a loadFirestoreState).
+async function getWindowedOrders(context: FirestoreStateContext, scope?: Parameters<typeof query>[1]): Promise<Order[]> {
+  const scoped = scope ? [scope] : [];
+  const boundary = historyStartBoundary(context.historyStart);
+  const [active, closed] = await Promise.all([
+    getCollection<Order>("orders", ...scoped, where("status", "in", [...ACTIVE_ORDER_STATUSES])),
+    boundary
+      ? getCollection<Order>("orders", ...scoped, where("status", "in", [...CLOSED_ORDER_STATUSES]), where("createdAt", ">=", boundary))
+      : getCollection<Order>("orders", ...scoped, where("status", "in", [...CLOSED_ORDER_STATUSES]))
+  ]);
+  return mergeById(active, closed);
+}
+
+function mergeById<T extends { id: string }>(...groups: T[][]): T[] {
+  const merged = new Map<string, T>();
+  for (const group of groups) {
+    for (const item of group) merged.set(item.id, item);
+  }
+  return Array.from(merged.values());
+}
+
 async function getOrdersForContext(context?: FirestoreStateContext): Promise<Order[]> {
-  if (context?.role === "seller" || context?.role === "seller_logistics") return getCollection<Order>("orders", where("sellerId", "==", context.profileId));
+  if (context?.role === "seller" || context?.role === "seller_logistics") return getWindowedOrders(context, where("sellerId", "==", context.profileId));
   if (context?.role === "driver") {
     const [assigned, free] = await Promise.all([
       getCollection<Order>("orders", where("driverId", "==", context.profileId)),
@@ -556,12 +861,13 @@ async function getOrdersForContext(context?: FirestoreStateContext): Promise<Ord
     return [...assigned, ...free].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   if (context?.role === "messenger") return getCollection<Order>("orders", where("messengerId", "==", context.profileId));
-  return getCollection<Order>("orders");
+  return context ? getWindowedOrders(context) : getCollection<Order>("orders");
 }
 
+// Espejo exacto de los targets de wallet en subscribeFirestoreState.
 async function getWalletForContext(context?: FirestoreStateContext): Promise<WalletEntry[]> {
   if (context?.role === "seller") {
-    return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId));
+    return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "seller"), where("ownerId", "==", context.profileId), where("settlementId", "==", ""));
   }
   if (context?.role === "driver") {
     return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId));

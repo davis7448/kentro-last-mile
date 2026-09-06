@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, entriesForClosedOrder, sellerBalance } from "./finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerBalance, summarizeWalletPeriod } from "./finance";
 import { seedState } from "./seed";
-import type { AppState } from "./types";
+import type { AppState, Order, WalletEntry } from "./types";
 
 describe("wallet calculations", () => {
   it("reserves 9.000 COP per pending order before withdrawal", () => {
@@ -278,6 +278,104 @@ describe("wallet calculations", () => {
     expect(entries.some((entry) => entry.type === "failed_fee" && entry.amountCop === -12000)).toBe(true);
     expect(entries.some((entry) => entry.type === "driver_earning" && entry.amountCop === 9000)).toBe(true);
   });
+
+  it("frees a failed order from the driver-cash gate but keeps delivered COD gated", () => {
+    const codReceived = new Set<string>(["ord-cod-recibido"]);
+    const gated = { id: "ord-cod-pendiente", status: "delivered" as const, paymentMethod: "cod" as const };
+    const received = { id: "ord-cod-recibido", status: "delivered" as const, paymentMethod: "cod" as const };
+    const failed = { id: "ord-fallido", status: "failed" as const, paymentMethod: "cod" as const };
+    const prepaid = { id: "ord-prepago", status: "delivered" as const, paymentMethod: "prepaid" as const };
+
+    // Un fallido no recauda COD: su cobro no puede quedar esperando dinero que nunca llega.
+    expect(isOrderEligibleForSellerSettlement(failed, codReceived)).toBe(true);
+    // La compuerta debe seguir reteniendo el COD entregado que aun no se recibe.
+    expect(isOrderEligibleForSellerSettlement(gated, codReceived)).toBe(false);
+    expect(isOrderEligibleForSellerSettlement(received, codReceived)).toBe(true);
+    expect(isOrderEligibleForSellerSettlement(prepaid, new Set())).toBe(true);
+  });
+
+  it("charges each lost visit separately when an order is retried and fails again", () => {
+    const state = seedState();
+    const failedEvidence = (id: string) => ({
+      id,
+      type: "failed" as const,
+      photoLabel: "",
+      note: "Cliente no recibe",
+      failedCategory: "failed_visit" as const,
+      createdAt: "2026-07-28T13:00:00.000Z",
+      actorId: "messenger-1"
+    });
+    const base = {
+      ...state.orders[0],
+      id: "ord-retry-failed-twice",
+      sellerId: "seller-1",
+      status: "failed" as const,
+      driverId: "driver-1"
+    };
+
+    const first = entriesForClosedOrder({ ...base, evidence: [failedEvidence("ev-1")] }, state);
+    const second = entriesForClosedOrder({ ...base, evidence: [failedEvidence("ev-1"), failedEvidence("ev-2")] }, state);
+
+    // La primera visita conserva el id historico; la segunda usa uno propio, de modo
+    // que al guardarse no sobrescribe el cobro anterior.
+    expect(first.some((entry) => entry.id === "we-ord-retry-failed-twice-seller-failed-fee")).toBe(true);
+    expect(second.some((entry) => entry.id === "we-ord-retry-failed-twice-seller-failed-fee-2")).toBe(true);
+    expect(second.some((entry) => entry.id === "we-ord-retry-failed-twice-driver-failed-pay-2")).toBe(true);
+  });
+});
+
+describe("platform position", () => {
+  const entry = (over: Partial<AppState["wallet"][number]>): AppState["wallet"][number] => ({
+    id: "we-x", ownerType: "seller", ownerId: "seller-1", orderId: "ord-1",
+    type: "cod_revenue", amountCop: 0, description: "", createdAt: "2026-07-01T00:00:00.000Z", ...over
+  });
+
+  it("cuenta como utilidad el margen y no el cobro bruto", () => {
+    const state: AppState = {
+      ...seedState(),
+      orders: [], settlements: [],
+      wallet: [
+        entry({ id: "we-1-cod", type: "cod_revenue", amountCop: 100000 }),
+        entry({ id: "we-1-fee", type: "delivery_fee", amountCop: -12000 }),
+        entry({ id: "we-1-pay", ownerType: "driver", ownerId: "driver-1", type: "driver_earning", amountCop: 9000 })
+      ]
+    };
+    const position = calculatePlatformPosition(state);
+    expect(position.feesCop).toBe(12000);
+    expect(position.driverPayCop).toBe(9000);
+    // La utilidad es el margen (3.000), NO el cobro bruto (12.000): ese era el bug de la tabla.
+    expect(position.profitCop).toBe(3000);
+  });
+
+  it("deja el costo de producto retenido fuera de la utilidad", () => {
+    const state: AppState = {
+      ...seedState(),
+      orders: [], settlements: [],
+      wallet: [
+        entry({ id: "we-1-fee", type: "delivery_fee", amountCop: -12000 }),
+        entry({ id: "we-1-cost", type: "product_cost", amountCop: -5000, supplierId: "sup-1", supplierName: "Proveedor Uno" }),
+        entry({ id: "we-1-pay", ownerType: "driver", ownerId: "driver-1", type: "driver_earning", amountCop: 9000 })
+      ]
+    };
+    const position = calculatePlatformPosition(state);
+    expect(position.profitCop).toBe(3000);
+    expect(position.withheldForSuppliersCop).toBe(5000);
+    expect(position.withheldBySupplier).toEqual([{ supplierId: "sup-1", supplierName: "Proveedor Uno", amountCop: 5000 }]);
+  });
+
+  it("incluye en el por cobrar el COD de pedidos que aun no entran a ningun corte", () => {
+    const state: AppState = {
+      ...seedState(),
+      orders: [], settlements: [],
+      wallet: [
+        entry({ id: "we-2-cod", orderId: "ord-sin-corte", type: "cod_revenue", amountCop: 100000 }),
+        entry({ id: "we-2-pay", orderId: "ord-sin-corte", ownerType: "driver", ownerId: "driver-1", type: "driver_earning", amountCop: 9000 })
+      ]
+    };
+    const position = calculatePlatformPosition(state);
+    expect(position.driverCodOutsideSettlementsCop).toBe(91000);
+    expect(position.driverReceivableCop).toBe(91000);
+  });
 });
 
 describe("driver financial summary", () => {
@@ -520,5 +618,195 @@ describe("driver settlement financials", () => {
     expect(financials.feesCop).toBe(12000);
     expect(financials.driverPayCop).toBe(9000);
     expect(financials.platformMarginCop).toBe(3000);
+  });
+});
+
+describe("selectOpenWalletEntries", () => {
+  const entry = (overrides: Partial<WalletEntry>): WalletEntry => ({
+    id: "we-1",
+    ownerType: "seller",
+    ownerId: "seller-1",
+    orderId: "order-1",
+    type: "delivery_fee",
+    amountCop: -9000,
+    description: "Flete",
+    createdAt: "2026-05-30T10:00:00.000Z",
+    ...overrides
+  });
+
+  it("incluye lo pendiente por antiguo que sea: el rango de fechas no aplica aqui", () => {
+    const viejo = entry({ id: "we-viejo", createdAt: "2026-05-30T10:00:00.000Z", settlementId: "" });
+    const reciente = entry({ id: "we-reciente", createdAt: "2026-08-21T10:00:00.000Z", settlementId: "" });
+    expect(selectOpenWalletEntries([viejo, reciente]).map((item) => item.id)).toEqual(["we-viejo", "we-reciente"]);
+  });
+
+  it("trata el campo ausente igual que el vacio", () => {
+    const sinCampo = entry({ id: "we-sin-campo" });
+    expect(selectOpenWalletEntries([sinCampo])).toHaveLength(1);
+  });
+
+  it("deja fuera lo ya liquidado", () => {
+    const liquidado = entry({ id: "we-liquidado", settlementId: "stl-1" });
+    expect(selectOpenWalletEntries([liquidado])).toEqual([]);
+  });
+
+  it("mantiene el costo de producto que sigue pendiente con el proveedor aunque ya se liquido con la tienda", () => {
+    // Caso real: 1.441 asientos en produccion. Si se derivara del `settlementId` de la tienda,
+    // el proveedor dejaria de aparecer como pendiente de cobro.
+    const pendienteProveedor = entry({
+      id: "we-costo",
+      type: "product_cost",
+      settlementId: "stl-tienda-1",
+      supplierSettlementId: ""
+    });
+    expect(selectOpenWalletEntries([pendienteProveedor]).map((item) => item.id)).toEqual(["we-costo"]);
+  });
+
+  it("deja fuera el costo de producto ya pagado por ambos lados", () => {
+    const cerrado = entry({
+      id: "we-costo-cerrado",
+      type: "product_cost",
+      settlementId: "stl-tienda-1",
+      supplierSettlementId: "stl-prov-1"
+    });
+    expect(selectOpenWalletEntries([cerrado])).toEqual([]);
+  });
+});
+
+describe("summarizeWalletPeriod", () => {
+  const walletEntry = (overrides: Partial<WalletEntry>): WalletEntry => ({
+    id: `we-${Math.random()}`,
+    ownerType: "seller",
+    ownerId: "seller-1",
+    orderId: "order-1",
+    type: "delivery_fee",
+    amountCop: -9000,
+    description: "Flete entregado",
+    createdAt: "2026-05-30T10:00:00.000Z",
+    ...overrides
+  });
+
+  const periodo = [
+    walletEntry({ orderId: "o-1", type: "cod_revenue", amountCop: 120000, description: "Recaudo COD" }),
+    walletEntry({ orderId: "o-1", type: "delivery_fee", amountCop: -9000, description: "Flete entregado" }),
+    walletEntry({ orderId: "o-1", type: "driver_earning", amountCop: 6000, ownerType: "driver", ownerId: "driver-1", description: "Pago transportista entregado" }),
+    walletEntry({ orderId: "o-2", type: "failed_fee", amountCop: -12000, description: "Cobro fallido" }),
+    walletEntry({ orderId: "o-2", type: "driver_earning", amountCop: 3000, ownerType: "driver", ownerId: "driver-1", description: "Pago transportista fallido" })
+  ];
+
+  it("calcula el periodo sin necesitar los pedidos cargados", () => {
+    // Esta es la regresion que rompio "Ver todo": el resumen se derivaba de state.orders, que
+    // ahora se descarga por ventana, y el margen operativo caia de $4.217.500 a $1.488.000.
+    const sinPedidos = summarizeWalletPeriod(periodo, new Map());
+    expect(sinPedidos.codCop).toBe(120000);
+    expect(sinPedidos.sellerFeesCop).toBe(21000);
+    expect(sinPedidos.driverPayCop).toBe(9000);
+    expect(sinPedidos.platformMarginCop).toBe(12000);
+  });
+
+  it("da el mismo dinero con y sin los pedidos en memoria", () => {
+    const ordersById = new Map<string, Order>([
+      ["o-1", { id: "o-1", status: "delivered" } as Order],
+      ["o-2", { id: "o-2", status: "failed" } as Order]
+    ]);
+    const conPedidos = summarizeWalletPeriod(periodo, ordersById);
+    const sinPedidos = summarizeWalletPeriod(periodo, new Map());
+    expect(conPedidos.codCop).toBe(sinPedidos.codCop);
+    expect(conPedidos.sellerFeesCop).toBe(sinPedidos.sellerFeesCop);
+    expect(conPedidos.driverPayCop).toBe(sinPedidos.driverPayCop);
+    expect(conPedidos.platformMarginCop).toBe(sinPedidos.platformMarginCop);
+  });
+
+  it("separa el pago por entregas del pago por fallidos", () => {
+    const resumen = summarizeWalletPeriod(periodo, new Map());
+    expect(resumen.deliveredPayCop).toBe(6000);
+    expect(resumen.failedPayCop).toBe(3000);
+    expect(resumen.deliveryFeeCop).toBe(9000);
+    expect(resumen.failedFeeCop).toBe(12000);
+  });
+
+  it("cuenta entregados y fallidos por estado del pedido, y si no esta cargado los deduce del asiento", () => {
+    const ordersById = new Map<string, Order>([["o-1", { id: "o-1", status: "delivered" } as Order]]);
+    const resumen = summarizeWalletPeriod(periodo, ordersById);
+    expect(resumen.deliveredOrders).toBe(1);
+    expect(resumen.failedOrders).toBe(1);
+  });
+
+  it("recorta el cobro por pedido antes de sumar: una nota de credito no compensa otro pedido", () => {
+    const conNotaCredito = [
+      walletEntry({ orderId: "o-1", type: "delivery_fee", amountCop: -9000 }),
+      // reversa que deja el pedido o-2 en positivo; no puede restarle al cobro de o-1
+      walletEntry({ orderId: "o-2", type: "delivery_fee", amountCop: 5000 })
+    ];
+    expect(summarizeWalletPeriod(conNotaCredito, new Map()).sellerFeesCop).toBe(9000);
+  });
+
+  it("ignora los asientos sin pedido, como los abonos a tienda", () => {
+    const conAbono = [...periodo, walletEntry({ orderId: "", type: "seller_abono", amountCop: -50000, description: "Abono" })];
+    expect(summarizeWalletPeriod(conAbono, new Map()).sellerFeesCop).toBe(21000);
+  });
+});
+
+describe("driverCashReceiptRows", () => {
+  const corte = (overrides: Record<string, unknown> = {}) => ({
+    id: "stl-1",
+    kind: "driver" as const,
+    ownerId: "driver-1",
+    ownerName: "Lider",
+    startDate: "2026-08-18",
+    endDate: "2026-08-20",
+    walletEntryIds: [],
+    orderIds: [],
+    codCop: 0,
+    feesCop: 0,
+    driverPayCop: 0,
+    platformMarginCop: 0,
+    netCop: 0,
+    status: "reconciled" as const,
+    createdAt: "2026-08-20T10:00:00.000Z",
+    ...overrides
+  });
+
+  it("lista cada abono con su nota, no solo el ultimo", () => {
+    // 20 de los 26 cortes en produccion tienen mas de un abono, y la nota del corte solo conserva
+    // la del ultimo porque recordDriverCashReceipt la sobreescribe.
+    const rows = driverCashReceiptRows(corte({
+      cashReceipts: [
+        { id: "r1", amountCop: 4735000, receivedAt: "2026-08-20T12:00:00.000Z", note: "abono recaudo efectivo agosto 19" },
+        { id: "r2", amountCop: 464300, receivedAt: "2026-08-20T15:00:00.000Z", note: "abono recaudo nequi Martha agosto 18" }
+      ]
+    }) as never, 6000000, 5199300);
+    expect(rows.map((row) => row.note)).toEqual([
+      "abono recaudo efectivo agosto 19",
+      "abono recaudo nequi Martha agosto 18"
+    ]);
+  });
+
+  it("lleva el saldo corriente, no repite el pendiente final", () => {
+    const rows = driverCashReceiptRows(corte({
+      cashReceipts: [
+        { id: "r1", amountCop: 400000, receivedAt: "2026-08-20T12:00:00.000Z" },
+        { id: "r2", amountCop: 300000, receivedAt: "2026-08-20T15:00:00.000Z" }
+      ]
+    }) as never, 1000000, 700000);
+    expect(rows.map((row) => row.pendingAfterCop)).toEqual([600000, 300000]);
+  });
+
+  it("nunca deja el pendiente en negativo si se entrego de mas", () => {
+    const rows = driverCashReceiptRows(corte({
+      cashReceipts: [{ id: "r1", amountCop: 1200000, receivedAt: "2026-08-20T12:00:00.000Z" }]
+    }) as never, 1000000, 1200000);
+    expect(rows[0].pendingAfterCop).toBe(0);
+  });
+
+  it("devuelve una fila sintetica para cortes viejos que solo guardaron el total", () => {
+    const rows = driverCashReceiptRows(corte({ paidAt: "2026-08-21T10:00:00.000Z" }) as never, 900000, 900000);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].synthetic).toBe(true);
+    expect(rows[0].amountCop).toBe(900000);
+  });
+
+  it("no inventa filas cuando no se recibio nada", () => {
+    expect(driverCashReceiptRows(corte() as never, 900000, 0)).toEqual([]);
   });
 });

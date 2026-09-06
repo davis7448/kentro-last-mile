@@ -26,6 +26,7 @@ function baseState(inventory: InventoryItem[]): AppState {
     settlements: [],
     payouts: [],
     audit: [],
+  cashSnapshots: [],
     settings: {
       activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,

@@ -63,6 +63,11 @@ export type Seller = {
   pickupContactPhone?: string;
   pickupNotes?: string;
   debtBlockedAt?: string;
+  /**
+   * Cobra en efectivo: sus pagos no pasan por el banco, asi que no generan 4x1000.
+   * Va como marca por cuenta y no fijo en codigo, porque la forma de pago cambia.
+   */
+  paysInCash?: boolean;
 };
 export type ShopifyStore = {
   id: string;
@@ -125,7 +130,7 @@ export type ShopifySyncIssue = {
   resolvedAt?: string;
   orderId?: string;
 };
-export type Driver = { id: string; name: string; phone: string; active: boolean };
+export type Driver = { id: string; name: string; phone: string; active: boolean; paysInCash?: boolean };
 export type Messenger = {
   id: string;
   leaderDriverId: string;
@@ -144,6 +149,7 @@ export type Supplier = {
   phone?: string;
   notes?: string;
   active: boolean;
+  paysInCash?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -189,6 +195,9 @@ export type InventoryItem = {
 
 export type Order = {
   id: string;
+  /** Como se confirmo el pedido: a mano desde la app o automaticamente por el bot de
+   *  ChatBy. Las rutas de UChat ya lo escribian en Firestore sin declararlo aqui. */
+  confirmedVia?: "manual" | "uchat" | "uchat_pull";
   trackingCode?: string;
   shopifyOrderId: string;
   sellerId: string;
@@ -255,7 +264,9 @@ export type WalletEntry = {
     | "cod_remittance"
     | "payout"
     | "seller_abono"
-    | "cash_shortage";
+    | "cash_shortage"
+    /** Gravamen a los movimientos financieros (4x1000) sobre lo que sale por transferencia. */
+    | "gmf_tax";
   amountCop: number;
   description: string;
   supplierSettlementId?: string;
@@ -298,6 +309,12 @@ export type Settlement = {
   cashReceivedCop?: number;
   cashReceiptStatus?: "none" | "partial" | "complete";
   cashPendingCop?: number;
+  /** Efectivo entregado por encima de lo esperado (queda a favor del domiciliario). */
+  cashExcessCop?: number;
+  /** Monto realmente transferido cuando el corte se pago por menos del neto. */
+  paidAmountCop?: number;
+  /** 4x1000 retenido en este corte. 0 si la cuenta cobra en efectivo. */
+  gmfCop?: number;
   cashReceipts?: CashReceipt[];
   cashAllocations?: Array<{
     orderId?: string;
@@ -311,8 +328,20 @@ export type Settlement = {
 export type PayoutRequest = {
   id: string;
   sellerId: string;
+  sellerName?: string;
+  /** Neto liquidable calculado por el servidor con la misma regla que createSettlement. */
   amountCop: number;
+  /** Saldo retenido porque el COD de esos pedidos aun no entra de la flota. */
+  blockedCop?: number;
+  eligibleOrderCount?: number;
   status: "requested" | "approved" | "rejected" | "paid";
+  requestedBy?: string;
+  requestedByEmail?: string;
+  /** Corte que la cerro. Una solicitud solo se paga creando la liquidacion real. */
+  settlementId?: string;
+  paidAt?: string;
+  rejectedAt?: string;
+  rejectedReason?: string;
   createdAt: string;
 };
 
@@ -323,8 +352,93 @@ export type AuditEvent = {
   action: string;
   entity: string;
   entityId: string;
+  /** Solo en eventos nuevos: los historicos solo tienen el cambio dentro de `summary`. */
+  fromStatus?: string;
+  toStatus?: string;
   summary: string;
   createdAt: string;
+};
+
+/** Una fila del historial de un pedido, tal como la devuelve el callable
+ *  `getOrderAuditTrail`: igual que `AuditEvent` pero con el actor ya resuelto a nombre y
+ *  correo (traducir el uid exige Admin SDK, el cliente no puede hacerlo). */
+export type OrderAuditEntry = {
+  id: string;
+  createdAt: string;
+  action: string;
+  actorId: string;
+  actorLabel: string;
+  actorEmail?: string;
+  actorRole?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  summary: string;
+};
+
+/** Las cuatro correcciones administrativas de estado que admite el callable
+ *  `correctOrderStatus`. Cada una exige un estado de partida concreto; la matriz completa
+ *  vive en functions/src/order-corrections-plan.ts. */
+export type OrderCorrectionKind =
+  | "failed_to_delivered"
+  | "delivered_to_failed"
+  | "cancelled_to_operational"
+  | "failed_to_retry_pending";
+
+export type OrderCorrectionNote = { code: string; message: string };
+
+export type OrderCorrectionSettlementPreview = {
+  id: string;
+  kind: "seller" | "driver" | "supplier";
+  ownerName: string;
+  before: { walletEntryCount: number; orderCount: number; netCop: number; cashExpectedCop?: number; cashPendingCop?: number };
+  after: { walletEntryCount: number; orderCount: number; netCop: number; cashExpectedCop?: number; cashPendingCop?: number };
+  relatedEntryPatches: Array<{ id: string; amountCop: number; reason: string }>;
+};
+
+/** Consecuencias completas de una correccion, calculadas en el servidor ANTES de escribir.
+ *  El mismo objeto se devuelve en la previsualizacion y en la aplicacion, porque el
+ *  planificador es puro: lo que el admin aprueba es literalmente lo que se escribe.
+ *  `blockers` no vacio significa que la correccion no puede aplicarse. */
+export type OrderCorrectionPlan = {
+  kind: OrderCorrectionKind;
+  orderId: string;
+  trackingCode: string;
+  fromStatus: string;
+  toStatus: string;
+  orderPatchPreview: Record<string, string>;
+  /** Numero de visita fallida que quedara registrada; decide el sufijo `-N` de los asientos. */
+  failedAttempt?: number;
+  entriesToDelete: WalletEntry[];
+  entriesToCreate: WalletEntry[];
+  entriesToCompensate: Array<{ sourceId: string; frozenSettlementId: string; entry: WalletEntry }>;
+  entriesToKeep: WalletEntry[];
+  settlementsToRecalculate: OrderCorrectionSettlementPreview[];
+  frozenSettlements: Array<{ id: string; kind: string; status: string; ownerName: string }>;
+  inventory: { kind: string; movements: Array<{ skuKey: string; quantity: number }> };
+  financials: {
+    sellerNetBeforeCop: number;
+    sellerNetAfterCop: number;
+    sellerDeltaCop: number;
+    driverNetBeforeCop: number;
+    driverNetAfterCop: number;
+    driverDeltaCop: number;
+  };
+  warnings: OrderCorrectionNote[];
+  blockers: OrderCorrectionNote[];
+  auditAction: string;
+  auditSummary: string;
+};
+
+/** Saldo real de las cuentas de la operacion en un momento dado, para contrastarlo
+ *  contra el saldo teorico y detectar desfases a tiempo. */
+export type CashSnapshot = {
+  id: string;
+  balanceCop: number;
+  expectedCop: number;
+  differenceCop: number;
+  note?: string;
+  createdAt: string;
+  createdBy: string;
 };
 
 export type AppState = {
@@ -347,6 +461,7 @@ export type AppState = {
   settlements: Settlement[];
   payouts: PayoutRequest[];
   audit: AuditEvent[];
+  cashSnapshots: CashSnapshot[];
   settings: {
     activeCityId: string;
     sellerDeliveredFeeCop: number;

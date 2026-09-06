@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",          "title": "Sistema",                "x": 0,    "y": 0,    "w": 1200, "h": 1640 },
+    { "file": "Liquidaciones.dc.html", "title": "Consola / Liquidaciones","x": 1320, "y": 0,    "w": 1440, "h": 2000 },
+    { "file": "Operacion.dc.html",     "title": "Consola / Operacion",    "x": 2880, "y": 0,    "w": 1440, "h": 1200 },
+    { "file": "Mensajero.dc.html",     "title": "Calle / Mensajero",      "x": 0,    "y": 2200, "w": 390,  "h": 860 },
+    { "file": "Lider.dc.html",         "title": "Calle / Lider logistico","x": 510,  "y": 2200, "w": 390,  "h": 1010 },
+    { "file": "Tienda.dc.html",        "title": "Tienda",                 "x": 1020, "y": 2200, "w": 1200, "h": 900 },
+    { "file": "Componentes.dc.html",   "title": "Componentes",            "x": 2340, "y": 2200, "w": 1400, "h": 1180 }
+  ],
+  "annotations": [
+    { "id": "concepto", "x": 0, "y": -190, "w": 620, "text": "GUIA DE CARGA\nEl objeto fisico del negocio es el rotulo con QR pegado a la caja. Todo el sistema toma su lenguaje de la papeleria logistica.\n\nArriba: la CONSOLA (escritorio, densa).\nAbajo: la CALLE (telefono, una mano, sol directo)." },
+    { "id": "dos-densidades", "x": 0, "y": 1740, "w": 420, "text": "LA IDEA CENTRAL\nHoy la app de calle es la de escritorio encogida: mismos 14px, mismos objetivos de 36px.\n\nAqui son dos densidades del MISMO sistema: 13px/44px arriba, 17px/56px abajo." },
+    { "id": "auditoria", "x": 2880, "y": 1290, "w": 460, "text": "MEDIDO SOBRE EL CODIGO ACTUAL\n125 de 129 botones bajo 44px.\n102 textos que fallan WCAG AA.\nCero fuentes definidas.\nrounded-md repetido 423 veces." }
+  ],
+  "launch": { "view": "canvas" }
+}

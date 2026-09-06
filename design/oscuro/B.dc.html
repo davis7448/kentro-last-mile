@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    body { margin:0; background:#0f1620; color:#e6edf5; font-family:'Manrope',sans-serif; -webkit-font-smoothing:antialiased; }
+    a { color:#4dd8e8; } a:hover { color:#e6edf5; }
+    .m { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+    .d { font-family:'Manrope',sans-serif; }
+  </style>
+</helmet>
+
+<div style="width:900px;padding:32px 34px 40px;box-sizing:border-box;background:#0f1620;">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:18px;border-bottom:1px solid rgba(230,237,245,.12);">
+    <div>
+      <p class="m" style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.2em;color:#4dd8e8;">OPCION B</p>
+      <h1 class="d" style="margin:0;font-size:38px;font-weight:800;letter-spacing:-.02em;line-height:1;">Telemetria</h1>
+      <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:#8798ab;max-width:520px;">Slate azulado con tarjetas elevadas y acento cian. Aire de panel de control.</p>
+    </div>
+    <div style="display:flex;gap:6px;padding-top:6px;">
+      <span style="width:26px;height:26px;background:#4dd8e8;border-radius:8px;"></span>
+      <span style="width:26px;height:26px;background:#ff8a6b;border-radius:8px;"></span>
+      <span style="width:26px;height:26px;background:#161f2b;border:1px solid rgba(230,237,245,.12);border-radius:8px;"></span>
+    </div>
+  </div>
+
+  <p class="m" style="margin:26px 0 12px;font-size:10px;font-weight:600;letter-spacing:.18em;color:#8798ab;">PENDIENTE POR LIQUIDAR</p>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+    <div style="background:#161f2b;border:1px solid rgba(230,237,245,.12);border-radius:8px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8798ab;">TIENDAS POR PAGAR</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;">$ 17.581.261</p>
+    </div>
+    <div style="background:#161f2b;border:1px solid rgba(230,237,245,.12);border-radius:8px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8798ab;">DOMICILIARIOS</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;">$ 550.000</p>
+    </div>
+    <div style="background:#161f2b;border:1px solid rgba(230,237,245,.12);border-radius:8px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8798ab;">PROVEEDORES</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;color:#ff8a6b;">$ 6.885.750</p>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;background:#161f2b;border:1px solid rgba(230,237,245,.12);border-radius:8px;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid rgba(230,237,245,.12);">
+      <span class="d" style="font-size:14px;font-weight:700;">Tiendas disponibles para pagar</span>
+      <span class="m" style="font-size:11px;color:#8798ab;">8 cuentas</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th class="m" style="padding:8px 18px;text-align:left;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8798ab;">TIENDA</th>
+        <th class="m" style="padding:8px 10px;text-align:right;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8798ab;">PEDIDOS</th>
+        <th class="m" style="padding:8px 10px;text-align:right;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8798ab;">SALDO A PAGAR</th>
+        <th style="padding:8px 18px;"></th>
+      </tr></thead>
+      <tbody>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+          <tr style="border-top:1px solid rgba(230,237,245,.12);">
+            <td style="padding:11px 18px;font-size:13px;font-weight:600;">{{r.n}}</td>
+            <td class="m" style="padding:11px 10px;text-align:right;font-size:13px;color:#8798ab;">{{r.o}}</td>
+            <td class="m" style="padding:11px 10px;text-align:right;font-size:14px;font-weight:700;">{{r.d}}</td>
+            <td style="padding:11px 18px;text-align:right;">
+              <button type="button" style="min-height:34px;padding:0 12px;border:1px solid #4dd8e8;border-radius:8px;background:transparent;color:#4dd8e8;font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Cerrar corte</button>
+            </td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;">
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid #4dd8e8;border-radius:8px;color:#4dd8e8;font-size:10px;font-weight:600;letter-spacing:.1em;">ENTREGADO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid #ff8a6b;border-radius:8px;color:#ff8a6b;font-size:10px;font-weight:600;letter-spacing:.1em;">FALLIDO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid rgba(230,237,245,.12);border-radius:8px;color:#8798ab;font-size:10px;font-weight:600;letter-spacing:.1em;">IMPORTADO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border-radius:8px;background:#4dd8e8;color:#0f1620;font-size:10px;font-weight:700;letter-spacing:.1em;">ACCION</span>
+  </div>
+
+  <p style="margin:22px 0 0;padding-top:16px;border-top:1px solid rgba(230,237,245,.12);font-size:13px;line-height:1.6;color:#8798ab;max-width:640px;">Lo mas cercano a un dashboard moderno. Redondeado, con profundidad y jerarquia por elevacion.</p>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { rows: [
+      { n:'DANDA', o:2998, d:'$ 9.350.800' },
+      { n:'Bella Mujer', o:140, d:'$ 2.329.541' },
+      { n:'OnStok', o:77, d:'$ 2.192.800' },
+      { n:'Nambu', o:74, d:'$ 1.704.710' },
+      { n:'Senziacol', o:67, d:'$ 1.085.910' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

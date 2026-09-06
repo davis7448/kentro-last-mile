@@ -2,7 +2,10 @@
  * Lineas de producto de un pedido y sus movimientos de inventario.
  *
  * ESPEJO de src/lib/inventory-movements.ts (el cliente no puede importar de functions/
- * ni al reves). Cambiar los dos juntos.
+ * ni al reves). Cambiar los dos juntos EN LO QUE COMPARTEN: el derivado de lineas
+ * (normalizeOrderLines / inventoryMovementsForOrder). La aplicacion sobre documentos es
+ * propia de cada lado (el cliente expone applyInventoryMovementsToItems), asi que los
+ * kinds `consume_available` / `restore_available` no tienen contraparte alli.
  *
  * Regla que ordena todo el diseno: una reserva solo se libera si alguien la creo.
  * Los movimientos se derivan de lineItems para cualquier pedido, pero solo se APLICAN
@@ -158,7 +161,15 @@ export async function readSellerInventoryIndex(
   collection: FirebaseFirestore.Query,
   sellerId: string
 ): Promise<InventoryIndex> {
-  const snapshot = await transaction.get(collection.where("sellerId", "==", sellerId));
+  return buildSellerInventoryIndex(await transaction.get(collection.where("sellerId", "==", sellerId)));
+}
+
+/**
+ * La parte sin transaccion: la correccion administrativa de pedidos trabaja con un batch
+ * (necesita leer la coleccion de asientos entera, que no cabe en una transaccion) y aun asi
+ * tiene que indexar el inventario igual que closeOrder.
+ */
+export function buildSellerInventoryIndex(snapshot: FirebaseFirestore.QuerySnapshot): InventoryIndex {
   const index: InventoryIndex = new Map();
   for (const doc of snapshot.docs) {
     const item = doc.data();
@@ -173,15 +184,30 @@ export async function readSellerInventoryIndex(
   return index;
 }
 
-export type InventoryMovementKind = "reserve" | "release" | "consume";
+/**
+ * `consume_available` y `restore_available` existen solo para las correcciones de estado.
+ * Al pasar un pedido de fallido a entregado, el cierre fallido YA hizo `release` (bajo
+ * `reserved`); lo unico que falta es descontar `available`. Reusar `consume` volveria a
+ * decrementar `reserved` y dejaria el stock reservado en negativo logico.
+ */
+export type InventoryMovementKind = "reserve" | "release" | "consume" | "consume_available" | "restore_available";
 
 /**
  * Aplica los movimientos sobre las fichas del indice. Los SKU sin ficha se ignoran en
  * silencio: se puede vender un producto que no esta en inventario (decision de producto).
  * No hay tope al reservar; nunca se bloquea un pedido por falta de stock.
  */
+/**
+ * Escritor estructural: sirve igual una Transaction que un WriteBatch. Las correcciones de
+ * estado usan batch (necesitan leer la coleccion de asientos entera, que no cabe en una
+ * transaccion) y aun asi tienen que mover inventario como lo hace closeOrder.
+ */
+export type InventoryWriter = {
+  set(ref: DocumentReference, data: Record<string, unknown>, options: { merge: true }): unknown;
+};
+
 export function applyInventoryMovements(
-  transaction: Transaction,
+  transaction: InventoryWriter,
   index: InventoryIndex,
   movements: InventoryMovement[],
   kind: InventoryMovementKind,
@@ -191,6 +217,13 @@ export function applyInventoryMovements(
     const entry = index.get(movement.skuKey);
     if (!entry) continue;
     const patch: Record<string, unknown> = { updatedAt: now };
+    if (kind === "consume_available" || kind === "restore_available") {
+      // Solo mueven `available`: la reserva ya se resolvio en el cierre anterior.
+      entry.available = Math.max(0, entry.available + (kind === "restore_available" ? movement.quantity : -movement.quantity));
+      patch.available = entry.available;
+      transaction.set(entry.ref, patch, { merge: true });
+      continue;
+    }
     if (kind === "reserve") {
       entry.reserved += movement.quantity;
     } else {

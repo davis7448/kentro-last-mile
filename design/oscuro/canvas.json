@@ -1,0 +1,55 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "A \u00b7 Terminal",
+      "x": 0,
+      "y": 0,
+      "w": 900,
+      "h": 760
+    },
+    {
+      "file": "B.dc.html",
+      "title": "B \u00b7 Telemetria",
+      "x": 960,
+      "y": 0,
+      "w": 900,
+      "h": 760
+    },
+    {
+      "file": "C.dc.html",
+      "title": "C \u00b7 Alto contraste",
+      "x": 0,
+      "y": 830,
+      "w": 900,
+      "h": 760
+    },
+    {
+      "file": "D.dc.html",
+      "title": "D \u00b7 Grafito",
+      "x": 960,
+      "y": 830,
+      "w": 900,
+      "h": 760
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -150,
+      "w": 700,
+      "text": "CUATRO DIRECCIONES OSCURAS\nLa misma pantalla de Liquidaciones, con tus cifras reales, en cuatro tratamientos distintos.\n\nSenala una (o mezcla: la paleta de una con la tipografia de otra) y desarrollo esa."
+    },
+    {
+      "id": "sol",
+      "x": 1920,
+      "y": 0,
+      "w": 300,
+      "text": "PENDIENTE DE DECIDIR\nEsto es la CONSOLA de escritorio.\n\nEl mensajero trabaja al sol: ahi el oscuro no se lee. Mi propuesta es dejar la calle en claro, pero lo decides tu."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

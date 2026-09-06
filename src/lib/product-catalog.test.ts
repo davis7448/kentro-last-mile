@@ -153,4 +153,24 @@ describe("buildMissingProductCostEntries", () => {
     const entries = buildMissingProductCostEntries(state, catalogItem({ id: "prd-spray", sku: "SPRAY-X2", productCostConfigured: false }));
     expect(entries).toHaveLength(0);
   });
+
+  it("does not create zero-cost entries when the configured cost is 0", () => {
+    const state = { ...baseState(), orders: [comboOrder()] };
+    const entries = buildMissingProductCostEntries(state, catalogItem({ id: "prd-spray", sku: "SPRAY-X2", productCostCop: 0 }));
+    expect(entries).toHaveLength(0);
+  });
+
+  it("overwrites an existing zero-cost entry once the real cost is configured (regression)", () => {
+    // Guardar el producto sin costo dejaba un asiento en 0 y el dedupe impedia
+    // corregirlo al configurar el costo real, dejando el costo sin cobrar.
+    const state = {
+      ...baseState(),
+      orders: [comboOrder()],
+      wallet: [{ id: "we-ord-combo-product-cost-prd-spray", ownerType: "seller" as const, ownerId: "seller-1", orderId: "ord-combo", type: "product_cost" as const, amountCop: 0, description: "Costo producto", productId: "prd-spray", createdAt: "2026-06-01T00:00:00.000Z" }]
+    };
+    const entries = buildMissingProductCostEntries(state, catalogItem({ id: "prd-spray", sku: "SPRAY-X2", productCostCop: 10000 }));
+    expect(entries).toHaveLength(1);
+    expect(entries[0].id).toBe("we-ord-combo-product-cost-prd-spray");
+    expect(entries[0].amountCop).toBe(-20000);
+  });
 });

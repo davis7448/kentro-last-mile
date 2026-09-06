@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Cuadre de Efectivo</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400&amp;family=IBM+Plex+Mono:wght@500;600&amp;family=Archivo+Narrow:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#bfc9c4",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#e8e2d5",
+                        "surface-container-high": "#eae8e6",
+                        "on-tertiary-fixed-variant": "#534342",
+                        "on-error-container": "#93000a",
+                        "tertiary-container": "#281b1a",
+                        "on-primary-fixed": "#141d1a",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#d8c1bf",
+                        "on-tertiary-fixed": "#251817",
+                        "outline": "#737875",
+                        "on-secondary-fixed-variant": "#49473d",
+                        "inverse-surface": "#303030",
+                        "primary-fixed-dim": "#bfc9c4",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#e4e2e1",
+                        "surface-container-low": "#f6f3f2",
+                        "error": "#ba1a1a",
+                        "inverse-on-surface": "#f3f0ef",
+                        "surface-variant": "#e4e2e1",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#e8e2d5",
+                        "surface": "#fcf9f7",
+                        "surface-container": "#f0edec",
+                        "on-primary-container": "#7e8884",
+                        "on-surface": "#1b1c1b",
+                        "on-primary-fixed-variant": "#3f4945",
+                        "on-tertiary-container": "#958180",
+                        "outline-variant": "#c3c8c4",
+                        "secondary-fixed-dim": "#cbc6ba",
+                        "background": "#fcf9f7",
+                        "on-secondary-container": "#68645a",
+                        "on-surface-variant": "#434846",
+                        "primary-container": "#17201d",
+                        "surface-bright": "#fcf9f7",
+                        "surface-tint": "#57605d",
+                        "on-secondary-fixed": "#1d1c14",
+                        "primary": "#010604",
+                        "on-background": "#1b1c1b",
+                        "surface-dim": "#dcd9d8",
+                        "tertiary": "#0b0303",
+                        "secondary": "#625e54",
+                        "tertiary-fixed": "#f5dddb",
+                        "primary-fixed": "#dbe5e0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "stack-xs": "4px",
+                        "margin-desktop": "32px",
+                        "stack-md": "16px",
+                        "gutter": "16px",
+                        "unit": "4px",
+                        "stack-lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "code-md": ["IBM Plex Mono"],
+                        "display-lg": ["Archivo Narrow"],
+                        "label-sm": ["IBM Plex Mono"],
+                        "headline-md": ["Archivo Narrow"],
+                        "headline-lg": ["Archivo Narrow"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "38px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Functional Brutalism Overrides */
+        body {
+            background-color: #f7f8f4; /* Custom Paper color from prompt */
+            color: #17201d; /* Ink color */
+        }
+        
+        .border-ink {
+            border-color: #17201d;
+        }
+        
+        .bg-manila {
+            background-color: #f0e6d2; /* Approximation of Manila folder for cards */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen flex flex-col font-body-lg text-body-lg selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface border-b border-ink z-40">
+<div class="flex justify-between items-center px-margin-mobile py-stack-sm w-full">
+<div class="flex items-center gap-stack-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-code-md text-code-md border border-ink">
+                    LL
+                </div>
+<span class="font-code-md text-code-md font-bold tracking-widest text-primary uppercase">CASH_RECON_V1.0</span>
+</div>
+<button aria-label="Settings" class="p-2 hover:bg-surface-container-high transition-colors text-primary active:bg-secondary-container rounded">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow w-full max-w-3xl mx-auto px-margin-mobile py-stack-lg mb-20 md:px-margin-desktop space-y-stack-lg">
+<!-- Summary Header -->
+<section class="border border-ink rounded bg-surface">
+<div class="border-b border-ink p-stack-sm bg-surface-container-high">
+<h1 class="font-headline-md text-headline-md uppercase tracking-tight">Resumen de Cuadre</h1>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-ink">
+<div class="bg-surface p-stack-md flex flex-col justify-between h-full">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant mb-stack-xs block">Efectivo Esperado</span>
+<span class="font-code-md text-code-md text-right w-full block mt-auto">$ 8.208.225</span>
+</div>
+<div class="bg-surface p-stack-md flex flex-col justify-between h-full border-t md:border-t-0 md:border-l border-ink">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant mb-stack-xs block">Recibido</span>
+<span class="font-code-md text-code-md text-right w-full block mt-auto">$ 8.208.225</span>
+</div>
+<div class="bg-surface p-stack-md flex flex-col justify-between h-full border-t md:border-t-0 md:border-l border-ink">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant mb-stack-xs block">Pendiente</span>
+<span class="font-code-md text-code-md text-right w-full block mt-auto text-primary-container font-bold">$ 0</span>
+</div>
+</div>
+</section>
+<!-- Recogida por Lote Section -->
+<section class="border-2 border-ink rounded bg-manila p-stack-md flex items-center justify-between relative overflow-hidden">
+<!-- Stamp effect -->
+<div class="absolute -right-4 -bottom-4 opacity-10 pointer-events-none transform rotate-[-15deg]">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner" style="font-size: 120px;">qr_code_scanner</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md uppercase">Recogida por Lote</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1 max-w-[200px]">Escanee el manifiesto consolidado para procesar lote completo.</p>
+</div>
+<button class="h-[56px] px-6 border-2 border-ink bg-surface text-primary font-label-sm text-label-sm uppercase tracking-wider hover:bg-surface-container-high transition-colors active:bg-secondary-container flex items-center gap-2 rounded-sm shadow-[4px_4px_0px_0px_#17201d]">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner">qr_code_scanner</span>
+<span>ESCANEAR QR</span>
+</button>
+</section>
+<!-- Abonos Entregados List -->
+<section class="border border-ink rounded bg-surface">
+<div class="border-b border-ink p-stack-sm bg-surface-container-high flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md uppercase tracking-tight">Abonos Entregados</h2>
+<span class="font-label-sm text-label-sm bg-primary-container text-on-primary-container px-2 py-0.5 rounded border border-ink">4 REGISTROS</span>
+</div>
+<div class="flex flex-col">
+<!-- Record 1 -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-stack-md border-b border-ink hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col gap-1 mb-2 sm:mb-0">
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant w-16">20 ago</span>
+<span class="font-body-md text-body-md">abono efectivo agosto 18</span>
+</div>
+</div>
+<span class="font-code-md text-code-md text-right sm:text-left">$ 2.022.682</span>
+</div>
+<!-- Record 2 -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-stack-md border-b border-ink bg-surface-container-low hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col gap-1 mb-2 sm:mb-0">
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant w-16">20 ago</span>
+<span class="font-body-md text-body-md">abono recaudo nequi Martha</span>
+</div>
+</div>
+<span class="font-code-md text-code-md text-right sm:text-left">$ 464.300</span>
+</div>
+<!-- Record 3 -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-stack-md border-b border-ink hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col gap-1 mb-2 sm:mb-0">
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant w-16">20 ago</span>
+<span class="font-body-md text-body-md">abono recaudo efectivo agosto 19</span>
+</div>
+</div>
+<span class="font-code-md text-code-md text-right sm:text-left">$ 4.735.000</span>
+</div>
+<!-- Record 4 -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-stack-md hover:bg-surface-container-lowest transition-colors bg-surface-container-low">
+<div class="flex flex-col gap-1 mb-2 sm:mb-0">
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant w-16">21 ago</span>
+<span class="font-body-md text-body-md">abono recaudo nequi martha agosto 19</span>
+</div>
+</div>
+<span class="font-code-md text-code-md text-right sm:text-left">$ 986.243</span>
+</div>
+</div>
+<div class="p-stack-md border-t border-ink bg-surface-container-high">
+<button class="w-full h-[56px] bg-primary-container text-on-primary-container font-label-sm text-label-sm uppercase tracking-wider border border-ink rounded-sm flex items-center justify-center gap-2 hover:bg-primary transition-colors hover:text-on-primary active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>REGISTRAR NUEVO RECAUDO</span>
+</button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface border-t-2 border-primary md:hidden">
+<div class="flex justify-around items-stretch w-full h-16">
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-1 hover:bg-surface-container-highest transition-colors w-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="description">description</span>
+<span class="font-label-sm text-label-sm uppercase tracking-tighter">MANIFIESTO</span>
+</a>
+<!-- LEDGER - Assuming active based on "Cuadre de Efectivo" / Ledger context -->
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary p-1 border-x border-primary active:scale-95 transition-transform duration-75 w-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="account_balance_wallet" data-weight="fill">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm uppercase tracking-tighter">LEDGER</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-1 hover:bg-surface-container-highest transition-colors w-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="local_shipping">local_shipping</span>
+<span class="font-label-sm text-label-sm uppercase tracking-tighter">RECOGIDA</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-1 hover:bg-surface-container-highest transition-colors w-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="inventory_2">inventory_2</span>
+<span class="font-label-sm text-label-sm uppercase tracking-tighter">ARCHIVO</span>
+</a>
+</div>
+</nav>
+</body></html>

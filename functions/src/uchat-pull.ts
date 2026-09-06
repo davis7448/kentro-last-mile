@@ -360,6 +360,8 @@ async function confirmOrderIfPending(orderId: string, now: string, info: any, pr
       actorRole: "system",
       action: "order.confirmed_uchat",
       entity: "order",
+      fromStatus: "imported",
+      toStatus: "ready_to_assign",
       entityId: snap.id,
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por Chateapro/Chatby (pull API)${addressChanged ? " · direccion sincronizada" : ""}`,
       createdAt: now

@@ -1,0 +1,32 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "A \u00b7 Oscuro / verde acido",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 880
+    },
+    {
+      "file": "B.dc.html",
+      "title": "B \u00b7 Claro / verde acido",
+      "x": 1140,
+      "y": 0,
+      "w": 1080,
+      "h": 880
+    }
+  ],
+  "annotations": [
+    {
+      "id": "ref",
+      "x": 0,
+      "y": -170,
+      "w": 760,
+      "text": "A PARTIR DE TUS REFERENCIAS\nPildoras de 999px, tarjetas de 24px flotando sin borde, verde acido para lo accionable, negro y blanco mezclados, cifras grandes en la sans.\n\nMisma estructura en oscuro y en claro: elige el modo, la estructura no cambia."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

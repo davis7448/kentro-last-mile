@@ -12,6 +12,27 @@ import {
   skuKeyOf,
   summarizeOrderLines
 } from "./inventory-movements";
+import { gmfForPayout } from "./gmf";
+import { buildCodReceivedSet, isWithinSettlementRange, summarizeSellerPayable } from "./seller-ledger";
+import {
+  computeDriverCashSummary,
+  type DriverCashInputs,
+  type DriverCashSummary,
+  settlementCashReceivedCop,
+  type SettlementDoc,
+  type SettlementOrderDoc,
+  settlementTotals,
+  type WalletEntryDoc
+} from "./settlement-math";
+import {
+  buildWalletEntries,
+  isLiquidationWalletType,
+  type ProductCostLine,
+  resolveProductCostLinesForOrder,
+  resolveTariffs,
+  stripUndefined,
+  withOpenSettlementFlags
+} from "./wallet-entries";
 
 const requiredText = (label: string) => z.string().trim().min(1, `${label} es obligatorio.`);
 const optionalText = z.preprocess((value) => {
@@ -64,18 +85,27 @@ const closeOrderSchema = z.object({
   scheduledWindow: optionalString
 });
 
+// startDate/endDate vacios = rango abierto. Un corte es el total de lo que se debe a la cuenta;
+// acotarlo por fechas dejaba fuera lo pendiente mas antiguo. Se conserva el filtro cuando el
+// llamante SI manda fechas, porque los cortes historicos se crearon asi.
 const settlementSchema = z.object({
   kind: z.enum(["seller", "driver", "supplier"]),
   ownerId: z.string().min(1),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  startDate: z.string(),
+  endDate: z.string(),
   walletEntryIds: z.array(z.string().min(1)).optional(),
-  note: optionalString
+  note: optionalString,
+  /** Si en ESTE corte se cobro el 4x1000. Sin valor, se hereda de la marca de la cuenta. */
+  chargeGmf: z.boolean().optional()
 });
 
 const settlementStatusSchema = z.object({
   settlementId: z.string().min(1),
   status: z.enum(["paid", "reconciled"]),
+  // Monto REALMENTE transferido. Si es menor al neto del corte, la diferencia se
+  // restituye como saldo por pagar en vez de darse por pagada (paso con el corte de
+  // DANDA del 30-jul: se marco pagado por 8.758.000 y solo se transfirieron 6.200.000).
+  paidAmountCop: z.number().nonnegative().optional(),
   note: optionalString
 });
 
@@ -88,7 +118,21 @@ const driverCashReceiptSchema = z.object({
 const sellerAbonoSchema = z.object({
   sellerId: z.string().min(1),
   amountCop: z.number().positive(),
-  note: optionalString
+  note: optionalString,
+  /**
+   * Si en ESTE abono se cobro el 4x1000. Sin valor, se hereda de la marca de la cuenta.
+   * Va por transaccion porque un mismo vendedor puede recibir una vez en efectivo y otra por
+   * transferencia, y quien paga lo sabe en el momento, no antes.
+   */
+  chargeGmf: z.boolean().optional()
+});
+
+const supplierAbonoSchema = z.object({
+  supplierId: z.string().min(1),
+  amountCop: z.number().positive(),
+  note: optionalString,
+  /** Si en ESTE abono se cobro el 4x1000. Sin valor, se hereda de la marca de la cuenta. */
+  chargeGmf: z.boolean().optional()
 });
 
 const confirmImportedOrderSchema = z.object({
@@ -156,103 +200,24 @@ const unassignMessengerSchema = z.object({
   orderIds: z.array(z.string().min(1)).min(1)
 });
 
-const defaultSettings = {
-  sellerDeliveredFeeCop: 12000,
-  sellerFailedFeeCop: 12000,
-  fulfillmentFeeCop: 2000,
-  driverDeliveredPayCop: 9000,
-  driverFailedPayCop: 9000
-};
-
-const tariffFields = [
-  "sellerDeliveredFeeCop",
-  "sellerFailedFeeCop",
-  "fulfillmentFeeCop",
-  "driverDeliveredPayCop",
-  "driverFailedPayCop"
-] as const;
-
-const dandaSellerIds = new Set(["seller-1779315416119"]);
-const dandaPreferredDriverId = "driver-1778271901513";
-const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
-const dandaSellerFeeCutoff = Date.parse("2026-07-17T05:00:00.000Z");
-
-// La tarifa de flete de DANDA subio a $13.500 para pedidos ENTREGADOS desde el
-// 17-jul-2026 (sin importar la fecha de creacion). En closeOrder, deliveredAtIso
-// es el momento del cierre (= fecha de entrega).
-function dandaDeliveredFeeCop(deliveredAtIso: string): number {
-  const deliveredAt = typeof deliveredAtIso === "string" ? Date.parse(deliveredAtIso) : Number.NaN;
-  return Number.isFinite(deliveredAt) && deliveredAt >= dandaSellerFeeCutoff ? 13500 : 12000;
-}
-
-type WalletEntryDoc = {
-  id: string;
-  ownerType: "seller" | "driver" | "admin";
-  ownerId: string;
-  orderId: string;
-  type: "cod_revenue" | "cod_remittance" | "delivery_fee" | "failed_fee" | "fulfillment_fee" | "product_cost" | "driver_earning" | "platform_margin" | "cash_shortage" | "seller_abono";
-  amountCop: number;
-  description: string;
-  createdAt: string;
-  settlementId?: string;
-  supplierSettlementId?: string;
-  supplierId?: string;
-  supplierName?: string;
-  productId?: string;
-  productName?: string;
-};
-
-type SettlementDoc = {
-  id: string;
-  kind: "seller" | "driver" | "supplier";
-  ownerId: string;
-  ownerName: string;
-  startDate: string;
-  endDate: string;
-  walletEntryIds: string[];
-  orderIds: string[];
-  codCop: number;
-  feesCop: number;
-  productCostCop?: number;
-  driverPayCop: number;
-  platformMarginCop: number;
-  netCop: number;
-  status: "pending" | "paid" | "reconciled";
-  cashExpectedCop?: number;
-  cashReceivedCop?: number;
-  cashPendingCop?: number;
-  cashReceiptStatus?: "none" | "partial" | "complete";
-  cashReceipts?: Array<{ amountCop: number; receivedAt: string; note?: string }>;
-  cashAllocations?: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }>;
-  createdAt: string;
-  paidAt?: string;
-  reconciledAt?: string;
-  note?: string;
-};
-
-type SettlementOrderDoc = {
-  paymentMethod?: "cod" | "prepaid";
-  createdAt?: string;
-  trackingCode?: string;
-};
-
-type DriverCashAllocation = {
-  orderId: string;
-  expectedCop: number;
-  receivedCop: number;
-  covered: boolean;
-};
-
-type DriverCashSummary = {
-  codCop: number;
-  feesCop: number;
-  driverPayCop: number;
-  platformMarginCop: number;
-  expectedCop: number;
-  allocations: DriverCashAllocation[];
-};
-
 type FailedCategory = z.infer<typeof failedCategorySchema>;
+
+/**
+ * Referencia para un evento de auditoria con ID autogenerado por Firestore.
+ *
+ * Antes cada sitio usaba `audit-${Date.now()}` como ID de documento: dos acciones en el
+ * mismo milisegundo se pisaban en silencio y el rastro se perdia justo cuando habia
+ * concurrencia, que es cuando la evidencia importa. Varios sitios ademas llamaban a
+ * `Date.now()` dos veces (una para el ID del doc y otra para el campo `id`), asi que un
+ * cambio de milisegundo entre ambas dejaba el campo `id` sin coincidir con el doc.
+ *
+ * El ID autogenerado elimina las dos fallas por construccion. Quien lo use debe escribir
+ * `id: ref.id` para que el campo siga coincidiendo con el documento (`state-store.ts` y el
+ * tipo `AuditEvent` lo asumen).
+ */
+export function newAuditRef(db: FirebaseFirestore.Firestore) {
+  return db.collection("auditEvents").doc();
+}
 
 function zodFieldMessage(error: z.ZodError) {
   const flat = error.flatten();
@@ -298,7 +263,7 @@ export const createManualOrder = onCall(async (request) => {
   }
 
   const now = new Date().toISOString();
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const lines = normalizeOrderLines(input);
   const collapsed = summarizeOrderLines(lines);
   const movements = inventoryMovementsForOrder(collapsed);
@@ -394,16 +359,22 @@ export const confirmImportedOrder = onCall(async (request) => {
       ...current,
       addressRisk: "accepted",
       status: "ready_to_assign",
+      // Deja explicito en el propio pedido que lo confirmo una persona, para contrastarlo
+      // contra las confirmaciones automaticas del bot ("uchat" / "uchat_pull").
+      confirmedVia: "manual",
       updatedAt: now
     };
     transaction.set(orderRef, updated, { merge: true });
-    transaction.set(db.collection("auditEvents").doc(`audit-${Date.now()}`), {
-      id: `audit-${Date.now()}`,
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
       action: "order.seller_confirmed",
       entity: "order",
       entityId: snap.id,
+      fromStatus: "imported",
+      toStatus: "ready_to_assign",
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por ${role === "admin" ? "admin" : "vendedor"}`,
       createdAt: now
     });
@@ -412,6 +383,37 @@ export const confirmImportedOrder = onCall(async (request) => {
 
   return { order };
 });
+
+/**
+ * Resuelve las lineas de un pedido que se esta editando desde un formulario que solo
+ * maneja los campos planos (productName/sku/quantity).
+ *
+ * Un pedido MULTI-LINEA no se puede reconstruir desde esos campos: `sku` viene pegado
+ * ("A + B") y `quantity` es la suma de unidades. Rearmarlo fabricaba un SKU inexistente
+ * -que nunca matchea el catalogo- y hacia que el costo se cobrara como
+ * "costo del combo x total de unidades", duplicandolo. Por eso, cuando el pedido ya
+ * tiene 2+ lineas se conservan tal cual y los campos planos se re-derivan DESDE ellas,
+ * nunca al reves.
+ */
+function resolveEditedOrderLines(
+  input: { productName?: string; sku?: string; quantity?: number },
+  current: Record<string, unknown>
+): { summary: ReturnType<typeof summarizeOrderLines> | null; preserved: boolean } {
+  const currentLines = Array.isArray(current.lineItems) ? current.lineItems : [];
+  if (currentLines.length > 1) {
+    return { summary: summarizeOrderLines(normalizeOrderLines({ lineItems: currentLines })), preserved: true };
+  }
+  const editedProduct = input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined;
+  if (!editedProduct) return { summary: null, preserved: false };
+  return {
+    summary: summarizeOrderLines(normalizeOrderLines({
+      productName: input.productName ?? (current.productName as string | undefined),
+      sku: input.sku ?? (current.sku as string | undefined),
+      quantity: input.quantity ?? (current.quantity as number | undefined)
+    })),
+    preserved: false
+  };
+}
 
 export const updateImportedOrder = onCall(async (request) => {
   const role = request.auth?.token.role;
@@ -440,17 +442,9 @@ export const updateImportedOrder = onCall(async (request) => {
     if (current.status !== "imported") {
       throw new HttpsError("failed-precondition", "Only imported orders pending confirmation can be edited.");
     }
-    // Edicion manual de producto: reconstruye una linea desde los campos colapsados ya
-    // fusionados con lo que habia, para que la forma canonica sea siempre "hay lineItems".
-    // Un pedido `imported` nunca reservo inventario, asi que aqui no hay delta que aplicar.
-    const editedProduct = input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined;
-    const editedLineItems = editedProduct
-      ? summarizeOrderLines(normalizeOrderLines({
-        productName: input.productName ?? current.productName,
-        sku: input.sku ?? current.sku,
-        quantity: input.quantity ?? current.quantity
-      })).lineItems
-      : undefined;
+    // Edicion manual de producto. Un pedido `imported` nunca reservo inventario, asi que
+    // aqui no hay delta de stock que aplicar.
+    const { summary: editedSummary, preserved } = resolveEditedOrderLines(input, current);
     const updated = stripUndefined({
       ...current,
       customerName: input.customerName.trim(),
@@ -462,15 +456,17 @@ export const updateImportedOrder = onCall(async (request) => {
       fulfillmentMode: input.fulfillmentMode,
       totalCop: input.totalCop,
       productId: input.productId?.trim(),
-      productName: input.productName?.trim(),
-      sku: input.sku?.trim(),
-      quantity: input.quantity,
-      lineItems: editedLineItems,
+      // Con lineas preservadas los campos planos salen de las lineas reales.
+      productName: preserved ? editedSummary?.productName : input.productName?.trim(),
+      sku: preserved ? editedSummary?.sku : input.sku?.trim(),
+      quantity: preserved ? editedSummary?.quantity : input.quantity,
+      lineItems: editedSummary?.lineItems,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
-    transaction.set(db.collection("auditEvents").doc(`audit-${Date.now()}`), {
-      id: `audit-${Date.now()}`,
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
       action: "order.imported_updated",
@@ -499,7 +495,7 @@ export const confirmRetryOrder = onCall(async (request) => {
 
   const db = getFirestore();
   const orderRef = db.collection("orders").doc(parsed.data.orderId);
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const now = new Date().toISOString();
 
   const order = await db.runTransaction(async (transaction) => {
@@ -534,6 +530,8 @@ export const confirmRetryOrder = onCall(async (request) => {
       action: "order.retry_confirmed",
       entity: "order",
       entityId: snap.id,
+      fromStatus: "failed",
+      toStatus: String(updated.status ?? ""),
       summary: `Reintento confirmado para ${current.trackingCode ?? current.shopifyOrderId ?? snap.id}`,
       createdAt: now
     });
@@ -558,7 +556,7 @@ export const classifyFailedOrder = onCall(async (request) => {
   const db = getFirestore();
   const orderRef = db.collection("orders").doc(input.orderId);
   const settingsRef = db.doc("settings/global");
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const now = new Date().toISOString();
 
   return db.runTransaction(async (transaction) => {
@@ -626,7 +624,7 @@ export const updateOrderAdjustments = onCall(async (request) => {
   const db = getFirestore();
   const orderRef = db.collection("orders").doc(input.orderId);
   const now = new Date().toISOString();
-  const auditId = `audit-${Date.now()}`;
+  const auditRef = newAuditRef(db);
   const order = await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(orderRef);
     if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
@@ -634,16 +632,9 @@ export const updateOrderAdjustments = onCall(async (request) => {
     if (["delivered", "failed", "cancelled", "liquidated"].includes(String(current.status))) {
       throw new HttpsError("failed-precondition", "Closed, cancelled or liquidated orders cannot be adjusted from this form.");
     }
-    // Edicion manual de producto: reconstruye una linea desde los campos colapsados ya
-    // fusionados con lo que habia, para que la forma canonica sea siempre "hay lineItems".
-    const editedProduct = input.productName !== undefined || input.sku !== undefined || input.quantity !== undefined;
-    const editedSummary = editedProduct
-      ? summarizeOrderLines(normalizeOrderLines({
-        productName: input.productName ?? current.productName,
-        sku: input.sku ?? current.sku,
-        quantity: input.quantity ?? current.quantity
-      }))
-      : null;
+    // Edicion manual de producto (ver resolveEditedOrderLines: un pedido multi-linea
+    // conserva sus lineas en vez de rearmarse desde los campos pegados).
+    const { summary: editedSummary, preserved } = resolveEditedOrderLines(input, current);
     // Si el pedido tenia reserva viva, cambiar producto/cantidad debe mover el stock en el
     // acto; si no, `reserved` queda desfasado hasta que alguien reconcilie.
     const sellerId = String(current.sellerId ?? "");
@@ -660,17 +651,17 @@ export const updateOrderAdjustments = onCall(async (request) => {
       ...current,
       totalCop: input.totalCop,
       productId: input.productId?.trim(),
-      productName: input.productName?.trim(),
-      sku: input.sku?.trim(),
-      quantity: input.quantity,
+      productName: preserved ? editedSummary?.productName : input.productName?.trim(),
+      sku: preserved ? editedSummary?.sku : input.sku?.trim(),
+      quantity: preserved ? editedSummary?.quantity : input.quantity,
       lineItems: editedSummary?.lineItems,
       // El marcador sigue al stock: si el producto nuevo no tiene ficha, ya no hay nada que liberar.
       inventoryReserved: inventoryIndex ? nextMovements.some((movement) => inventoryIndex.has(movement.skuKey)) : undefined,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
-    transaction.set(db.collection("auditEvents").doc(auditId), {
-      id: auditId,
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
       action: "order.adjusted",
@@ -854,9 +845,9 @@ export const assignMessengerToOrders = onCall(async (request) => {
       };
       transaction.set(snap.ref, updated, { merge: true });
       if (previousMessengerId && previousMessengerId !== parsed.data.messengerId) {
-        const auditId = `audit-${Date.now()}-${snap.id}`;
-        transaction.set(db.collection("auditEvents").doc(auditId), {
-          id: auditId,
+        const auditRef = newAuditRef(db);
+        transaction.set(auditRef, {
+          id: auditRef.id,
           actorId: request.auth?.uid,
           actorRole: role,
           action: "order.messenger_reassigned",
@@ -908,9 +899,9 @@ export const unassignMessengerFromOrders = onCall(async (request) => {
         updatedAt: now
       };
       transaction.set(snap.ref, updated, { merge: true });
-      const auditId = `audit-${Date.now()}-${snap.id}`;
-      transaction.set(db.collection("auditEvents").doc(auditId), {
-        id: auditId,
+      const auditRef = newAuditRef(db);
+      transaction.set(auditRef, {
+        id: auditRef.id,
         actorId: request.auth?.uid,
         actorRole: role,
         action: "order.messenger_unassigned",
@@ -976,13 +967,16 @@ export const cancelOrder = onCall(async (request) => {
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
-    transaction.set(db.collection("auditEvents").doc(`audit-${Date.now()}`), {
-      id: `audit-${Date.now()}`,
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
       action: "order.cancelled",
       entity: "order",
       entityId: snap.id,
+      fromStatus: String(current.status ?? ""),
+      toStatus: "cancelled",
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} anulado por ${role === "admin" ? "admin" : role === "seller_logistics" ? "logistico tienda" : "vendedor"}`,
       createdAt: now
     });
@@ -1062,7 +1056,7 @@ export const closeOrder = onCall(async (request) => {
   const db = getFirestore();
   const orderRef = db.collection("orders").doc(input.orderId);
   const settingsRef = db.doc("settings/global");
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const now = new Date().toISOString();
 
   return db.runTransaction(async (transaction) => {
@@ -1144,6 +1138,8 @@ export const closeOrder = onCall(async (request) => {
       action: nextStatus === "delivered" ? "order.delivered" : nextStatus === "failed" ? "order.failed" : "order.retry_scheduled",
       entity: "order",
       entityId: input.orderId,
+      fromStatus: String(order.status ?? ""),
+      toStatus: String(nextStatus ?? ""),
       summary: nextStatus === "delivered" ? "Pedido entregado y wallet actualizada" : nextStatus === "failed" ? "Pedido fallido y wallet actualizada" : "Visita reagendada por el cliente",
       createdAt: now
     });
@@ -1164,9 +1160,10 @@ export const createSettlement = onCall(async (request) => {
   }
 
   const input = parsed.data;
-  if (input.startDate > input.endDate) {
+  if (input.startDate && input.endDate && input.startDate > input.endDate) {
     throw new HttpsError("invalid-argument", "startDate must be before endDate.");
   }
+  const isWithinRange = (entryDate: string) => isWithinSettlementRange(entryDate, input.startDate, input.endDate);
 
   const db = getFirestore();
   const ownerCollection = input.kind === "seller" ? "sellers" : input.kind === "driver" ? "drivers" : "suppliers";
@@ -1187,7 +1184,7 @@ export const createSettlement = onCall(async (request) => {
       const ownerMatches = input.kind === "supplier"
         ? data.ownerType === "seller" && data.type === "product_cost" && data.supplierId === input.ownerId
         : data.ownerType === input.kind && data.ownerId === input.ownerId;
-      const inRange = explicitEntryDocs ? true : entryDate >= input.startDate && entryDate <= input.endDate;
+      const inRange = explicitEntryDocs ? true : isWithinRange(entryDate);
       return ownerMatches && isUnsettled && isLiquidationWalletType(String(data.type ?? "")) && inRange;
     });
 
@@ -1219,12 +1216,17 @@ export const createSettlement = onCall(async (request) => {
     candidateDocs = unsettledEntryDocs.filter((entry) => {
       const data = entry.data() ?? {};
       // Los abonos a tienda no dependen de un pedido; siempre se liquidan.
-      if (String(data.type ?? "") === "seller_abono") return true;
+      if (String(data.type ?? "") === "seller_abono" || String(data.type ?? "") === "gmf_tax") return true;
       const orderId = String(data.orderId ?? "");
       const order = ordersById.get(orderId);
       if (!order) return false;
       if (order.paymentMethod === "prepaid") return true;
-      return order.paymentMethod === "cod" && codReceivedOrderIds.has(orderId);
+      // Solo se espera el efectivo de pedidos COD ENTREGADOS. Un fallido no recauda nada
+      // (nunca entra a cashAllocations), asi que exigirle "COD recibido" dejaba su cobro
+      // bloqueado de forma permanente.
+      const hasPendingCod = order.status === "delivered" || order.status === "liquidated";
+      if (!hasPendingCod) return true;
+      return codReceivedOrderIds.has(orderId);
     });
   }
 
@@ -1239,8 +1241,16 @@ export const createSettlement = onCall(async (request) => {
   }
 
   const settlementRef = db.collection("settlements").doc(`stl-${Date.now()}-${input.kind}-${input.ownerId}`);
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const now = new Date().toISOString();
+
+  // Solicitudes de liquidacion abiertas de esta tienda: se cierran cuando el corte se crea de
+  // verdad. Es la unica forma de resolver una solicitud, porque el flujo de payout no mueve plata.
+  const openPayoutRefs = input.kind === "seller"
+    ? (await db.collection("payouts").where("sellerId", "==", input.ownerId).get()).docs
+        .filter((doc) => String(doc.data()?.status ?? "") === "requested")
+        .map((doc) => doc.ref)
+    : [];
 
   return db.runTransaction(async (transaction) => {
     const ownerSnap = await transaction.get(ownerRef);
@@ -1257,7 +1267,7 @@ export const createSettlement = onCall(async (request) => {
         const ownerMatches = input.kind === "supplier"
           ? entry.ownerType === "seller" && entry.type === "product_cost" && entry.supplierId === input.ownerId
           : entry.ownerType === input.kind && entry.ownerId === input.ownerId;
-        const inRange = input.walletEntryIds && input.walletEntryIds.length > 0 ? true : entryDate >= input.startDate && entryDate <= input.endDate;
+        const inRange = input.walletEntryIds && input.walletEntryIds.length > 0 ? true : isWithinRange(entryDate);
         return ownerMatches && isUnsettled && isLiquidationWalletType(entry.type) && inRange;
       });
     const entries = unsettledSnaps.map((snap) => ({ id: snap.id, ...snap.data() }) as WalletEntryDoc);
@@ -1283,10 +1293,14 @@ export const createSettlement = onCall(async (request) => {
       entries,
       now,
       input.note,
-      relatedSellerEntries
+      relatedSellerEntries,
+      // El override de la pantalla manda sobre la marca de la cuenta: quien paga sabe en el
+      // momento si ese giro concreto salio por banco o en efectivo.
+      input.chargeGmf === undefined ? Boolean(ownerSnap.data()?.paysInCash) : !input.chargeGmf
     );
 
     const platformEntry = buildPlatformWalletEntry(settlement, now);
+    const gmfEntry = buildGmfWalletEntry(settlement, now);
 
     transaction.set(settlementRef, settlement);
     for (const snap of unsettledSnaps) {
@@ -1294,6 +1308,12 @@ export const createSettlement = onCall(async (request) => {
     }
     if (platformEntry) {
       transaction.set(db.collection("walletEntries").doc(platformEntry.id), platformEntry, { merge: true });
+    }
+    if (gmfEntry) {
+      transaction.set(db.collection("walletEntries").doc(gmfEntry.id), gmfEntry, { merge: true });
+    }
+    for (const payoutRef of openPayoutRefs) {
+      transaction.set(payoutRef, { status: "paid", settlementId: settlement.id, paidAt: now }, { merge: true });
     }
     transaction.set(auditRef, {
       id: auditRef.id,
@@ -1310,7 +1330,8 @@ export const createSettlement = onCall(async (request) => {
       settlement,
       walletEntries: [
         ...entries.map((entry) => input.kind === "supplier" ? { ...entry, supplierSettlementId: settlement.id } : { ...entry, settlementId: settlement.id }),
-        ...(platformEntry ? [platformEntry] : [])
+        ...(platformEntry ? [platformEntry] : []),
+        ...(gmfEntry ? [gmfEntry] : [])
       ]
     };
   });
@@ -1330,7 +1351,7 @@ export const updateSettlementStatus = onCall(async (request) => {
   const input = parsed.data;
   const db = getFirestore();
   const settlementRef = db.collection("settlements").doc(input.settlementId);
-  const auditRef = db.collection("auditEvents").doc(`audit-${Date.now()}`);
+  const auditRef = newAuditRef(db);
   const now = new Date().toISOString();
   const settlementPreviewSnap = await settlementRef.get();
   if (!settlementPreviewSnap.exists) {
@@ -1388,8 +1409,29 @@ export const updateSettlementStatus = onCall(async (request) => {
       status: input.status,
       paidAt: input.status === "paid" ? now : settlement.paidAt,
       reconciledAt: input.status === "reconciled" ? now : settlement.reconciledAt,
+      paidAmountCop: typeof input.paidAmountCop === "number" ? Math.round(input.paidAmountCop) : settlement.paidAmountCop,
       note: input.note?.trim() || settlement.note
     });
+
+    // Pago parcial de un corte de tienda: la diferencia entre el neto y lo realmente
+    // transferido vuelve a ser saldo por pagar, para que entre al proximo corte.
+    if (settlement.kind === "seller" && typeof input.paidAmountCop === "number") {
+      const netCop = Math.round(Number(settlement.netCop) || 0);
+      const unpaidCop = netCop - Math.round(input.paidAmountCop);
+      if (unpaidCop > 0) {
+        const adjustmentId = `we-unpaid-${settlement.id}`;
+        transaction.set(db.collection("walletEntries").doc(adjustmentId), withOpenSettlementFlags({
+          id: adjustmentId,
+          ownerType: "seller",
+          ownerId: settlement.ownerId,
+          orderId: "",
+          type: "seller_abono",
+          amountCop: unpaidCop, // positivo: restituye la deuda con la tienda
+          description: `Saldo no transferido del corte ${settlement.startDate} a ${settlement.endDate} (neto ${netCop}, transferido ${Math.round(input.paidAmountCop)})`,
+          createdAt: now
+        }), { merge: true });
+      }
+    }
 
     transaction.set(settlementRef, nextSettlement, { merge: true });
     transaction.set(auditRef, {
@@ -1441,9 +1483,16 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     const settlement = { id: liveSnap.id, ...liveSnap.data() } as SettlementDoc;
     const expectedCop = cashSummaryBeforeReceipt.expectedCop;
     const previousReceivedCop = settlementCashReceivedCop(settlement);
-    const receivedNowCop = Math.max(0, Math.min(Number(input.receivedNowCop || 0), expectedCop - previousReceivedCop));
+    // Se registra el monto REAL entregado, sin topar en lo esperado. Antes se aplicaba
+    // Math.min(..., expectedCop - previousReceivedCop): si el domiciliario entregaba de
+    // mas, la diferencia se descartaba en silencio y quedaba sin rastro (de ahi la nota
+    // "EXCEDENTE QUE NO SE PUDO REGISTRAR" que aparecio en produccion).
+    const receivedNowCop = Math.max(0, Math.round(Number(input.receivedNowCop || 0)));
     const receivedCop = previousReceivedCop + receivedNowCop;
     const pendingCop = Math.max(0, expectedCop - receivedCop);
+    // Excedente: lo que el domiciliario entrego por encima de lo esperado. Queda visible
+    // para acreditarselo en el proximo corte en vez de desaparecer.
+    const excessCop = Math.max(0, receivedCop - expectedCop);
     const cashSummary = await calculateDriverCashSummary(db, settlement, receivedCop);
     const receipts = [
       ...(Array.isArray(settlement.cashReceipts) ? settlement.cashReceipts : []),
@@ -1463,6 +1512,7 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       cashExpectedCop: expectedCop,
       cashReceivedCop: receivedCop,
       cashPendingCop: pendingCop,
+      cashExcessCop: excessCop,
       cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
       cashReceipts: receipts,
       cashAllocations: cashSummary.allocations,
@@ -1481,6 +1531,7 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       cashExpectedCop: expectedCop,
       cashReceivedCop: receivedCop,
       cashPendingCop: pendingCop,
+      cashExcessCop: excessCop,
       cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
       cashReceipts: receipts,
       cashAllocations: cashSummary.allocations,
@@ -1488,7 +1539,7 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     });
     const shortageRef = db.collection("walletEntries").doc(`we-${settlement.id}-cash-shortage`);
     transaction.set(settlementRef, nextSettlement, { merge: true });
-    transaction.set(shortageRef, stripUndefined({
+    transaction.set(shortageRef, withOpenSettlementFlags(stripUndefined({
       id: shortageRef.id,
       ownerType: "driver",
       ownerId: settlement.ownerId,
@@ -1498,9 +1549,10 @@ export const recordDriverCashReceipt = onCall(async (request) => {
       description: `Saldo pendiente de recaudo ${settlement.ownerName}`,
       createdAt: now,
       settlementId: pendingCop === 0 ? settlement.id : undefined
-    }), { merge: true });
-    transaction.set(db.collection("auditEvents").doc(`audit-${Date.now()}`), {
-      id: `audit-${Date.now()}`,
+    })), { merge: true });
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
       action: "settlement.cash_received",
@@ -1511,6 +1563,167 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     });
     return { settlement: responseSettlement, walletEntries: [stripUndefined({ id: shortageRef.id, ownerType: "driver", ownerId: settlement.ownerId, orderId: settlement.id, type: "cash_shortage", amountCop: -pendingCop, description: `Saldo pendiente de recaudo ${settlement.ownerName}`, createdAt: now, settlementId: pendingCop === 0 ? settlement.id : undefined }) as WalletEntryDoc] };
   });
+});
+
+/**
+ * Abono parcial a un proveedor. El saldo del proveedor no es un asiento propio: se
+ * deriva de los product_cost de las tiendas que apuntan a el y aun no estan liquidados.
+ * Por eso un abono no puede ser "un asiento negativo" como el de tiendas: se liquidan
+ * asientos COMPLETOS, del mas antiguo al mas nuevo, hasta donde alcance el monto.
+ *
+ * Asi el saldo pendiente siempre cuadra con los pedidos que faltan por pagar, y no se
+ * repite lo que paso con el corte de DANDA (marcado como pagado por mas de lo transferido).
+ */
+export const recordSupplierAbono = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can record supplier abonos.");
+  }
+
+  const parsed = supplierAbonoSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Invalid supplier abono data.", parsed.error.flatten());
+  }
+
+  const input = parsed.data;
+  const db = getFirestore();
+  const supplierSnap = await db.collection("suppliers").doc(input.supplierId).get();
+  if (!supplierSnap.exists) throw new HttpsError("not-found", "Supplier not found.");
+  const supplierName = String(supplierSnap.data()?.name ?? input.supplierId);
+
+  const entriesSnap = await db
+    .collection("walletEntries")
+    .where("ownerType", "==", "seller")
+    .where("type", "==", "product_cost")
+    .where("supplierId", "==", input.supplierId)
+    .get();
+  const unsettled = entriesSnap.docs
+    .map((doc) => ({ ...(doc.data() as WalletEntryDoc), ref: doc.ref, id: doc.id }))
+    .filter((entry) => !entry.supplierSettlementId);
+  // Solo los negativos se pueden "cubrir" con un abono (son los costos por pagar), pero el
+  // saldo real descuenta tambien los POSITIVOS: asientos de cruce, p.ej. fletes que el
+  // proveedor nos debe y se compensan contra su cuenta. Sin esto el tope del abono era
+  // mayor que la deuda y la seccion de proveedores mostraba una cifra distinta a esta.
+  const pending = unsettled
+    .filter((entry) => Number(entry.amountCop || 0) < 0)
+    .sort((left, right) => String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? "")));
+
+  const pendingCop = Math.max(0, -unsettled.reduce((sum, entry) => sum + Number(entry.amountCop || 0), 0));
+  if (pendingCop <= 0) {
+    throw new HttpsError("failed-precondition", "Este proveedor no tiene saldo pendiente.");
+  }
+
+  const requestedCop = Math.min(Math.round(Number(input.amountCop)), pendingCop);
+  const covered: typeof pending = [];
+  let appliedCop = 0;
+  for (const entry of pending) {
+    const cost = -Math.round(Number(entry.amountCop || 0));
+    if (appliedCop + cost > requestedCop) break;
+    covered.push(entry);
+    appliedCop += cost;
+  }
+
+  // Si sobra monto que no alcanza a cubrir otro pedido entero, se PARTE ese pedido:
+  // la porcion pagada queda liquidada y el resto sigue pendiente. Asi siempre se
+  // registra el monto real transferido y no se pierde el sobrante.
+  const now = new Date().toISOString();
+  const settlementId = `stl-${Date.now()}-supplier-${input.supplierId}`;
+  const remainderCop = requestedCop - appliedCop;
+  const splitSource = remainderCop > 0 ? pending[covered.length] : undefined;
+  let splitEntry: { id: string; amountCop: number; sourceRemainingCop: number } | undefined;
+  if (splitSource && remainderCop > 0) {
+    const originalCop = -Math.round(Number(splitSource.amountCop || 0));
+    splitEntry = {
+      id: `${splitSource.id}-parcial-${Date.now()}`,
+      amountCop: -remainderCop,
+      // El asiento original se queda solo con la parte que sigue debiendose.
+      sourceRemainingCop: -(originalCop - remainderCop)
+    };
+    appliedCop += remainderCop;
+  }
+
+  if (covered.length === 0 && !splitEntry) {
+    throw new HttpsError("failed-precondition", "El monto no alcanza a cubrir ningun costo pendiente.");
+  }
+
+  const settledIds = [...covered.map((entry) => entry.id), ...(splitEntry ? [splitEntry.id] : [])];
+  const orderIds = Array.from(new Set(
+    [...covered, ...(splitSource && splitEntry ? [splitSource] : [])].map((entry) => String(entry.orderId ?? "")).filter(Boolean)
+  ));
+  const dates = [...covered, ...(splitSource && splitEntry ? [splitSource] : [])].map((entry) => String(entry.createdAt ?? now)).sort();
+  const settlement = stripUndefined({
+    id: settlementId,
+    kind: "supplier",
+    ownerId: input.supplierId,
+    ownerName: supplierName,
+    startDate: dates[0].slice(0, 10),
+    endDate: dates[dates.length - 1].slice(0, 10),
+    walletEntryIds: settledIds,
+    orderIds,
+    codCop: 0,
+    feesCop: 0,
+    productCostCop: appliedCop,
+    driverPayCop: 0,
+    platformMarginCop: 0,
+    netCop: appliedCop,
+    // El 4x1000 del giro al proveedor. Va contra la plataforma porque el proveedor no tiene
+    // wallet propia: su saldo se deriva de los product_cost de las tiendas.
+    gmfCop: (input.chargeGmf ?? !Boolean(supplierSnap.data()?.paysInCash)) ? gmfForPayout(appliedCop) : 0,
+    status: "paid",
+    paidAt: now,
+    createdAt: now,
+    note: input.note?.trim() || undefined
+  }) as SettlementDoc;
+
+  const supplierGmfEntry = buildGmfWalletEntry(settlement, now);
+
+  const batch = db.batch();
+  batch.set(db.collection("settlements").doc(settlementId), settlement);
+  if (supplierGmfEntry) batch.set(db.collection("walletEntries").doc(supplierGmfEntry.id), supplierGmfEntry);
+  for (const entry of covered) batch.set(entry.ref, { supplierSettlementId: settlementId, updatedAt: now }, { merge: true });
+  if (splitSource && splitEntry) {
+    // El asiento original conserva solo lo que sigue pendiente...
+    batch.set(splitSource.ref, { amountCop: splitEntry.sourceRemainingCop, updatedAt: now }, { merge: true });
+    // ...y la porcion pagada nace como asiento propio ya liquidado.
+    batch.set(db.collection("walletEntries").doc(splitEntry.id), withOpenSettlementFlags(stripUndefined({
+      id: splitEntry.id,
+      ownerType: "seller",
+      ownerId: splitSource.ownerId,
+      orderId: splitSource.orderId,
+      type: "product_cost",
+      amountCop: splitEntry.amountCop,
+      description: `${splitSource.description ?? "Costo producto"} (pago parcial)`,
+      supplierId: splitSource.supplierId,
+      supplierName: splitSource.supplierName,
+      productId: splitSource.productId,
+      productName: splitSource.productName,
+      supplierSettlementId: settlementId,
+      createdAt: splitSource.createdAt ?? now
+    })), { merge: true });
+  }
+  const auditRef = newAuditRef(db);
+  batch.set(auditRef, {
+    id: auditRef.id,
+    actorId: request.auth?.uid,
+    actorRole: role,
+    action: "settlement.supplier_abono",
+    entity: "supplier",
+    entityId: input.supplierId,
+    summary: `Abono a proveedor ${supplierName}: ${appliedCop} sobre un pendiente de ${pendingCop} (${covered.length} pedidos completos${splitEntry ? ` + ${remainderCop} parcial` : ""})`,
+    createdAt: now
+  });
+  await batch.commit();
+
+  return {
+    settlement,
+    appliedCop,
+    requestedCop,
+    // Con el pedido partido, el monto siempre se aplica completo.
+    unappliedCop: requestedCop - appliedCop,
+    remainingCop: pendingCop - appliedCop,
+    orders: covered.length,
+    partialCop: splitEntry ? remainderCop : 0
+  };
 });
 
 export const recordSellerAbono = onCall(async (request) => {
@@ -1551,7 +1764,7 @@ export const recordSellerAbono = onCall(async (request) => {
 
   const now = new Date().toISOString();
   const entryId = `we-abono-${input.sellerId}-${Date.now()}`;
-  const abonoEntry: WalletEntryDoc = stripUndefined({
+  const abonoEntry: WalletEntryDoc = withOpenSettlementFlags(stripUndefined({
     id: entryId,
     ownerType: "seller",
     ownerId: input.sellerId,
@@ -1560,13 +1773,29 @@ export const recordSellerAbono = onCall(async (request) => {
     amountCop: -amountCop,
     description: input.note?.trim() ? `Abono a tienda ${sellerName}: ${input.note.trim()}` : `Abono a tienda ${sellerName}`,
     createdAt: now
-  }) as WalletEntryDoc;
-  const auditId = `audit-abono-${Date.now()}`;
+  })) as WalletEntryDoc;
+  // El 4x1000 del abono: sale suelto (sin settlementId) para que el siguiente corte lo barra.
+  const chargeGmf = input.chargeGmf ?? !Boolean(sellerSnap.data()?.paysInCash);
+  const gmfCop = chargeGmf ? gmfForPayout(amountCop) : 0;
+  const gmfEntry: WalletEntryDoc | null = gmfCop > 0
+    ? (withOpenSettlementFlags(stripUndefined({
+        id: `${entryId}-gmf`,
+        ownerType: "seller",
+        ownerId: input.sellerId,
+        orderId: "",
+        type: "gmf_tax",
+        amountCop: -gmfCop,
+        description: `4x1000 del abono a ${sellerName}`,
+        createdAt: now
+      })) as WalletEntryDoc)
+    : null;
+  const auditRef = newAuditRef(db);
 
   const batch = db.batch();
   batch.set(db.collection("walletEntries").doc(entryId), abonoEntry);
-  batch.set(db.collection("auditEvents").doc(auditId), {
-    id: auditId,
+  if (gmfEntry) batch.set(db.collection("walletEntries").doc(gmfEntry.id), gmfEntry);
+  batch.set(auditRef, {
+    id: auditRef.id,
     actorId: request.auth?.uid,
     actorRole: role,
     action: "seller.abono",
@@ -1577,14 +1806,29 @@ export const recordSellerAbono = onCall(async (request) => {
   });
   await batch.commit();
 
-  return { walletEntry: abonoEntry, netOwedBeforeCop: Math.round(netOwedCop), amountCop };
+  return { walletEntry: abonoEntry, gmfEntry, gmfCop, netOwedBeforeCop: Math.round(netOwedCop), amountCop };
 });
 
-function settlementCashReceivedCop(settlement: SettlementDoc) {
-  if (typeof settlement.cashReceivedCop === "number") {
-    return Math.max(0, Number(settlement.cashReceivedCop) || 0);
-  }
-  return (settlement.cashReceipts ?? []).reduce((sum, receipt) => sum + Math.max(0, Number(receipt.amountCop) || 0), 0);
+/**
+ * Carga lo que la aritmetica de efectivo necesita del mundo. Se separa de
+ * `computeDriverCashSummary` (settlement-math.ts) porque la correccion administrativa de
+ * pedidos necesita evaluar el corte sobre un estado que AUN NO se escribio: carga estos
+ * inputs una vez, les aplica el delta en memoria y vuelve a calcular.
+ *
+ * Ojo: barre las dos colecciones de asientos completas. Si se necesita para varios cortes
+ * en la misma invocacion, cargarlos UNA vez y reusarlos.
+ */
+export async function loadDriverCashInputs(db: ReturnType<typeof getFirestore>, orderIds: string[]): Promise<DriverCashInputs> {
+  const [sellerEntrySnap, driverEntrySnap, orderSnaps] = await Promise.all([
+    db.collection("walletEntries").where("ownerType", "==", "seller").get(),
+    db.collection("walletEntries").where("ownerType", "==", "driver").get(),
+    Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()))
+  ]);
+  return {
+    sellerEntries: sellerEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
+    driverEntries: driverEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
+    orderMeta: new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]))
+  };
 }
 
 async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, settlement: SettlementDoc, receivedCop: number): Promise<DriverCashSummary> {
@@ -1592,68 +1836,8 @@ async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, s
   if (orderIds.length === 0) {
     return { codCop: 0, feesCop: 0, driverPayCop: 0, platformMarginCop: 0, expectedCop: 0, allocations: [] };
   }
-
-  const [sellerEntrySnap, driverEntrySnap, orderSnaps] = await Promise.all([
-    db.collection("walletEntries").where("ownerType", "==", "seller").get(),
-    db.collection("walletEntries").where("ownerType", "==", "driver").get(),
-    Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()))
-  ]);
-  const orderIdSet = new Set(orderIds);
-  const codByOrder = new Map<string, number>();
-  const feesByOrder = new Map<string, number>();
-  for (const doc of sellerEntrySnap.docs) {
-    const entry = doc.data() as WalletEntryDoc;
-    const orderId = String(entry.orderId ?? "");
-    if (!orderIdSet.has(orderId)) continue;
-    // cod_remittance neteado: una reversa de COD (pedido revertido a fallido) deja
-    // el COD del pedido en 0 y no debe figurar como efectivo esperado del domiciliario.
-    if (entry.type === "cod_revenue" || entry.type === "cod_remittance") {
-      codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-    }
-    if (["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type)) {
-      feesByOrder.set(orderId, (feesByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-    }
-  }
-  const driverPayByOrder = new Map<string, number>();
-  for (const doc of driverEntrySnap.docs) {
-    const entry = doc.data() as WalletEntryDoc;
-    const orderId = String(entry.orderId ?? "");
-    if (entry.type !== "driver_earning" || !orderIdSet.has(orderId)) continue;
-    driverPayByOrder.set(orderId, (driverPayByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-  }
-  const orderMeta = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
-  const sortedOrderIds = orderIds
-    .filter((orderId) => Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0)) > 0)
-    .sort((left, right) => {
-      const leftOrder = orderMeta.get(left);
-      const rightOrder = orderMeta.get(right);
-      return String(leftOrder?.createdAt ?? "").localeCompare(String(rightOrder?.createdAt ?? "")) || String(leftOrder?.trackingCode ?? left).localeCompare(String(rightOrder?.trackingCode ?? right));
-    });
-
-  let remaining = Math.max(0, Number(receivedCop) || 0);
-  const allocations = sortedOrderIds.map((orderId) => {
-    const expectedOrderCop = Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0));
-    const receivedOrderCop = Math.min(expectedOrderCop, remaining);
-    remaining -= receivedOrderCop;
-    return {
-      orderId,
-      expectedCop: expectedOrderCop,
-      receivedCop: receivedOrderCop,
-      covered: receivedOrderCop >= expectedOrderCop
-    };
-  });
-
-  const codCop = Array.from(codByOrder.values()).reduce((sum, amount) => sum + amount, 0);
-  const feesCop = Math.max(0, -Array.from(feesByOrder.values()).reduce((sum, amount) => sum + amount, 0));
-  const driverPayCop = Array.from(driverPayByOrder.values()).reduce((sum, amount) => sum + amount, 0);
-  return {
-    codCop,
-    feesCop,
-    driverPayCop,
-    platformMarginCop: feesCop - driverPayCop,
-    expectedCop: Math.max(0, codCop - driverPayCop),
-    allocations
-  };
+  const inputs = await loadDriverCashInputs(db, orderIds);
+  return computeDriverCashSummary(inputs, orderIds, receivedCop);
 }
 
 function buildSettlement(
@@ -1666,44 +1850,64 @@ function buildSettlement(
   entries: WalletEntryDoc[],
   now: string,
   note?: string,
-  relatedSellerEntries: WalletEntryDoc[] = []
+  relatedSellerEntries: WalletEntryDoc[] = [],
+  paysInCash = false
 ): SettlementDoc {
-  const financialEntries = kind === "driver" ? relatedSellerEntries : entries;
-  const codCop = financialEntries.filter((entry) => entry.type === "cod_revenue" || entry.type === "cod_remittance").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const feesCop = Math.max(0, -financialEntries
-    .filter((entry) => entry.ownerType === "seller" && ["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type))
-    .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
-  const productCostCop = Math.max(0, -entries
-    .filter((entry) => entry.ownerType === "seller" && entry.type === "product_cost")
-    .reduce((sum, entry) => sum + Number(entry.amountCop), 0));
-  const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const entryNetCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const netCop = kind === "driver" ? driverPayCop - codCop : kind === "supplier" ? productCostCop : entryNetCop;
+  // La aritmetica vive en settlement-math.ts para que la correccion administrativa de
+  // pedidos pueda recalcular un corte sin duplicarla. El gravamen queda ademas como
+  // asiento propio para que la wallet de la cuenta cuadre en cero.
+  const { codCop, feesCop, productCostCop, driverPayCop, platformMarginCop, gmfCop, netCop } =
+    settlementTotals(kind, entries, relatedSellerEntries, paysInCash);
+  // Con rango abierto el documento guarda el periodo REAL que cubrio el corte (primer y ultimo
+  // movimiento incluido). Sin esto el historico de liquidaciones quedaria con fechas en blanco.
+  const entryDates = entries.map((entry) => String(entry.createdAt ?? "").slice(0, 10)).filter(Boolean).sort();
+  const resolvedStartDate = startDate || entryDates[0] || now.slice(0, 10);
+  const resolvedEndDate = endDate || entryDates[entryDates.length - 1] || now.slice(0, 10);
   return stripUndefined({
     id,
     kind,
     ownerId,
     ownerName,
-    startDate,
-    endDate,
+    startDate: resolvedStartDate,
+    endDate: resolvedEndDate,
     walletEntryIds: entries.map((entry) => entry.id),
     orderIds: Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean))),
     codCop,
     feesCop,
     productCostCop,
     driverPayCop,
-    platformMarginCop: kind === "seller" || kind === "driver" ? feesCop - driverPayCop : 0,
+    platformMarginCop,
     netCop,
+    gmfCop,
     status: "pending",
     createdAt: now,
     note: note?.trim() || undefined
   });
 }
 
-function isLiquidationWalletType(type: string) {
-  // cod_remittance: reversas de COD por correcciones; sin el, esos asientos quedan huerfanos como saldo pendiente eterno
-  // seller_abono: pagos parciales adelantados a la tienda; deben barrerse a la liquidacion final para no quedar como saldo eterno
-  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning", "seller_abono"].includes(type);
+/**
+ * Asiento del 4x1000. Va contra la cuenta a la que se le retiene, no contra la plataforma: el
+ * dinero es del banco, no un ingreso nuestro. Con el, los movimientos de la cuenta suman
+ * exactamente lo que se transfirio y no queda un residuo eterno por la diferencia.
+ */
+function buildGmfWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {
+  const gmfCop = Number(settlement.gmfCop ?? 0);
+  if (gmfCop <= 0) return null;
+  // El proveedor no tiene wallet propia: su saldo se deriva de los product_cost de las tiendas.
+  // Ponerle el asiento a `ownerType: "seller"` con el id del PROVEEDOR crearia un movimiento que
+  // no es de nadie y descuadraria esa wallet. Va contra la plataforma, que es quien asume el giro.
+  const esProveedor = settlement.kind === "supplier";
+  return {
+    id: `we-${settlement.id}-gmf`,
+    ownerType: esProveedor ? ("admin" as const) : (settlement.kind as "seller" | "driver"),
+    ownerId: esProveedor ? "platform" : settlement.ownerId,
+    orderId: settlement.id,
+    type: "gmf_tax",
+    amountCop: -gmfCop,
+    description: `4x1000 retenido en el corte de ${settlement.ownerName}`,
+    createdAt: now,
+    settlementId: settlement.id
+  };
 }
 
 function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): WalletEntryDoc | null {
@@ -1726,19 +1930,6 @@ function buildPlatformWalletEntry(settlement: SettlementDoc, now: string): Walle
   };
 }
 
-function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any>): Record<string, number> {
-  const values: Record<string, number> = {};
-  for (const field of tariffFields) {
-    const zoneValue = Number(zone?.[field]);
-    const settingValue = Number(settings[field]);
-    const fallbackValue = Number(defaultSettings[field]);
-    values[field] = Number.isFinite(zoneValue) && zoneValue > 0 ? zoneValue : Number.isFinite(settingValue) && settingValue > 0 ? settingValue : fallbackValue;
-  }
-  return values;
-}
-
-// Entregado consume stock; fallido definitivo solo libera la reserva; reagendado no toca nada
-// (la reserva sigue viva porque el pedido sigue abierto). Solo actua si el pedido reservo.
 function settleInventoryForOrder(
   transaction: Transaction,
   inventoryIndex: InventoryIndex | null,
@@ -1777,7 +1968,10 @@ const orderTransitionSchema = z.object({
   patch: orderTransitionPatchSchema
 });
 
-const OPERATIONAL_TARGET_STATUS = new Set(["address_risk", "ready_to_assign", "assigned", "call_pending", "scheduled", "picked_up", "in_route", "retry_pending"]);
+// Tupla y no Set suelto: el zod de order-corrections.ts la consume tal cual, asi que la
+// lista de estados operativos validos existe UNA sola vez.
+export const OPERATIONAL_TARGET_STATUSES = ["address_risk", "ready_to_assign", "assigned", "call_pending", "scheduled", "picked_up", "in_route", "retry_pending"] as const;
+const OPERATIONAL_TARGET_STATUS = new Set<string>(OPERATIONAL_TARGET_STATUSES);
 const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
 
 export const applyOrderTransition = onCall(async (request) => {
@@ -1826,14 +2020,18 @@ export const applyOrderTransition = onCall(async (request) => {
 
     const clean = stripUndefined({ ...patch, updatedAt: now } as Record<string, unknown>);
     transaction.set(ref, clean, { merge: true });
-    const auditId = `audit-transition-${Date.now()}-${orderId.slice(-8)}`;
-    transaction.set(db.collection("auditEvents").doc(auditId), {
-      id: auditId,
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
       actorId: request.auth?.uid ?? "unknown",
       actorRole: role,
       action: "order.transition",
       entity: "order",
       entityId: orderId,
+      // fromStatus/toStatus como campos: el `summary` se conserva porque es lo unico que
+      // tienen los eventos historicos, pero no es filtrable ni fiable de parsear.
+      fromStatus: String(order.status ?? ""),
+      toStatus: String(patch.status ?? order.status ?? ""),
       summary: `Transicion ${order.status} -> ${patch.status ?? order.status}`,
       createdAt: now
     });
@@ -1841,199 +2039,292 @@ export const applyOrderTransition = onCall(async (request) => {
   });
 });
 
-function normalizeProductName(value?: string) {
-  return (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
+const orderAuditTrailSchema = z.object({
+  orderId: z.string().min(1)
+});
 
-type ProductCostLine = {
-  productId: string;
-  productName: string;
-  supplierId?: string;
-  supplierName?: string;
-  totalCostCop: number;
+// Tope defensivo: ningun pedido genera cientos de eventos en su ciclo de vida, y sin tope
+// un pedido patologico podria devolver una respuesta enorme al navegador.
+const AUDIT_TRAIL_LIMIT = 200;
+
+// Actores que no son personas. Sin este mapa la UI mostraria el id crudo del proceso.
+const SYSTEM_ACTOR_LABELS: Record<string, string> = {
+  "uchat-pull": "Bot ChatBy (consulta programada)",
+  "uchat-confirm-webhook": "Bot ChatBy (webhook)",
+  "onstock-webhook": "Webhook OnStok",
+  "store-order-webhook": "Webhook de tienda",
+  "shopify-webhook": "Webhook Shopify",
+  system: "Sistema",
+  unknown: "Desconocido"
 };
 
-function matchCatalogForLine(
-  catalog: Record<string, any>[],
-  sellerId: string,
-  options: { sku?: string; productName?: string; productId?: string }
-): Record<string, any> | null {
-  const normalizedSku = typeof options.sku === "string" ? options.sku.trim().toUpperCase() : "";
-  const normalizedName = normalizeProductName(typeof options.productName === "string" ? options.productName : "");
-  const byId = options.productId
-    ? catalog.find((item) => item.id === options.productId && item.sellerId === sellerId && item.active !== false)
-    : undefined;
-  const bySku = normalizedSku
-    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && typeof item.sku === "string" && item.sku.trim().toUpperCase() === normalizedSku)
-    : undefined;
-  const byName = normalizedName
-    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && !item.sku && item.normalizedProductName === normalizedName)
-    : undefined;
-  return byId ?? bySku ?? byName ?? null;
-}
+// El logistico de tienda no tiene acceso financiero (ver CLAUDE.md), asi que su historial
+// omite las acciones que revelan plata.
+const FINANCIAL_AUDIT_ACTIONS = new Set(["order.adjusted", "seller.abono", "settlement.supplier_abono", "settlement.cash_received", "settlement.created", "order.correct_failed_to_delivered", "order.correct_delivered_to_failed", "order.correct_cancelled_to_operational", "order.reopened_for_retry"]);
 
-// Costo por linea/SKU: una entrada por producto del catalogo (costo unitario x cantidad).
-// Si el pedido trae lineItems se calcula por linea (combos + productos adicionales); si no,
-// usa los campos colapsados. El costo del catalogo se interpreta SIEMPRE como por unidad.
-function resolveProductCostLinesForOrder(order: Record<string, any>, catalog: Record<string, any>[]): ProductCostLine[] {
-  const sellerId = String(order.sellerId ?? "");
-  if (!sellerId) return [];
-  const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
-  const hasLineItems = lineItems.length > 0;
-  const rawLines = hasLineItems
-    ? lineItems
-    : [{ sku: order.sku, productName: order.productName, quantity: order.quantity }];
-  const byProduct = new Map<string, { product: Record<string, any>; quantity: number }>();
-  for (const line of rawLines) {
-    const quantity = Math.max(1, Number(line?.quantity) || 1);
-    const product = matchCatalogForLine(catalog, sellerId, {
-      sku: typeof line?.sku === "string" ? line.sku : undefined,
-      productName: typeof line?.productName === "string" ? line.productName : undefined,
-      productId: hasLineItems ? undefined : (typeof order.productId === "string" ? order.productId : undefined)
-    });
-    if (!product || product.productCostConfigured !== true) continue;
-    const existing = byProduct.get(product.id);
-    if (existing) existing.quantity += quantity;
-    else byProduct.set(product.id, { product, quantity });
+type ResolvedActor = { label: string; email?: string };
+
+/**
+ * Traduce los `actorId` de un lote de eventos a nombre y correo.
+ *
+ * Los eventos guardan el uid crudo de Firebase Auth. Solo el Admin SDK puede resolverlo, asi
+ * que esto no se puede hacer en el cliente: es la razon principal por la que el historial
+ * vive en un callable y no en una lectura directa de Firestore.
+ */
+async function resolveAuditActors(actorIds: string[]): Promise<Map<string, ResolvedActor>> {
+  const resolved = new Map<string, ResolvedActor>();
+  const humanIds: string[] = [];
+
+  for (const actorId of actorIds) {
+    const systemLabel = SYSTEM_ACTOR_LABELS[actorId];
+    if (systemLabel) {
+      resolved.set(actorId, { label: systemLabel });
+    } else {
+      humanIds.push(actorId);
+    }
   }
-  return Array.from(byProduct.values()).map(({ product, quantity }) => {
-    const unitCostCop = Math.max(0, Number(product.productCostCop) || 0);
-    return {
-      productId: String(product.id ?? ""),
-      productName: String(product.name ?? "Producto"),
-      supplierId: typeof product.supplierId === "string" ? product.supplierId : undefined,
-      supplierName: typeof product.supplierName === "string" ? product.supplierName : undefined,
-      totalCostCop: unitCostCop * quantity
-    };
-  });
-}
 
-function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string, productCostLines?: ProductCostLine[] | null): WalletEntryDoc[] {
-  const pickedUpAt = typeof order.pickedUpAt === "string" ? Date.parse(order.pickedUpAt) : Number.NaN;
-  const usesNewDandaDriverPay =
-    String(order.driverId ?? "") === dandaPreferredDriverId &&
-    Number.isFinite(pickedUpAt) &&
-    pickedUpAt >= dandaDriverPayCutoff;
-  const values = dandaSellerIds.has(String(order.sellerId ?? ""))
-    ? {
-        ...defaultSettings,
-        ...settings,
-        sellerDeliveredFeeCop: dandaDeliveredFeeCop(now),
-        sellerFailedFeeCop: 0,
-        driverDeliveredPayCop: usesNewDandaDriverPay ? 11000 : 10000,
-        driverFailedPayCop: 0
+  // getUsers acepta maximo 100 identificadores por llamada.
+  for (let index = 0; index < humanIds.length; index += 100) {
+    const chunk = humanIds.slice(index, index + 100);
+    try {
+      const result = await getAuth().getUsers(chunk.map((uid) => ({ uid })));
+      for (const user of result.users) {
+        resolved.set(user.uid, { label: user.displayName ?? user.email ?? user.uid, email: user.email });
       }
-    : {
-        ...defaultSettings,
-        ...settings,
-        sellerFailedFeeCop: 12000
-      };
-  const entries: WalletEntryDoc[] = [];
-
-  if (order.status === "delivered" && order.paymentMethod === "cod") {
-    entries.push({
-      id: `we-${order.id}-cod`,
-      ownerType: "seller",
-      ownerId: order.sellerId,
-      orderId: order.id,
-      type: "cod_revenue",
-      amountCop: Number(order.totalCop) || 0,
-      description: `Recaudo COD pedido ${order.shopifyOrderId}`,
-      createdAt: now
-    });
-  }
-
-  if (order.status === "delivered") {
-    entries.push({
-      id: `we-${order.id}-seller-delivery-fee`,
-      ownerType: "seller",
-      ownerId: order.sellerId,
-      orderId: order.id,
-      type: "delivery_fee",
-      amountCop: -Number(values.sellerDeliveredFeeCop),
-      description: `Flete entregado ${order.shopifyOrderId}`,
-      createdAt: now
-    });
-    entries.push({
-      id: `we-${order.id}-driver-delivery-pay`,
-      ownerType: "driver",
-      ownerId: order.driverId ?? "unassigned",
-      orderId: order.id,
-      type: "driver_earning",
-      amountCop: Number(values.driverDeliveredPayCop),
-      description: `Pago transportista entregado ${order.shopifyOrderId}`,
-      createdAt: now
-    });
-    const costLines = productCostLines ?? [];
-    const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
-    for (const line of costLines) {
-      entries.push(stripUndefined({
-        id: hasLineItems ? `we-${order.id}-product-cost-${line.productId}` : `we-${order.id}-product-cost`,
-        ownerType: "seller",
-        ownerId: order.sellerId,
-        orderId: order.id,
-        type: "product_cost",
-        amountCop: -line.totalCostCop,
-        description: `Costo producto ${order.shopifyOrderId}`,
-        supplierId: line.supplierId,
-        supplierName: line.supplierName,
-        productId: line.productId || undefined,
-        productName: line.productName,
-        createdAt: now
-      }) as WalletEntryDoc);
+    } catch {
+      // Un fallo de Auth no puede tumbar el historial: se cae al uid crudo mas abajo.
     }
   }
 
-  const isChargeableFailedVisit = order.status === "failed" && String(order.failedCategory ?? "failed_visit") === "failed_visit";
-  if (isChargeableFailedVisit) {
-    if (Number(values.sellerFailedFeeCop) > 0) {
-      entries.push({
-        id: `we-${order.id}-seller-failed-fee`,
-        ownerType: "seller",
-        ownerId: order.sellerId,
-        orderId: order.id,
-        type: "failed_fee",
-        amountCop: -Number(values.sellerFailedFeeCop),
-        description: `Cobro fallido ${order.shopifyOrderId}`,
-        createdAt: now
-      });
-    }
-    if (Number(values.driverFailedPayCop) > 0) {
-      entries.push({
-        id: `we-${order.id}-driver-failed-pay`,
-        ownerType: "driver",
-        ownerId: order.driverId ?? "unassigned",
-        orderId: order.id,
-        type: "driver_earning",
-        amountCop: Number(values.driverFailedPayCop),
-        description: `Pago transportista fallido ${order.shopifyOrderId}`,
-        createdAt: now
-      });
-    }
+  // Usuarios borrados o no resueltos: mostrar el uid en vez de dejar la fila en blanco.
+  for (const actorId of humanIds) {
+    if (!resolved.has(actorId)) resolved.set(actorId, { label: actorId });
   }
 
-  if (order.fulfillmentMode === "warehouse" && (order.status === "delivered" || isChargeableFailedVisit)) {
-    entries.push({
-      id: `we-${order.id}-fulfillment-fee`,
-      ownerType: "seller",
-      ownerId: order.sellerId,
-      orderId: order.id,
-      type: "fulfillment_fee",
-      amountCop: -Number(values.fulfillmentFeeCop),
-      description: `Fulfillment desde bodega ${order.shopifyOrderId}`,
-      createdAt: now
-    });
-  }
-
-  return entries;
+  return resolved;
 }
 
-function stripUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
-}
+/**
+ * Historial de auditoria de un pedido: quien hizo cada accion y cuando.
+ *
+ * Existe porque `auditEvents` es inalcanzable desde la app: la coleccion es admin-only y el
+ * cliente solo carga los ultimos 50 eventos globales, asi que responder "quien confirmo este
+ * pedido" exigia un script con Admin SDK contra produccion.
+ */
+export const getOrderAuditTrail = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || typeof role !== "string") {
+    throw new HttpsError("permission-denied", "Debes iniciar sesion para ver el historial.");
+  }
+
+  const parsed = orderAuditTrailSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Pedido invalido.", parsed.error.flatten());
+  }
+  const { orderId } = parsed.data;
+
+  const db = getFirestore();
+  const orderSnap = await db.collection("orders").doc(orderId).get();
+  if (!orderSnap.exists) throw new HttpsError("not-found", "El pedido no existe.");
+  const order = orderSnap.data() ?? {};
+
+  // Mismo scoping por rol que usa applyOrderTransition para operar el pedido.
+  if (role === "seller" || role === "seller_logistics") {
+    const sellerClaim = typeof request.auth.token.sellerId === "string" ? request.auth.token.sellerId : "";
+    if (!sellerClaim || order.sellerId !== sellerClaim) {
+      throw new HttpsError("permission-denied", "Solo puedes ver el historial de los pedidos de tu tienda.");
+    }
+  } else if (role === "driver") {
+    const driverClaim = typeof request.auth.token.driverId === "string" ? request.auth.token.driverId : "";
+    if (!driverClaim || order.driverId !== driverClaim) {
+      throw new HttpsError("permission-denied", "Pedido no asignado a este lider logistico.");
+    }
+  } else if (role === "messenger") {
+    const messengerClaim = typeof request.auth.token.messengerId === "string" ? request.auth.token.messengerId : "";
+    if (!messengerClaim || order.messengerId !== messengerClaim) {
+      throw new HttpsError("permission-denied", "Pedido no asignado a este mensajero.");
+    }
+  } else if (role !== "admin") {
+    throw new HttpsError("permission-denied", "Tu usuario no puede ver el historial de pedidos.");
+  }
+
+  // Igualdad simple sobre un campo: usa el indice automatico, sin indice compuesto. El orden
+  // se resuelve en memoria porque son pocas decenas de eventos por pedido.
+  const snap = await db.collection("auditEvents").where("entityId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get();
+  const rows = snap.docs
+    .map((doc) => doc.data())
+    .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))))
+    .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+
+  const actors = await resolveAuditActors([...new Set(rows.map((row) => String(row.actorId ?? "unknown")))]);
+
+  const events = rows.map((row) => {
+    const actorId = String(row.actorId ?? "unknown");
+    const actor = actors.get(actorId);
+    return stripUndefined({
+      id: String(row.id ?? ""),
+      createdAt: String(row.createdAt ?? ""),
+      action: String(row.action ?? ""),
+      actorId,
+      actorLabel: actor?.label ?? actorId,
+      actorEmail: actor?.email,
+      actorRole: typeof row.actorRole === "string" ? row.actorRole : undefined,
+      fromStatus: typeof row.fromStatus === "string" ? row.fromStatus : undefined,
+      toStatus: typeof row.toStatus === "string" ? row.toStatus : undefined,
+      summary: typeof row.summary === "string" ? row.summary : ""
+    });
+  });
+
+  return { events };
+});
+
+const requestSellerPayoutSchema = z.object({
+  /** Solo lo usa el admin para pedir en nombre de una tienda. El vendedor va por su claim. */
+  sellerId: optionalString
+});
+
+const rejectSellerPayoutSchema = z.object({
+  payoutId: z.string().min(1),
+  reason: optionalString
+});
+
+/**
+ * Registra la solicitud de liquidacion de una tienda.
+ *
+ * Antes esto no existia: el boton "Solicitar liquidacion automatica" solo mutaba el estado de
+ * React del navegador de la tienda y el efecto que persiste el estado se salia para todo rol que
+ * no fuera admin, asi que la solicitud nunca llegaba a Firestore. La tienda veia "requested" en
+ * pantalla y el admin no veia nada; la coleccion `payouts` estaba vacia en toda la plataforma.
+ *
+ * El monto lo calcula el SERVIDOR. No puede venir del navegador: es la cifra que se le va a pagar
+ * a la tienda, y las reglas de Firestore no pueden validar un total derivado de walletEntries.
+ * Se usa la misma compuerta de elegibilidad que createSettlement (via seller-ledger), para que la
+ * tienda pida exactamente lo que el admin puede cerrar; el saldo de la UI (`sellerBalance`) usa
+ * otra formula, con una reserva por pedido en curso, y no cuadra con un corte real.
+ *
+ * Esto NO mueve plata: solo deja constancia de la solicitud. El dinero sigue moviendose unicamente
+ * por createSettlement.
+ */
+export const requestSellerPayout = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  const sellerClaim = typeof request.auth?.token.sellerId === "string" ? request.auth.token.sellerId : undefined;
+  // seller_logistics queda fuera a proposito: es el rol operativo de tienda, sin acceso financiero.
+  if (!request.auth || (role !== "seller" && role !== "admin")) {
+    throw new HttpsError("permission-denied", "Tu usuario no puede solicitar liquidaciones.");
+  }
+
+  const parsed = requestSellerPayoutSchema.safeParse(request.data ?? {});
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Datos de solicitud invalidos.", parsed.error.flatten());
+  }
+
+  // El vendedor nunca elige la tienda: sale de su claim.
+  const sellerId = role === "admin" ? (parsed.data.sellerId ?? "") : (sellerClaim ?? "");
+  if (!sellerId) {
+    throw new HttpsError("invalid-argument", role === "admin" ? "Indica la tienda." : "Tu usuario no tiene una tienda asociada.");
+  }
+
+  const db = getFirestore();
+  const sellerSnap = await db.collection("sellers").doc(sellerId).get();
+  if (!sellerSnap.exists) throw new HttpsError("not-found", "No se encontro el perfil de la tienda.");
+  const sellerName = String(sellerSnap.data()?.name ?? sellerId);
+
+  // Una solicitud abierta a la vez: si no, cada clic genera una fila nueva y el admin recibe ruido.
+  const existingSnap = await db.collection("payouts").where("sellerId", "==", sellerId).get();
+  const alreadyOpen = existingSnap.docs.find((doc) => String(doc.data()?.status ?? "") === "requested");
+  if (alreadyOpen) {
+    throw new HttpsError("failed-precondition", "Ya tienes una solicitud de liquidacion abierta. Espera a que Kentro la procese.");
+  }
+
+  const [entriesSnap, settlementsSnap] = await Promise.all([
+    db.collection("walletEntries").where("ownerId", "==", sellerId).get(),
+    db.collection("settlements").where("kind", "==", "driver").get()
+  ]);
+  const entries = entriesSnap.docs.map((doc) => doc.data());
+  const orderIds = [...new Set(entries.map((entry) => String(entry.orderId ?? "")).filter(Boolean))];
+  const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
+  const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as Record<string, any>]));
+  const codReceived = buildCodReceivedSet(settlementsSnap.docs.map((doc) => doc.data()));
+
+  const summary = summarizeSellerPayable(entries, ordersById, codReceived);
+  if (summary.eligibleCop <= 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      summary.blockedCop > 0
+        ? "Todavia no hay saldo liquidable: el efectivo de tus pedidos entregados aun no entra de la flota."
+        : "No tienes saldo pendiente por liquidar."
+    );
+  }
+
+  const now = new Date().toISOString();
+  const payoutRef = db.collection("payouts").doc();
+  const auditRef = newAuditRef(db);
+  const payout = {
+    id: payoutRef.id,
+    sellerId,
+    sellerName,
+    amountCop: summary.eligibleCop,
+    blockedCop: summary.blockedCop,
+    eligibleOrderCount: summary.eligibleOrderCount,
+    status: "requested" as const,
+    requestedBy: request.auth.uid,
+    requestedByEmail: typeof request.auth.token.email === "string" ? request.auth.token.email : undefined,
+    createdAt: now
+  };
+
+  const batch = db.batch();
+  batch.set(payoutRef, stripUndefined(payout));
+  batch.set(auditRef, {
+    id: auditRef.id,
+    actorId: request.auth.uid,
+    actorRole: role,
+    action: "payout.requested",
+    entity: "seller",
+    entityId: sellerId,
+    summary: `${sellerName} solicito liquidacion por ${summary.eligibleCop} COP (${summary.eligibleOrderCount} pedidos)${summary.blockedCop !== 0 ? ` · ${summary.blockedCop} retenidos por COD sin recaudar` : ""}`,
+    createdAt: now
+  });
+  await batch.commit();
+
+  return { payout };
+});
+
+/** Cierra una solicitud sin pagarla, para que no quede abierta indefinidamente. */
+export const rejectSellerPayout = onCall(async (request) => {
+  const role = request.auth?.token.role;
+  if (!request.auth || role !== "admin") {
+    throw new HttpsError("permission-denied", "Solo un admin puede rechazar solicitudes de liquidacion.");
+  }
+  const parsed = rejectSellerPayoutSchema.safeParse(request.data);
+  if (!parsed.success) {
+    throw new HttpsError("invalid-argument", "Datos invalidos.", parsed.error.flatten());
+  }
+
+  const db = getFirestore();
+  const ref = db.collection("payouts").doc(parsed.data.payoutId);
+  const now = new Date().toISOString();
+
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "La solicitud no existe.");
+    const current = snap.data() ?? {};
+    if (String(current.status ?? "") !== "requested") {
+      throw new HttpsError("failed-precondition", "Esta solicitud ya fue procesada.");
+    }
+    const updated = stripUndefined({ ...current, status: "rejected", rejectedAt: now, rejectedReason: parsed.data.reason });
+    transaction.set(ref, updated, { merge: true });
+    const auditRef = newAuditRef(db);
+    transaction.set(auditRef, {
+      id: auditRef.id,
+      actorId: request.auth?.uid,
+      actorRole: role,
+      action: "payout.rejected",
+      entity: "seller",
+      entityId: String(current.sellerId ?? ""),
+      summary: `Solicitud de liquidacion de ${current.sellerName ?? current.sellerId} rechazada${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+      createdAt: now
+    });
+    return { payout: { id: snap.id, ...updated } };
+  });
+});

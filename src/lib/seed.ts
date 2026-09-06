@@ -23,6 +23,7 @@ export function emptyState(): AppState {
     settlements: [],
     payouts: [],
     audit: [],
+    cashSnapshots: [],
     settings: {
       activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,
@@ -241,6 +242,7 @@ export function seedState(): AppState {
         createdAt: now
       }
     ],
+    cashSnapshots: [],
     settings: {
       activeCityId: "city-cali",
       sellerDeliveredFeeCop: 12000,

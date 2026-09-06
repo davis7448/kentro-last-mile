@@ -17,6 +17,11 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 - `src/lib/firebase/state-store.ts` — carga/suscripción de estado Firestore (scoping por rol) + escrituras.
 - `src/lib/firebase/auth.ts` — wrappers de callables.
 - `functions/src/` — backend: `orders.ts` (callables de ciclo de vida: confirm/close/cancel/adjust/**applyOrderTransition**…), `roles.ts`, `shopify.ts`, `index.ts` (webhook Shopify; tiene su PROPIA copia de helpers `summarizeShopifyLineItems`/offers), `onstock-webhook.ts`, `store-webhook.ts`, `uchat-pull.ts` (**confirmación de pedidos vía ChatBy/UChat, enfoque PULL**: callable `setStoreUchatConfig` guarda token en `storeUchatSecrets` (sin acceso cliente); scheduled `pullUchatConfirmations` cada 3 min consulta la API de UChat por teléfono E.164 y pasa `imported`→`ready_to_assign` los pedidos con `lead_status=CONFIRMADO` o tag `PED-Confirmado`), `uchat-webhook.ts` (`uchatConfirmWebhook`: webhook entrante alternativo/secundario).
+- `functions/src/order-stats.ts` — callable `getOrderStats`: indicadores de un periodo **agregando en Firestore**, sin descargar pedidos. Lo usa la UI cuando el rango elegido se sale de la ventana descargada (atajos "Mes pasado"/"Acumulado"). Devuelve solo contadores exactos; el embudo por mensajero y el recaudo neto siguen en cliente porque no son agregables (ver el comentario del archivo).
+- `functions/src/wallet-entries.ts` — **la unica fuente de verdad sobre cuanta plata genera un pedido**: `buildWalletEntries`, `resolveTariffs`, costo de producto y las reglas de tarifa de DANDA. Puro (sin firebase-admin) para que lo reusen el cierre y las correcciones sin copiarlo.
+- `functions/src/settlement-math.ts` — aritmetica de cortes sin Firestore: `computeDriverCashSummary` (cuanto efectivo debe un domiciliario), `settlementTotals`. `orders.ts` conserva `loadDriverCashInputs`, que es la parte que lee. Se separo para poder responder "como queda el corte DESPUES del cambio" sin escribir primero.
+- `functions/src/order-corrections-plan.ts` + `order-corrections.ts` — **correccion administrativa de estados terminales desde la UI** (callable `correctOrderStatus`): fallido→entregado, entregado→fallido, anulado→operativo, fallido→nueva visita. Sustituye a los ocho scripts one-off que se corrian a mano (`correct-*.js`, `clawback-*.js`, `reopen-order-for-retry.js`), cuyo razonamiento esta recogido en la cabecera del planificador. El planificador es PURO, asi que `dryRun: true` devuelve exactamente lo que se va a escribir: la previsualizacion y la aplicacion no pueden divergir. Regla central: un corte ya pagado o conciliado NO se toca — se compensa con asientos `-correction-reverse-*` en el periodo abierto; uno pendiente si se recalcula. Usa batch con precondiciones `lastUpdateTime` (no transaccion) porque recalcular un corte necesita las colecciones de asientos completas.
+- `src/lib/date-ranges.ts` — atajos de periodo (semana pasada / mes pasado / acumulado), todos cortando en la ultima semana completa. Con pruebas.
 - `firestore.rules` — reglas.
 
 ## Roles
@@ -26,14 +31,40 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 1. **El ciclo de vida de un pedido (status/driverId/evidencia) se cambia SOLO por callables del servidor**, nunca con escrituras directas del cliente. Un `applyOrderTransition` valida optimistic-concurrency (`expectedStatus` debe == estado real) y audita. Las reglas prohíben que el cliente escriba esos campos (solo rótulos/no-op). Esto evita el "clobber": un navegador con estado viejo pisando una entrega.
 2. **Costo de producto = costo del ítem por unidad-de-Shopify × cantidad real de Shopify.** Nada de expandir cantidades en la plataforma. Los pedidos guardan `lineItems[]` y se cobra por línea/SKU (una entrada `product_cost` por producto). Excluir "envío prioritario". `closeOrder` lee el catálogo en vivo.
 3. **No re-introducir dependencias de cálculo frágiles** (ej. el viejo `unitsPerSoldUnit` del 2x1 de Kovia se eliminó).
+4. **`failedCategory` tiene CINCO valores, no cuatro**: `failed_visit`, `no_coverage`, `bad_order_or_no_contact`, `bad_phone` y `pending_review`. Cobrable = `failed_visit` **o campo ausente**; despachable excluye solo los tres del medio (`pending_review` SÍ es despachable). Contar cobrables **restando** las no-cobrables es un error: se hizo así y `pending_review` desviaba 44 pedidos. Contar `failed_visit` en positivo, que además absorbe categorías futuras sin tocar nada.
+
+## Diseno
+Sistema "Acid Glass": tema oscuro, verde acido `#c6f24e` como unico acento, Plus Jakarta Sans,
+pildoras y tarjetas redondeadas, glassmorfismo solo en controles y una tarjeta heroe.
+**Antes de tocar UI, leer `docs/design-system.md`** — trae los tokens con sus ratios de contraste
+verificados, los patrones de composicion (riel, franja de KPI, tablas a tarjetas, divulgacion
+progresiva), las trampas comprobadas (pildoras en bloques, regex sobre clases, colores literales)
+y un checklist de cierre.
 
 ## Deploy
 - Reglas: `firebase deploy --only firestore:rules --project kentro-last-mile`
 - Hosting: `firebase deploy --only hosting --project kentro-last-mile`
+- **Caché (no tocar sin pensar):** `firebase.json` fija `no-cache` para el HTML y `immutable` un año para `/_next/static/**`. Firebase por defecto pone `max-age=3600` a TODO, y eso rompía la app en móviles tras cada despliegue: el navegador conservaba el índice viejo pidiendo chunks con hash que el despliegue ya había borrado, y el JS no arrancaba (pantalla en blanco / "this page couldn't load"). El HTML debe revalidar siempre; los assets con hash en el nombre nunca.
 - **Functions (¡ojo!):** un guard (`scripts/guard-functions-deploy.js`) las bloquea. Compilar primero (`cd functions && npm run build`) y desplegar con `ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only functions`, tras confirmar con `firebase functions:list` que el set local == prod (no borra funciones). El set local == prod está verificado.
+
+## Navegadores (browserslist)
+`package.json` fija `browserslist` en Safari/iOS 14, Chrome 87. **No subirlo sin motivo.** Por defecto
+Next 16 compila para Safari 16.4+ y emitia un `class static block` en su propio runtime; en un iPhone
+con iOS anterior eso no es un error de ejecucion sino de SINTAXIS, asi que el navegador descarta el
+bundle entero y la app no pinta NADA (pantalla de error del navegador, en cualquier sesion, tambien en
+incognito). Con el target bajo, Next ademas inyecta los polyfills de `Object.hasOwn` y `.at()`.
+Comprobacion tras cambiar el build: descargar los chunks de produccion y verificar que
+`grep -o 'static{'` da 0.
 
 ## Verificar datos en vivo
 Scripts node con `admin.initializeApp({projectId:"kentro-last-mile"})` (ADC; usar libs de `functions/node_modules`). Sirve para Firestore/Auth. `createCustomToken` NO funciona (ADC sin signBlob) — para probar callables/reglas como usuario, crear usuario desechable + `signInWithPassword` REST con la API web key del `src/lib/firebase/client.ts`.
 
 ## Calidad
-`npx tsc --noEmit` (raíz y en `functions/`), `npx vitest run`.
+`npx tsc --noEmit` (raíz y en `functions/`), `npx vitest run`, `npm run lint`.
+
+**`npm run lint` no es opcional antes de desplegar UI.** Existe por un fallo que llegó a producción:
+un `useMemo` puesto después del `return` anticipado de `SellerView`. En el PC no se veía (la caché de
+IndexedDB ya traía los datos en el primer render, así que el número de hooks nunca cambiaba); en un
+móvil sin caché el primer render salía por el `return` y el segundo ejecutaba un hook más → React #310
+y app muerta, solo para tiendas y solo en móvil. `react-hooks/rules-of-hooks` va como **error**;
+`exhaustive-deps` como aviso (3 pendientes, no rompen nada).

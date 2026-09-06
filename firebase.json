@@ -1,10 +1,43 @@
 {
   "hosting": {
     "source": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "frameworksBackend": {
       "region": "us-central1"
-    }
+    },
+    "headers": [
+      {
+        "source": "/_next/static/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          }
+        ]
+      }
+    ]
   },
   "firestore": {
     "rules": "firestore.rules",
@@ -15,7 +48,9 @@
   },
   "functions": {
     "source": "functions",
-    "predeploy": ["node scripts/guard-functions-deploy.js"],
+    "predeploy": [
+      "node scripts/guard-functions-deploy.js"
+    ],
     "runtime": "nodejs20"
   }
 }

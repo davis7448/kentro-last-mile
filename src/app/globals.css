@@ -3,17 +3,106 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: dark;
+
+  /* Los tokens se guardan como CANALES rgb para que Tailwind pueda aplicarles opacidad
+     (`bg-rust/10`) y para que el tema se pueda cambiar por subarbol: la vista del mensajero
+     necesita tema claro porque se usa bajo sol directo, y comparte componentes con el resto. */
+  --c-ink: 14 17 22;        /* fondo de pagina */
+  --c-panel: 25 30 37;      /* tarjeta opaca: tablas y cifras, nunca sobre cristal */
+  --c-field: 33 40 50;      /* superficie secundaria */
+  --c-fg: 244 246 248;      /* 14.6:1 sobre panel */
+  --c-fg2: 203 211 220;
+  --c-muted: 154 165 179;   /* 6.1:1 sobre panel */
+  --c-acid: 198 242 78;     /* 12.2:1 sobre panel */
+  --c-deep: 16 20 12;       /* tinta sobre acid: 13.9:1 */
+  --c-danger: 255 139 124;
+  /* `rust` es salmon CLARO en oscuro y rojo OSCURO en claro, asi que ningun color de texto fijo
+     sirve para los dos: sobre el boton solido hace falta su propio token. 8.2:1 aqui. */
+  --c-on-danger: 16 20 12;
+  --c-info: 124 196 255;
+  --c-ok: 198 242 78;
+
+  --ink: rgb(var(--c-ink));
+  --panel: rgb(var(--c-panel));
+  --field: rgb(var(--c-field));
+  --fg: rgb(var(--c-fg));
+  --muted: rgb(var(--c-muted));
+  --acid: rgb(var(--c-acid));
+  --deep: rgb(var(--c-deep));
+  --danger: rgb(var(--c-danger));
+
+  --glass-bg: 255 255 255;
+  --glass-alpha: 0.06;
+  --glass-border: 0.14;
+
+  --control-consola: 44px;
+  --control-calle: 56px;
+}
+
+/* TEMA CLARO DE CALLE. El mensajero trabaja al sol: un tema oscuro ahi no se lee, es fisica
+   de la pantalla, no gusto. Redefiniendo solo los canales, TODOS los componentes compartidos
+   (tarjeta de pedido, evidencias, sellos de estado) se adaptan sin duplicar una sola clase.
+   Ratios verificados sobre tarjeta blanca y sobre la pagina #eceef0. */
+.theme-light {
   color-scheme: light;
+
+  --c-ink: 236 238 240;     /* fondo de pagina */
+  --c-panel: 255 255 255;   /* tarjeta */
+  --c-field: 242 244 246;
+  --c-fg: 20 23 28;         /* 17.9:1 */
+  --c-fg2: 61 68 77;        /*  9.8:1 */
+  --c-muted: 91 101 112;    /*  5.9:1 */
+  --c-acid: 198 242 78;     /* con tinta encima: 14.4:1 */
+  --c-deep: 16 20 12;
+  --c-danger: 197 55 39;    /*  5.3:1 */
+  --c-on-danger: 255 255 255; /* 6.3:1 sobre el rojo del tema claro */
+  --c-info: 31 111 178;     /*  5.3:1 */
+  --c-ok: 28 99 64;         /*  7.2:1 */
+
+  --glass-bg: 20 23 28;
+  --glass-alpha: 0.04;
+  --glass-border: 0.10;
+
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-fg));
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* Ninguna pagina debe desplazarse en horizontal. Sin esta guarda, una tabla ancha arrastraba
+   el ancho del documento y la cabecera fija dejaba de cubrir la pantalla al desplazarse: se
+   veia contenido asomando por encima y el encabezado sin llegar al borde derecho. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
-  background: #f7f8f4;
-  color: #17201d;
+  background: var(--ink);
+  color: var(--fg);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dinero, guias y cualquier cifra que se compare en columna. Los numerales tabulares evitan
+   que $ 9.350.800 y $ 964.100 se lean desalineados. */
+/* Las cifras van en la MISMA sans que el resto, solo con numerales tabulares para que
+   $ 9.350.800 y $ 964.100 se alineen en columna. Nada de monoespaciada. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 button,
@@ -22,7 +111,102 @@ select {
   font: inherit;
 }
 
+/* Objetivo tactil minimo. 125 de los 129 botones median ~36px de alto: por debajo del minimo
+   de 44px, y los usa un mensajero con una mano en la calle. `.focus-ring` es la clase que la
+   app ya pone en todo control interactivo, asi que sirve de gancho unico. */
+button.focus-ring,
+input.focus-ring,
+select.focus-ring,
+textarea.focus-ring {
+  min-height: var(--control-consola);
+}
+
+/* En la calle el objetivo sube a 56px: una mano, guantes, prisa y un telefono al sol. */
+.theme-light button.focus-ring,
+.theme-light input.focus-ring,
+.theme-light select.focus-ring,
+.theme-light textarea.focus-ring {
+  min-height: var(--control-calle);
+}
+
+/* Y el cuerpo minimo sube a 17px, que es el suelo de legibilidad en exteriores. */
+.theme-light {
+  font-size: 17px;
+}
+
+/* Los botones de solo icono necesitan ancho ademas de alto. */
+button.focus-ring:not(:has(> :not(svg))) {
+  min-width: var(--control-consola);
+}
+
 .focus-ring:focus-visible {
   outline: 3px solid rgba(58, 125, 100, 0.35);
   outline-offset: 2px;
+}
+
+/* ---------------- GLASSMORFISMO ----------------
+   Cristal esmerilado, no liquid glass: borde uniforme de 1px, sin degradado cromatico y sin
+   barrido especular. Se aplica SOLO a controles y a la tarjeta heroe; las tablas y los bloques
+   de cifras van sobre superficie opaca, porque un fondo que cambia bajo cada fila destruye la
+   comparacion en columna, que es justo para lo que existen esas tablas. */
+.glass {
+  background: rgb(var(--glass-bg) / var(--glass-alpha));
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgb(var(--glass-bg) / var(--glass-border));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.30);
+}
+
+.glass-acid {
+  background: rgba(198, 242, 78, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  color: var(--deep);
+}
+
+/* Sin luz de color detras el cristal no existe: backdrop-filter sobre un color plano no
+   produce nada. Estos tres brillos son la condicion para que el efecto se vea. */
+.bloom-field { position: relative; isolation: isolate; }
+.bloom-field::before,
+.bloom-field::after {
+  content: "";
+  position: fixed;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(55px);
+}
+.bloom-field::before {
+  top: -180px; left: 4%;
+  width: 720px; height: 560px;
+  background: radial-gradient(closest-side, rgba(198, 242, 78, 0.30), transparent 72%);
+}
+.bloom-field::after {
+  top: 220px; right: -180px;
+  width: 760px; height: 640px;
+  background: radial-gradient(closest-side, rgba(124, 196, 255, 0.24), transparent 72%);
+}
+
+/* Tercer brillo, el coral, para que el cristal recoja tres temperaturas distintas de luz
+   segun donde caiga en la pantalla. Es lo que hace que no se lea como un gris translucido. */
+body::after {
+  content: "";
+  position: fixed;
+  bottom: -220px; left: 34%;
+  width: 700px; height: 520px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgba(255, 139, 124, 0.16), transparent 72%);
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* En telefono no hay cristal: backdrop-filter repinta en cada scroll y estas pantallas se usan
+   en la calle, en gama baja. Se degrada a superficie opaca. */
+@media (max-width: 640px) {
+  .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--field); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--field); }
 }
