@@ -85,8 +85,8 @@ import {
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerBalance, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
-import type { DriverFinancialSummary } from "@/lib/finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerAbonoRows, sellerBalance, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
+import type { DriverFinancialSummary, SellerAbonoRow } from "@/lib/finance";
 import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
@@ -5748,6 +5748,10 @@ type LiquidationRow = {
   platformMarginCop: number;
   cashToReturnCop: number;
   abonoCop: number;
+  /** Cada abono con su fecha y su nota: el total solo no dice por donde salio la plata. */
+  abonoRows: SellerAbonoRow[];
+  /** 4x1000 de esos abonos. Va dentro del neto pero no salia en ninguna linea del detalle. */
+  abonoGmfCop: number;
   receivableCop: number;
   /** Cobra en efectivo: no se le retiene 4x1000 porque no hay transferencia. */
   paysInCash: boolean;
@@ -6019,6 +6023,8 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       platformMarginCop: feesCop - orderDetails.reduce((sum, audit) => sum + audit.driverPayCop, 0),
       cashToReturnCop: 0,
       abonoCop,
+      abonoRows: sellerAbonoRows(ownEntries),
+      abonoGmfCop: netChargeCop(ownEntries, ["gmf_tax"]),
       receivableCop: Math.max(0, netCop),
       paysInCash: Boolean(seller.paysInCash),
       gmfCop: gmfForPayout(Math.max(0, netCop), seller.paysInCash),
@@ -6069,6 +6075,8 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
       platformMarginCop: feesCop - earningsCop,
       cashToReturnCop: Math.max(0, codCop - earningsCop),
       abonoCop: 0,
+      abonoRows: [],
+      abonoGmfCop: 0,
       receivableCop: Math.max(0, earningsCop - codCop),
       paysInCash: Boolean(driver.paysInCash),
       gmfCop: gmfForPayout(Math.max(0, earningsCop - codCop), driver.paysInCash),
@@ -6980,9 +6988,11 @@ function LiquidationTable({
                     {busyId === rowKey ? "Guardando..." : actionLabel}
                   </button>
                 </div>
+                {/* El mismo detalle que en escritorio: antes aqui solo iba la tabla por pedido, y
+                    como los abonos no cuelgan de un pedido en el telefono eran invisibles. */}
                 {expanded && (
                   <div className="rounded-2xl bg-field/60 p-2">
-                    <LiquidationOrderAuditTable audits={row.orderDetails} compact />
+                    <LiquidationRowDetail row={row} />
                   </div>
                 )}
               </div>
@@ -7469,6 +7479,49 @@ function DetailLine({ label, value, tone }: { label: string; value: string | num
   );
 }
 
+/**
+ * Los abonos de la tienda, uno por uno. Un `seller_abono` se guarda con `orderId: ""`, asi que no
+ * aparece en ninguna fila de la tabla por pedido: sin esta tabla el unico rastro era el total de
+ * "Abonos ya pagados", y una tienda recibe varios abonos en la misma semana.
+ */
+function SellerAbonoTable({ rows, totalCop, gmfCop }: { rows: SellerAbonoRow[]; totalCop: number; gmfCop: number }) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold">Abonos ya pagados</h3>
+        <span className="text-xs font-semibold text-ink-60">
+          {rows.length} abono{rows.length === 1 ? "" : "s"} · <span className="tabular">{formatCop(totalCop)}</span>
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-2xl bg-panel">
+        <table className="w-full min-w-[420px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-left text-xs uppercase tracking-normal text-ink-60">
+              <th className="py-2 pl-3 pr-3 font-semibold">Fecha</th>
+              <th className="py-2 pr-3 text-right font-semibold">Valor</th>
+              <th className="py-2 pr-3 font-semibold">Nota</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((abono) => (
+              <tr key={abono.id} className="border-b border-white/5 last:border-0">
+                <td className="py-3 pl-3 pr-3 whitespace-nowrap">{new Date(abono.createdAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}</td>
+                <td className="py-3 pr-3 text-right font-bold text-rust"><span className="tabular">{formatCop(abono.amountCop)}</span></td>
+                <td className="py-3 pr-3 text-ink-70">{abono.note || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {gmfCop > 0 && (
+        <p className="text-xs text-ink-60">
+          4x1000 de los abonos: <span className="tabular font-semibold text-rust">{formatCop(gmfCop)}</span>. Se descuenta aparte y tambien lo barre el siguiente corte.
+        </p>
+      )}
+    </>
+  );
+}
+
 function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
   return (
     <div className="grid gap-3">
@@ -7505,6 +7558,7 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
             <DetailLine label="COD a favor de tienda" value={formatCop(row.codCop)} tone="mint" />
             <DetailLine label="Cobros descontados" value={formatCop(row.feesCop + row.productCostCop)} tone="rust" />
             {row.abonoCop > 0 && <DetailLine label="Abonos ya pagados" value={formatCop(row.abonoCop)} tone="rust" />}
+            {row.abonoGmfCop > 0 && <DetailLine label="4x1000 de abonos" value={formatCop(row.abonoGmfCop)} tone="rust" />}
             <DetailLine label="A pagar a tienda" value={formatCop(row.receivableCop)} tone="mint" />
           </div>
         )}
@@ -7520,6 +7574,7 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
         </div>
       </div>
       <LiquidationOrderAuditTable audits={row.orderDetails} compact />
+      {row.abonoRows.length > 0 && <SellerAbonoTable rows={row.abonoRows} totalCop={row.abonoCop} gmfCop={row.abonoGmfCop} />}
     </div>
   );
 }

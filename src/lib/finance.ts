@@ -625,6 +625,40 @@ export function driverCashReceiptRows(
   });
 }
 
+/** Un abono a tienda, listo para pintar: monto en positivo y la nota sin el prefijo. */
+export type SellerAbonoRow = {
+  id: string;
+  createdAt: string;
+  amountCop: number;
+  note: string;
+};
+
+/**
+ * Los abonos de una tienda, uno por uno. Antes el admin solo veia el total en la fila
+ * "Abonos ya pagados": una tienda recibe varios abonos en la misma semana y la nota de cada uno
+ * (que dice por donde salio la plata) solo vive en la descripcion de su asiento.
+ *
+ * `recordSellerAbono` guarda la descripcion como `Abono a tienda <nombre>: <nota>`, asi que la nota
+ * se recorta por la posicion del primer `": "`. Sin regex a proposito: el nombre de la tienda es
+ * texto libre y puede traer `:` o caracteres que romperian el patron.
+ */
+export function sellerAbonoRows(entries: WalletEntry[]): SellerAbonoRow[] {
+  return entries
+    .filter((entry) => entry.type === "seller_abono")
+    // ISO 8601 ordena bien comparando cadenas; localeCompare (Intl) es un orden de magnitud mas lento.
+    .sort((left, right) => (left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0))
+    .map((entry) => {
+      const separator = entry.description.indexOf(": ");
+      return {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        // Los asientos de abono se guardan en negativo (plata que sale hacia la tienda).
+        amountCop: Math.abs(Math.round(Number(entry.amountCop) || 0)),
+        note: separator === -1 ? "" : entry.description.slice(separator + 2).trim()
+      };
+    });
+}
+
 export function calculateDriverFinancialSummary(state: AppState, driverId: string): DriverFinancialSummary {
   const driverSettlements = state.settlements.filter((settlement) => settlement.kind === "driver" && settlement.ownerId === driverId);
   const settledOrderIds = new Set<string>();

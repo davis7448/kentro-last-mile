@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerBalance, summarizeWalletPeriod } from "./finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerAbonoRows, sellerBalance, summarizeWalletPeriod } from "./finance";
 import { seedState } from "./seed";
 import type { AppState, Order, WalletEntry } from "./types";
 
@@ -670,6 +670,54 @@ describe("selectOpenWalletEntries", () => {
       supplierSettlementId: "stl-prov-1"
     });
     expect(selectOpenWalletEntries([cerrado])).toEqual([]);
+  });
+});
+
+describe("sellerAbonoRows", () => {
+  const abono = (overrides: Partial<WalletEntry>): WalletEntry => ({
+    id: "we-abono-1",
+    ownerType: "seller",
+    ownerId: "seller-1",
+    orderId: "",
+    type: "seller_abono",
+    amountCop: -50_000,
+    description: "Abono a tienda Kovia",
+    createdAt: "2026-08-20T12:00:00.000Z",
+    ...overrides
+  });
+
+  it("lista cada abono en orden, con el monto en positivo", () => {
+    const filas = sellerAbonoRows([
+      abono({ id: "we-b", amountCop: -120_000, createdAt: "2026-08-22T09:00:00.000Z" }),
+      abono({ id: "we-a", amountCop: -50_000, createdAt: "2026-08-20T12:00:00.000Z" })
+    ]);
+    expect(filas.map((fila) => fila.id)).toEqual(["we-a", "we-b"]);
+    expect(filas.map((fila) => fila.amountCop)).toEqual([50_000, 120_000]);
+  });
+
+  it("recorta el prefijo y deja solo la nota", () => {
+    const [fila] = sellerAbonoRows([abono({ description: "Abono a tienda Kovia: nequi Martha agosto 18" })]);
+    expect(fila.note).toBe("nequi Martha agosto 18");
+  });
+
+  it("devuelve nota vacia cuando el abono se registro sin nota", () => {
+    const [fila] = sellerAbonoRows([abono({ description: "Abono a tienda Kovia" })]);
+    expect(fila.note).toBe("");
+  });
+
+  it("conserva los dos puntos que vengan DENTRO de la nota", () => {
+    // El nombre de la tienda y la nota son texto libre: recortar por el primer separador y
+    // devolver el resto entero, no partir por cada ":".
+    const [fila] = sellerAbonoRows([abono({ description: "Abono a tienda Kovia: transferencia 10:30 am" })]);
+    expect(fila.note).toBe("transferencia 10:30 am");
+  });
+
+  it("ignora los asientos que no son abonos, como el 4x1000 hermano", () => {
+    const filas = sellerAbonoRows([
+      abono({ id: "we-abono" }),
+      abono({ id: "we-abono-gmf", type: "gmf_tax", amountCop: -200, description: "4x1000 del abono a Kovia" })
+    ]);
+    expect(filas.map((fila) => fila.id)).toEqual(["we-abono"]);
   });
 });
 
