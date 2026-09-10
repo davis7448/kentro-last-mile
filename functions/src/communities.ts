@@ -33,6 +33,13 @@ import {
 } from "./community-pricing";
 import { resolveTariffs } from "./wallet-entries";
 import { isRetiredSlugStillValid, validateSlug } from "./community-slug";
+import {
+  planBulkSignupDisable,
+  planMassSignupAlertDismissal,
+  summarizeBulkSignupDisable,
+  type BulkSignupDisableAuthResult,
+  type BulkSignupDisableSeller
+} from "./community-containment";
 
 const text = z.string().trim().min(1);
 
@@ -331,15 +338,76 @@ export const dismissMassSignupAlert = onCall(async (request) => {
   if (actor.role !== "admin") throw new HttpsError("permission-denied", "Solo un administrador.");
   const parsed = z.object({ communityId: text }).safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
-  await getFirestore().collection("communities").doc(parsed.data.communityId).update({
-    massSignupAlertDismissedAt: new Date().toISOString()
+  const plan = planMassSignupAlertDismissal({
+    communityId: parsed.data.communityId,
+    nowIso: new Date().toISOString()
   });
+  await getFirestore().collection("communities").doc(plan.communityId).update(plan.communityUpdate);
   return { ok: true };
 });
+
+/** Solo los campos que el nucleo puro necesita: nada de volcar el documento entero. */
+function containmentSellerFrom(doc: {
+  id: string;
+  data: () => Record<string, unknown> | undefined;
+}): BulkSignupDisableSeller {
+  const data = doc.data() ?? {};
+  const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
+  return {
+    id: doc.id,
+    communityId: str(data.communityId),
+    communityJoinedAt: str(data.communityJoinedAt),
+    contactEmail: str(data.contactEmail),
+    debtBlockedAt: str(data.debtBlockedAt)
+  };
+}
+
+/**
+ * Cierra el acceso de una tienda y contesta EN CRUDO que paso, sin interpretarlo.
+ *
+ * Lo que sustituye es un `.catch(() => null)` que se tragaba el fallo de la busqueda: si
+ * `getUsers` lanzaba o no habia usuario, la cuenta de Auth seguia viva y la tienda se
+ * reportaba igual como desactivada. Aqui cada desenlace tiene nombre y `uids` acumula solo
+ * los accesos que `updateUser` cerro de verdad.
+ */
+async function disableAuthAccess(
+  auth: ReturnType<typeof getAuth>,
+  email: string
+): Promise<BulkSignupDisableAuthResult> {
+  let users: Awaited<ReturnType<typeof auth.getUsers>>;
+  try {
+    users = await auth.getUsers([{ email }]);
+  } catch {
+    return { kind: "lookup_error" };
+  }
+  if (users.users.length === 0) return { kind: "not_found" };
+
+  const uids: string[] = [];
+  for (const user of users.users) {
+    try {
+      await auth.updateUser(user.uid, { disabled: true });
+    } catch {
+      // Buscar por correo devuelve como mucho una cuenta, asi que esto es el caso entero:
+      // la cuenta existe y sigue abierta. Un cierre parcial no se reporta como cierre.
+      return { kind: "update_error" };
+    }
+    uids.push(user.uid);
+  }
+  return { kind: "disabled", uids };
+}
 
 /**
  * RF_41, RF_42: sin tope automatico de altas, esta es la unica contencion ante un enlace
  * filtrado. Desactiva accesos; NO borra pedidos ni historial de dinero.
+ *
+ * La decision entera vive en `community-containment.ts` y aqui solo queda leer, ejecutar y
+ * pasar por el nucleo lo que Auth conteste. Dos motivos, los dos por fallos de esta callable:
+ *
+ * 1. El instante se toma UNA vez. Antes se llamaba a `new Date()` dentro del bucle, asi que
+ *    cada tienda quedaba sellada con un milisegundo distinto y la misma operacion no tenia
+ *    fecha con la que auditarse.
+ * 2. Quien decide quien quedo desactivado es el informe, no este bucle. El sello del documento
+ *    va SIEMPRE —es escritura propia—, pero un bloqueo escrito no es un acceso cerrado.
  */
 export const disableCommunitySignupsInRange = onCall(async (request) => {
   const actor = actorFrom(request);
@@ -359,14 +427,26 @@ export const disableCommunitySignupsInRange = onCall(async (request) => {
     .where("communityJoinedAt", "<=", toIso)
     .get();
 
-  const disabled: string[] = [];
-  for (const doc of snap.docs) {
-    await doc.ref.update({ debtBlockedAt: new Date().toISOString() });
-    const users = await auth.getUsers([{ email: String(doc.data()?.contactEmail ?? "") }]).catch(() => null);
-    for (const user of users?.users ?? []) await auth.updateUser(user.uid, { disabled: true });
-    disabled.push(doc.id);
+  const plan = planBulkSignupDisable({
+    sellers: snap.docs.map(containmentSellerFrom),
+    communityId,
+    fromIso,
+    toIso,
+    nowIso: new Date().toISOString()
+  });
+
+  const authResults: { sellerId: string; result: BulkSignupDisableAuthResult }[] = [];
+  for (const action of plan.disable) {
+    await db.collection("sellers").doc(action.sellerId).update(action.sellerUpdate);
+    // Sin correo el acceso no se puede ni buscar: no se intenta, y el informe lo cuenta fallido.
+    if (action.contactEmail === null) continue;
+    authResults.push({
+      sellerId: action.sellerId,
+      result: await disableAuthAccess(auth, action.contactEmail)
+    });
   }
-  return { disabled };
+
+  return summarizeBulkSignupDisable({ plan, authResults });
 });
 
 /** RF_11: cambiar de comunidad no lo decide ni la tienda ni el lider. */

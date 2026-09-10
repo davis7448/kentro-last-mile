@@ -69,7 +69,9 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, setCommunityLeaderStatus, setCommunityLinkStatus } from "@/lib/firebase/auth";
+import { disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, setCommunityLeaderStatus, setCommunityLinkStatus } from "@/lib/firebase/auth";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, buildBulkSignupDisableView, type BulkSignupDisableOutcome, type BulkSignupDisableView } from "@/lib/community-view";
+import { canBulkDisableCommunitySignups, type Actor } from "../../functions/src/community-access";
 import { buildCommunityStats, dateAxisLabel, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
@@ -95,7 +97,7 @@ import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWal
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, CashSnapshot, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
+import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -3906,16 +3908,157 @@ function StoreTariffCard() {
 
 
 /**
+ * Los limites del dia en hora de Cali, en instantes UTC.
+ *
+ * El rango se elige con dos `input type="date"`, que dan un dia suelto sin huso. Mandarlo tal
+ * cual desplazaria la contencion cinco horas: una tienda que entro a las 8 de la noche quedo
+ * grabada con la fecha del dia siguiente en UTC. Se normaliza aqui, y ademas asi los dos
+ * extremos viajan en `Z`, que es como estan escritas las fechas de ingreso contra las que el
+ * servidor las compara.
+ */
+const caliDayStartIso = (date: string) => new Date(`${date}T00:00:00.000-05:00`).toISOString();
+const caliDayEndIso = (date: string) => new Date(`${date}T23:59:59.999-05:00`).toISOString();
+
+/** Como se titula el desenlace. `partial` y `none` NO se pintan como un exito. */
+const BULK_DISABLE_OUTCOME_COPY: Record<BulkSignupDisableOutcome, { title: string; tone: string }> = {
+  contained: { title: "Contencion completa: todos los accesos alcanzados quedaron cerrados", tone: "text-acid" },
+  partial: { title: "Contencion parcial: quedan accesos abiertos", tone: "text-rust" },
+  none: { title: "Ningun acceso quedo cerrado", tone: "text-rust" }
+};
+
+/**
+ * Los cuatro repartos del informe, cada uno con su rotulo. El orden es el de la lectura: que
+ * se cerro, que fallo, que quedo fuera del filtro y a cuantas alcanzo la operacion.
+ *
+ * No hay una quinta casilla con un total, y no es un olvido: "3 cerradas y 17 fallidas" NO es
+ * "20 procesadas". Sumarlas es exactamente el fallo mudo que T32 cerro en el servidor, y desde
+ * una pantalla se vuelve a abrir sin que nada se ponga rojo.
+ */
+const BULK_DISABLE_COUNT_COPY = [
+  { key: "disabled", title: "Accesos cerrados", hint: "constan cerrados en la cuenta" },
+  { key: "failed", title: "Fallidas", hint: "su acceso SIGUE abierto" },
+  { key: "untouched", title: "Intactas", hint: "el filtro las dejo fuera" },
+  { key: "blocked", title: "Alcanzadas", hint: "selladas en su ficha por el rango" }
+] as const;
+
+/**
+ * El informe de una contencion, tal cual lo devolvio el servidor.
+ *
+ * Se pinta entero: los cuatro recuentos por separado, cada motivo con su rotulo y las tiendas
+ * de cada grupo por su nombre, para que el administrador pueda ir a por las que quedaron
+ * abiertas. Sin redondear y sin agrupar dos motivos bajo un mismo texto — el reparto lo hace
+ * `buildBulkSignupDisableView`, que esta probado, y aqui no se recalcula nada.
+ */
+function BulkSignupDisableReportCard({
+  view,
+  sellerName
+}: {
+  view: BulkSignupDisableView;
+  sellerName: (sellerId: string) => string;
+}) {
+  const outcome = BULK_DISABLE_OUTCOME_COPY[view.outcome];
+  const nothingReached = view.counts.blocked === 0;
+
+  return (
+    <div className="mt-3 grid gap-3 rounded-2xl bg-panel p-3">
+      <div>
+        <p className={`text-sm font-semibold ${outcome.tone}`}>{outcome.title}</p>
+        <p className="mt-1 text-xs text-ink-60">
+          Rango consultado: {formatDateTime(view.fromIso)} — {formatDateTime(view.toIso)}
+        </p>
+      </div>
+
+      {/* Los cuatro recuentos, cada uno por su lado. Aqui no se suma nada. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {BULK_DISABLE_COUNT_COPY.map((count) => (
+          <div key={count.key} className="rounded-2xl bg-field p-3">
+            <p className={`tabular text-lg font-bold ${count.key === "failed" && view.counts.failed > 0 ? "text-rust" : ""}`}>
+              {view.counts[count.key]}
+            </p>
+            <p className="text-xs font-semibold">{count.title}</p>
+            <p className="text-xs text-ink-60">{count.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      {nothingReached && (
+        <p className="text-xs text-ink-60">
+          El rango elegido no alcanzo a ninguna tienda de esta comunidad: no habia acceso que cerrar.
+          Comprueba las fechas en las que estuvo circulando el enlace.
+        </p>
+      )}
+
+      {view.disabled.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold">Accesos cerrados</p>
+          <ul className="mt-1 grid gap-1">
+            {view.disabled.map((entry) => (
+              <li key={entry.sellerId} className="text-xs text-ink-60">
+                {sellerName(entry.sellerId)} · {entry.authUids.length === 1 ? "1 cuenta" : `${entry.authUids.length} cuentas`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view.failures.map((group) => (
+        <div key={group.reason}>
+          <p className="text-xs font-semibold text-rust">
+            {group.label} · <span className="tabular">{group.count}</span>
+          </p>
+          <ul className="mt-1 grid gap-1">
+            {group.sellerIds.map((sellerId) => (
+              <li key={sellerId} className="text-xs text-ink-60">{sellerName(sellerId)}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {view.skipped.map((group) => (
+        <div key={group.reason}>
+          <p className="text-xs font-semibold">
+            {group.label} · <span className="tabular">{group.count}</span>
+          </p>
+          <ul className="mt-1 grid gap-1">
+            {group.sellerIds.map((sellerId) => (
+              <li key={sellerId} className="text-xs text-ink-60">{sellerName(sellerId)}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Comunidades, para el administrador.
  *
  * Muestra lo que hace falta para gobernarlas sin abrir la consola de Firebase: quien las lidera,
  * que precio cobran hoy, si su enlace admite altas y si alguna disparo el aviso de captacion
  * masiva. El aviso se descarta sin desactivar a nadie: un lider que capta en un evento lo
  * levanta sin hacer nada malo.
+ *
+ * Y aqui vive la contencion de un enlace filtrado (RF_41), que la spec declara el unico remedio
+ * cuando el enlace acaba donde no debia: elegir el rango en el que se filtro y cerrar de golpe
+ * el acceso de las tiendas que entraron por ahi. Solo el administrador la ve
+ * (`canBulkDisableCommunitySignups`), la misma decision que toma la callable por su cuenta.
  */
-function AdminCommunitiesPanel({ state }: { state: AppState }) {
+function AdminCommunitiesPanel({ state, session }: { state: AppState; session: Session }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Una contencion a la vez: es una emergencia, no una tarea de fondo.
+  const [containmentFor, setContainmentFor] = useState<string | null>(null);
+  const [containmentFrom, setContainmentFrom] = useState("");
+  const [containmentTo, setContainmentTo] = useState("");
+  const [containmentBusy, setContainmentBusy] = useState(false);
+  const [containmentError, setContainmentError] = useState<string | null>(null);
+  const [containment, setContainment] = useState<BulkSignupDisableView | null>(null);
+
+  const actor: Actor = { uid: session.id, role: session.role };
+
+  // El informe viene con ids: sin nombre, el administrador no sabe a por cual ir.
+  const sellerName = (sellerId: string) =>
+    state.sellers.find((seller) => seller.id === sellerId)?.name ?? sellerId;
 
   const act = async (id: string, run: () => Promise<unknown>) => {
     setBusy(id);
@@ -3926,6 +4069,50 @@ function AdminCommunitiesPanel({ state }: { state: AppState }) {
       setError(cause instanceof Error ? cause.message : "No se pudo completar la accion.");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const openContainment = (communityId: string) => {
+    setContainment(null);
+    setContainmentError(null);
+    setContainmentFrom("");
+    setContainmentTo("");
+    setContainmentFor(containmentFor === communityId ? null : communityId);
+  };
+
+  const runContainment = async (community: Community) => {
+    if (!containmentFrom || !containmentTo) {
+      setContainmentError("Elige el rango de fechas en el que estuvo circulando el enlace.");
+      return;
+    }
+    const fromIso = caliDayStartIso(containmentFrom);
+    const toIso = caliDayEndIso(containmentTo);
+    // Cuantas alcanza, segun lo que ya hay en pantalla. Es una estimacion y se dice como tal:
+    // quien manda es el informe que devuelve el servidor.
+    const alcanzadas = state.sellers.filter(
+      (seller) =>
+        seller.communityId === community.id &&
+        !!seller.communityJoinedAt &&
+        seller.communityJoinedAt >= fromIso &&
+        seller.communityJoinedAt <= toIso
+    ).length;
+    const confirmado = window.confirm(
+      `Cerrar el acceso de las tiendas que entraron por el enlace de ${community.name} entre ${containmentFrom} y ${containmentTo}?\n\n` +
+        `Aqui se ven ${alcanzadas} tiendas en ese rango. Sus pedidos y su historial de dinero quedan intactos: ` +
+        "solo se cierra el acceso, y reabrirlo despues es cuenta por cuenta."
+    );
+    if (!confirmado) return;
+
+    setContainmentBusy(true);
+    setContainmentError(null);
+    setContainment(null);
+    try {
+      const report = await disableCommunitySignupsInRange({ communityId: community.id, fromIso, toIso });
+      setContainment(buildBulkSignupDisableView(report));
+    } catch (cause) {
+      setContainmentError(cause instanceof Error ? cause.message : "No se pudo completar la contencion.");
+    } finally {
+      setContainmentBusy(false);
     }
   };
 
@@ -3949,6 +4136,10 @@ function AdminCommunitiesPanel({ state }: { state: AppState }) {
             community.massSignupAlertAt &&
             (!community.massSignupAlertDismissedAt || community.massSignupAlertDismissedAt < community.massSignupAlertAt);
           const stores = state.sellers.filter((seller) => seller.communityId === community.id).length;
+          // RF_41: la contencion la dispara el administrador, no el lider — ni el de esta comunidad,
+          // que es justo quien mas motivos tendria para querer tapar una fuga de su propio enlace.
+          const puedeContener = canBulkDisableCommunitySignups(actor, community.id);
+          const contencionAbierta = containmentFor === community.id;
           return (
             <div key={community.id} className="rounded-2xl border border-white/10 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -4003,7 +4194,70 @@ function AdminCommunitiesPanel({ state }: { state: AppState }) {
                     Descartar aviso
                   </button>
                 )}
+                {puedeContener && (
+                  <button
+                    type="button"
+                    onClick={() => openContainment(community.id)}
+                    className="focus-ring rounded-full bg-field px-4 py-2 text-xs font-semibold text-rust hover:bg-white/10"
+                  >
+                    {contencionAbierta ? "Cerrar el control" : "Contener enlace filtrado"}
+                  </button>
+                )}
               </div>
+
+              {/* RF_41: el control solo existe para quien puede ejecutarlo. */}
+              {puedeContener && contencionAbierta && (
+                <div className="mt-3 rounded-2xl bg-field p-3">
+                  <p className="text-sm font-semibold">Contener el enlace filtrado</p>
+                  <p className="mt-1 text-xs text-ink-60">
+                    Cierra de una vez el acceso de las tiendas que entraron por este enlace dentro del
+                    rango que elijas. Sus pedidos y su historial de dinero quedan intactos; reabrir el
+                    acceso despues es cuenta por cuenta.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <label className="grid gap-1 text-xs font-semibold text-ink-60">
+                      Desde
+                      <input
+                        type="date"
+                        value={containmentFrom}
+                        onChange={(event) => setContainmentFrom(event.target.value)}
+                        className="focus-ring rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-normal text-fg"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-ink-60">
+                      Hasta
+                      <input
+                        type="date"
+                        value={containmentTo}
+                        onChange={(event) => setContainmentTo(event.target.value)}
+                        className="focus-ring rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-normal text-fg"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={containmentBusy}
+                      onClick={() => void runContainment(community)}
+                      className="focus-ring rounded-full border border-rust/30 bg-panel px-4 py-2 text-xs font-semibold text-rust disabled:opacity-50"
+                    >
+                      {containmentBusy ? "Cerrando accesos..." : "Cerrar los accesos del rango"}
+                    </button>
+                  </div>
+                  {containmentError && (
+                    <p className="mt-3 rounded-2xl border border-rust/20 bg-rust/10 p-3 text-xs text-rust">
+                      {containmentError}
+                    </p>
+                  )}
+                  {containmentBusy && (
+                    <p className="mt-3 text-xs text-ink-60">
+                      Cerrando los accesos uno a uno. No cierres la pantalla: el informe con lo que
+                      quedo cerrado y lo que no llega al terminar.
+                    </p>
+                  )}
+                  {containment && !containmentBusy && (
+                    <BulkSignupDisableReportCard view={containment} sellerName={sellerName} />
+                  )}
+                </div>
+              )}
             </div>
           );
         }}
@@ -4217,7 +4471,7 @@ function communitySlug(state: AppState, communityId: string): string {
   return seller?.communitySignupSlug ?? communityId;
 }
 
-function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, sellerFilter, historyStart, searchingHistory, onStartDate, onEndDate, onStatusFilter, onSellerFilter, onSelectRange, periodStats = null, periodStatsError = null, view = "operations" }: { state: AppState; setState: (state: AppState) => void; onNavigate: (view: AppView) => void; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; sellerFilter: string; historyStart?: string; searchingHistory?: boolean; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSellerFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; view?: AppView }) {
+function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, sellerFilter, historyStart, searchingHistory, onStartDate, onEndDate, onStatusFilter, onSellerFilter, onSelectRange, periodStats = null, periodStatsError = null, view = "operations" }: { state: AppState; setState: (state: AppState) => void; session: Session; onNavigate: (view: AppView) => void; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; sellerFilter: string; historyStart?: string; searchingHistory?: boolean; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSellerFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; view?: AppView }) {
   const [adminOrderTab, setAdminOrderTab] = useState<"operation" | "failed">("operation");
   const [adminFailedCategoryFilter, setAdminFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
   // Antes esto eran ~14 recorridos completos de `state.orders` en cada render (con dos
@@ -4375,7 +4629,7 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
             <AdminUsersPanel state={state} setState={setState} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Comunidades" summary={`${state.communities.length} con enlace propio`}>
-            <AdminCommunitiesPanel state={state} />
+            <AdminCommunitiesPanel state={state} session={session} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Lideres logisticos" summary={`${state.drivers.length} activos`}>
           <Card>
@@ -11783,7 +12037,7 @@ export function OperationsApp() {
     if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
     if (session.role === "community_leader") return <CommunityLeaderView state={viewState} session={session} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
     if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
-    return <AdminView view={activeView} state={viewState} setState={setState} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
+    return <AdminView view={activeView} state={viewState} setState={setState} session={session} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
   }, [activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;

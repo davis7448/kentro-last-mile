@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "phase": "verify",
+  "phase": "implement",
   "activeSpec": {
     "file": "specs/001_lider_de_comunidad.md",
     "status": "approved"
   },
-  "activeTask": "T28",
+  "activeTask": "T29",
   "tasks": {
     "T1": {
       "requirements": [
@@ -121,7 +121,7 @@
         "functions/src/orders.ts",
         "functions/src/order-corrections.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T10": {
@@ -168,7 +168,7 @@
         "functions/src/roles.ts",
         "functions/src/index.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T13": {
@@ -230,7 +230,7 @@
         "functions/src/community-signup.ts",
         "src/lib/community-signup.test.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T17": {
@@ -245,7 +245,7 @@
         "functions/src/community-signup.ts",
         "src/lib/community-signup.test.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T18": {
@@ -257,7 +257,7 @@
         "src/lib/community-view.ts",
         "src/lib/community-view.test.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T19": {
@@ -272,7 +272,7 @@
         "functions/src/contact-form.ts",
         "functions/src/store-webhook.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T20": {
@@ -303,7 +303,7 @@
         "functions/src/community-stats.ts",
         "functions/src/index.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T22": {
@@ -316,7 +316,7 @@
         "firestore.rules",
         "firestore.indexes.json"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T23": {
@@ -327,7 +327,7 @@
       "files": [
         "src/lib/firebase/state-store.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T24": {
@@ -363,7 +363,7 @@
         "src/components/operations-app.tsx",
         "src/lib/firebase/auth.ts"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T26": {
@@ -377,7 +377,7 @@
         "src/app/registro/[slug]/page.tsx",
         "src/app/registro/[slug]/signup-form.tsx"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T27": {
@@ -389,7 +389,7 @@
       "files": [
         "src/components/operations-app.tsx"
       ],
-      "testWritten": true,
+      "testWritten": false,
       "done": true
     },
     "T28": {
@@ -403,7 +403,257 @@
       ],
       "testWritten": true,
       "done": false,
-      "blocked": "RNF_01 MEDIDO Y NO SE CUMPLE (10-09-2026): el lider baja un asiento de cashback por pedido -- 100 pedidos/100 docs, 10.000 pedidos/10.000 docs (2,67 MB). La suscripcion de wallet de community_leader en state-store.ts no tiene ventana ni limite. Cifras en src/lib/community-cashback-entries.test.ts (bloque T28) y en docs/rendimiento.md. Arreglarlo cae FUERA del alcance de T28 y pide tarea nueva en fase implement. RNF_02 si esta cubierto y verde."
+      "blocked": "RNF_01 MEDIDO Y NO SE CUMPLE (10-09-2026): el lider baja un asiento de cashback por pedido -- 100 pedidos/100 docs, 10.000 pedidos/10.000 docs (2,67 MB). La suscripcion de wallet de community_leader en state-store.ts no tiene ventana ni limite. Cifras en src/lib/community-cashback-entries.test.ts (bloque T28) y en docs/rendimiento.md. Arreglarlo cae FUERA del alcance de T28: lo recoge T42, que al cerrarse desbloquea esta. RNF_02 si esta cubierto y verde."
+    },
+    "T29": {
+      "requirements": [
+        "RF_07",
+        "RF_08"
+      ],
+      "files": [
+        "functions/src/community-signup-doc.ts",
+        "functions/src/community-signup.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T30": {
+      "requirements": [
+        "RF_10"
+      ],
+      "files": [
+        "functions/src/community-signup-validate.ts",
+        "functions/src/community-signup.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T31": {
+      "requirements": [
+        "RF_41",
+        "RF_42"
+      ],
+      "files": [
+        "functions/src/community-containment.ts",
+        "src/lib/community-containment.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T32": {
+      "requirements": [
+        "RF_41",
+        "RF_42",
+        "RF_53"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "functions/src/community-containment.ts",
+        "src/lib/community-containment.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T33": {
+      "requirements": [
+        "RF_49"
+      ],
+      "files": [
+        "functions/src/settlement-math.ts",
+        "src/lib/settlement-math.test.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T34": {
+      "requirements": [
+        "RF_34"
+      ],
+      "files": [
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts",
+        "src/components/operations-app.tsx"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T35": {
+      "requirements": [
+        "RF_44"
+      ],
+      "files": [
+        "functions/src/community-access.ts",
+        "functions/src/orders.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T36": {
+      "requirements": [
+        "RF_11"
+      ],
+      "files": [
+        "functions/src/community-access.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T37": {
+      "requirements": [
+        "RF_51"
+      ],
+      "files": [
+        "functions/src/community-access.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T38": {
+      "requirements": [
+        "RF_46"
+      ],
+      "files": [
+        "functions/src/community-stats-math.ts",
+        "functions/src/community-stats.ts",
+        "src/lib/community-stats.test.ts",
+        "src/components/operations-app.tsx"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T39": {
+      "requirements": [
+        "RNF_04",
+        "RF_28",
+        "RF_40"
+      ],
+      "files": [
+        "functions/src/community-pricing.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T40": {
+      "requirements": [
+        "RF_04",
+        "RF_16"
+      ],
+      "files": [
+        "functions/src/community-slug.ts",
+        "functions/src/community-pricing.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-slug.test.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T41": {
+      "requirements": [
+        "RF_27",
+        "RF_32"
+      ],
+      "files": [
+        "functions/src/community-access.ts",
+        "src/lib/community-access.test.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts",
+        "src/components/operations-app.tsx"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T42": {
+      "requirements": [
+        "RNF_01"
+      ],
+      "files": [
+        "src/lib/firebase/state-store.ts",
+        "src/lib/community-cashback-entries.test.ts",
+        "docs/rendimiento.md"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T43": {
+      "requirements": [
+        "RF_49"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/firebase/auth.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T44": {
+      "requirements": [
+        "RF_41",
+        "RF_42"
+      ],
+      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/components/operations-app.tsx",
+        "functions/src/community-access.ts",
+        "src/lib/community-access.test.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T45": {
+      "requirements": [
+        "RF_14",
+        "RF_16"
+      ],
+      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/components/operations-app.tsx",
+        "functions/src/community-access.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T46": {
+      "requirements": [
+        "RF_11"
+      ],
+      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/components/operations-app.tsx",
+        "functions/src/community-access.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T47": {
+      "requirements": [
+        "RF_35"
+      ],
+      "files": [
+        "functions/src/community-floor-trigger.ts",
+        "functions/src/index.ts",
+        "functions/src/community-pricing.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
     }
   },
   "testCommand": "npm test",

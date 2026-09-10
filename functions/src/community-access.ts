@@ -83,6 +83,25 @@ export function canReadSellerFinancials(actor: Actor, seller: SellerLike): boole
   return false;
 }
 
+/**
+ * RF_41: la contencion de un enlace filtrado la dispara el administrador, no el lider.
+ *
+ * Es SU enlace el que se filtro y son SUS tiendas las que entraron, asi que el lider es quien
+ * mas incentivo tiene para tapar el rastro: cerrar en bloque decenas de accesos se queda del
+ * lado del administrador, igual que revocar el enlace (RF_05), que tampoco es suyo.
+ *
+ * `communityId` entra en la firma y no concede nada —un administrador la desactiva sea cual
+ * sea, tambien una que no conoce—. Esta para que interfaz, servidor y reglas hablen del mismo
+ * par actor/comunidad, como en `canReadCommunityStats`. Y la aridad es la que es a proposito:
+ * RF_42 dice que el historial de dinero de esas cuentas no se toca, asi que la decision no
+ * puede llegar a depender de que las tiendas "no deban nada".
+ */
+export function canBulkDisableCommunitySignups(actor: Actor, communityId: string): boolean {
+  // Se nombra para dejar constancia de que se recibe y se descarta, no por descuido.
+  void communityId;
+  return isAdmin(actor);
+}
+
 /** RF_11: cambiar de comunidad no lo decide ni la tienda ni el lider. */
 export function canReassignSellerCommunity(actor: Actor): boolean {
   return isAdmin(actor);

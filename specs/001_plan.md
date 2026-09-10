@@ -55,6 +55,8 @@ Cuatro cosas comprobadas leyendo el codigo, no supuestas. Cambian el diseno:
 | `functions/src/wallet-entries.ts` *(modificar)* | Sigue siendo la unica fuente de verdad del dinero de un pedido. Pasa a leer el precio congelado del pedido y a emitir el asiento de cashback llamando a `community-pricing`. **No** se le copia la formula. |
 | `functions/src/settlement-math.ts` *(modificar)* | `settlementTotals` acepta el nuevo tipo de dueno. |
 | `functions/src/order-corrections-plan.ts` *(modificar)* | El plan de correccion incluye el cashback: compensa si el corte esta pagado, recalcula si esta pendiente (RF_24, RF_25). Sigue siendo puro, asi que `dryRun` sigue sin poder divergir de la aplicacion. |
+| `functions/src/community-signup-doc.ts` **(nuevo, T29)** | `buildSignupSellerDoc`: el documento de tienda que escribe el registro publico. Se extrae de `registerSellerBySlug` porque ahi dentro no se puede probar (RF_07, RF_08) y es el punto donde queda constancia permanente de por que enlace entro cada tienda. Puro. |
+| `functions/src/community-containment.ts` **(nuevo, T31)** | `planBulkSignupDisable`: a quien alcanza la desactivacion en bloque de un rango y —tan importante como eso— que deja intacto (RF_41, RF_42). Puro. Es el nucleo del unico remedio que existe ante un enlace filtrado, y hoy no tiene ninguna prueba. |
 
 ### Capa de servidor (Firestore, auth, transacciones)
 
@@ -70,6 +72,8 @@ Cuatro cosas comprobadas leyendo el codigo, no supuestas. Cambian el diseno:
 | `functions/src/orders.ts` *(modificar)* | `createManualOrder` congela precio; `createSettlement` y `updateSettlementStatus` admiten cortes de lider; **`closedAt` pasa a escribirse en todos los cierres**, que es lo que hace viable el eje de cierre de 4.5. |
 | `functions/src/index.ts`, `shopify.ts`, `onstock-webhook.ts`, `contact-form.ts` *(modificar)* | Congelar el precio al crear el pedido, por el mismo helper. |
 | `functions/src/roles.ts` *(modificar)* | Nuevo rol y su reclamo `communityId`. |
+| `functions/src/community-order-pricing.ts` *(creado en T19)* | El helper unico de congelado que llaman los siete puntos de creacion. No estaba en este arbol; se anade para que el mapa refleje el codigo. |
+| `functions/src/community-floor-trigger.ts` **(nuevo, RF_35)** | Disparador de la elevacion al piso. Ver 4.7. |
 
 ### Cliente
 
@@ -80,10 +84,31 @@ Cuatro cosas comprobadas leyendo el codigo, no supuestas. Cambian el diseno:
 | `storage.rules` *(modificar)* | Subida del logo del lider: solo el suyo, con limite de tamano. |
 | `src/lib/types.ts` *(modificar)* | Tipos nuevos y campos anadidos. |
 | `src/lib/community-view.ts` **(nuevo)** | Derivaciones puras para el panel del lider (rotulos de eje, % de entrega con denominador, "cero real" vs "sin datos"). Probable sin React. |
-| `src/components/operations-app.tsx` *(modificar)* | `CommunityLeaderView` nueva y la seccion de comunidades en admin. |
+| `src/components/operations-app.tsx` *(modificar)* | `CommunityLeaderView` nueva y la seccion de comunidades en admin. **Pendiente y decidido construir (ver 2.1):** desactivacion en bloque (RF_41), carga de logo (RF_14, RF_16), reasignacion de tienda (RF_11), cashback causado en la lista de comunidades (RF_34) y corte de lider en liquidaciones (RF_49). |
 | `src/lib/firebase/state-store.ts` *(modificar)* | Alcance del rol nuevo: **no** descarga pedidos; solo su comunidad, sus tiendas y sus cortes. |
-| `src/lib/firebase/auth.ts` *(modificar)* | Envoltorios de las callables nuevas. |
+| `src/lib/firebase/auth.ts` *(modificar)* | Envoltorios de las callables nuevas. **Faltan tres** —`disableCommunitySignupsInRange`, `setCommunityLogo`, `reassignSellerCommunity` (2.1)— mas el tipo de corte de lider en `createFirebaseSettlement` (T43). `raiseCommunityPricesToFloor` no lleva envoltorio: la resuelve el trigger de 4.7. |
 | `firestore.rules`, `firestore.indexes.json` *(modificar)* | Reglas e indices. |
+
+### 2.1 La superficie de cliente que falta (hallazgo de `/sdd-analyze`, 10-09-2026)
+
+Cuatro callables estan **desplegadas y sin un solo llamador**: no hay envoltorio en
+`src/lib/firebase/auth.ts` ni control en la interfaz. El backend existe, la funcionalidad no.
+
+| Callable | Requisito | Consecuencia de que no exista |
+|---|---|---|
+| `disableCommunitySignupsInRange` | RF_41, RF_42 | La spec la declara **el unico remedio ante un enlace filtrado**, y hoy un administrador real no puede ejecutarla. Es el hueco mas caro de la lista. |
+| `setCommunityLogo` | RF_14, RF_16 | La marca del lider es una historia de usuario entera; el enlace se pinta siempre con la marca de la plataforma. |
+| `reassignSellerCommunity` | RF_11 | Solo un administrador puede reasignar, y ninguno puede. |
+| `raiseCommunityPricesToFloor` | RF_35 | Ver 4.7: no lo llama nadie, ni cliente ni servidor. |
+
+A esto se suman dos huecos que no son de cableado sino de implementacion: la lista de comunidades del
+admin **no muestra el cashback causado** que pide RF_34, y `LiquidationRow.role` solo admite
+`"seller" | "driver"`, asi que la pantalla de liquidaciones **no puede crear un corte de
+`community_leader`** aunque `createSettlement` lo acepte — el "pagado" del lider es cero por
+construccion (RF_49).
+
+**Decision del 10-09-2026: se construyen las cuatro**, RF_41 primero por ser el remedio unico. Sin
+esto, cerrar el Definition of Done dejaria requisitos MUST sin poder ejecutarse.
 
 ## 3. Modelo de datos
 
@@ -195,9 +220,11 @@ pedido guarda ambos numeros y el panel del lider muestra un contador de "pedidos
 la tarifa de zona supera tu precio" (RF_29 y 4.5). El lider ve por que no cobro, en vez de ver menos
 dinero sin explicacion.
 
-La elevacion al piso **no** reescribe el documento en esta funcion: la escritura la hace el callable
-de administracion cuando el admin sube la base, para que la funcion siga siendo pura y para que el
-aviso al lider (RF_35) salga una sola vez y no en cada lectura.
+La elevacion al piso **no** reescribe el documento en esta funcion: la funcion se queda pura y la
+escritura la hace un disparador aparte, para que el aviso al lider (RF_35) salga una sola vez y no en
+cada lectura. **Cual es ese disparador se decide en 4.7**, porque la version anterior de este plan
+afirmaba que lo hacia "el callable de administracion cuando el admin sube la base" y eso era falso:
+ese callable existe y no lo llama nadie.
 
 ### 4.2 Congelado al crear el pedido (`freezeOrderPricing`)
 
@@ -285,6 +312,43 @@ existen:
 
 El aviso de captacion masiva **no bloquea** (RF_13): marca la comunidad y las altas, y sigue.
 
+### 4.7 Quien dispara la elevacion al piso (RF_35)
+
+**El problema.** `raiseCommunityPricesToFloor` (`functions/src/communities.ts:292`) esta escrita,
+desplegada y **sin un solo llamador en todo el repo**. Y la tarifa base no la escribe ningun callable:
+la escribe el cliente, directo a `settings/app`, en el autoguardado de
+`src/lib/firebase/state-store.ts:293`. De modo que RF_35 —"MUST elevar automaticamente los precios que
+queden por debajo de la base y MUST notificarselo al lider"— no esta implementado de punta a punta.
+
+**Dos opciones y por que se descarta la primera.**
+
+1. *Llamada explicita desde el guardado de ajustes.* El cliente, tras escribir `settings/app`, invoca
+   el callable. Es la de menos piezas, pero deja la correccion **a merced del navegador**: si la
+   pestana se cierra, la red falla o el guardado sale por otro camino, la subida de base queda escrita
+   y los precios de comunidad NO se elevan. El sintoma es que Kentro cobra por debajo de su costo, en
+   silencio y sin fecha de caducidad. Es exactamente el modo de fallo que la regla de oro #5 describe:
+   no falla, no avisa, solo muestra menos dinero del que se debe.
+2. *Trigger `onDocumentUpdated` sobre `settings/app`.* **Elegida.** Se dispara escriba quien escriba
+   —el autoguardado de hoy, un script de mantenimiento manana, una edicion a mano en la consola— y no
+   se puede saltar desde el cliente. El coste es una invocacion por escritura de ajustes, que son
+   raras.
+
+**Como se comporta el trigger.**
+
+- Compara tarifas **antes y despues**. Si ninguna base **sube**, termina sin escribir: una bajada de
+  base no puede subirle el precio a nadie, y el resto de campos de `settings/app` (que son muchos) no
+  tienen nada que ver con esto.
+- Por cada comunidad con un precio por debajo de la base nueva, eleva ese concepto al piso, deja
+  entrada en el historial de precios (RF_39: quien, cuando, de cuanto a cuanto, desde cuando) con
+  autor `system:floor` y marca el aviso que la interfaz del lider muestra (RF_35).
+- **La elevacion al piso es la unica subida exenta de los ocho dias** (RF_40), porque el plazo dejaria
+  a Kentro cobrando por debajo de su costo durante ocho dias. Aplica de inmediato.
+- **No hay recursion**: escribe en `communities`, nunca en `settings/app`.
+- **Es idempotente**: correr el trigger dos veces con las mismas tarifas no produce una segunda
+  entrada de historial, porque el segundo pase ya no encuentra precios por debajo del piso.
+- La base que usa es la **global**, no la de zona, por lo que ya explica 4.1: la de zona depende del
+  pedido y se resuelve al congelar, con su contador propio para que el cashback cero nunca sea mudo.
+
 ## 5. Estrategia de testing
 
 Convencion del repo, respetada: las pruebas viven en `src/lib/<modulo>.test.ts` e importan el codigo
@@ -309,9 +373,23 @@ prueba, y el auditor no tiene que adivinar.
 | `src/lib/community-cashback-entries.test.ts` | RF_22, RF_23, RF_26 y la no regresion sin comunidad |
 | `src/lib/community-corrections.test.ts` | RF_24, RF_25 |
 | `src/lib/community-stats.test.ts` | RF_29, RF_30, RF_46, RF_47, RF_48 |
-| `src/lib/community-access.test.ts` | RF_05, RF_06, RF_11, RF_12, RF_27, RF_31, RF_34, RF_50, RF_51, RF_52 |
-| `src/lib/community-signup.test.ts` | RF_07, RF_08, RF_09, RF_10, RF_13, RF_41, RF_42, RF_43, RF_45, RF_53 |
-| `src/lib/community-view.test.ts` | RF_01, RF_14, RF_15, RF_16, RF_32, RF_33, RF_39, RF_40, RF_44, RF_49 |
+| `src/lib/community-access.test.ts` | RF_05, RF_06, RF_11, RF_12, RF_27, RF_31, RF_34, RF_44, RF_50, RF_51, RF_52 |
+| `src/lib/community-signup.test.ts` | RF_07, RF_08, RF_09, RF_10, RF_13, RF_43, RF_45 |
+| `src/lib/community-containment.test.ts` **(nuevo, T31/T32)** | RF_41, RF_42, RF_53 |
+| `src/lib/community-view.test.ts` | RF_01, RF_14, RF_15, RF_16, RF_32, RF_33, RF_39, RF_40 |
+| `src/lib/settlement-math.test.ts` | RF_26, RF_49 (reparto causado/pagado, T33) |
+| `src/lib/community-pricing.test.ts` *(anadido)* | RNF_04 y RF_40 (T39), RF_35 (T47) |
+| `src/lib/community-view.test.ts` *(anadido)* | RF_34 (T34) y las filas de corte de lider (T43) |
+| `src/lib/community-cashback-entries.test.ts` *(anadido)* | RNF_01 (T28, T42) |
+
+**Los RNF tambien entran en la tabla.** No estaban, y RNF_01 es justo el que se midio y fallo: un
+indice del auditor que omite los no funcionales no es un indice.
+
+Tres movimientos respecto a la version anterior de esta tabla, para que siga sirviendo de indice al
+auditor: **RF_44** pasa a `community-access.test.ts` (su predicado vive en `community-access.ts`),
+**RF_49** a `settlement-math.test.ts` (el reparto causado/pagado es aritmetica de cortes) y
+**RF_41/RF_42/RF_53** salen de `community-signup.test.ts` al archivo nuevo de contencion, que es donde
+esta su nucleo.
 
 **Que se simula y como.** Nada de relojes globales: toda funcion que dependa del tiempo recibe el
 instante como parametro, que es el patron que ya usa `dandaDeliveredFeeCop` con `deliveredAtIso`.
@@ -350,5 +428,19 @@ anotado como paso manual del Definition of Done, no disfrazado de prueba automat
 |---|---|
 | Olvidar uno de los seis puntos de creacion | Un unico helper `freezeOrderPricing` y una prueba por cada camino. Si falta uno, el sintoma es silencioso: el lider no cobra. |
 | La linea 156 de `wallet-entries.ts` anula el precio de fallido | Prueba dedicada que falla si vuelve a pisarse. |
-| El panel del lider degrada como degrado el del admin | RNF_01 se mide antes de dar por hecha la tarea, comparando la cuenta de documentos con 100 y con 10.000 pedidos. |
+| El panel del lider degrada como degrado el del admin | RNF_01 se mide antes de dar por hecha la tarea, comparando la cuenta de documentos con 100 y con 10.000 pedidos. **Medido el 10-09-2026: NO se cumple** (100 pedidos/100 documentos, 10.000/10.000, 2,67 MB). Ver la correccion de abajo. |
+| `getWalletForContext` no es el espejo que su comentario dice ser | No tiene rama de `community_leader` y cae al fallback `getCollection("walletEntries")`: **la coleccion entera**. Hoy queda tapado porque la suscripcion mete `wallet` en `skip`, pero es la divergencia carga-inicial/listener que este proyecto ya documenta, y contra las reglas seria un 403. |
+
+| Alta automatica sin tope (decision de negocio) | Aviso + revocacion + desactivacion en bloque. Documentado como riesgo aceptado en la spec. |
+
+### Correccion sobre RNF_01 (10-09-2026)
+
+La suscripcion de wallet del lider (`src/lib/firebase/state-store.ts:468`) baja **un asiento por
+pedido de la comunidad**, sin ventana ni limite. Lo que este plan no vio es que **se puede eliminar,
+no solo acotar**: `CommunityLeaderView` no lee `state.wallet` en ningun punto — el cashback causado
+llega agregado del servidor por `getCommunityStats` y el pagado sale de `state.settlements`.
+
+Y los dos sitios a tocar **no** son los que dice la trampa habitual del proyecto:
+`getOrdersForContext` ya devuelve `[]` para este rol (`state-store.ts:940`). El par real es la
+**suscripcion** (`:468`) y **`getWalletForContext`** (`:956-965`), que hoy no distingue este rol.
 | Alta automatica sin tope (decision de negocio) | Aviso + revocacion + desactivacion en bloque. Documentado como riesgo aceptado en la spec. |

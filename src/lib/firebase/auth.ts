@@ -2,6 +2,7 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import type { BulkSignupDisableReport } from "../../../functions/src/community-containment";
 import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { clearFirebaseLocalCache, getFirebaseClient } from "./client";
 
@@ -598,6 +599,21 @@ export async function setCommunityLeaderStatus(input: { communityId: string; sta
   if (!client) throw new Error("Firebase no esta configurado.");
   const callable = httpsCallable(getFunctions(client.app, "us-central1"), "setCommunityLeaderStatus");
   return (await callable(input)).data;
+}
+
+/**
+ * RF_41, RF_42: la contencion de un enlace filtrado. Cierra accesos de las tiendas que entraron
+ * por el en un rango; NO borra pedidos ni historial de dinero.
+ *
+ * Devuelve el informe ENTERO —lo cerrado, lo fallido con su motivo, lo intacto con el suyo— y
+ * no el viejo `{ disabled: string[] }`: la lista de desactivadas a secas es exactamente lo que
+ * hacia leer como exito una operacion en la que no se cerro ni un acceso.
+ */
+export async function disableCommunitySignupsInRange(input: { communityId: string; fromIso: string; toIso: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "disableCommunitySignupsInRange");
+  return (await callable(input)).data as BulkSignupDisableReport;
 }
 
 export async function dismissMassSignupAlert(input: { communityId: string }) {
