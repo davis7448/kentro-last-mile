@@ -403,7 +403,7 @@
       ],
       "testWritten": true,
       "done": false,
-      "blocked": "RNF_01 exige medir contra produccion con una comunidad real; no existe ninguna todavia."
+      "blocked": "RNF_01 MEDIDO Y NO SE CUMPLE (10-09-2026): el lider baja un asiento de cashback por pedido -- 100 pedidos/100 docs, 10.000 pedidos/10.000 docs (2,67 MB). La suscripcion de wallet de community_leader en state-store.ts no tiene ventana ni limite. Cifras en src/lib/community-cashback-entries.test.ts (bloque T28) y en docs/rendimiento.md. Arreglarlo cae FUERA del alcance de T28 y pide tarea nueva en fase implement. RNF_02 si esta cubierto y verde."
     }
   },
   "testCommand": "npm test",

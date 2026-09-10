@@ -137,20 +137,52 @@ momento; las reglas se lo prohiben y `getOrdersForContext` devuelve `[]` para el
 llegan agregadas del servidor por `getCommunityStats`, que solo hace `count()` y `sum()`.
 
 Lo que si descarga: su comunidad (1 documento), las tiendas de su comunidad (N, decenas como
-mucho) y sus propios cortes y asientos de cashback. Con 20 tiendas eso son del orden de
-decenas de documentos, no miles.
+mucho), sus cortes y **un asiento de cashback por cada pedido de la comunidad**. Ese ultimo es
+el problema: ver abajo.
 
-**Medicion pendiente.** RNF_01 pide comprobar contra datos reales que la cuenta de documentos
-que baja el navegador es la MISMA con 100 y con 10.000 pedidos en el periodo. No se ha podido
-medir todavia porque no existe ninguna comunidad en produccion: hace falta crear un lider de
-prueba con tiendas y volumen. El procedimiento es el de siempre:
+### RNF_01 NO se cumple: medido el 10 de septiembre de 2026
+
+| Pedidos en el periodo | Asientos que baja el lider | Peso |
+|---|---|---|
+| 100 | 100 | 27,3 KB |
+| 10.000 | 10.000 | 2,67 MB |
+
+**Uno a uno con el volumen.** RNF_01 exige que las dos cifras fueran la misma y no lo son.
+
+El presupuesto "CERO pedidos" es cierto y enganoso a la vez. El lider efectivamente no consulta
+`orders`. Pero `buildWalletEntries` emite un asiento `community_cashback` por pedido cobrable, y
+la suscripcion de wallet del rol no los acota:
+
+```js
+// src/lib/firebase/state-store.ts
+{ key: "wallet", target: query(walletRef,
+    where("ownerType", "==", "community_leader"),
+    where("ownerId", "==", context.profileId)) }   // sin ventana, sin limite, sin settlementId
+```
+
+Comparese con el rol `seller`, dos bloques mas arriba, que si filtra `where("settlementId","==","")`.
+El lider no lo hace. Y aun anadiendolo la cuenta no se acota: todo asiento nace sin liquidar, asi
+que dentro de un periodo abierto siguen siendo 10.000. **Acotar esto pide una ventana de fecha o
+agregacion en servidor, no un filtro mas.** Es la misma deuda que ya tiene el admin con
+`walletEntries` (3,58 MB, el 68% de su carga) y por la misma razon.
+
+**Como se midio, y por que no contra produccion.** `buildWalletEntries` es puro y determinista, asi
+que la cuenta se deriva exacta sin datos reales: `src/lib/community-cashback-entries.test.ts`,
+bloque `T28 · RNF_01`, reproduce literalmente el filtro de la suscripcion y cuenta. Las cifras estan
+fijadas ahi, de modo que cualquier arreglo las pone en rojo y obliga a reescribirlas.
+
+Medirlo contra produccion habria exigido meter 10.000 pedidos sinteticos en la coleccion `orders`
+de la plataforma viva, que es la fuente de verdad del dinero: contaminaria `getPlatformPosition`,
+`getOrderStats`, los cortes y el panel del admin. **No se hizo a proposito.** Lo que si falta tomar
+contra produccion, cuando exista una comunidad real, es el tiempo hasta ver cifras en el perfil de
+red de las demas mediciones; la cuenta de documentos, que es la mitad sustantiva del requisito, ya
+esta respondida y la respuesta es que no cumple.
+
+El instrumento de siempre sigue sirviendo para esa segunda mitad:
 
 ```
 localStorage.setItem("kentro-perf","1")
 ```
-
-y comparar el contador entre dos periodos de volumen muy distinto. Si la cifra cambia con el
-volumen, alguien abrio una consulta de pedidos para este rol y hay que quitarla.
 
 **La trampa a vigilar aqui** es la de siempre en este proyecto: `getOrdersForContext` y los
 targets de `subscribeFirestoreState` son dos sitios y hay que tocar los dos. Si solo se toca

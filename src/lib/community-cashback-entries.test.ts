@@ -108,3 +108,76 @@ describe("T6 · asiento de cashback", () => {
     expect(find(entries, "we-ord-1-driver-delivery-pay")?.amountCop).toBe(9000);
   });
 });
+
+/**
+ * T28 · RNF_01 — cuantos documentos baja el navegador del lider segun el volumen.
+ *
+ * La spec pide comparar la cuenta con 100 y con 10.000 pedidos en el periodo y que sea la MISMA.
+ * No hace falta produccion para medirlo: los asientos son deterministas y `buildWalletEntries` es
+ * puro, asi que se puede contar exactamente lo que devolveria la consulta del rol.
+ *
+ * El filtro que se reproduce aqui es, literalmente, el de `subscribeFirestoreState`:
+ *   where("ownerType", "==", "community_leader"), where("ownerId", "==", <comunidad>)
+ * sin ventana de fecha, sin limite y —a diferencia del rol `seller`— sin `settlementId == ""`.
+ */
+const LEADER_ID = "com-1";
+
+/** Lo que devolveria la consulta de wallet del lider sobre un periodo de `n` pedidos. */
+function leaderWalletDocs(n: number): number {
+  let docs = 0;
+  for (let i = 0; i < n; i += 1) {
+    // Mezcla deliberadamente conservadora: 8 de cada 10 entregados, 2 fallidos cobrables.
+    // Cuantos menos asientos por pedido, mas favorable es la cuenta al codigo actual.
+    const status = i % 10 < 8 ? "delivered" : "failed";
+    const entries = buildWalletEntries(
+      order({ id: `ord-${i}`, status, failedCategory: status === "failed" ? "failed_visit" : undefined, communityPricing: frozen() }),
+      TARIFFS,
+      NOW
+    );
+    docs += entries.filter((e) => e.ownerType === "community_leader" && e.ownerId === LEADER_ID).length;
+  }
+  return docs;
+}
+
+describe("T28 · RNF_01: la carga del lider frente al volumen", () => {
+  it("RNF_01: mide la cuenta de documentos con 100 y con 10.000 pedidos", () => {
+    const con100 = leaderWalletDocs(100);
+    const con10k = leaderWalletDocs(10_000);
+
+    // Cifras medidas, no estimadas. Se fijan para que cualquier arreglo las mueva a la vista.
+    expect(con100).toBe(100);
+    expect(con10k).toBe(10_000);
+
+    /**
+     * ESTO ES EL INCUMPLIMIENTO DE RNF_01, no una curiosidad.
+     *
+     * El comentario de `subscribeFirestoreState` promete "CERO pedidos" y es cierto: el lider no
+     * consulta `orders`. Pero baja UN asiento de cashback POR PEDIDO, asi que la cuenta crece
+     * uno a uno con el volumen igual que si los bajara. Es la misma deuda que ya tiene el admin
+     * con `walletEntries` (3,58 MB, el 68% de su carga) y que docs/rendimiento.md llama
+     * "la proxima deuda".
+     *
+     * Cuando se acote la suscripcion, esta prueba se pone en rojo y hay que reescribirla con la
+     * cuenta nueva. Ese es exactamente su trabajo.
+     */
+    expect(con10k).toBe(con100 * 100);
+    expect(con10k).not.toBe(con100); // RNF_01 exige que fueran iguales.
+  });
+
+  it("RNF_01: el filtro por corte que usa la tienda reduciria la cuenta, pero no la acota", () => {
+    // `seller` filtra `settlementId == ""`; `community_leader` no. Aun anadiendolo, todo asiento
+    // nace sin liquidar, asi que dentro de un periodo abierto la cuenta es la misma.
+    const abiertos = (n: number) => {
+      let docs = 0;
+      for (let i = 0; i < n; i += 1) {
+        const entries = buildWalletEntries(order({ id: `ord-${i}`, communityPricing: frozen() }), TARIFFS, NOW);
+        docs += entries.filter(
+          (e) => e.ownerType === "community_leader" && e.ownerId === LEADER_ID && e.settlementId === ""
+        ).length;
+      }
+      return docs;
+    };
+    expect(abiertos(100)).toBe(100);
+    expect(abiertos(10_000)).toBe(10_000);
+  });
+});
