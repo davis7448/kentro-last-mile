@@ -11,6 +11,7 @@ import {
   settlementTotals,
   type WalletEntryDoc
 } from "../../functions/src/settlement-math";
+import { isLiquidationWalletType } from "../../functions/src/wallet-entries";
 
 function entry(over: Partial<WalletEntryDoc> & Pick<WalletEntryDoc, "id" | "ownerType" | "type" | "amountCop" | "orderId">): WalletEntryDoc {
   return { ownerId: "owner", description: "", createdAt: "2026-08-01T10:00:00.000Z", ...over };
@@ -199,5 +200,37 @@ describe("settlementTotals", () => {
     const totals = settlementTotals("seller", [entry({ id: "a", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" })], [], true);
     expect(totals.gmfCop).toBe(0);
     expect(totals.netCop).toBe(100000);
+  });
+});
+
+describe("T8 · cortes de lider de comunidad", () => {
+  const cashback = (id: string, amountCop: number): WalletEntryDoc => ({
+    id,
+    ownerType: "community_leader",
+    ownerId: "com-1",
+    orderId: id.replace("we-", "").split("-")[0],
+    type: "community_cashback",
+    amountCop,
+    description: "Cashback comunidad",
+    createdAt: "2026-09-05T10:00:00.000Z"
+  });
+
+  it("RF_26: el neto de un corte de lider es la suma de sus cashbacks, menos el 4x1000", () => {
+    // El cashback se gira por transferencia como cualquier otro pago, asi que paga GMF igual
+    // que el resto: 7.500 - 30. RF_26 pide el MISMO mecanismo, no uno privilegiado.
+    const totals = settlementTotals("community_leader", [cashback("we-o1-cb", 3000), cashback("we-o2-cb", 4500)]);
+    expect(totals.gmfCop).toBe(30);
+    expect(totals.netCop).toBe(7470);
+    expect(totals.driverPayCop).toBe(0);
+    expect(totals.codCop).toBe(0);
+  });
+
+  it("RF_26: una reversa de correccion resta del corte del lider", () => {
+    const totals = settlementTotals("community_leader", [cashback("we-o1-cb", 3000), cashback("we-o1-rev", -3000)]);
+    expect(totals.netCop).toBe(0);
+  });
+
+  it("RF_26: el cashback es un tipo liquidable, o quedaria como saldo abierto para siempre", () => {
+    expect(isLiquidationWalletType("community_cashback")).toBe(true);
   });
 });

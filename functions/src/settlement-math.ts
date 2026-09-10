@@ -16,7 +16,7 @@ import { gmfForPayout } from "./gmf";
 
 export type WalletEntryDoc = {
   id: string;
-  ownerType: "seller" | "driver" | "admin";
+  ownerType: "seller" | "driver" | "admin" | "community_leader";
   ownerId: string;
   orderId: string;
   type:
@@ -30,7 +30,8 @@ export type WalletEntryDoc = {
     | "platform_margin"
     | "cash_shortage"
     | "seller_abono"
-    | "gmf_tax";
+    | "gmf_tax"
+    | "community_cashback";
   amountCop: number;
   description: string;
   createdAt: string;
@@ -44,7 +45,7 @@ export type WalletEntryDoc = {
 
 export type SettlementDoc = {
   id: string;
-  kind: "seller" | "driver" | "supplier";
+  kind: "seller" | "driver" | "supplier" | "community_leader";
   ownerId: string;
   ownerName: string;
   startDate: string;
@@ -101,6 +102,12 @@ export type DriverCashSummary = {
 export type DriverCashInputs = {
   sellerEntries: WalletEntryDoc[];
   driverEntries: WalletEntryDoc[];
+  /**
+   * Asientos de cashback de lideres de comunidad. Opcional porque no interviene en el efectivo
+   * del domiciliario —que es de lo que trata este modulo—, pero SI en el recalculo de un corte
+   * pendiente: sin ellos, corregir un pedido vacia el corte del lider y le paga de menos.
+   */
+  leaderEntries?: WalletEntryDoc[];
   orderMeta: Map<string, SettlementOrderDoc>;
 };
 
@@ -200,7 +207,7 @@ export type SettlementTotals = {
  * porque el domiciliario no tiene asientos de recaudo propios.
  */
 export function settlementTotals(
-  kind: "seller" | "driver" | "supplier",
+  kind: "seller" | "driver" | "supplier" | "community_leader",
   entries: WalletEntryDoc[],
   relatedSellerEntries: WalletEntryDoc[] = [],
   paysInCash = false

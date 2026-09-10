@@ -1,10 +1,27 @@
 import { initializeApp } from "firebase-admin/app";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import crypto from "crypto";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
+export {
+  cancelScheduledCommunityPrice,
+  createCommunityLeader,
+  disableCommunitySignupsInRange,
+  dismissMassSignupAlert,
+  getMyStoreTariff,
+  raiseCommunityPricesToFloor,
+  reassignSellerCommunity,
+  scheduleCommunityPrice,
+  setCommunityLeaderStatus,
+  setCommunityLinkStatus,
+  setCommunityLogo,
+  setCommunitySlug
+} from "./communities";
+export { getCommunityBySlug, registerSellerBySlug } from "./community-signup";
+export { getCommunityStats } from "./community-stats";
 export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, getOrderAuditTrail, reconcileInventoryReservations, recordDriverCashReceipt, recordSellerAbono, recordSupplierAbono, rejectSellerPayout, requestSellerPayout, unassignMessengerFromOrders, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
 export { importShopifyOrder, shopifyComplianceWebhook, shopifyCustomersDataRequest, shopifyCustomersRedact, shopifyOAuthCallback, shopifyOAuthStart, shopifyPilotOAuthStart, shopifyShopRedact, shopifyTenantOAuthStart, syncShopifyHistoricalOrders } from "./shopify";
 export { mercadotiendaContactFormWebhook } from "./contact-form";
@@ -135,6 +152,12 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
 
   const docId = `shopify-${order.id}`;
   const orderRef = db.collection("orders").doc(docId);
+  const pricingSellerSnap = await db.collection("sellers").doc(sellerId).get();
+  const pricingStamp = await createCommunityPricingResolver(db)(
+    { id: sellerId, ...(pricingSellerSnap.data() ?? {}) },
+    undefined,
+    new Date().toISOString()
+  );
   await db.runTransaction(async (transaction) => {
     const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
     const existingData = existing.data() ?? {};
@@ -148,6 +171,9 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       shopifyNumericId: order.id,
       shopDomain,
       sellerId,
+      // Precio de comunidad congelado al crear (RF_21).
+      communityId: pricingStamp.communityId,
+      communityPricing: pricingStamp.communityPricing,
       driverId: existingData.driverId ?? null,
       cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",

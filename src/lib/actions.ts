@@ -15,7 +15,8 @@ const actorByRole: Record<Role, string> = {
   seller: "seller",
   seller_logistics: "seller_logistics",
   driver: "driver",
-  messenger: "messenger"
+  messenger: "messenger",
+  community_leader: "community_leader"
 };
 
 function audit(state: AppState, action: string, entity: string, entityId: string, summary: string): AuditEvent {

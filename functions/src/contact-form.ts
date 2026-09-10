@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onRequest, type Request } from "firebase-functions/v2/https";
@@ -224,6 +225,12 @@ export const mercadotiendaContactFormWebhook = onRequest(
 
     const sellerRef = db.collection("sellers").doc(mercadotiendaSellerId);
     const orderRef = db.collection("orders").doc(`cf7-${sampleRef.id}`);
+    const pricingSellerSnap = await sellerRef.get();
+    const pricingStamp = await createCommunityPricingResolver(db)(
+      { id: mercadotiendaSellerId, ...(pricingSellerSnap.data() ?? {}) },
+      undefined,
+      new Date().toISOString()
+    );
     const order = await db.runTransaction(async (transaction) => {
       const sellerSnap = await transaction.get(sellerRef);
       if (!sellerSnap.exists) throw new Error("Mercadotienda seller profile not found.");
@@ -232,6 +239,9 @@ export const mercadotiendaContactFormWebhook = onRequest(
       const orderDoc = {
         id: orderRef.id,
         trackingCode,
+        // Precio de comunidad congelado al crear (RF_21).
+        communityId: pricingStamp.communityId,
+        communityPricing: pricingStamp.communityPricing,
         shopifyOrderId: `MT-${sampleRef.id.slice(0, 8).toUpperCase()}`,
         sellerId: mercadotiendaSellerId,
         driverId: null,

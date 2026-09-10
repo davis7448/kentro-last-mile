@@ -1,0 +1,7 @@
+# La escotilla de emergencia es efimera y local: nunca se versiona.
+bypass.json
+
+# Los registros SI se versionan. Con varias cuentas trabajando sobre el mismo repo,
+# saber quien se salto el arnes y por que importa mas que el ruido en el diff.
+!*.log
+!logs/

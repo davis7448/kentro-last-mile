@@ -8,6 +8,7 @@ const SKU = "SKU-A";
 function baseState(inventory: InventoryItem[]): AppState {
   return {
     activeRole: "admin",
+    communities: [],
     cities: [],
     zones: [],
     sellers: [{ id: SELLER_ID, name: "Tienda", shopDomain: "tienda.myshopify.com", cityId: "city-cali", bankAccount: "0" }],

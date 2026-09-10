@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import { selectUnsettledWalletEntries } from "@/lib/finance";
 import { emptyState } from "@/lib/seed";
-import type { AppState, AuditEvent, CashSnapshot, City, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
+import type { AppState, AuditEvent, CashSnapshot, City, Community, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 
 const settingsPath = ["settings", "global"] as const;
@@ -143,11 +143,22 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
   const skipped = <T,>(key: WatchedKey, load: () => Promise<T[]>): Promise<T[]> => (skip?.has(key) ? Promise.resolve([]) : load());
   // seller_logistics ve lo operativo de su tienda igual que el vendedor, pero sin datos financieros.
   const storeRole = role === "seller" || role === "seller_logistics";
-  const [settingsSnapshot, cities, zones, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit, cashSnapshots] = await Promise.all([
+  const [settingsSnapshot, cities, zones, communities, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit, cashSnapshots] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
-    storeRole && context ? getOwnDocument<Seller>("sellers", context.profileId) : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
+    role === "admin"
+      ? getCollection<Community>("communities")
+      : role === "community_leader" && context
+        ? getOwnDocument<Community>("communities", context.profileId)
+        : Promise.resolve([]),
+    storeRole && context
+      ? getOwnDocument<Seller>("sellers", context.profileId)
+      : role === "community_leader" && context
+        // Solo las tiendas de SU comunidad. Las reglas ya lo exigen; esto evita ademas pedir
+        // la coleccion entera y comerse un 403 con la pantalla en blanco.
+        ? getCollection<Seller>("sellers", where("communityId", "==", context.profileId))
+        : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
     skipped("shopifyStores", () => storeRole && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([])),
     skipped("storeWebhookConfigs", () => storeRole && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([])),
     skipped("shopifyInstallRequests", () => storeRole && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([])),
@@ -190,6 +201,7 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
   return {
     ...base,
     activeRole: role,
+    communities,
     cities: cities ?? [],
     zones: zones ?? [],
     sellers: resolvedSellers ?? [],
@@ -445,6 +457,17 @@ export function subscribeFirestoreState(
           { key: "settlements", target: query(settlementRef, where("kind", "==", "seller"), where("ownerId", "==", context.profileId)) },
           { key: "payouts", target: query(payoutRef, where("sellerId", "==", context.profileId)) }
         ]
+      : context?.role === "community_leader"
+        ? [
+            /**
+             * Espejo de getOrdersForContext: CERO pedidos. El lider de comunidad solo necesita
+             * su propia comunidad, sus tiendas y sus cortes; las cifras llegan agregadas del
+             * servidor. Tocar este bloque sin tocar el otro hace que el primer pintado y el
+             * listener muestren cosas distintas.
+             */
+            { key: "wallet", target: query(walletRef, where("ownerType", "==", "community_leader"), where("ownerId", "==", context.profileId)) },
+            { key: "settlements", target: query(settlementRef, where("kind", "==", "community_leader"), where("ownerId", "==", context.profileId)) }
+          ]
       : context?.role === "driver"
         ? [
           // El lider bajaba 4.127 pedidos (~6,9 MB) — el 95% de la coleccion entera — en un movil
@@ -907,6 +930,14 @@ function mergeById<T extends { id: string }>(...groups: T[][]): T[] {
 }
 
 async function getOrdersForContext(context?: FirestoreStateContext): Promise<Order[]> {
+  /**
+   * El lider de COMUNIDAD no descarga ni un pedido, nunca. Sus cifras se agregan en el
+   * servidor (`getCommunityStats`) y su rol ni siquiera puede leer la coleccion: las reglas lo
+   * prohiben. Si algun dia alguien le abre aqui una consulta, el rol sale del presupuesto de
+   * carga de la plataforma el mismo dia — con veinte tiendas son decenas de miles de
+   * documentos para pintar seis numeros.
+   */
+  if (context?.role === "community_leader") return [];
   if (context?.role === "seller" || context?.role === "seller_logistics") return getWindowedOrders(context, where("sellerId", "==", context.profileId));
   if (context?.role === "driver") {
     const [assigned, free] = await Promise.all([

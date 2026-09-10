@@ -7,6 +7,7 @@ export function emptyState(): AppState {
     activeRole: "seller",
     cities: [{ id: "city-cali", name: "Cali", active: true }],
     zones: [],
+    communities: [],
     sellers: [],
     shopifyStores: [],
     storeWebhookConfigs: [],
@@ -42,6 +43,7 @@ export function emptyState(): AppState {
 export function seedState(): AppState {
   return {
     activeRole: "admin",
+    communities: [],
     cities: [
       { id: "city-cali", name: "Cali", active: true },
       { id: "city-med", name: "Medellin", active: false }

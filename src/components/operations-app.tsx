@@ -69,7 +69,8 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { getFirebaseOrderStats } from "@/lib/firebase/auth";
+import { dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, setCommunityLeaderStatus, setCommunityLinkStatus } from "@/lib/firebase/auth";
+import { buildCommunityStats, dateAxisLabel, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
@@ -2993,7 +2994,8 @@ const correctionEntryLabels: Record<string, string> = {
   platform_margin: "Margen de plataforma",
   cash_shortage: "Faltante de recaudo",
   seller_abono: "Abono a la tienda",
-  gmf_tax: "4x1000"
+  gmf_tax: "4x1000",
+  community_cashback: "Cashback lider de comunidad"
 };
 
 function correctionEntryLabel(type: string) {
@@ -3837,6 +3839,384 @@ function PickupScanModal({ state, driver, onClose, onCommit }: { state: AppState
   );
 }
 
+
+
+
+/**
+ * Tarifa vigente de la tienda, y la subida que su lider de comunidad haya programado.
+ *
+ * RF_28 exige que una subida se vea ANTES de aplicarse, con su fecha. Sin esta tarjeta, la
+ * tienda se enteraria del precio nuevo al recibir el cobro, que es justo lo que la spec prohibe.
+ */
+function StoreTariffCard() {
+  const [tariff, setTariff] = useState<Awaited<ReturnType<typeof fetchMyStoreTariff>> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyStoreTariff()
+      .then((data) => {
+        if (!cancelled) setTariff(data);
+      })
+      .catch((cause) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "No se pudo cargar tu tarifa.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) return <Card><p className="text-sm text-ink-60">Cargando tu tarifa...</p></Card>;
+  if (error) return <Card><p className="text-sm text-ink-60">{error}</p></Card>;
+  if (!tariff) return null;
+
+  const labels: Record<string, string> = {
+    sellerDeliveredFeeCop: "Flete por entrega",
+    sellerFailedFeeCop: "Cobro por fallido",
+    fulfillmentFeeCop: "Manejo desde bodega"
+  };
+
+  return (
+    <Card>
+      <p className="text-sm font-semibold">Tu tarifa</p>
+      {tariff.communityName && <p className="mt-1 text-xs text-ink-60">Comunidad: {tariff.communityName}</p>}
+      <div className="mt-3 space-y-2">
+        {Object.entries(labels).map(([field, label]) => {
+          const upcoming = tariff.scheduled?.[field];
+          return (
+            <div key={field} className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-sm text-ink-60">{label}</span>
+              <span className="tabular text-sm font-semibold">{formatCop(tariff.current[field] ?? 0)}</span>
+              {upcoming && (
+                <span className="w-full text-xs text-acid">
+                  Sube a {formatCop(upcoming.toCop)} el {upcoming.effectiveAt.slice(0, 10)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+
+/**
+ * Comunidades, para el administrador.
+ *
+ * Muestra lo que hace falta para gobernarlas sin abrir la consola de Firebase: quien las lidera,
+ * que precio cobran hoy, si su enlace admite altas y si alguna disparo el aviso de captacion
+ * masiva. El aviso se descarta sin desactivar a nadie: un lider que capta en un evento lo
+ * levanta sin hacer nada malo.
+ */
+function AdminCommunitiesPanel({ state }: { state: AppState }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const act = async (id: string, run: () => Promise<unknown>) => {
+    setBusy(id);
+    setError(null);
+    try {
+      await run();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo completar la accion.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (state.communities.length === 0) {
+    return (
+      <Card>
+        <p className="text-sm text-ink-60">
+          No hay comunidades todavia. Al crear un lider de comunidad se genera su enlace de
+          invitacion y las tiendas que entren por el quedan adscritas a el.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      {error && <p className="mb-3 rounded-2xl bg-field p-3 text-sm text-red-300">{error}</p>}
+      <PaginatedList items={state.communities} pageSize={8} empty={<p className="text-sm text-ink-60">Sin comunidades.</p>}>
+        {(community) => {
+          const pendingAlert =
+            community.massSignupAlertAt &&
+            (!community.massSignupAlertDismissedAt || community.massSignupAlertDismissedAt < community.massSignupAlertAt);
+          const stores = state.sellers.filter((seller) => seller.communityId === community.id).length;
+          return (
+            <div key={community.id} className="rounded-2xl border border-white/10 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-semibold">{community.name}</p>
+                <span className="text-xs text-ink-60">/registro/{community.slug}</span>
+              </div>
+              <p className="mt-1 text-sm text-ink-60">
+                {community.leaderName} · {stores} tiendas ·{" "}
+                {community.linkStatus === "active" ? "enlace activo" : "enlace revocado"} ·{" "}
+                {community.status === "active" ? "lider activo" : "lider desactivado"}
+              </p>
+              <p className="mt-1 text-xs text-ink-60">
+                Entrega {formatCop(community.pricing?.sellerDeliveredFeeCop ?? state.settings.sellerDeliveredFeeCop)} ·
+                Fallido {formatCop(community.pricing?.sellerFailedFeeCop ?? state.settings.sellerFailedFeeCop)} ·
+                Manejo {formatCop(community.pricing?.fulfillmentFeeCop ?? state.settings.fulfillmentFeeCop)}
+              </p>
+              {pendingAlert && (
+                <p className="mt-2 rounded-2xl bg-field p-3 text-xs">
+                  Captacion masiva detectada. Ninguna alta se bloqueo.
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy === community.id}
+                  onClick={() => act(community.id, () => setCommunityLinkStatus({
+                    communityId: community.id,
+                    linkStatus: community.linkStatus === "active" ? "revoked" : "active"
+                  }))}
+                  className="rounded-full bg-field px-4 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {community.linkStatus === "active" ? "Revocar enlace" : "Reactivar enlace"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy === community.id}
+                  onClick={() => act(community.id, () => setCommunityLeaderStatus({
+                    communityId: community.id,
+                    status: community.status === "active" ? "disabled" : "active"
+                  }))}
+                  className="rounded-full bg-field px-4 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {community.status === "active" ? "Desactivar lider" : "Reactivar lider"}
+                </button>
+                {pendingAlert && (
+                  <button
+                    type="button"
+                    disabled={busy === community.id}
+                    onClick={() => act(community.id, () => dismissMassSignupAlert({ communityId: community.id }))}
+                    className="rounded-full bg-field px-4 py-2 text-xs font-semibold disabled:opacity-60"
+                  >
+                    Descartar aviso
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        }}
+      </PaginatedList>
+    </Card>
+  );
+}
+
+
+/**
+ * Panel del lider de comunidad.
+ *
+ * No pinta ni un pedido, y no es una limitacion sino el diseno: sus cifras llegan agregadas del
+ * servidor (`getCommunityStats`) y su rol no puede leer la coleccion de pedidos. Lo que ve es
+ * el desempeno de sus tiendas y su propio cashback.
+ *
+ * Los tres ejes de fecha van ROTULADOS en cada bloque. Mezclarlos en silencio ya desvio cifras
+ * en esta plataforma, y aqui conviven de forma natural: los pedidos creados se cuentan por su
+ * fecha de creacion y las entregas y el dinero por la de cierre.
+ */
+function CommunityLeaderView({
+  state,
+  session,
+  startDate,
+  endDate,
+  onStartDate,
+  onEndDate
+}: {
+  state: AppState;
+  session: { role: Role; profileId: string };
+  startDate: string;
+  endDate: string;
+  onStartDate: (value: string) => void;
+  onEndDate: (value: string) => void;
+}) {
+  const [stats, setStats] = useState<CommunityStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const communityId = session.profileId;
+  const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchCommunityStats({ communityId, startDate, endDate })
+      .then((data) => {
+        if (cancelled) return;
+        setSellerNames(data.sellerNames ?? {});
+        // Lo PAGADO no se puede agregar en servidor sin denormalizar un campo en cada asiento,
+        // asi que se completa aqui con los cortes que este rol ya descarga. La aritmetica es la
+        // misma funcion pura en los dos lados, asi que no pueden divergir.
+        const paidCop = state.settlements
+          .filter((item) => item.kind === "community_leader" && item.ownerId === communityId)
+          .filter((item) => item.status === "paid" || item.status === "reconciled")
+          .reduce((total, item) => total + (Number(item.netCop) || 0), 0);
+        const raw = { ...(data.raw as unknown as RawCommunityAggregates), cashbackPaidCop: paidCop };
+        setStats(buildCommunityStats(raw));
+      })
+      .catch((cause) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "No se pudieron cargar las cifras.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId, startDate, endDate, state.settlements]);
+
+  const inviteUrl = typeof window !== "undefined" ? `${window.location.origin}/registro/${communitySlug(state, communityId)}` : "";
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Card><p className="text-sm text-ink-60">Cargando las cifras de tu comunidad...</p></Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <p className="text-sm font-semibold">No se pudieron cargar tus cifras</p>
+        <p className="mt-1 text-sm text-ink-60">{error}</p>
+      </Card>
+    );
+  }
+
+  if (!stats || stats.emptiness === "no_stores") {
+    // Comunidad vacia: en vez de una pantalla en blanco, el enlace para llenarla.
+    return (
+      <Card>
+        <p className="text-base font-semibold">Todavia no tienes tiendas</p>
+        <p className="mt-1 text-sm text-ink-60">
+          Comparte tu enlace de invitacion: quien se registre por el entra directo a tu comunidad.
+        </p>
+        {inviteUrl && <p className="mt-3 break-all rounded-2xl bg-field p-3 text-sm text-acid">{inviteUrl}</p>}
+      </Card>
+    );
+  }
+
+  const money = (value: number) => formatCop(value);
+  const rate = stats.totals.deliveryRate;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-ink-60">
+            Desde
+            <input type="date" value={startDate} onChange={(event) => onStartDate(event.target.value)} className="mt-1 block rounded-xl bg-field px-3 py-2 text-sm" />
+          </label>
+          <label className="text-xs text-ink-60">
+            Hasta
+            <input type="date" value={endDate} onChange={(event) => onEndDate(event.target.value)} className="mt-1 block rounded-xl bg-field px-3 py-2 text-sm" />
+          </label>
+        </div>
+        {inviteUrl && (
+          <p className="mt-4 break-all text-xs text-ink-60">
+            Tu enlace de invitacion: <span className="text-acid">{inviteUrl}</span>
+          </p>
+        )}
+      </Card>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Metric icon={<Boxes size={20} />} label={`Pedidos creados (${dateAxisLabel("created")})`} value={String(stats.totals.created)} />
+        <Metric icon={<Truck size={20} />} label={`Despachados (${dateAxisLabel("dispatched")})`} value={String(stats.totals.dispatched)} />
+        <Metric icon={<Check size={20} />} label={`Entregados (${dateAxisLabel("closed")})`} value={String(stats.totals.delivered)} />
+        <Metric icon={<X size={20} />} label={`Fallidos (${dateAxisLabel("closed")})`} value={String(stats.totals.failed)} />
+      </div>
+
+      <Card>
+        <p className="text-sm font-semibold">Tu cashback</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-ink-60">Causado ({dateAxisLabel("closed")})</p>
+            <p className="tabular text-2xl font-bold">{money(stats.totals.cashbackAccruedCop)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-60">Ya pagado</p>
+            <p className="tabular text-2xl font-bold">{money(stats.totals.cashbackPaidCop)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-60">Pendiente</p>
+            <p className="tabular text-2xl font-bold text-acid">{money(stats.totals.cashbackPendingCop)}</p>
+          </div>
+        </div>
+        {stats.totals.ordersWithoutCashbackByZoneFloor > 0 && (
+          // Que el cero tenga explicacion: si no, el lider cree que la plataforma le roba.
+          <p className="mt-3 rounded-2xl bg-field p-3 text-xs text-ink-60">
+            {stats.totals.ordersWithoutCashbackByZoneFloor} pedidos no generaron cashback porque la
+            tarifa de su zona supera el precio que fijaste.
+          </p>
+        )}
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold">
+          Entrega: {rate.percent === null ? "sin pedidos cerrados" : `${rate.percent.toFixed(1)}%`}
+          {rate.denominator > 0 && <span className="ml-2 text-xs font-normal text-ink-60">sobre {rate.denominator} cerrados</span>}
+        </p>
+        <p className="mt-1 text-xs text-ink-60">
+          {stats.totals.activeStores} tiendas activas · {stats.totals.inactiveStores} sin pedidos en el periodo
+        </p>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold">Como va cada tienda</p>
+        {stats.emptiness === "no_orders_in_period" ? (
+          <p className="mt-2 text-sm text-ink-60">Tus tiendas no movieron pedidos en este periodo.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="text-left text-xs text-ink-60">
+                <tr>
+                  <th className="py-2">Tienda</th>
+                  <th className="py-2">Creados</th>
+                  <th className="py-2">Despachados</th>
+                  <th className="py-2">Entregados</th>
+                  <th className="py-2">Fallidos</th>
+                  <th className="py-2">% entrega</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.byStore.map((row) => (
+                  <tr key={row.sellerId} className="border-t border-white/[0.06]">
+                    <td className="py-2">{sellerNames[row.sellerId] ?? row.sellerId}</td>
+                    <td className="tabular py-2">{row.created}</td>
+                    <td className="tabular py-2">{row.dispatched}</td>
+                    <td className="tabular py-2">{row.delivered}</td>
+                    <td className="tabular py-2">{row.failed}</td>
+                    <td className="tabular py-2">
+                      {row.deliveryRate.percent === null ? "—" : `${row.deliveryRate.percent.toFixed(0)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/** El nombre corto vive en la comunidad; el lider solo tiene su id hasta que se carga. */
+function communitySlug(state: AppState, communityId: string): string {
+  const seller = state.sellers.find((item) => item.communityId === communityId);
+  return seller?.communitySignupSlug ?? communityId;
+}
+
 function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, sellerFilter, historyStart, searchingHistory, onStartDate, onEndDate, onStatusFilter, onSellerFilter, onSelectRange, periodStats = null, periodStatsError = null, view = "operations" }: { state: AppState; setState: (state: AppState) => void; onNavigate: (view: AppView) => void; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; sellerFilter: string; historyStart?: string; searchingHistory?: boolean; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSellerFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; view?: AppView }) {
   const [adminOrderTab, setAdminOrderTab] = useState<"operation" | "failed">("operation");
   const [adminFailedCategoryFilter, setAdminFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
@@ -3993,6 +4373,9 @@ function AdminView({ state, setState, onNavigate, orderSearch, onOrderSearchChan
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Usuarios" summary="Altas, roles y accesos">
             <AdminUsersPanel state={state} setState={setState} />
+          </CollapsiblePanel>
+          <CollapsiblePanel flush title="Comunidades" summary={`${state.communities.length} con enlace propio`}>
+            <AdminCommunitiesPanel state={state} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Lideres logisticos" summary={`${state.drivers.length} activos`}>
           <Card>
@@ -5433,6 +5816,7 @@ function WalletPanel({ state }: { state: AppState }) {
                 <p className="text-right font-bold"><span className="tabular">{formatCop(balance.availableCop)}</span></p>
               </div>
               {state.activeRole === "seller" && <SellerPayoutRequest sellerId={seller.id} payouts={state.payouts} />}
+              {state.activeRole === "seller" && <StoreTariffCard />}
             </div>
           );
         }}
@@ -8626,7 +9010,8 @@ function walletEntryTypeLabel(type: WalletEntry["type"]) {
     payout: "Pago",
     seller_abono: "Abono a tienda",
     cash_shortage: "Faltante efectivo",
-    gmf_tax: "4x1000"
+    gmf_tax: "4x1000",
+    community_cashback: "Cashback lider de comunidad"
   };
   return labels[type] ?? type;
 }
@@ -11289,7 +11674,11 @@ export function OperationsApp() {
               ? claims.driverId ?? account?.profileId ?? `driver-${user.uid}`
               : claims.role === "messenger"
                 ? claims.messengerId ?? account?.profileId ?? `messenger-${user.uid}`
-                : account?.profileId ?? `admin-${user.uid}`;
+                : claims.role === "community_leader"
+                  // Para este rol, el "perfil" es su comunidad: es lo que filtra sus tiendas,
+                  // sus cortes y sus cifras.
+                  ? claims.communityId ?? account?.profileId ?? `com-${user.uid}`
+                  : account?.profileId ?? `admin-${user.uid}`;
         setSession({
           id: user.uid,
           email: user.email ?? account?.email ?? "",
@@ -11392,6 +11781,7 @@ export function OperationsApp() {
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
     if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} />;
     if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
+    if (session.role === "community_leader") return <CommunityLeaderView state={viewState} session={session} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
     if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
     return <AdminView view={activeView} state={viewState} setState={setState} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
   }, [activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);

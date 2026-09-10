@@ -24,6 +24,7 @@ import {
   settlementTotals,
   type WalletEntryDoc
 } from "./settlement-math";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import {
   buildWalletEntries,
   isLiquidationWalletType,
@@ -88,8 +89,14 @@ const closeOrderSchema = z.object({
 // startDate/endDate vacios = rango abierto. Un corte es el total de lo que se debe a la cuenta;
 // acotarlo por fechas dejaba fuera lo pendiente mas antiguo. Se conserva el filtro cuando el
 // llamante SI manda fechas, porque los cortes historicos se crearon asi.
+/**
+ * Estados de los que un pedido ya no sale por la via operativa. Definido arriba porque
+ * `closeOrder` lo necesita para sellar `closedAt`, que es el eje de fecha del dinero.
+ */
+const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+
 const settlementSchema = z.object({
-  kind: z.enum(["seller", "driver", "supplier"]),
+  kind: z.enum(["seller", "driver", "supplier", "community_leader"]),
   ownerId: z.string().min(1),
   startDate: z.string(),
   endDate: z.string(),
@@ -267,6 +274,37 @@ export const createManualOrder = onCall(async (request) => {
   const lines = normalizeOrderLines(input);
   const collapsed = summarizeOrderLines(lines);
   const movements = inventoryMovementsForOrder(collapsed);
+  /**
+   * RF_44: una tienda registrada por enlace entra a la app, pero no crea pedidos hasta tener
+   * ciudad, punto de recogida y cuenta bancaria. Sin eso no hay donde recoger ni a quien pagar.
+   *
+   * Se compara contra `false` EXPLICITO a proposito: las tiendas que ya existian no tienen el
+   * campo, y tratarlas como incompletas dejaria a toda la plataforma sin poder crear pedidos.
+   */
+  if (sellerData.onboardingComplete === false) {
+    const faltan = [
+      !sellerData.cityId ? "ciudad" : "",
+      !sellerData.pickupAddress ? "punto de recogida" : "",
+      !sellerData.bankAccount ? "cuenta bancaria" : ""
+    ].filter(Boolean);
+    throw new HttpsError(
+      "failed-precondition",
+      `Completa los datos de tu tienda antes de crear pedidos: ${faltan.join(", ") || "datos pendientes"}.`
+    );
+  }
+
+  /**
+   * El precio de comunidad se congela AQUI, antes de abrir la transaccion: son lecturas de
+   * otras colecciones y meterlas en el read-set del pedido no aporta nada. Un cambio de precio
+   * justo en este instante afecta al pedido siguiente, no a este.
+   */
+  const zoneSnap = input.zoneId ? await db.collection("zones").doc(input.zoneId).get() : null;
+  const pricingStamp = await createCommunityPricingResolver(db)(
+    { id: input.sellerId, ...sellerData },
+    zoneSnap?.data() ?? undefined,
+    now
+  );
+
   const order = await db.runTransaction(async (transaction) => {
     // Todas las lecturas antes de cualquier escritura (requisito de las transacciones).
     const inventoryIndex = movements.length > 0
@@ -307,6 +345,10 @@ export const createManualOrder = onCall(async (request) => {
       pickupPointName: typeof sellerData.pickupPointName === "string" && sellerData.pickupPointName.trim() ? sellerData.pickupPointName.trim() : String(sellerData.name ?? "Punto de recogida"),
       pickupAddress: typeof sellerData.pickupAddress === "string" ? sellerData.pickupAddress.trim() : "",
       evidence: [],
+      // Precio de comunidad congelado al crear: es lo que se cobrara al cerrar, pase lo que
+      // pase con la tarifa entretanto.
+      communityId: pricingStamp.communityId,
+      communityPricing: pricingStamp.communityPricing,
       createdAt: now,
       updatedAt: now
     });
@@ -966,6 +1008,7 @@ export const cancelOrder = onCall(async (request) => {
     const updated = stripUndefined({
       ...current,
       status: "cancelled",
+      closedAt: now,
       driverId: current.driverId ?? null,
       callNote: parsed.data.reason?.trim() || current.callNote,
       updatedAt: now
@@ -1120,6 +1163,12 @@ export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
     const nextOrder = stripUndefined({
       ...order,
       status: nextStatus,
+      /**
+       * Instante del cierre. Es el eje de fecha del dinero: las cifras de una comunidad
+       * agrupan entregados y fallidos por aqui, no por `createdAt`. Un pedido reabierto a
+       * `retry_pending` lo pierde, y vuelve a ganarlo cuando se cierre de nuevo.
+       */
+      closedAt: TERMINAL_STATUS.has(nextStatus) ? now : order.closedAt,
       failedReason: input.outcome === "failed" ? evidence.reason : order.failedReason,
       failedCategory: nextStatus === "failed" ? failedCategory : order.failedCategory,
       failedCategorySource: nextStatus === "failed" ? "driver" : order.failedCategorySource,
@@ -1174,7 +1223,11 @@ export const createSettlement = onCall(async (request) => {
   const isWithinRange = (entryDate: string) => isWithinSettlementRange(entryDate, input.startDate, input.endDate);
 
   const db = getFirestore();
-  const ownerCollection = input.kind === "seller" ? "sellers" : input.kind === "driver" ? "drivers" : "suppliers";
+  const ownerCollection =
+    input.kind === "seller" ? "sellers"
+    : input.kind === "driver" ? "drivers"
+    : input.kind === "community_leader" ? "communities"
+    : "suppliers";
   const ownerRef = db.collection(ownerCollection).doc(input.ownerId);
   const explicitEntryDocs = input.walletEntryIds && input.walletEntryIds.length > 0
     ? (await Promise.all(input.walletEntryIds.map((entryId) => db.collection("walletEntries").doc(entryId).get()))).filter((entry) => entry.exists)
@@ -1827,14 +1880,17 @@ export const recordSellerAbono = onCall(async (request) => {
  * en la misma invocacion, cargarlos UNA vez y reusarlos.
  */
 export async function loadDriverCashInputs(db: ReturnType<typeof getFirestore>, orderIds: string[]): Promise<DriverCashInputs> {
-  const [sellerEntrySnap, driverEntrySnap, orderSnaps] = await Promise.all([
+  const [sellerEntrySnap, driverEntrySnap, leaderEntrySnap, orderSnaps] = await Promise.all([
     db.collection("walletEntries").where("ownerType", "==", "seller").get(),
     db.collection("walletEntries").where("ownerType", "==", "driver").get(),
+    // Hace falta para que corregir un pedido no vacie el corte pendiente de su lider.
+    db.collection("walletEntries").where("ownerType", "==", "community_leader").get(),
     Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()))
   ]);
   return {
     sellerEntries: sellerEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
     driverEntries: driverEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
+    leaderEntries: leaderEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
     orderMeta: new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]))
   };
 }
@@ -1850,7 +1906,7 @@ async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, s
 
 function buildSettlement(
   id: string,
-  kind: "seller" | "driver" | "supplier",
+  kind: "seller" | "driver" | "supplier" | "community_leader",
   ownerId: string,
   ownerName: string,
   startDate: string,
@@ -1980,8 +2036,6 @@ const orderTransitionSchema = z.object({
 // lista de estados operativos validos existe UNA sola vez.
 export const OPERATIONAL_TARGET_STATUSES = ["address_risk", "ready_to_assign", "assigned", "call_pending", "scheduled", "picked_up", "in_route", "retry_pending"] as const;
 const OPERATIONAL_TARGET_STATUS = new Set<string>(OPERATIONAL_TARGET_STATUSES);
-const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
-
 // 512 MiB no es por memoria sino por CPU: en Cloud Functions la CPU va atada a la memoria, y
 // el arranque en frio medido contra produccion era de 2,33 s incluso en una funcion trivial.
 // Esta esta en la ruta caliente del domiciliario, que lo paga al cerrar el primer pedido del

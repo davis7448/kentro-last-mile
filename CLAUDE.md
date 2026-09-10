@@ -93,3 +93,15 @@ IndexedDB ya traía los datos en el primer render, así que el número de hooks 
 móvil sin caché el primer render salía por el `return` y el segundo ejecutaba un hook más → React #310
 y app muerta, solo para tiendas y solo en móvil. `react-hooks/rules-of-hooks` va como **error**;
 `exhaustive-deps` como aviso (3 pendientes, no rompen nada).
+
+## Arnes SDD
+Este repo trabaja bajo Spec Driven Development. Consulta el skill `/sdd` antes de escribir codigo.
+
+- **Constitucion:** `docs/constitution.md` — reglas que no se negocian (las 13 estan atadas a fallos
+  reales de este proyecto, no a teoria).
+- **Especificaciones:** `specs/NNN_feature.md`, en sintaxis EARS.
+- **Estado del ciclo:** `.sdd/state.json` (`phase`, spec y tarea activas, comando de pruebas).
+- **Flujo:** `/sdd-spec` -> `/sdd-plan` -> `/sdd-tasks` -> `/sdd-run` -> `/sdd-verify` -> `/sdd-audit`.
+
+Las escrituras de codigo de produccion estan bloqueadas hasta que exista una spec aprobada. La
+escotilla es `/sdd-bypass`, es efimera (`.sdd/bypass.json`, sin versionar) y su uso queda registrado.

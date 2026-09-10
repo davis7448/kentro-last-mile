@@ -101,7 +101,7 @@ export type PlanNote = { code: string; message: string };
 
 export type PlannedSettlement = {
   id: string;
-  kind: "seller" | "driver" | "supplier";
+  kind: "seller" | "driver" | "supplier" | "community_leader";
   ownerName: string;
   /** Lo que se escribe en el documento del corte. */
   patch: Record<string, unknown>;
@@ -340,6 +340,16 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
   });
 
   // --- Reconciliacion de asientos ---------------------------------------------------------
+  /**
+   * `closedAt` sigue al estado, porque es el eje de fecha con el que se agrupan las cifras de
+   * dinero de una comunidad. Volver a un estado operativo lo borra: un pedido reabierto no
+   * esta cerrado, y dejarselo puesto lo contaria como entrega de un periodo pasado.
+   */
+  if (toStatus) {
+    const CLOSED = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+    orderPatch.closedAt = CLOSED.has(toStatus) ? (order.closedAt ?? now) : DELETE_FIELD;
+  }
+
   const movesMoney = request.kind === "failed_to_delivered" || request.kind === "delivered_to_failed";
   const canonical = movesMoney ? buildWalletEntries(nextOrder, input.tariffs, now, input.productCostLines) : [];
   const canonicalById = new Map(canonical.map((entry) => [entry.id, entry]));
@@ -433,9 +443,19 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
       ...input.cashInputs.driverEntries.filter((entry) => !deletedIds.has(entry.id)),
       ...createdEntries.filter((entry) => entry.ownerType === "driver")
     ],
+    leaderEntries: [
+      ...(input.cashInputs.leaderEntries ?? []).filter((entry) => !deletedIds.has(entry.id)),
+      ...createdEntries.filter((entry) => entry.ownerType === "community_leader")
+    ],
     orderMeta: input.cashInputs.orderMeta
   };
-  const allAdjusted = [...adjustedInputs.sellerEntries, ...adjustedInputs.driverEntries];
+  // Los tres tipos de dueno entran en el recalculo. Dejar fuera al lider vaciaba su corte
+  // pendiente al corregir un solo pedido, y el sintoma habria sido cobrar de menos en silencio.
+  const allAdjusted = [
+    ...adjustedInputs.sellerEntries,
+    ...adjustedInputs.driverEntries,
+    ...(adjustedInputs.leaderEntries ?? [])
+  ];
 
   const settlementsToRecalculate: PlannedSettlement[] = [];
   for (const settlementId of pendingSettlementIds) {

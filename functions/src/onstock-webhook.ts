@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
@@ -253,6 +254,12 @@ export const onstockOrderWebhook = onRequest(
 
     const externalId = cleanId(incoming.id);
     const orderRef = db.collection("orders").doc(`onstock-${externalId}`);
+    const pricingSellerSnap = await db.collection("sellers").doc(onstockSellerId).get();
+    const pricingStamp = await createCommunityPricingResolver(db)(
+      { id: onstockSellerId, ...(pricingSellerSnap.data() ?? {}) },
+      undefined,
+      new Date().toISOString()
+    );
     const result = await db.runTransaction(async (transaction) => {
       const [existing, sellerSnap] = await Promise.all([
         transaction.get(orderRef),
@@ -273,6 +280,9 @@ export const onstockOrderWebhook = onRequest(
           || (incoming.order_number ? `#${incoming.order_number}` : `ONSTOCK-${externalId}`),
         shopifyNumericId: String(incoming.id),
         sellerId: onstockSellerId,
+        // Precio de comunidad congelado al crear (RF_21).
+        communityId: pricingStamp.communityId,
+        communityPricing: pricingStamp.communityPricing,
         driverId: null,
         cityId: "city-cali",
         customerName,

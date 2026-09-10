@@ -129,3 +129,29 @@ propio cambio y su propia verificación.
 **Búsqueda en servidor para líder y mensajero.** `findFirestoreOrders` ya soporta el scoping, pero
 la UI lo cierra a los roles con ventana. Abrirlo pediría seis índices más
 (`driverId`/`messengerId` × `trackingCode`/`shopifyOrderId`/`customerPhone`).
+
+## Lider de comunidad (rol nuevo, spec 001)
+
+**Presupuesto de diseno: CERO pedidos.** El rol no descarga la coleccion `orders` en ningun
+momento; las reglas se lo prohiben y `getOrdersForContext` devuelve `[]` para el. Sus cifras
+llegan agregadas del servidor por `getCommunityStats`, que solo hace `count()` y `sum()`.
+
+Lo que si descarga: su comunidad (1 documento), las tiendas de su comunidad (N, decenas como
+mucho) y sus propios cortes y asientos de cashback. Con 20 tiendas eso son del orden de
+decenas de documentos, no miles.
+
+**Medicion pendiente.** RNF_01 pide comprobar contra datos reales que la cuenta de documentos
+que baja el navegador es la MISMA con 100 y con 10.000 pedidos en el periodo. No se ha podido
+medir todavia porque no existe ninguna comunidad en produccion: hace falta crear un lider de
+prueba con tiendas y volumen. El procedimiento es el de siempre:
+
+```
+localStorage.setItem("kentro-perf","1")
+```
+
+y comparar el contador entre dos periodos de volumen muy distinto. Si la cifra cambia con el
+volumen, alguien abrio una consulta de pedidos para este rol y hay que quitarla.
+
+**La trampa a vigilar aqui** es la de siempre en este proyecto: `getOrdersForContext` y los
+targets de `subscribeFirestoreState` son dos sitios y hay que tocar los dos. Si solo se toca
+uno, el primer pintado y el listener muestran cosas distintas.

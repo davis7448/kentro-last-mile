@@ -1,0 +1,413 @@
+{
+  "version": 1,
+  "phase": "verify",
+  "activeSpec": {
+    "file": "specs/001_lider_de_comunidad.md",
+    "status": "approved"
+  },
+  "activeTask": "T28",
+  "tasks": {
+    "T1": {
+      "requirements": [
+        "RF_01"
+      ],
+      "files": [
+        "src/lib/types.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T2": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_04"
+      ],
+      "files": [
+        "functions/src/community-slug.ts",
+        "src/lib/community-slug.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T3": {
+      "requirements": [
+        "RF_17",
+        "RF_18",
+        "RF_19",
+        "RF_20",
+        "RF_35",
+        "RF_36"
+      ],
+      "files": [
+        "functions/src/community-pricing.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T4": {
+      "requirements": [
+        "RF_28",
+        "RF_38",
+        "RF_40",
+        "RF_54"
+      ],
+      "files": [
+        "functions/src/community-pricing.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T5": {
+      "requirements": [
+        "RF_21",
+        "RF_37"
+      ],
+      "files": [
+        "functions/src/community-pricing.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T6": {
+      "requirements": [
+        "RF_22",
+        "RF_23",
+        "RF_26",
+        "RNF_02"
+      ],
+      "files": [
+        "functions/src/wallet-entries.ts",
+        "src/lib/community-cashback-entries.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T7": {
+      "requirements": [
+        "RF_24",
+        "RF_25"
+      ],
+      "files": [
+        "functions/src/order-corrections-plan.ts",
+        "src/lib/community-corrections.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T8": {
+      "requirements": [
+        "RF_26",
+        "RF_49"
+      ],
+      "files": [
+        "functions/src/settlement-math.ts",
+        "functions/src/orders.ts",
+        "src/lib/settlement-math.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T9": {
+      "requirements": [
+        "RF_46"
+      ],
+      "files": [
+        "functions/src/orders.ts",
+        "functions/src/order-corrections.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T10": {
+      "requirements": [
+        "RF_05",
+        "RF_06",
+        "RF_11",
+        "RF_12",
+        "RF_27",
+        "RF_31",
+        "RF_34",
+        "RF_50",
+        "RF_51",
+        "RF_52"
+      ],
+      "files": [
+        "functions/src/community-access.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T11": {
+      "requirements": [
+        "RF_43",
+        "RF_45"
+      ],
+      "files": [
+        "functions/src/community-signup-validate.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T12": {
+      "requirements": [
+        "RF_05",
+        "RF_06",
+        "RF_50",
+        "RF_51"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "functions/src/roles.ts",
+        "functions/src/index.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T13": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_14",
+        "RF_15",
+        "RF_16"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "storage.rules",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T14": {
+      "requirements": [
+        "RF_18",
+        "RF_19",
+        "RF_27",
+        "RF_28",
+        "RF_35",
+        "RF_39",
+        "RF_54"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "src/lib/community-pricing.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T15": {
+      "requirements": [
+        "RF_09",
+        "RF_14",
+        "RF_15"
+      ],
+      "files": [
+        "functions/src/community-signup.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T16": {
+      "requirements": [
+        "RF_07",
+        "RF_08",
+        "RF_09",
+        "RF_10",
+        "RF_43",
+        "RF_45"
+      ],
+      "files": [
+        "functions/src/community-signup.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T17": {
+      "requirements": [
+        "RF_13",
+        "RF_41",
+        "RF_42",
+        "RF_53"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "functions/src/community-signup.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T18": {
+      "requirements": [
+        "RF_44"
+      ],
+      "files": [
+        "functions/src/orders.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T19": {
+      "requirements": [
+        "RF_21"
+      ],
+      "files": [
+        "functions/src/orders.ts",
+        "functions/src/index.ts",
+        "functions/src/shopify.ts",
+        "functions/src/onstock-webhook.ts",
+        "functions/src/contact-form.ts",
+        "functions/src/store-webhook.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T20": {
+      "requirements": [
+        "RF_29",
+        "RF_30",
+        "RF_46",
+        "RF_47",
+        "RF_48"
+      ],
+      "files": [
+        "functions/src/community-stats-math.ts",
+        "src/lib/community-stats.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T21": {
+      "requirements": [
+        "RF_29",
+        "RF_30",
+        "RF_46",
+        "RF_47",
+        "RF_48",
+        "RNF_01"
+      ],
+      "files": [
+        "functions/src/community-stats.ts",
+        "functions/src/index.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T22": {
+      "requirements": [
+        "RF_11",
+        "RF_31",
+        "RF_52"
+      ],
+      "files": [
+        "firestore.rules",
+        "firestore.indexes.json"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T23": {
+      "requirements": [
+        "RF_52",
+        "RNF_01"
+      ],
+      "files": [
+        "src/lib/firebase/state-store.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T24": {
+      "requirements": [
+        "RF_29",
+        "RF_30",
+        "RF_31",
+        "RF_32",
+        "RF_33",
+        "RF_40",
+        "RF_46",
+        "RNF_05"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T25": {
+      "requirements": [
+        "RF_05",
+        "RF_11",
+        "RF_12",
+        "RF_34",
+        "RF_50",
+        "RF_53",
+        "RNF_05"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/firebase/auth.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T26": {
+      "requirements": [
+        "RF_14",
+        "RF_15",
+        "RF_43",
+        "RNF_03"
+      ],
+      "files": [
+        "src/app/registro/[slug]/page.tsx",
+        "src/app/registro/[slug]/signup-form.tsx"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T27": {
+      "requirements": [
+        "RF_28",
+        "RF_40",
+        "RNF_04"
+      ],
+      "files": [
+        "src/components/operations-app.tsx"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T28": {
+      "requirements": [
+        "RNF_01",
+        "RNF_02"
+      ],
+      "files": [
+        "src/lib/community-cashback-entries.test.ts",
+        "docs/rendimiento.md"
+      ],
+      "testWritten": true,
+      "done": false,
+      "blocked": "RNF_01 exige medir contra produccion con una comunidad real; no existe ninguna todavia."
+    }
+  },
+  "testCommand": "npm test",
+  "deployUrl": null,
+  "activePlan": "specs/001_plan.md",
+  "activeTasks": "specs/001_tasks.md"
+}

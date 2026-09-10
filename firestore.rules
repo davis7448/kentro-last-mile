@@ -30,6 +30,18 @@ service cloud.firestore {
       return role() == "driver" && request.auth.token.driverId == driverId;
     }
 
+    // Lider de COMUNIDAD. Nada que ver con isDriver, que es el lider LOGISTICO.
+    function isCommunityLeader(communityId) {
+      return role() == "community_leader" && request.auth.token.communityId == communityId;
+    }
+
+    // Una tienda es de la comunidad del lider que consulta.
+    function sellerInMyCommunity(sellerId) {
+      return role() == "community_leader"
+        && exists(/databases/$(database)/documents/sellers/$(sellerId))
+        && get(/databases/$(database)/documents/sellers/$(sellerId)).data.communityId == request.auth.token.communityId;
+    }
+
     function isMessenger(messengerId) {
       return role() == "messenger" && request.auth.token.messengerId == messengerId;
     }
@@ -103,8 +115,28 @@ service cloud.firestore {
     }
 
     match /sellers/{sellerId} {
-      allow read: if isAdmin() || isStoreMember(sellerId);
+      // El lider de comunidad ve la ficha operativa de SUS tiendas. El saldo, la deuda y el
+      // recaudo no viven aqui: estan en walletEntries y settlements, que tiene cerrados.
+      allow read: if isAdmin() || isStoreMember(sellerId) || sellerInMyCommunity(sellerId);
+      // Ni la tienda ni su lider cambian de comunidad por su cuenta (RF_11).
       allow write: if isAdmin();
+    }
+
+    match /communities/{communityId} {
+      // Su lider la lee entera. Ninguna otra comunidad, ni siquiera de forma agregada (RF_52).
+      allow read: if isAdmin() || isCommunityLeader(communityId);
+      // Precios, marca y estado pasan SIEMPRE por callable: aqui no se escribe nunca.
+      allow write: if false;
+
+      match /priceHistory/{entryId} {
+        allow read: if isAdmin() || isCommunityLeader(communityId);
+        allow write: if false;
+      }
+    }
+
+    match /communitySlugs/{slug} {
+      // La resolucion del enlace publico la hace una callable sin sesion, con el SDK admin.
+      allow read, write: if false;
     }
 
     match /drivers/{driverId} {
@@ -141,6 +173,9 @@ service cloud.firestore {
         || isMessenger(resource.data.messengerId)
         || messengerBelongsToDriver(resource.data.messengerId)
         || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
+      // OJO: el lider de comunidad NO aparece aqui, y es deliberado. RF_31 le prohibe el
+      // detalle de un pedido y los datos del cliente final; sus cifras salen agregadas del
+      // servidor (getCommunityStats), sin que el navegador baje ni un pedido.
       allow create: if isAdmin() || sellerOrderCreate();
       // El ciclo de vida de los pedidos (status/driverId/evidence/etc.) se modifica SOLO por el
       // servidor via callables (admin SDK, que ignoran estas reglas, auditan y validan la
@@ -170,14 +205,18 @@ service cloud.firestore {
     match /walletEntries/{entryId} {
       allow read: if isAdmin()
         || (resource.data.ownerType == "seller" && isSeller(resource.data.ownerId))
-        || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId));
+        || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId))
+        // Su PROPIO cashback si; el saldo de sus tiendas no. RF_31 prohibe lo de las tiendas,
+        // no lo suyo: sin esto el lider no podria ver lo que se le debe.
+        || (resource.data.ownerType == "community_leader" && isCommunityLeader(resource.data.ownerId));
       allow write: if isAdmin();
     }
 
     match /settlements/{settlementId} {
       allow read: if isAdmin()
         || (resource.data.kind == "seller" && isSeller(resource.data.ownerId))
-        || (resource.data.kind == "driver" && isDriver(resource.data.ownerId));
+        || (resource.data.kind == "driver" && isDriver(resource.data.ownerId))
+        || (resource.data.kind == "community_leader" && isCommunityLeader(resource.data.ownerId));
       allow write: if isAdmin();
     }
 

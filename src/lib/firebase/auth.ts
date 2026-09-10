@@ -10,6 +10,8 @@ export type FirebaseSessionClaims = {
   sellerId?: string;
   driverId?: string;
   messengerId?: string;
+  /** Comunidad del lider de comunidad. Nada que ver con driverId (lider logistico). */
+  communityId?: string;
 };
 
 export async function ensureFirebaseSession(): Promise<User | null> {
@@ -36,7 +38,8 @@ export function subscribeFirebaseUser(onUser: (user: User | null, claims: Fireba
       role,
       sellerId: typeof token.claims.sellerId === "string" ? token.claims.sellerId : undefined,
       driverId: typeof token.claims.driverId === "string" ? token.claims.driverId : undefined,
-      messengerId: typeof token.claims.messengerId === "string" ? token.claims.messengerId : undefined
+      messengerId: typeof token.claims.messengerId === "string" ? token.claims.messengerId : undefined,
+      communityId: typeof token.claims.communityId === "string" ? token.claims.communityId : undefined
     });
   });
 }
@@ -537,4 +540,100 @@ export async function setFirebaseUserRole(uid: string, role: Role, profileId?: s
     driverId: role === "driver" ? profileId : undefined,
     messengerId: role === "messenger" ? profileId : undefined
   });
+}
+
+// --- Lider de comunidad -------------------------------------------------------------------
+
+/**
+ * Cifras de una comunidad. Se piden al servidor SIEMPRE, incluso para un periodo corto: el
+ * lider no descarga pedidos, ni uno. Ver `functions/src/community-stats.ts`.
+ */
+export async function fetchCommunityStats(input: { communityId: string; startDate: string; endDate: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getCommunityStats");
+  const result = await callable(input);
+  return result.data as { raw: Record<string, unknown>; stats: Record<string, unknown>; sellerNames: Record<string, string> };
+}
+
+export async function scheduleCommunityPrice(input: { communityId: string; field: string; amountCop: number }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "scheduleCommunityPrice");
+  return (await callable(input)).data;
+}
+
+export async function cancelScheduledCommunityPrice(input: { communityId: string; field: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "cancelScheduledCommunityPrice");
+  return (await callable(input)).data;
+}
+
+export async function setCommunitySlug(input: { communityId: string; slug: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "setCommunitySlug");
+  return (await callable(input)).data as { slug: string };
+}
+
+export async function createCommunityLeader(input: {
+  name: string; slug: string; leaderName: string; leaderEmail: string; leaderPhone: string; password: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "createCommunityLeader");
+  return (await callable(input)).data as { communityId: string; slug: string; uid: string };
+}
+
+export async function setCommunityLinkStatus(input: { communityId: string; linkStatus: "active" | "revoked" }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "setCommunityLinkStatus");
+  return (await callable(input)).data;
+}
+
+export async function setCommunityLeaderStatus(input: { communityId: string; status: "active" | "disabled" }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "setCommunityLeaderStatus");
+  return (await callable(input)).data;
+}
+
+export async function dismissMassSignupAlert(input: { communityId: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "dismissMassSignupAlert");
+  return (await callable(input)).data;
+}
+
+/** Publica: sin sesion. Solo devuelve la marca del enlace, para pintar la pantalla. */
+export async function fetchCommunityBySlug(slug: string) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getCommunityBySlug");
+  return (await callable({ slug })).data as { acceptsSignups: boolean; name?: string; logoPath?: string | null };
+}
+
+/** Publica: sin sesion. Crea la tienda ya operativa y adscrita a la comunidad del enlace. */
+export async function registerSellerBySlug(input: {
+  slug: string; email: string; password: string; responsibleName: string; phone: string; storeName: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "registerSellerBySlug");
+  return (await callable(input)).data as { sellerId: string; communityId: string };
+}
+
+/** RNF_04: la tarifa vigente de la propia tienda y la subida programada, si la hay. */
+export async function fetchMyStoreTariff() {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getMyStoreTariff");
+  return (await callable({})).data as {
+    communityId: string | null;
+    communityName?: string;
+    current: Record<string, number>;
+    scheduled: Record<string, { toCop: number; effectiveAt: string }> | null;
+  };
 }

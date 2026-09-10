@@ -1,4 +1,9 @@
-export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger";
+/**
+ * OJO con los dos "lideres": `driver` es el lider LOGISTICO (recoge y reparte) y
+ * `community_leader` es el lider de COMUNIDAD (agrupa tiendas y cobra cashback). No tienen
+ * ninguna relacion. En pantalla nunca se escribe "lider" a secas: ver `roleLabel`.
+ */
+export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger" | "community_leader";
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
@@ -51,6 +56,76 @@ export type Zone = {
   driverDeliveredPayCop?: number;
   driverFailedPayCop?: number;
 };
+export type CommunityPricingFields = {
+  sellerDeliveredFeeCop?: number;
+  sellerFailedFeeCop?: number;
+  fulfillmentFeeCop?: number;
+};
+
+/** Subida de precio programada. Las subidas esperan ocho dias; las bajadas entran ya. */
+export type ScheduledPriceChange = {
+  field: keyof CommunityPricingFields;
+  fromCop: number;
+  toCop: number;
+  effectiveAt: string;
+  scheduledBy: string;
+  scheduledAt: string;
+};
+
+export type CommunityPriceHistoryEntry = {
+  field: keyof CommunityPricingFields;
+  fromCop: number;
+  toCop: number;
+  effectiveAt: string;
+  actorUid: string;
+  actorRole: Role;
+  createdAt: string;
+};
+
+export type Community = {
+  id: string;
+  /** Nombre visible. No es unico: dos comunidades pueden llamarse igual. */
+  name: string;
+  /** Nombre corto del enlace. Este SI es unico. */
+  slug: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPhone: string;
+  /** URL publica del logo. La pantalla de registro se pinta SIN sesion y no puede firmar. */
+  logoPath?: string;
+  linkStatus: "active" | "revoked";
+  status: "active" | "disabled";
+  pricing: CommunityPricingFields;
+  /** Una programada como mucho por concepto: la segunda reemplaza a la primera. */
+  scheduled?: Partial<Record<keyof CommunityPricingFields, ScheduledPriceChange>>;
+  massSignupAlertAt?: string;
+  massSignupAlertDismissedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** communitySlugs/{slug}. `retiredAt` presente = slug viejo, valido 30 dias mas. */
+export type CommunitySlugDoc = {
+  communityId: string;
+  retiredAt?: string;
+};
+
+/**
+ * Precio congelado en el pedido al crearlo. Se guardan final Y base por concepto: el cashback
+ * es la resta de dos numeros que cambian por separado, y con los dos se puede auditar de donde
+ * salio. Ausente = pedido sin comunidad, que cobra la tarifa viva y no genera cashback.
+ */
+export type OrderCommunityPricing = {
+  communityId: string;
+  frozenAt: string;
+  sellerDeliveredFeeCop: number;
+  baseDeliveredFeeCop: number;
+  sellerFailedFeeCop: number;
+  baseFailedFeeCop: number;
+  fulfillmentFeeCop: number;
+  baseFulfillmentFeeCop: number;
+};
+
 export type Seller = {
   id: string;
   name: string;
@@ -68,6 +143,13 @@ export type Seller = {
    * Va como marca por cuenta y no fijo en codigo, porque la forma de pago cambia.
    */
   paysInCash?: boolean;
+  /** Comunidad a la que pertenece. Permanente salvo reasignacion de un administrador. */
+  communityId?: string;
+  communityJoinedAt?: string;
+  /** Por que enlace entro. Se conserva aunque el lider cambie su nombre corto. */
+  communitySignupSlug?: string;
+  /** Ciudad, punto de recogida y cuenta bancaria completos: sin esto no puede crear pedidos. */
+  onboardingComplete?: boolean;
 };
 export type ShopifyStore = {
   id: string;
@@ -245,11 +327,16 @@ export type Order = {
   evidence: Evidence[];
   createdAt: string;
   updatedAt: string;
+  /** Instante del cierre. Es el eje de fecha del dinero; se escribe en TODA transicion terminal. */
+  closedAt?: string;
+  /** Denormalizado al crear: sin el no se pueden agregar las cifras de una comunidad. */
+  communityId?: string;
+  communityPricing?: OrderCommunityPricing;
 };
 
 export type WalletEntry = {
   id: string;
-  ownerType: "seller" | "driver" | "admin";
+  ownerType: "seller" | "driver" | "admin" | "community_leader";
   ownerId: string;
   orderId?: string;
   settlementId?: string;
@@ -266,7 +353,9 @@ export type WalletEntry = {
     | "seller_abono"
     | "cash_shortage"
     /** Gravamen a los movimientos financieros (4x1000) sobre lo que sale por transferencia. */
-    | "gmf_tax";
+    | "gmf_tax"
+    /** Margen del lider de comunidad: precio que cobra a su tienda menos la base de Kentro. */
+    | "community_cashback";
   amountCop: number;
   description: string;
   supplierSettlementId?: string;
@@ -287,7 +376,7 @@ export type CashReceipt = {
 
 export type Settlement = {
   id: string;
-  kind: "seller" | "driver" | "supplier";
+  kind: "seller" | "driver" | "supplier" | "community_leader";
   ownerId: string;
   ownerName: string;
   startDate: string;
@@ -446,6 +535,8 @@ export type AppState = {
   cities: City[];
   zones: Zone[];
   sellers: Seller[];
+  /** Comunidades. Solo las carga el admin (todas) y el lider (la suya). */
+  communities: Community[];
   shopifyStores: ShopifyStore[];
   storeWebhookConfigs: StoreWebhookConfig[];
   shopifyInstallRequests: ShopifyInstallRequest[];

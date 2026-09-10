@@ -11,6 +11,7 @@
  * Eso hace que cerrar dos veces el mismo pedido sea idempotente, y permite al planificador de
  * correcciones comparar por id lo que un pedido TIENE contra lo que DEBERIA tener.
  */
+import { cashbackForFrozenPricing, type FrozenPricing } from "./community-pricing";
 import type { WalletEntryDoc } from "./settlement-math";
 
 export const defaultSettings = {
@@ -155,7 +156,45 @@ export function buildWalletEntries(order: Record<string, any>, settings: Record<
         // ajuste, hay que quitar esta linea Y limpiar sellerFailedFeeCop de las zonas.
         sellerFailedFeeCop: 12000
       };
+
+  /**
+   * Precio de comunidad congelado al CREAR el pedido. Va aqui a proposito, despues del bloque
+   * anterior: la linea `sellerFailedFeeCop: 12000` gana sobre los ajustes y sobre la zona, y si
+   * este bloque fuera antes, el flete de fallido de una comunidad se anularia en silencio —
+   * exactamente lo que ya paso en ago-2026 con la pantalla de ajustes.
+   *
+   * Una tienda con tarifa especial en codigo (DANDA) nunca deberia llegar aqui con precio
+   * congelado: su flete depende de la fecha de ENTREGA y el congelado es de la fecha de
+   * CREACION. `freezeOrderPricing` se encarga de no congelarlas.
+   */
+  const frozen = (order.communityPricing ?? undefined) as FrozenPricing | undefined;
+  if (frozen) {
+    values.sellerDeliveredFeeCop = Number(frozen.sellerDeliveredFeeCop);
+    values.sellerFailedFeeCop = Number(frozen.sellerFailedFeeCop);
+    values.fulfillmentFeeCop = Number(frozen.fulfillmentFeeCop);
+  }
+  const cashback = cashbackForFrozenPricing(frozen);
+
   const entries: WalletEntryDoc[] = [];
+
+  /**
+   * Un cashback de cero NO emite asiento: un corte lleno de lineas en cero es ruido. Como
+   * consecuencia, los asientos no sirven para CONTAR pedidos de una comunidad (un lider sin
+   * margen no generaria ninguno); los contadores salen de `orders`. Sumar si es correcto.
+   */
+  const pushCashback = (concept: "delivered" | "failed" | "fulfillment", amountCop: number, label: string) => {
+    if (!frozen || amountCop <= 0) return;
+    entries.push({
+      id: `we-${order.id}-community-cashback-${concept}`,
+      ownerType: "community_leader",
+      ownerId: frozen.communityId,
+      orderId: order.id,
+      type: "community_cashback",
+      amountCop,
+      description: `Cashback comunidad ${label} ${order.shopifyOrderId}`,
+      createdAt: now
+    });
+  };
 
   if (order.status === "delivered" && order.paymentMethod === "cod") {
     entries.push({
@@ -191,6 +230,7 @@ export function buildWalletEntries(order: Record<string, any>, settings: Record<
       description: `Pago transportista entregado ${order.shopifyOrderId}`,
       createdAt: now
     });
+    pushCashback("delivered", cashback.deliveredCop, "entregado");
     const costLines = productCostLines ?? [];
     const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
     for (const line of costLines) {
@@ -237,6 +277,7 @@ export function buildWalletEntries(order: Record<string, any>, settings: Record<
         description: `Cobro fallido ${order.shopifyOrderId}${attemptLabel}`,
         createdAt: now
       });
+      pushCashback("failed", cashback.failedCop, "fallido");
     }
     if (Number(values.driverFailedPayCop) > 0) {
       entries.push({
@@ -263,6 +304,7 @@ export function buildWalletEntries(order: Record<string, any>, settings: Record<
       description: `Fulfillment desde bodega ${order.shopifyOrderId}`,
       createdAt: now
     });
+    pushCashback("fulfillment", cashback.fulfillmentCop, "manejo");
   }
 
   return entries.map(withOpenSettlementFlags);
@@ -291,5 +333,7 @@ export function isLiquidationWalletType(type: string) {
   // gmf_tax: el 4x1000 de un abono nace suelto y tiene que arrastrarse al siguiente corte;
   // si no, queda como saldo abierto para siempre. El que nace DENTRO de un corte ya viene con
   // settlementId, asi que no lo recoge nadie dos veces.
-  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning", "seller_abono", "gmf_tax"].includes(type);
+  // community_cashback: el margen del lider de comunidad. Sin el en esta lista, su cashback
+  // nunca entraria en un corte y quedaria como saldo abierto para siempre.
+  return ["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "driver_earning", "seller_abono", "gmf_tax", "community_cashback"].includes(type);
 }

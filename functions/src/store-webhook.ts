@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
@@ -274,6 +275,14 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
 
   const externalId = cleanId(order.id);
   const orderRef = db.collection("orders").doc(`shopify-${externalId}`);
+  // Fuera de la transaccion: son lecturas de otras colecciones que no necesitan estar en el
+  // read-set del pedido.
+  const pricingSellerSnap = await db.collection("sellers").doc(sellerId).get();
+  const pricingStamp = await createCommunityPricingResolver(db)(
+    { id: sellerId, ...(pricingSellerSnap.data() ?? {}) },
+    undefined,
+    now
+  );
   const result = await db.runTransaction(async (transaction) => {
     const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
     if (existing.exists) return { created: false, order: existing.data() ?? { id: orderRef.id } };
@@ -307,6 +316,10 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
       evidence: [],
       source: "store_order_webhook",
       webhookSampleId: sampleRef.id,
+      // Precio de comunidad congelado al crear. Este camino se dejo fuera del plan inicial y
+      // el sintoma habria sido silencioso: el lider simplemente no cobraria.
+      communityId: pricingStamp.communityId,
+      communityPricing: pricingStamp.communityPricing,
       tags: tagsList(order.tags).join(", "),
       createdAt: order.created_at ?? now,
       updatedAt: now
