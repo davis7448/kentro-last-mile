@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "verify",
+  "phase": "deploy",
   "activeSpec": {
     "file": "specs/003_doble_rol.md",
     "status": "approved"
