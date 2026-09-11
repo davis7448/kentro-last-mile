@@ -83,9 +83,11 @@ una ejecucion de prueba escriba sobre los datos reales**.
 
 ### 3.3 El tiempo
 
-- **RF_12 (ubicua):** El sistema MUST poder fijar el instante con el que opera cada paso del
-  recorrido, para poder atravesar los plazos de la spec 001 —los ocho dias de una subida, los
-  treinta de un nombre corto retirado, la hora deslizante del aviso de captacion— sin esperarlos.
+- **RF_12 (ubicua):** El sistema MUST poder fijar el instante de **los datos de partida**, para
+  poder situarse al otro lado de los plazos de la spec 001 —los ocho dias de una subida, los treinta
+  de un nombre corto retirado— y comprobar que la regla se aplica cuando la fecha llega. **No** se
+  exige gobernar el reloj del servidor: los pasos cuyo instante lo pone el propio sistema caen en
+  RF_13.
 - **RF_13 (ubicua):** Los tramos cuyo instante **no** sea gobernable desde fuera MUST declararse
   como no verificados, en vez de falsearse sembrando fechas. Un recorrido que salta el paso que
   pretende demostrar es peor que no tenerlo, porque se reporta en verde.
@@ -118,8 +120,9 @@ una ejecucion de prueba escriba sobre los datos reales**.
   la spec 001: compensacion cuando el corte ya se pago, y recalculo cuando sigue pendiente. Son el
   encadenado con mas dinero en riesgo.
   *(Demuestra de la spec 001: RF_24, RF_25.)*
-- **RF_19 (ubicua):** Cada recorrido MUST dejar evidencia de lo ocurrido —lo que se vio en pantalla
-  y los avisos de error— asociada a los requisitos de la spec 001 que demuestra.
+- **RF_19 (ubicua):** Cada recorrido MUST dejar evidencia de lo ocurrido —lo que respondio cada
+  peticion, el estado en que quedaron los datos y los avisos de error— asociada a los requisitos de
+  la spec 001 que demuestra.
 
 ### 3.5 La aplicacion que se verifica
 
@@ -176,6 +179,13 @@ Cada uno cuelga del requisito que lo gobierna; ninguno introduce comportamiento 
   una spec futura.
 - **Verificar a la vez desde dos sitios.** RF_11 solo exige no mezclar y no bloquearse; la ejecucion
   simultanea de dos verificaciones no se soporta en esta spec.
+- **Recorrer la aplicacion con un navegador (RF_20).** Queda **fuera de este ciclo**, por dos
+  razones y no por una: hay un fallo conocido del utillaje entre emuladores, identificadores `demo-`
+  y el integrador de frameworks; y sobre todo, el precio de no hacerlo esta acotado y se declara —la
+  cifra de "pagado" que ve el lider se completa **en el cliente**, asi que contra la superficie de
+  servidor vale siempre cero. Esa relacion se afirma con la funcion pura de cliente que la calcula,
+  y **"lo que el lider ve en pantalla" queda como tramo no verificado** (RF_13). Decirlo es lo que
+  distingue una exclusion de un hueco.
 
 ## 7. Definition of Done
 

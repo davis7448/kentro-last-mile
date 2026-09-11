@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "plan",
+  "phase": "implement",
   "activeSpec": {
     "file": "specs/002_entorno_de_verificacion.md",
     "status": "approved"
@@ -8,664 +8,859 @@
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_01"
+        "RF_01",
+        "RF_02",
+        "RF_03"
       ],
       "files": [
-        "src/lib/types.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
+        "src/lib/verification/isolation.ts",
+        "src/lib/verification/isolation.test.ts"
       ],
-      "testWritten": true,
-      "done": true
+      "testWritten": false,
+      "done": false
     },
     "T2": {
       "requirements": [
         "RF_02",
-        "RF_03",
-        "RF_04"
+        "RF_06"
       ],
       "files": [
-        "functions/src/community-slug.ts",
-        "src/lib/community-slug.test.ts"
+        "src/lib/verification/hosts.ts",
+        "src/lib/verification/hosts.test.ts",
+        "src/lib/verification/provenance.ts",
+        "src/lib/verification/provenance.test.ts"
       ],
-      "testWritten": true,
-      "done": true
+      "testWritten": false,
+      "done": false
     },
     "T3": {
       "requirements": [
-        "RF_17",
-        "RF_18",
-        "RF_19",
-        "RF_20",
-        "RF_35",
-        "RF_36"
+        "RF_05"
       ],
       "files": [
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
+        "firebase.json",
+        "src/lib/verification/emulator-config.test.ts"
       ],
-      "testWritten": true,
-      "done": true
+      "testWritten": false,
+      "done": false
     },
     "T4": {
       "requirements": [
-        "RF_28",
-        "RF_38",
-        "RF_40",
-        "RF_54"
+        "RF_11"
       ],
       "files": [
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
+        "src/lib/verification/lock-core.ts",
+        "src/lib/verification/lock-core.test.ts",
+        "scripts/verify/lock.mjs",
+        ".gitignore"
       ],
-      "testWritten": true,
-      "done": true
+      "testWritten": false,
+      "done": false
     },
     "T5": {
       "requirements": [
-        "RF_21",
-        "RF_37"
+        "RF_08",
+        "RF_10"
       ],
       "files": [
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
+        "src/lib/verification/run-order.ts",
+        "src/lib/verification/run-order.test.ts",
+        "scripts/verify/emulator.mjs"
       ],
-      "testWritten": true,
-      "done": true
+      "testWritten": false,
+      "done": false
     },
     "T6": {
       "requirements": [
-        "RF_22",
-        "RF_23",
-        "RF_26",
-        "RNF_02"
-      ],
-      "files": [
-        "functions/src/wallet-entries.ts",
-        "src/lib/community-cashback-entries.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T7": {
-      "requirements": [
-        "RF_24",
-        "RF_25"
-      ],
-      "files": [
-        "functions/src/order-corrections-plan.ts",
-        "src/lib/community-corrections.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T8": {
-      "requirements": [
-        "RF_26",
-        "RF_49"
-      ],
-      "files": [
-        "functions/src/settlement-math.ts",
-        "functions/src/orders.ts",
-        "src/lib/settlement-math.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T9": {
-      "requirements": [
-        "RF_46"
-      ],
-      "files": [
-        "functions/src/orders.ts",
-        "functions/src/order-corrections.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T10": {
-      "requirements": [
-        "RF_05",
-        "RF_06",
-        "RF_11",
+        "RF_07",
+        "RF_09",
         "RF_12",
-        "RF_27",
-        "RF_31",
-        "RF_34",
-        "RF_50",
-        "RF_51",
-        "RF_52"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T11": {
-      "requirements": [
-        "RF_43",
-        "RF_45"
-      ],
-      "files": [
-        "functions/src/community-signup-validate.ts",
-        "src/lib/community-signup.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T12": {
-      "requirements": [
-        "RF_05",
-        "RF_06",
-        "RF_50",
-        "RF_51"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "functions/src/roles.ts",
-        "functions/src/index.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T13": {
-      "requirements": [
-        "RF_02",
-        "RF_03",
-        "RF_14",
-        "RF_15",
         "RF_16"
       ],
       "files": [
-        "functions/src/communities.ts",
-        "storage.rules",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T14": {
-      "requirements": [
-        "RF_18",
-        "RF_19",
-        "RF_27",
-        "RF_28",
-        "RF_35",
-        "RF_39",
-        "RF_54"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "src/lib/community-pricing.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T15": {
-      "requirements": [
-        "RF_09",
-        "RF_14",
-        "RF_15"
-      ],
-      "files": [
-        "functions/src/community-signup.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T16": {
-      "requirements": [
-        "RF_07",
-        "RF_08",
-        "RF_09",
-        "RF_10",
-        "RF_43",
-        "RF_45"
-      ],
-      "files": [
-        "functions/src/community-signup.ts",
-        "src/lib/community-signup.test.ts"
+        "src/lib/verification/seed.ts",
+        "src/lib/verification/seed.test.ts"
       ],
       "testWritten": false,
-      "done": true
+      "done": false
     },
-    "T17": {
+    "T7": {
       "requirements": [
         "RF_13",
-        "RF_41",
-        "RF_42",
-        "RF_53"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "functions/src/community-signup.ts",
-        "src/lib/community-signup.test.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T18": {
-      "requirements": [
-        "RF_44"
-      ],
-      "files": [
-        "functions/src/orders.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T19": {
-      "requirements": [
-        "RF_21"
-      ],
-      "files": [
-        "functions/src/orders.ts",
-        "functions/src/index.ts",
-        "functions/src/shopify.ts",
-        "functions/src/onstock-webhook.ts",
-        "functions/src/contact-form.ts",
-        "functions/src/store-webhook.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T20": {
-      "requirements": [
-        "RF_29",
-        "RF_30",
-        "RF_46",
-        "RF_47",
-        "RF_48"
-      ],
-      "files": [
-        "functions/src/community-stats-math.ts",
-        "src/lib/community-stats.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T21": {
-      "requirements": [
-        "RF_29",
-        "RF_30",
-        "RF_46",
-        "RF_47",
-        "RF_48",
-        "RNF_01"
-      ],
-      "files": [
-        "functions/src/community-stats.ts",
-        "functions/src/index.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T22": {
-      "requirements": [
-        "RF_11",
-        "RF_31",
-        "RF_52"
-      ],
-      "files": [
-        "firestore.rules",
-        "firestore.indexes.json"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T23": {
-      "requirements": [
-        "RF_52",
-        "RNF_01"
-      ],
-      "files": [
-        "src/lib/firebase/state-store.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T24": {
-      "requirements": [
-        "RF_29",
-        "RF_30",
-        "RF_31",
-        "RF_32",
-        "RF_33",
-        "RF_40",
-        "RF_46",
-        "RNF_05"
-      ],
-      "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T25": {
-      "requirements": [
-        "RF_05",
-        "RF_11",
-        "RF_12",
-        "RF_34",
-        "RF_50",
-        "RF_53",
-        "RNF_05"
-      ],
-      "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/firebase/auth.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T26": {
-      "requirements": [
-        "RF_14",
-        "RF_15",
-        "RF_43",
-        "RNF_03"
-      ],
-      "files": [
-        "src/app/registro/[slug]/page.tsx",
-        "src/app/registro/[slug]/signup-form.tsx"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T27": {
-      "requirements": [
-        "RF_28",
-        "RF_40",
+        "RF_19",
         "RNF_04"
       ],
       "files": [
-        "src/components/operations-app.tsx"
+        "src/lib/verification/outcome.ts",
+        "src/lib/verification/outcome.test.ts"
       ],
       "testWritten": false,
-      "done": true
+      "done": false
     },
-    "T28": {
+    "T8": {
+      "requirements": [
+        "RF_17",
+        "RF_18"
+      ],
+      "files": [
+        "src/lib/verification/money-chain.ts",
+        "src/lib/verification/money-chain.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T9": {
+      "requirements": [
+        "RF_21",
+        "RF_22"
+      ],
+      "files": [
+        "src/lib/firebase/client.ts",
+        "src/lib/firebase/client.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T10": {
+      "requirements": [
+        "RF_04"
+      ],
+      "files": [
+        "scripts/verify/run.mjs",
+        "src/lib/verification/runner-contract.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T11": {
+      "requirements": [
+        "RF_07"
+      ],
+      "files": [
+        "scripts/verify/emulator.mjs"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T12": {
+      "requirements": [
+        "RF_14"
+      ],
+      "files": [
+        "scripts/verify/recorrido-alta.mjs"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T13": {
+      "requirements": [
+        "RF_17",
+        "RF_18"
+      ],
+      "files": [
+        "scripts/verify/recorrido-dinero.mjs"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T14": {
+      "requirements": [
+        "RF_15"
+      ],
+      "files": [
+        "scripts/verify/recorrido-contencion.mjs"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T15": {
       "requirements": [
         "RNF_01",
         "RNF_02"
       ],
       "files": [
-        "src/lib/community-cashback-entries.test.ts",
-        "docs/rendimiento.md"
-      ],
-      "testWritten": true,
-      "done": true,
-      "blocked": "RESUELTO 11-09-2026 por T42: la suscripcion de wallet del lider se elimino, la cuenta de documentos ya no crece con el volumen (0 con 100 y con 10.000 pedidos) y docs/rendimiento.md esta reescrito."
-    },
-    "T29": {
-      "requirements": [
-        "RF_07",
-        "RF_08"
-      ],
-      "files": [
-        "functions/src/community-signup-doc.ts",
-        "functions/src/community-signup.ts",
-        "src/lib/community-signup.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T30": {
-      "requirements": [
-        "RF_10"
-      ],
-      "files": [
-        "functions/src/community-signup-validate.ts",
-        "functions/src/community-signup.ts",
-        "src/lib/community-signup.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T31": {
-      "requirements": [
-        "RF_41",
-        "RF_42"
-      ],
-      "files": [
-        "functions/src/community-containment.ts",
-        "src/lib/community-containment.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T32": {
-      "requirements": [
-        "RF_41",
-        "RF_42",
-        "RF_53"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "functions/src/community-containment.ts",
-        "src/lib/community-containment.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T33": {
-      "requirements": [
-        "RF_49"
-      ],
-      "files": [
-        "functions/src/settlement-math.ts",
-        "src/lib/settlement-math.test.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts",
-        "src/components/operations-app.tsx"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T34": {
-      "requirements": [
-        "RF_34"
-      ],
-      "files": [
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts",
-        "src/components/operations-app.tsx"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T35": {
-      "requirements": [
-        "RF_44"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "functions/src/orders.ts",
-        "src/lib/community-access.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T36": {
-      "requirements": [
-        "RF_11"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "functions/src/communities.ts",
-        "src/lib/community-access.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T37": {
-      "requirements": [
-        "RF_51"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "functions/src/communities.ts",
-        "src/lib/community-access.test.ts"
+        "package.json",
+        "scripts/verify/run.mjs"
       ],
       "testWritten": false,
-      "done": true
+      "done": false
     },
-    "T38": {
+    "T16": {
       "requirements": [
-        "RF_46"
+        "RNF_03"
       ],
       "files": [
-        "functions/src/community-stats-math.ts",
-        "functions/src/community-stats.ts",
-        "src/lib/community-stats.test.ts",
-        "src/components/operations-app.tsx"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T39": {
-      "requirements": [
-        "RNF_04",
-        "RF_28",
-        "RF_40"
-      ],
-      "files": [
-        "functions/src/community-pricing.ts",
-        "functions/src/communities.ts",
-        "src/lib/community-pricing.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T40": {
-      "requirements": [
-        "RF_04",
-        "RF_16"
-      ],
-      "files": [
-        "functions/src/community-slug.ts",
-        "functions/src/community-pricing.ts",
-        "functions/src/communities.ts",
-        "src/lib/community-slug.test.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T41": {
-      "requirements": [
-        "RF_27",
-        "RF_32"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts",
-        "src/components/operations-app.tsx"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T42": {
-      "requirements": [
-        "RNF_01"
-      ],
-      "files": [
-        "src/lib/firebase/state-store.ts",
-        "src/lib/community-cashback-entries.test.ts",
-        "docs/rendimiento.md"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T43": {
-      "requirements": [
-        "RF_49"
-      ],
-      "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/firebase/auth.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T44": {
-      "requirements": [
-        "RF_41",
-        "RF_42"
-      ],
-      "files": [
-        "src/lib/firebase/auth.ts",
-        "src/components/operations-app.tsx",
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T45": {
-      "requirements": [
-        "RF_14",
-        "RF_16"
-      ],
-      "files": [
-        "src/lib/firebase/auth.ts",
-        "src/components/operations-app.tsx",
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts",
-        "storage.rules"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T46": {
-      "requirements": [
-        "RF_11"
-      ],
-      "files": [
-        "src/lib/firebase/auth.ts",
-        "src/components/operations-app.tsx",
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts"
+        "docs/verificacion.md",
+        "README.md"
       ],
       "testWritten": false,
-      "done": true
-    },
-    "T47": {
-      "requirements": [
-        "RF_35"
-      ],
-      "files": [
-        "functions/src/community-floor-trigger.ts",
-        "functions/src/index.ts",
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
+      "done": false
     }
   },
   "testCommand": "npm test",
   "deployUrl": "https://kentro-last-mile.web.app",
-  "activePlan": "specs/001_plan.md",
-  "activeTasks": "specs/001_tasks.md",
+  "activePlan": "specs/002_plan.md",
+  "activeTasks": "specs/002_tasks.md",
   "specs": {
     "001": {
       "file": "specs/001_lider_de_comunidad.md",
       "status": "implementada",
       "deployed": "2026-09-11"
     }
-  }
+  },
+  "archivedTasks": {
+    "001": {
+      "T1": {
+        "requirements": [
+          "RF_01"
+        ],
+        "files": [
+          "src/lib/types.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_02",
+          "RF_03",
+          "RF_04"
+        ],
+        "files": [
+          "functions/src/community-slug.ts",
+          "src/lib/community-slug.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_17",
+          "RF_18",
+          "RF_19",
+          "RF_20",
+          "RF_35",
+          "RF_36"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_28",
+          "RF_38",
+          "RF_40",
+          "RF_54"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RF_21",
+          "RF_37"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T6": {
+        "requirements": [
+          "RF_22",
+          "RF_23",
+          "RF_26",
+          "RNF_02"
+        ],
+        "files": [
+          "functions/src/wallet-entries.ts",
+          "src/lib/community-cashback-entries.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T7": {
+        "requirements": [
+          "RF_24",
+          "RF_25"
+        ],
+        "files": [
+          "functions/src/order-corrections-plan.ts",
+          "src/lib/community-corrections.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T8": {
+        "requirements": [
+          "RF_26",
+          "RF_49"
+        ],
+        "files": [
+          "functions/src/settlement-math.ts",
+          "functions/src/orders.ts",
+          "src/lib/settlement-math.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T9": {
+        "requirements": [
+          "RF_46"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "functions/src/order-corrections.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T10": {
+        "requirements": [
+          "RF_05",
+          "RF_06",
+          "RF_11",
+          "RF_12",
+          "RF_27",
+          "RF_31",
+          "RF_34",
+          "RF_50",
+          "RF_51",
+          "RF_52"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T11": {
+        "requirements": [
+          "RF_43",
+          "RF_45"
+        ],
+        "files": [
+          "functions/src/community-signup-validate.ts",
+          "src/lib/community-signup.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T12": {
+        "requirements": [
+          "RF_05",
+          "RF_06",
+          "RF_50",
+          "RF_51"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "functions/src/roles.ts",
+          "functions/src/index.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T13": {
+        "requirements": [
+          "RF_02",
+          "RF_03",
+          "RF_14",
+          "RF_15",
+          "RF_16"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "storage.rules",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T14": {
+        "requirements": [
+          "RF_18",
+          "RF_19",
+          "RF_27",
+          "RF_28",
+          "RF_35",
+          "RF_39",
+          "RF_54"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T15": {
+        "requirements": [
+          "RF_09",
+          "RF_14",
+          "RF_15"
+        ],
+        "files": [
+          "functions/src/community-signup.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T16": {
+        "requirements": [
+          "RF_07",
+          "RF_08",
+          "RF_09",
+          "RF_10",
+          "RF_43",
+          "RF_45"
+        ],
+        "files": [
+          "functions/src/community-signup.ts",
+          "src/lib/community-signup.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T17": {
+        "requirements": [
+          "RF_13",
+          "RF_41",
+          "RF_42",
+          "RF_53"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "functions/src/community-signup.ts",
+          "src/lib/community-signup.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T18": {
+        "requirements": [
+          "RF_44"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T19": {
+        "requirements": [
+          "RF_21"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "functions/src/index.ts",
+          "functions/src/shopify.ts",
+          "functions/src/onstock-webhook.ts",
+          "functions/src/contact-form.ts",
+          "functions/src/store-webhook.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T20": {
+        "requirements": [
+          "RF_29",
+          "RF_30",
+          "RF_46",
+          "RF_47",
+          "RF_48"
+        ],
+        "files": [
+          "functions/src/community-stats-math.ts",
+          "src/lib/community-stats.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T21": {
+        "requirements": [
+          "RF_29",
+          "RF_30",
+          "RF_46",
+          "RF_47",
+          "RF_48",
+          "RNF_01"
+        ],
+        "files": [
+          "functions/src/community-stats.ts",
+          "functions/src/index.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T22": {
+        "requirements": [
+          "RF_11",
+          "RF_31",
+          "RF_52"
+        ],
+        "files": [
+          "firestore.rules",
+          "firestore.indexes.json"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T23": {
+        "requirements": [
+          "RF_52",
+          "RNF_01"
+        ],
+        "files": [
+          "src/lib/firebase/state-store.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T24": {
+        "requirements": [
+          "RF_29",
+          "RF_30",
+          "RF_31",
+          "RF_32",
+          "RF_33",
+          "RF_40",
+          "RF_46",
+          "RNF_05"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T25": {
+        "requirements": [
+          "RF_05",
+          "RF_11",
+          "RF_12",
+          "RF_34",
+          "RF_50",
+          "RF_53",
+          "RNF_05"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/firebase/auth.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T26": {
+        "requirements": [
+          "RF_14",
+          "RF_15",
+          "RF_43",
+          "RNF_03"
+        ],
+        "files": [
+          "src/app/registro/[slug]/page.tsx",
+          "src/app/registro/[slug]/signup-form.tsx"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T27": {
+        "requirements": [
+          "RF_28",
+          "RF_40",
+          "RNF_04"
+        ],
+        "files": [
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T28": {
+        "requirements": [
+          "RNF_01",
+          "RNF_02"
+        ],
+        "files": [
+          "src/lib/community-cashback-entries.test.ts",
+          "docs/rendimiento.md"
+        ],
+        "testWritten": true,
+        "done": true,
+        "blocked": "RESUELTO 11-09-2026 por T42: la suscripcion de wallet del lider se elimino, la cuenta de documentos ya no crece con el volumen (0 con 100 y con 10.000 pedidos) y docs/rendimiento.md esta reescrito."
+      },
+      "T29": {
+        "requirements": [
+          "RF_07",
+          "RF_08"
+        ],
+        "files": [
+          "functions/src/community-signup-doc.ts",
+          "functions/src/community-signup.ts",
+          "src/lib/community-signup.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T30": {
+        "requirements": [
+          "RF_10"
+        ],
+        "files": [
+          "functions/src/community-signup-validate.ts",
+          "functions/src/community-signup.ts",
+          "src/lib/community-signup.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T31": {
+        "requirements": [
+          "RF_41",
+          "RF_42"
+        ],
+        "files": [
+          "functions/src/community-containment.ts",
+          "src/lib/community-containment.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T32": {
+        "requirements": [
+          "RF_41",
+          "RF_42",
+          "RF_53"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "functions/src/community-containment.ts",
+          "src/lib/community-containment.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T33": {
+        "requirements": [
+          "RF_49"
+        ],
+        "files": [
+          "functions/src/settlement-math.ts",
+          "src/lib/settlement-math.test.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T34": {
+        "requirements": [
+          "RF_34"
+        ],
+        "files": [
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T35": {
+        "requirements": [
+          "RF_44"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "functions/src/orders.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T36": {
+        "requirements": [
+          "RF_11"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T37": {
+        "requirements": [
+          "RF_51"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T38": {
+        "requirements": [
+          "RF_46"
+        ],
+        "files": [
+          "functions/src/community-stats-math.ts",
+          "functions/src/community-stats.ts",
+          "src/lib/community-stats.test.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T39": {
+        "requirements": [
+          "RNF_04",
+          "RF_28",
+          "RF_40"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T40": {
+        "requirements": [
+          "RF_04",
+          "RF_16"
+        ],
+        "files": [
+          "functions/src/community-slug.ts",
+          "functions/src/community-pricing.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-slug.test.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T41": {
+        "requirements": [
+          "RF_27",
+          "RF_32"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T42": {
+        "requirements": [
+          "RNF_01"
+        ],
+        "files": [
+          "src/lib/firebase/state-store.ts",
+          "src/lib/community-cashback-entries.test.ts",
+          "docs/rendimiento.md"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T43": {
+        "requirements": [
+          "RF_49"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/firebase/auth.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T44": {
+        "requirements": [
+          "RF_41",
+          "RF_42"
+        ],
+        "files": [
+          "src/lib/firebase/auth.ts",
+          "src/components/operations-app.tsx",
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T45": {
+        "requirements": [
+          "RF_14",
+          "RF_16"
+        ],
+        "files": [
+          "src/lib/firebase/auth.ts",
+          "src/components/operations-app.tsx",
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts",
+          "storage.rules"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T46": {
+        "requirements": [
+          "RF_11"
+        ],
+        "files": [
+          "src/lib/firebase/auth.ts",
+          "src/components/operations-app.tsx",
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T47": {
+        "requirements": [
+          "RF_35"
+        ],
+        "files": [
+          "functions/src/community-floor-trigger.ts",
+          "functions/src/index.ts",
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      }
+    }
+  },
+  "activeTask": "T1"
 }
