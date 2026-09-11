@@ -1,0 +1,4 @@
+[error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[error] Access to fetch at 'https://us-central1-kentro-last-mile.cloudfunctions.net/getCommunityBySlug' from origin 'http://localhost:3100' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+[error] Failed to load resource: net::ERR_FAILED
+[warning] Info: The current domain is not authorized for OAuth operations. This will prevent signInWithPopup, signInWithRedirect, linkWithPopup and linkWithRedirect from working. Add your domain (localhost) to the OAuth redirect domains list in the Firebase console -> Authentication -> Settings -> Authorized domains tab.

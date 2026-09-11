@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "verify",
+  "phase": "deploy",
   "activeSpec": {
     "file": "specs/001_lider_de_comunidad.md",
     "status": "approved"
