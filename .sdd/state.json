@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "implement",
+  "phase": "verify",
   "activeSpec": {
     "file": "specs/003_doble_rol.md",
     "status": "approved"
@@ -169,8 +169,9 @@
         "src/lib/session-hats.test.ts",
         "src/lib/community-access.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true,
+      "note": "El nucleo del selector (session-hats) tiene 21 pruebas en verde; la pantalla se ata con guarda de fuente sobre operations-app.tsx, mismo patron que roleLabel en la spec 001."
     },
     "T13": {
       "requirements": [
@@ -184,7 +185,7 @@
         "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
-      "done": false
+      "done": true
     },
     "T14": {
       "requirements": [
@@ -211,8 +212,8 @@
         "functions/src/community-pricing.ts",
         "src/lib/community-pricing.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",
@@ -1111,6 +1112,5 @@
         "done": true
       }
     }
-  },
-  "activeTask": "T12"
+  }
 }

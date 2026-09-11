@@ -27,7 +27,7 @@
   * **Y el que mas importa no se arregla ahi:** `canReadSellerOperational` comprueba el rol **a mano y con retorno anticipado**, asi que una tienda-lider entra por la rama de vendedor y devuelve `false` para todas las tiendas de su comunidad. Hay que reescribirlo como **union de los dos derechos**, no como cadena de exclusion.
   * Verificacion: **tabla exhaustiva de no regresion (RNF_01) sobre los SEIS papeles** —`community_leader` incluido; `TODOS_LOS_ROLES` ya existe en el archivo de pruebas y fuerza a `tsc` a cubrir la union—. Cada uno, con reclamos sin `communityId`, obtiene exactamente los mismos permisos que antes.
 
-- [ ] **T2: Liderar no es lo mismo que ser acreedor**
+- [x] **T2: Liderar no es lo mismo que ser acreedor**
   * Requisitos: RF_23, RF_22
   * Archivos: `functions/src/community-access.ts`, `functions/src/communities.ts`, `functions/src/community-stats.ts`, `src/lib/community-access.test.ts`
   * Accion: `communityStanding: "leader" | "creditor"` en el `Actor`. El primero causa cashback y gobierna precios; el segundo **solo ve y cobra lo ya causado**.
@@ -36,19 +36,19 @@
 
 ## 2. Conceder, traspasar y retirar
 
-- [ ] **T3: Conceder el liderazgo, incluido el traspaso**
+- [x] **T3: Conceder el liderazgo, incluido el traspaso**
   * Requisitos: RF_04, RF_06, RF_17, RF_18, RF_19
   * Archivos: `functions/src/community-grant.ts` (nuevo), `src/lib/community-grant.test.ts` (nuevo)
   * Accion: `planLeadershipGrant`, puro. El traspaso **no es otra funcion**: es el caso en que la comunidad ya tiene lider, y produce dos efectos —degradar al anterior a acreedor, promover al nuevo—. Fundida con la que era T4, porque el propio plan decia que salia del mismo algoritmo.
   * Verificacion: **el aserto que mas vale de toda la spec** — el plan **nunca toca** `sellerId`, `driverId` ni `messengerId` del destino (RF_04). Barrido sobre el plan entero, como en la 001. Una cuenta que ya lidera otra se rechaza diciendo cual (RF_06). En el traspaso, el cashback del anterior queda **integro** y el nuevo empieza en cero (RF_19).
 
-- [ ] **T4: Retirar el liderazgo**
+- [x] **T4: Retirar el liderazgo**
   * Requisitos: RF_05, RF_22
   * Archivos: `functions/src/community-grant.ts`, `src/lib/community-grant.test.ts`
   * Accion: `planLeadershipRevoke`. Con deuda cero el vinculo se elimina; **con deuda queda como acreedor**.
   * Verificacion: la cuenta queda operando **exactamente** como antes de recibir el liderazgo, y `leaderUid` sale del documento de la comunidad en los dos casos.
 
-- [ ] **T5: El acreedor deja de serlo cuando se le paga**
+- [x] **T5: El acreedor deja de serlo cuando se le paga**
   * Requisitos: RF_23, RF_11
   * Archivos: `functions/src/community-grant.ts`, `functions/src/orders.ts`, `src/lib/community-grant.test.ts`
   * Accion: al marcarse pagado el ultimo corte pendiente de un acreedor, el vinculo se extingue.
@@ -56,20 +56,20 @@
 
 ## 3. La comunidad sin lider
 
-- [ ] **T6: `leaderUid` en el documento de la comunidad**
+- [x] **T6: `leaderUid` en el documento de la comunidad**
   * Requisitos: RF_17
   * Archivos: `functions/src/communities.ts`, `functions/src/community-grant.ts`, `src/lib/community-grant.test.ts`
   * Accion: el alta y la concesion escriben `leaderUid`; retirar lo quita.
   * Verificacion: `grep leaderUid` da hoy **cero resultados** en todo el repositorio. Es un campo nuevo, no uno que se lea mal.
 
-- [ ] **T7: Rellenar `leaderUid` en las comunidades que ya existen**
+- [x] **T7: Rellenar `leaderUid` en las comunidades que ya existen**
   * Requisitos: RF_20 (precondicion)
   * Archivos: `scripts/backfill-leader-uid.js` (nuevo), `docs/migraciones.md` (nuevo)
   * Accion: recorrer las comunidades vivas y escribir su `leaderUid` a partir de los reclamos de sus lideres.
   * **Va ANTES que T8 en produccion, y no es negociable.** Desplegar la regla de precio sin esto convierte todas las comunidades en comunidades sin lider: **tarifa base y cashback cero en cada pedido nuevo, sin error y sin aviso**. Regla de oro #5.
   * Verificacion: en seco primero; contar cuantas se tocarian y compararlo con las que hay.
 
-- [ ] **T8: Una comunidad sin lider cobra tarifa base**
+- [x] **T8: Una comunidad sin lider cobra tarifa base**
   * Requisitos: RF_20, RF_21, RF_12
   * Archivos: `functions/src/community-pricing.ts`, `src/lib/community-pricing.test.ts`
   * Accion: sin `leaderUid` **o con la comunidad desactivada**, `resolveCommunityPricing` devuelve la base — **comprobado antes que el piso**.
@@ -77,13 +77,13 @@
 
 ## 4. Las tres capas del servidor
 
-- [ ] **T9: Las callables de conceder y retirar**
+- [x] **T9: Las callables de conceder y retirar**
   * Requisitos: RF_17, RF_05
   * Archivos: `functions/src/communities.ts`, `functions/src/roles.ts`, `src/lib/community-grant.test.ts`
   * Accion: `grantCommunityLeadership` y `revokeCommunityLeadership` sobre los planes puros, con la reversion de la spec 001 RF_55. Y **`setUserRole` Y `createManagedUser` dejan de borrar `communityId`**: las dos reescriben los reclamos con el mismo patron, y el analisis encontro que la primera version solo nombraba una.
   * Verificacion: cambiar el papel operativo de alguien **no** le quita la comunidad. Sesion real con usuario desechable.
 
-- [ ] **T10: Las reglas de Firestore y de Storage**
+- [x] **T10: Las reglas de Firestore y de Storage**
   * Requisitos: RNF_02
   * Archivos: `firestore.rules`, `storage.rules`, `src/lib/community-access.test.ts`
   * Accion: `isCommunityLeader()` y `sellerInMyCommunity()` en Firestore, **y `isCommunityLeaderOf()` en `storage.rules`**, dejan de exigir el rol.
@@ -92,19 +92,19 @@
 
 ## 5. La pantalla
 
-- [ ] **T11: El nucleo del selector**
+- [x] **T11: El nucleo del selector**
   * Requisitos: RF_07, RF_10, RF_11
   * Archivos: `src/lib/session-hats.ts` (nuevo), `src/lib/session-hats.test.ts` (nuevo)
   * Accion: `availableHats`, `defaultHat`, `shouldShowHatSelector`. Puro, sin React.
   * Verificacion: sin selector para quien tiene un solo papel, **salvo que arrastre una deuda de uno anterior** (RF_11, y por eso T5 existe).
 
-- [ ] **T12: La sesion con dos identidades**
+- [x] **T12: La sesion con dos identidades**
   * Requisitos: RF_07, RF_10
   * Archivos: `src/components/operations-app.tsx`, `src/lib/session-hats.test.ts`
   * Accion: `Session` —que vive **aqui**, en la linea 177, no en `types.ts`— gana `ledCommunityId` y `communityStanding`; `profileId` pasa a ser **solo** la identidad operativa. Se reescribe el calculo de la sesion a partir de los reclamos.
   * Verificacion: hoy `profileId` significa cosas distintas segun el rol —para un lider **es su comunidad**— y una cuenta con dos papeles tiene dos identidades y una sola casilla. Los consumidores a los que llega el cambio estan enumerados en el plan; ninguno puede quedarse leyendo un `profileId` que ya no significa lo que creia.
 
-- [ ] **T13: El selector y el reparto de vistas**
+- [x] **T13: El selector y el reparto de vistas**
   * Requisitos: RF_07, RF_08, RF_09
   * Archivos: `src/components/operations-app.tsx`, `src/lib/session-hats.test.ts`, `src/lib/community-access.test.ts`
   * Accion: el selector en pantalla y el despacho de vistas segun el sombrero. **El sombrero no viaja al servidor.**
@@ -112,13 +112,13 @@
 
 ## 6. El dinero
 
-- [ ] **T14: Lo que baja el navegador**
+- [x] **T14: Lo que baja el navegador**
   * Requisitos: RF_15, RF_16, RNF_03
   * Archivos: `src/lib/firebase/state-store.ts`, `src/lib/state-store-targets.test.ts` (nuevo)
   * Accion: los objetivos del lider se **suman** a los del papel operativo. **No es un solo sitio**: la suscripcion, la carga inicial, y `getOrdersForContext`, `getWalletForContext` y `getSettlementsForContext`, que ramifican por rol **con retornos anticipados**.
   * Verificacion: para un vendedor-lider gana hoy la rama de vendedor, asi que **los cortes del lider no llegarian en el primer pintado aunque el listener si los traiga** — la divergencia exacta que el CLAUDE.md avisa. Principio 8: antes de tocar una descarga, comprobar que cifra depende de lo que se toca; un recorte mal hecho no falla ni avisa, y ya paso una vez con $1.135.720. Se afirma que **no se pierde ninguna cifra**, que el total es **como mucho la suma** (RF_16) y que cambiar de sombrero lee **cero documentos** (RNF_03).
 
-- [ ] **T15: El cashback de su propia tienda, a la vista**
+- [x] **T15: El cashback de su propia tienda, a la vista**
   * Requisitos: RF_13, RF_14, RF_24
   * Archivos: `src/lib/community-view.ts`, `src/lib/community-view.test.ts`, `functions/src/community-pricing.ts`, `src/lib/community-pricing.test.ts`
   * Accion: el reparto de cuanto cashback procede de la tienda del propio lider, y el aviso al administrador cuando un lider cambia un precio que le afecta a el mismo.

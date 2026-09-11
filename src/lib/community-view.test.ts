@@ -2191,3 +2191,354 @@ describe("T50 · cuando no hay ninguna comunidad, el panel se abre solo", () => 
     expect(OPERATIONS_APP_SOURCE).toMatch(/defaultOpen=\{shouldOpenCommunitiesPanel\(/);
   });
 });
+
+import { scheduleEffectiveAt } from "../../functions/src/community-pricing";
+
+/**
+ * T15 · RF_13, RF_14, RF_24: la tienda del propio lider dentro de su comunidad.
+ *
+ * Que un lider tenga tienda en la comunidad que lidera es legitimo — es el caso normal, de hecho:
+ * el lider suele ser el primer vendedor. Lo que NO es legitimo es que esa circunstancia quede
+ * invisible. Permitirlo y esconderlo son cosas distintas: lo primero es una decision de negocio,
+ * lo segundo es una cifra que nadie audita. El admin fija precios mirando el cashback causado de
+ * cada comunidad; si una parte de ese cashback vuelve al bolsillo del que decide el precio, el
+ * admin tiene que verlo desglosado, no sumado.
+ *
+ * Y la tentacion obvia al implementar esto es la contraria: excluir la tienda del lider de las
+ * cifras "para que no contamine". Eso descuadraria los totales con los cortes, que si la cobran.
+ * Por eso RF_14 tiene un `it()` propio: cuenta como una tienda mas, sin trato especial. Dos
+ * numeros, no uno.
+ */
+describe("T15 · la tienda del propio lider: visible, contada y sin privilegios", () => {
+  type T15SellerLike = { id: string; communityId?: string };
+  type T15CommunityLike = {
+    id: string;
+    name: string;
+    leaderName?: string;
+    /**
+     * CUAL de las tiendas es la del lider. El nucleo puro no lee reclamos de autenticacion, asi
+     * que el dato entra como entrada de la fila; quien construye el input lo saca del documento
+     * de la comunidad (`leaderUid` -> tienda) o del reclamo `sellerId` del lider.
+     */
+    leaderSellerId?: string;
+    pricing?: {
+      sellerDeliveredFeeCop?: number;
+      sellerFailedFeeCop?: number;
+      fulfillmentFeeCop?: number;
+    };
+  };
+  type T15EntryLike = {
+    ownerType: string;
+    ownerId: string;
+    type: string;
+    amountCop: number;
+    settlementId?: string;
+    /** Que tienda genero el cashback. Sin esto no hay forma de desglosar el de la tienda del lider. */
+    sellerId?: string;
+  };
+  type T15SettingsLike = {
+    sellerDeliveredFeeCop: number;
+    sellerFailedFeeCop: number;
+    fulfillmentFeeCop: number;
+  };
+  type T15Row = {
+    communityId: string;
+    name: string;
+    leaderName: string;
+    stores: number;
+    pricing: T15SettingsLike;
+    cashbackAccruedCop: number;
+    /**
+     * Cuanto del `cashbackAccruedCop` procede de la tienda del propio lider. Es una cifra APARTE,
+     * no un descuento del total: el total sigue siendo todo lo que la comunidad causo.
+     */
+    leaderStoreCashbackAccruedCop: number;
+  };
+  type T15BuildAdminList = (input: {
+    communities: T15CommunityLike[];
+    sellers: T15SellerLike[];
+    entries: T15EntryLike[];
+    settings: T15SettingsLike;
+  }) => T15Row[];
+
+  type T15PricingField = "sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop";
+  type T15Notice = {
+    field: T15PricingField;
+    fromCop: number;
+    toCop: number;
+    isRaise: boolean;
+    /** RF_24: si el que sube el precio se lo sube (tambien) a si mismo. */
+    affectsLeaderOwnStore: boolean;
+    /** El mismo plazo que para cualquier otro cambio. Sin excepcion. */
+    effectiveAt: string;
+    /** El aviso al administrador. `null` cuando el lider no tiene tienda en su comunidad. */
+    adminAlert: string | null;
+  };
+  type T15BuildNotice = (input: {
+    communityId: string;
+    leaderSellerId?: string;
+    sellers: T15SellerLike[];
+    field: T15PricingField;
+    fromCop: number;
+    toCop: number;
+    nowIso: string;
+  }) => T15Notice;
+
+  let buildAdminCommunityList: T15BuildAdminList;
+  let buildLeaderPriceChangeNotice: T15BuildNotice;
+
+  // Carga diferida, igual que en T34: `buildLeaderPriceChangeNotice` todavia no existe y un import
+  // estatico roto tumbaria la recoleccion de los casos verdes de todo el archivo.
+  beforeEach(async () => {
+    const vista = (await import("./community-view")) as unknown as {
+      buildAdminCommunityList?: T15BuildAdminList;
+      buildLeaderPriceChangeNotice?: T15BuildNotice;
+    };
+    if (typeof vista.buildAdminCommunityList !== "function") {
+      throw new Error("buildAdminCommunityList no existe en src/lib/community-view.ts");
+    }
+    buildAdminCommunityList = vista.buildAdminCommunityList;
+    // La funcion de RF_24 todavia no existe. No se lanza aqui: si el `beforeEach` reventara, los
+    // casos de RF_13 y RF_14 fallarian por una razon que no es la suya y no diriamos nada sobre
+    // ellos. Que falle al invocarla, dentro del `it()` que la necesita.
+    buildLeaderPriceChangeNotice =
+      typeof vista.buildLeaderPriceChangeNotice === "function"
+        ? vista.buildLeaderPriceChangeNotice
+        : () => {
+            throw new Error(
+              "buildLeaderPriceChangeNotice no existe en src/lib/community-view.ts (fase RED de T15)"
+            );
+          };
+  });
+
+  const AJUSTES: T15SettingsLike = {
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 6000,
+    fulfillmentFeeCop: 2000
+  };
+
+  // Andes: la lidera Marta, y la tienda `sel-marta` es SUYA y esta dentro de la comunidad.
+  // Pacifico: la lidera Hugo, cuya tienda `sel-hugo` esta en OTRA comunidad (Andes).
+  const COMUNIDADES: T15CommunityLike[] = [
+    { id: "com-andes", name: "Comunidad Andes", leaderName: "Marta Ruiz", leaderSellerId: "sel-marta" },
+    { id: "com-pacifico", name: "Comunidad Pacifico", leaderName: "Hugo Paz", leaderSellerId: "sel-hugo" }
+  ];
+
+  const TIENDAS: T15SellerLike[] = [
+    { id: "sel-marta", communityId: "com-andes" },
+    { id: "sel-bodega", communityId: "com-andes" },
+    { id: "sel-hugo", communityId: "com-andes" },
+    { id: "sel-costa", communityId: "com-pacifico" }
+  ];
+
+  const cashback = (over: Partial<T15EntryLike> = {}): T15EntryLike => ({
+    ownerType: "community_leader",
+    ownerId: "com-andes",
+    type: "community_cashback",
+    amountCop: 3000,
+    settlementId: "",
+    sellerId: "sel-bodega",
+    ...over
+  });
+
+  const fila = (rows: T15Row[], communityId: string): T15Row => {
+    const encontrada = rows.find((row) => row.communityId === communityId);
+    if (!encontrada) throw new Error(`no hay fila para ${communityId}`);
+    return encontrada;
+  };
+
+  const listaBase = (entries: T15EntryLike[]): T15Row[] =>
+    buildAdminCommunityList({
+      communities: COMUNIDADES,
+      sellers: TIENDAS,
+      entries,
+      settings: AJUSTES
+    });
+
+  it("RF_13: la fila separa cuanto del cashback procede de la tienda del propio lider", () => {
+    // 20.000 + 10.000 de la tienda de Marta (la lider) y 45.000 de una tienda ajena.
+    const rows = listaBase([
+      cashback({ sellerId: "sel-marta", amountCop: 20000 }),
+      cashback({ sellerId: "sel-marta", amountCop: 10000 }),
+      cashback({ sellerId: "sel-bodega", amountCop: 45000 })
+    ]);
+    const andes = fila(rows, "com-andes");
+
+    expect(andes.cashbackAccruedCop, "el total causado de la comunidad").toBe(75000);
+    expect(
+      andes.leaderStoreCashbackAccruedCop,
+      "cuanto de ese cashback lo genero la tienda de la propia lider"
+    ).toBe(30000);
+    // Dos numeros, no uno: si la implementacion devolviera el mismo valor en ambos campos, o
+    // restara uno del otro, esto lo delata.
+    expect(andes.leaderStoreCashbackAccruedCop).not.toBe(andes.cashbackAccruedCop);
+    expect(andes.leaderStoreCashbackAccruedCop).toBeLessThan(andes.cashbackAccruedCop);
+  });
+
+  it("RF_13: si la tienda del lider no esta en su comunidad, la cifra es CERO, no un hueco", () => {
+    // Hugo lidera Pacifico pero vende en Andes: nada del cashback de Pacifico es suyo.
+    const rows = listaBase([
+      cashback({ ownerId: "com-pacifico", sellerId: "sel-costa", amountCop: 7000 })
+    ]);
+    const pacifico = fila(rows, "com-pacifico");
+
+    expect(pacifico.cashbackAccruedCop).toBe(7000);
+    expect(
+      Object.prototype.hasOwnProperty.call(pacifico, "leaderStoreCashbackAccruedCop"),
+      "cero es un dato auditable; omitir el campo obliga al lector a adivinar si es cero o si nadie lo calculo"
+    ).toBe(true);
+    expect(pacifico.leaderStoreCashbackAccruedCop).toBe(0);
+    expect(typeof pacifico.leaderStoreCashbackAccruedCop).toBe("number");
+  });
+
+  it("RF_14: la tienda del lider cuenta como una tienda mas y su cashback cuenta en el total", () => {
+    // La tentacion obvia al implementar RF_13 es excluir la tienda del lider "para que no
+    // contamine". Los cortes SI la cobran: excluirla aqui descuadra el panel con la caja.
+    const rows = listaBase([
+      cashback({ sellerId: "sel-marta", amountCop: 30000 }),
+      cashback({ sellerId: "sel-bodega", amountCop: 45000 }),
+      cashback({ sellerId: "sel-hugo", amountCop: 5000 })
+    ]);
+    const andes = fila(rows, "com-andes");
+
+    expect(
+      andes.stores,
+      "sel-marta (la lider), sel-bodega y sel-hugo: tres tiendas, sin descontar la del lider"
+    ).toBe(3);
+    expect(
+      andes.cashbackAccruedCop,
+      "el total incluye los 30.000 de la tienda de la lider; si sale 50.000 es que se excluyo"
+    ).toBe(80000);
+  });
+
+  it("RF_13: dos comunidades no se mezclan, ni en el total ni en la cifra del lider", () => {
+    const rows = listaBase([
+      cashback({ ownerId: "com-andes", sellerId: "sel-marta", amountCop: 30000 }),
+      cashback({ ownerId: "com-andes", sellerId: "sel-bodega", amountCop: 45000 }),
+      cashback({ ownerId: "com-pacifico", sellerId: "sel-costa", amountCop: 7000 }),
+      // Cashback de Pacifico generado por la tienda de Marta: no es de Marta la cifra de
+      // Pacifico (ella no lidera Pacifico) ni suma al total de Andes.
+      cashback({ ownerId: "com-pacifico", sellerId: "sel-marta", amountCop: 1000 })
+    ]);
+
+    expect(fila(rows, "com-andes").cashbackAccruedCop).toBe(75000);
+    expect(fila(rows, "com-andes").leaderStoreCashbackAccruedCop).toBe(30000);
+    expect(fila(rows, "com-pacifico").cashbackAccruedCop).toBe(8000);
+    expect(fila(rows, "com-pacifico").leaderStoreCashbackAccruedCop).toBe(0);
+  });
+
+  it("RF_13: un asiento sin tienda, o de otro concepto, no se atribuye al lider", () => {
+    const rows = listaBase([
+      cashback({ sellerId: "sel-marta", amountCop: 30000 }),
+      // Asiento antiguo, sin `sellerId`: cuenta en el total (la comunidad lo causo) pero no se
+      // le puede imputar a nadie. Atribuirlo al lider por defecto seria inventarse una cifra.
+      cashback({ sellerId: undefined, amountCop: 12000 }),
+      // Pago de corte en la wallet del lider: ni total ni desglose.
+      cashback({ type: "settlement_payment", sellerId: "sel-marta", amountCop: 500000 }),
+      // Asiento de otra coleccion con el mismo ownerId.
+      cashback({ ownerType: "seller", sellerId: "sel-marta", amountCop: 900000 })
+    ]);
+    const andes = fila(rows, "com-andes");
+
+    expect(andes.cashbackAccruedCop).toBe(42000);
+    expect(andes.leaderStoreCashbackAccruedCop).toBe(30000);
+  });
+
+  it("RF_13: una comunidad sin lider declarado sale con cero, no rompe la lista", () => {
+    const rows = buildAdminCommunityList({
+      communities: [{ id: "com-huerfana", name: "Comunidad Huerfana" }],
+      sellers: [{ id: "sel-x", communityId: "com-huerfana" }],
+      entries: [cashback({ ownerId: "com-huerfana", sellerId: "sel-x", amountCop: 4000 })],
+      settings: AJUSTES
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stores).toBe(1);
+    expect(rows[0].cashbackAccruedCop).toBe(4000);
+    expect(rows[0].leaderStoreCashbackAccruedCop).toBe(0);
+  });
+
+  it("RF_13: un importe que no es numero vale cero en las dos cifras, no NaN", () => {
+    const roto = { ...cashback({ sellerId: "sel-marta" }), amountCop: "30000" } as unknown as T15EntryLike;
+    const rows = listaBase([
+      cashback({ sellerId: "sel-marta", amountCop: 20000 }),
+      roto,
+      cashback({ sellerId: "sel-marta", amountCop: Number.NaN })
+    ]);
+    const andes = fila(rows, "com-andes");
+
+    expect(Number.isFinite(andes.leaderStoreCashbackAccruedCop)).toBe(true);
+    expect(andes.leaderStoreCashbackAccruedCop).toBe(20000);
+    expect(andes.cashbackAccruedCop).toBe(20000);
+  });
+
+  // --- RF_24: el aviso de conflicto de interes al cambiar un precio ---------------------------
+
+  const AHORA = "2026-09-01T00:00:00.000Z";
+
+  const aviso = (over: Partial<Parameters<T15BuildNotice>[0]> = {}): T15Notice =>
+    buildLeaderPriceChangeNotice({
+      communityId: "com-andes",
+      leaderSellerId: "sel-marta",
+      sellers: TIENDAS,
+      field: "sellerDeliveredFeeCop",
+      fromCop: 12000,
+      toCop: 15000,
+      nowIso: AHORA,
+      ...over
+    });
+
+  it("RF_24: subir el precio teniendo tienda en la comunidad queda marcado y avisado al admin", () => {
+    const notice = aviso();
+
+    expect(notice.affectsLeaderOwnStore, "Marta se sube el precio tambien a si misma").toBe(true);
+    expect(notice.isRaise).toBe(true);
+    expect(typeof notice.adminAlert).toBe("string");
+    expect(
+      (notice.adminAlert ?? "").trim().length,
+      "el aviso al administrador no puede ser una cadena vacia: un aviso que no dice nada no es un aviso"
+    ).toBeGreaterThan(0);
+  });
+
+  it("RF_24: si el lider no tiene tienda en su comunidad, no hay conflicto ni aviso", () => {
+    // Hugo lidera Pacifico y vende en Andes: cambiar el precio de Pacifico no le toca el bolsillo.
+    const notice = aviso({ communityId: "com-pacifico", leaderSellerId: "sel-hugo" });
+
+    expect(notice.affectsLeaderOwnStore).toBe(false);
+    expect(notice.adminAlert, "sin conflicto no se inventa un aviso que el admin aprenderia a ignorar").toBeNull();
+  });
+
+  it("RF_24: un lider sin tienda registrada tampoco dispara el aviso", () => {
+    const notice = aviso({ leaderSellerId: undefined });
+
+    expect(notice.affectsLeaderOwnStore).toBe(false);
+    expect(notice.adminAlert).toBeNull();
+  });
+
+  it("RF_24: el plazo de subida es el mismo aunque su tienda sea la UNICA afectada", () => {
+    // El atajo tentador: "si la unica tienda que paga mas es la del propio lider, que entre ya,
+    // nadie mas se entera". No. El plazo es del precio, no de a quien le duela.
+    const notice = aviso({ sellers: [{ id: "sel-marta", communityId: "com-andes" }] });
+    const esperado = scheduleEffectiveAt(12000, 15000, AHORA);
+
+    expect(notice.affectsLeaderOwnStore).toBe(true);
+    expect(
+      notice.effectiveAt,
+      "la subida del lider a su propia tienda entra cuando entraria la de cualquier otro"
+    ).toBe(esperado);
+    expect(notice.effectiveAt, "una subida NUNCA entra en el acto").not.toBe(AHORA);
+    // Y es exactamente la misma fecha que si la comunidad tuviera tiendas ajenas.
+    expect(notice.effectiveAt).toBe(aviso().effectiveAt);
+  });
+
+  it("RF_24: una bajada tambien se avisa — el conflicto no depende del sentido del cambio", () => {
+    const notice = aviso({ fromCop: 15000, toCop: 12000 });
+
+    expect(notice.isRaise).toBe(false);
+    expect(notice.affectsLeaderOwnStore).toBe(true);
+    expect(typeof notice.adminAlert).toBe("string");
+    // Bajar entra en el acto, igual que para cualquiera.
+    expect(notice.effectiveAt).toBe(scheduleEffectiveAt(15000, 12000, AHORA));
+    expect(notice.effectiveAt).toBe(AHORA);
+  });
+});

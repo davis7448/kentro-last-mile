@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Store,
   Truck,
+  Users,
   Wallet,
   Wrench,
   X
@@ -71,6 +72,7 @@ import {
 } from "@/lib/firebase/auth";
 import { createCommunityLeader, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
 import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
@@ -174,7 +176,21 @@ type LocalAccount = {
   profileId: string;
 };
 
-type Session = Omit<LocalAccount, "password">;
+/**
+ * Una cuenta puede tener DOS identidades y hasta ahora habia una sola casilla.
+ *
+ * `profileId` es la identidad OPERATIVA — la tienda del vendedor, el domiciliario, el mensajero.
+ * `ledCommunityId` es la comunidad que esta cuenta lidera, que es otra cosa: una tienda que ademas
+ * lidera tiene las dos a la vez y meterlas en el mismo campo obligaba a elegir cual se pierde.
+ * (Para un `community_leader` puro las dos coinciden, que es como esta produccion hoy.)
+ *
+ * Las dos salen del RECLAMO, nunca del sombrero: el sombrero es pintura y no decide que se baja
+ * ni que reconoce el servidor.
+ */
+type Session = Omit<LocalAccount, "password"> & {
+  ledCommunityId?: string;
+  communityStanding?: "leader" | "creditor";
+};
 // El lider logistico tenia SEIS secciones dentro de "operations" mientras el riel mostraba dos
 // entradas. Ahora cada momento de su jornada es un destino propio.
 type AppView = "operations" | "wallet" | "liquidations" | "inventory" | "dispatch" | "finance" | "history" | "integrations" | "settings";
@@ -408,7 +424,12 @@ function useAppState(session: Session | null, historyStart?: string) {
       setHydrated(true);
     };
 
-    const context = session ? { role: session.role, profileId: session.profileId, historyStart } : undefined;
+    // `communityId` sale de `session.ledCommunityId`, o sea del reclamo, NUNCA del sombrero: lo que
+    // se descarga depende de lo que la cuenta ES, no de la pestana que este mirando. Si dependiera
+    // del sombrero, cambiar de sombrero reharia la suscripcion — justo lo que RF_10 prohibe.
+    const context = session
+      ? { role: session.role, profileId: session.profileId, communityId: session.ledCommunityId, historyStart }
+      : undefined;
     if (session && canUseFirestoreStore()) {
       setRemoteEnabled(true);
       // La suscripcion es ahora la unica fuente: hace la carga inicial (omitiendo las
@@ -430,7 +451,7 @@ function useAppState(session: Session | null, historyStart?: string) {
 
     hydrateLocal();
     return undefined;
-  }, [session?.id, session?.profileId, session?.role, historyStart]);
+  }, [session?.id, session?.profileId, session?.role, session?.ledCommunityId, historyStart]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1365,7 +1386,21 @@ function AuthScreen({
   );
 }
 
-function Header({ session, remoteEnabled, onSignOut }: { session: Session; remoteEnabled: boolean; onSignOut: () => void }) {
+function Header({
+  session,
+  remoteEnabled,
+  onSignOut,
+  hat,
+  canPickHat,
+  onHatChange
+}: {
+  session: Session;
+  remoteEnabled: boolean;
+  onSignOut: () => void;
+  hat: Hat;
+  canPickHat: boolean;
+  onHatChange: (hat: Hat) => void;
+}) {
   return (
     <header className="glass sticky top-0 z-20 border-x-0 border-t-0">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
@@ -4725,16 +4760,23 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
  * en esta plataforma, y aqui conviven de forma natural: los pedidos creados se cuentan por su
  * fecha de creacion y las entregas y el dinero por la de cierre.
  */
+/**
+ * Spec 003: la comunidad llega por `communityId` y ya NO por `session.profileId`.
+ *
+ * Antes el "perfil" de un lider ERA su comunidad, asi que una sola casilla servia. Con una cuenta
+ * que ademas vende, `profileId` es su tienda y la comunidad viaja aparte: seguir leyendola de ahi
+ * le pintaria a la tienda las cifras de una comunidad inexistente.
+ */
 function CommunityLeaderView({
   state,
-  session,
+  communityId,
   startDate,
   endDate,
   onStartDate,
   onEndDate
 }: {
   state: AppState;
-  session: { role: Role; profileId: string };
+  communityId: string;
   startDate: string;
   endDate: string;
   onStartDate: (value: string) => void;
@@ -4744,7 +4786,6 @@ function CommunityLeaderView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const communityId = session.profileId;
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -12478,6 +12519,11 @@ function AuditBar({ state }: { state: AppState }) {
 
 export function OperationsApp() {
   const [session, setSession] = useState<Session | null>(null);
+  // El sombrero es estado de INTERFAZ y se queda aqui: no viaja al servidor, no entra en el
+  // contexto de descarga y por eso cambiarlo no recarga nada (RF_10). Lo que se guarda es la
+  // ELECCION, no el sombrero efectivo: si la cuenta cambia y esa eleccion ya no esta entre sus
+  // sombreros, se cae sola al que le toque en vez de dejar la pantalla en un sombrero imposible.
+  const [hatChoice, setHatChoice] = useState<Hat | null>(null);
   const [activeView, setActiveView] = useState<AppView>("operations");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStartDate, setOrderStartDate] = useState(defaultOrderStartDate);
@@ -12618,6 +12664,12 @@ export function OperationsApp() {
         }
         const accounts = readAccounts();
         const account = accounts.find((item) => item.id === user.uid || item.email === user.email);
+        // La comunidad que lidera es una identidad APARTE de la operativa. Para un
+        // `community_leader` puro las dos coinciden (sigue siendo su `profileId`, que es lo que
+        // filtra sus tiendas, sus cortes y sus cifras); para una tienda que ademas lidera, no.
+        const ledCommunityId =
+          (claims.communityId ?? "").trim()
+          || (claims.role === "community_leader" ? account?.profileId ?? `com-${user.uid}` : "");
         const profileId =
           claims.role === "seller" || claims.role === "seller_logistics"
             ? claims.sellerId ?? account?.profileId ?? `seller-${user.uid}`
@@ -12626,16 +12678,21 @@ export function OperationsApp() {
               : claims.role === "messenger"
                 ? claims.messengerId ?? account?.profileId ?? `messenger-${user.uid}`
                 : claims.role === "community_leader"
-                  // Para este rol, el "perfil" es su comunidad: es lo que filtra sus tiendas,
-                  // sus cortes y sus cifras.
-                  ? claims.communityId ?? account?.profileId ?? `com-${user.uid}`
+                  ? ledCommunityId
                   : account?.profileId ?? `admin-${user.uid}`;
+        // La posicion se valida antes de entrar en la sesion: el envoltorio de `auth.ts` aun no la
+        // expone, y un valor desconocido colandose en la sesion seria peor que no tenerla. Quien
+        // decide los sombreros es el VINCULO, no la posicion (un acreedor ya no gobierna pero
+        // sigue cobrando), asi que esto no cambia lo que se pinta.
+        const standing = (claims as { communityStanding?: string }).communityStanding;
         setSession({
           id: user.uid,
           email: user.email ?? account?.email ?? "",
           name: account?.name ?? user.displayName ?? user.email ?? roleLabel(claims.role),
           role: claims.role,
-          profileId
+          profileId,
+          ledCommunityId: ledCommunityId || undefined,
+          communityStanding: standing === "leader" || standing === "creditor" ? standing : undefined
         });
         const activeRole = claims.role;
         setState((current) => ({ ...current, activeRole }));
@@ -12705,12 +12762,36 @@ export function OperationsApp() {
   function signOut() {
     window.localStorage.removeItem(sessionKey);
     setSession(null);
+    setHatChoice(null);
     setActiveView("operations");
     void signOutFirebase();
   }
 
+  // Que sombreros lleva esta cuenta, cual se abre y si hay selector lo decide `session-hats`, que
+  // es donde esta probado. Repetir la condicion en el JSX es como se desincronizan pantalla y
+  // nucleo: la pantalla no vuelve a preguntarse quien puede elegir, solo lo dibuja.
+  // Nada de esto es un hook, asi que no altera el orden de los de arriba.
+  const sessionClaims: SessionClaims | null = session
+    ? { role: session.role, communityId: session.ledCommunityId, communityStanding: session.communityStanding }
+    : null;
+  const hats = sessionClaims ? availableHats(sessionClaims) : [];
+  const activeHat: Hat = sessionClaims
+    ? (hatChoice && hats.includes(hatChoice) ? hatChoice : defaultHat(sessionClaims))
+    : "operational";
+  const canPickHat = sessionClaims ? shouldShowHatSelector(sessionClaims) : false;
+
   const view = useMemo(() => {
     if (!session) return null;
+    // El sombrero manda ANTES que el papel. Con el de comunidad no se le ensena ni un pedido, ni un
+    // cliente, ni el saldo de NINGUNA tienda — tampoco la suya (RF_09). Es regla de presentacion,
+    // no de autorizacion: el servidor le sigue reconociendo lo que su papel de tienda le da, porque
+    // ese derecho es suyo; lo que hace la pantalla es no ensenarselo.
+    if (activeHat === "community") {
+      // La comunidad sale de `ledCommunityId`. El `profileId` es el respaldo para el lider PURO,
+      // cuya sesion guardada por la version anterior no traia el campo nuevo.
+      const ledCommunityId = session.ledCommunityId ?? (session.role === "community_leader" ? session.profileId : "");
+      return <CommunityLeaderView state={viewState} communityId={ledCommunityId} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
+    }
     if (activeView === "wallet" && session.role !== "messenger" && session.role !== "seller_logistics") {
       // El admin ve ademas el saldo por tienda y las solicitudes de pago: complementa el historial
       // de movimientos de WalletPage, no lo repite. Antes vivia sepultado en la columna lateral de
@@ -12732,19 +12813,21 @@ export function OperationsApp() {
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
     if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} />;
     if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
-    if (session.role === "community_leader") return <CommunityLeaderView state={viewState} session={session} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
     if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
     return <AdminView view={activeView} state={viewState} setState={setState} session={session} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
-  }, [activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);
+  }, [activeHat, activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;
 
   return (
     <div className="bloom-field min-h-screen">
-      <ViewTabs activeView={activeView} onChange={setActiveView} role={session.role} />
+      {/* Con el sombrero de comunidad no hay destinos operativos que ofrecer: esa pantalla es una
+          sola, igual que hoy para el lider de comunidad. El riel se filtra por ese papel en vez de
+          inventar una lista aparte. */}
+      <ViewTabs activeView={activeView} onChange={setActiveView} role={activeHat === "community" ? "community_leader" : session.role} />
       {/* pb-24 en movil deja libre la barra inferior; md:pl-[84px] deja sitio al riel. */}
       <div className="min-w-0 pb-24 md:pb-0 md:pl-[84px]">
-        <Header session={session} remoteEnabled={remoteEnabled} onSignOut={signOut} />
+        <Header session={session} remoteEnabled={remoteEnabled} onSignOut={signOut} hat={activeHat} canPickHat={canPickHat} onHatChange={setHatChoice} />
         {hydrated ? view : <AppSkeleton />}
         <AuditBar state={state} />
       </div>

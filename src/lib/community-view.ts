@@ -4,6 +4,8 @@ import type {
   BulkSignupDisableSkipReason
 } from "../../functions/src/community-containment";
 import type { CommunityStats } from "../../functions/src/community-stats-math";
+import type { CommunityPricingField } from "../../functions/src/community-pricing";
+import { scheduleEffectiveAt } from "../../functions/src/community-pricing";
 import { normalizeSlug, validateSlug } from "../../functions/src/community-slug";
 import type { Role } from "./types";
 
@@ -377,12 +379,23 @@ export type AdminCommunityRow = {
    * No confundir con lo pagado (`communityCashbackPaidCop`), que es lo que ya salio de caja.
    */
   cashbackAccruedCop: number;
+  /**
+   * RF_13: cuanto de `cashbackAccruedCop` lo genero la tienda del PROPIO lider. Cifra aparte y
+   * NUNCA restada del total (ver el comentario de `buildAdminCommunityList`). Siempre presente,
+   * en cero si no aplica.
+   */
+  leaderStoreCashbackAccruedCop: number;
 };
 
 type AdminCommunityLike = {
   id: string;
   name: string;
   leaderName?: string;
+  /**
+   * CUAL de las tiendas es la del lider. Entra como dato porque este nucleo es puro: no lee
+   * reclamos de autenticacion. Quien arma el input lo saca del documento de la comunidad.
+   */
+  leaderSellerId?: string;
   pricing?: { sellerDeliveredFeeCop?: number; sellerFailedFeeCop?: number; fulfillmentFeeCop?: number };
 };
 
@@ -394,6 +407,8 @@ type AdminCashbackEntryLike = {
   type: string;
   amountCop: number;
   settlementId?: string;
+  /** Que tienda lo genero. Puede faltar en asientos antiguos: ver la regla de imputacion. */
+  sellerId?: string;
 };
 
 /**
@@ -438,6 +453,21 @@ function communityPriceOr(own: number | undefined, fallback: number): number {
  * - El filtro mira `ownerType` Y `type`. `ownerId` no es unico entre colecciones, y la wallet del
  *   lider tambien lleva pagos de corte: sumarlo todo infla la cifra con la que se deciden precios.
  * - El orden es el del catalogo, nunca el orden en que Firestore entregue asientos o tiendas.
+ * - **RF_13: la tienda del propio lider sale APARTE, nunca restada.** Que un lider tenga tienda en
+ *   la comunidad que lidera es normal —suele ser el primer vendedor—, y los cortes le cobran ese
+ *   cashback como a cualquier otra tienda. Restarlo de `cashbackAccruedCop` para que "no contamine"
+ *   descuadraria el panel con la caja: el total dejaria de coincidir con lo que se gira. Por eso
+ *   RF_14 se mantiene intacto —la tienda del lider cuenta como una tienda mas en `stores` y su
+ *   cashback suma al total— y RF_13 se satisface con una SEGUNDA cifra,
+ *   `leaderStoreCashbackAccruedCop`, que responde "cuanto de esto vuelve al bolsillo de quien fija
+ *   el precio". Dos numeros, no uno.
+ * - **El campo existe siempre, con cero cuando no aplica.** Un `undefined` es un hueco que nadie
+ *   audita: quien lee la fila no puede distinguir "no genero nada" de "nadie lo calculo".
+ * - **Un asiento sin `sellerId` suma al total y NO se imputa al lider.** Los asientos antiguos no
+ *   llevan tienda; atribuirlos al lider por defecto seria inventarse una cifra, y justo la cifra
+ *   con la que se le audita. Sin dato, no hay imputacion.
+ * - **La tienda del lider tiene que estar en SU comunidad.** Un lider puede vender en otra
+ *   comunidad (pasa): ese cashback no es suyo como lider, y su cifra aqui es cero.
  */
 export function buildAdminCommunityList(input: {
   communities: AdminCommunityLike[];
@@ -456,15 +486,41 @@ export function buildAdminCommunityList(input: {
     storesByCommunity.set(communityId, (storesByCommunity.get(communityId) ?? 0) + 1);
   }
 
+  // De que comunidad es cada tienda. Hace falta para no imputarle al lider el cashback que su
+  // tienda genero en una comunidad que NO lidera.
+  const communityBySeller = new Map<string, string>();
+  for (const seller of sellers) {
+    const sellerId = nonEmptyText(seller?.id, "");
+    const communityId = nonEmptyText(seller?.communityId, "");
+    if (sellerId && communityId) communityBySeller.set(sellerId, communityId);
+  }
+
+  // La tienda del lider de cada comunidad, solo si vive DENTRO de ella.
+  const leaderStoreByCommunity = new Map<string, string>();
+  for (const community of communities) {
+    const leaderSellerId = nonEmptyText(community?.leaderSellerId, "");
+    if (!leaderSellerId) continue;
+    if (communityBySeller.get(leaderSellerId) !== community.id) continue;
+    leaderStoreByCommunity.set(community.id, leaderSellerId);
+  }
+
   const accruedByCommunity = new Map<string, number>();
+  const leaderStoreAccruedByCommunity = new Map<string, number>();
   for (const entry of entries) {
     if (entry?.ownerType !== "community_leader") continue;
     if (entry.type !== "community_cashback") continue;
     const communityId = nonEmptyText(entry.ownerId, "");
     if (!communityId) continue;
-    accruedByCommunity.set(
+    const amountCop = numericCopOrZero(entry.amountCop);
+    accruedByCommunity.set(communityId, (accruedByCommunity.get(communityId) ?? 0) + amountCop);
+
+    // El desglose se SUMA aparte sobre el mismo asiento; nunca se descuenta del total de arriba.
+    const sellerId = nonEmptyText(entry.sellerId, "");
+    if (!sellerId) continue;
+    if (leaderStoreByCommunity.get(communityId) !== sellerId) continue;
+    leaderStoreAccruedByCommunity.set(
       communityId,
-      (accruedByCommunity.get(communityId) ?? 0) + numericCopOrZero(entry.amountCop)
+      (leaderStoreAccruedByCommunity.get(communityId) ?? 0) + amountCop
     );
   }
 
@@ -487,8 +543,91 @@ export function buildAdminCommunityList(input: {
         settings.fulfillmentFeeCop
       )
     },
-    cashbackAccruedCop: accruedByCommunity.get(community.id) ?? 0
+    cashbackAccruedCop: accruedByCommunity.get(community.id) ?? 0,
+    leaderStoreCashbackAccruedCop: leaderStoreAccruedByCommunity.get(community.id) ?? 0
   }));
+}
+
+// --- El lider que se cambia el precio a su propia tienda (RF_24) ------------------------------
+
+/** Los tres conceptos, con el mismo rotulo que ya lee la tienda en "Tu tarifa". */
+const LEADER_PRICING_LABELS: Record<CommunityPricingField, string> = {
+  sellerDeliveredFeeCop: "Flete por entrega",
+  sellerFailedFeeCop: "Cobro por fallido",
+  fulfillmentFeeCop: "Manejo desde bodega"
+};
+
+/** Pesos con separador de miles. Un aviso que dice "15000" se lee mal justo cuando importa. */
+function copText(value: number): string {
+  const amount = Number.isFinite(value) ? Math.round(value) : 0;
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}$${Math.abs(amount).toLocaleString("es-CO")}`;
+}
+
+export type LeaderPriceChangeNotice = {
+  field: CommunityPricingField;
+  fromCop: number;
+  toCop: number;
+  isRaise: boolean;
+  /** RF_24: si el que cambia el precio se lo cambia (tambien) a si mismo. */
+  affectsLeaderOwnStore: boolean;
+  /** El mismo plazo que para cualquier otro cambio. Sin excepcion. */
+  effectiveAt: string;
+  /** El aviso al administrador. `null` cuando el lider no tiene tienda en su comunidad. */
+  adminAlert: string | null;
+};
+
+/**
+ * RF_24: que se marca y que se le avisa al administrador cuando un lider mueve un precio de su
+ * comunidad teniendo tienda dentro de ella.
+ *
+ * Tres decisiones que no son evidentes y que estan atadas en `community-view.test.ts`:
+ *
+ * - **La fecha de vigencia sale de `scheduleEffectiveAt` y de ningun otro sitio.** Ni siquiera en
+ *   el caso en que la UNICA tienda afectada es la del propio lider: el atajo tentador ahi es "que
+ *   entre ya, nadie mas se entera", y es falso dos veces —el plazo de RF_28 es del precio, no de a
+ *   quien le duela, y manana esa comunidad puede tener tiendas ajenas pagando un precio que subio
+ *   sin aviso—. Reimplementar el plazo aqui crearia una segunda copia de la regla que divergiria.
+ * - **El aviso NO depende del sentido del cambio.** Una bajada tambien se avisa: el conflicto de
+ *   interes es que quien decide el precio es parte interesada, y eso existe igual bajando. Ademas
+ *   una bajada entra en el acto, asi que es el caso en el que el admin tiene MENOS margen.
+ * - **Sin tienda del lider en la comunidad no se fabrica un aviso.** Un aviso que salta siempre es
+ *   un aviso que el admin aprende a ignorar, y entonces tampoco vera el que si importa.
+ */
+export function buildLeaderPriceChangeNotice(input: {
+  communityId: string;
+  leaderSellerId?: string;
+  sellers: { id: string; communityId?: string }[];
+  field: CommunityPricingField;
+  fromCop: number;
+  toCop: number;
+  nowIso: string;
+}): LeaderPriceChangeNotice {
+  const { communityId, field, fromCop, toCop, nowIso } = input;
+
+  const leaderSellerId = nonEmptyText(input.leaderSellerId, "");
+  const community = nonEmptyText(communityId, "");
+  // La tienda del lider cuenta solo si esta en la comunidad cuyo precio se esta moviendo: un
+  // lider puede vender en otra comunidad, y ahi el cambio no le toca el bolsillo.
+  const affectsLeaderOwnStore =
+    leaderSellerId !== "" &&
+    community !== "" &&
+    (input.sellers ?? []).some(
+      (seller) =>
+        nonEmptyText(seller?.id, "") === leaderSellerId &&
+        nonEmptyText(seller?.communityId, "") === community
+    );
+
+  const isRaise = toCop > fromCop;
+  const effectiveAt = scheduleEffectiveAt(fromCop, toCop, nowIso);
+
+  const adminAlert = affectsLeaderOwnStore
+    ? `Conflicto de interes: el lider de la comunidad ${community} ${isRaise ? "sube" : "baja"} ` +
+      `"${LEADER_PRICING_LABELS[field]}" de ${copText(fromCop)} a ${copText(toCop)} y su propia ` +
+      `tienda (${leaderSellerId}) esta en esa comunidad. Rige desde ${effectiveAt}.`
+    : null;
+
+  return { field, fromCop, toCop, isRaise, affectsLeaderOwnStore, effectiveAt, adminAlert };
 }
 
 // --- El alta de un lider de comunidad, antes de llamar al servidor (RF_50, RF_02, RF_04) ------
