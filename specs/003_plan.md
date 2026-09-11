@@ -20,8 +20,22 @@ const isLeaderOf = (actor, communityId) =>
   actor.role === "community_leader" && !!communityId && actor.communityId === communityId;
 ```
 
-Los **trece** predicados de permiso del servidor cuelgan de ahi. Quitar la comprobacion de rol los
-arregla todos de golpe.
+De `isLeaderOf` cuelgan **cuatro** predicados, no trece: `canEditCommunityPricing`,
+`canEditCommunityBrand`, `canReadCommunityStats` y —por el primero— `canEditTariffConcept`. El
+archivo exporta trece booleanos, pero los otros nueve son `isAdmin` puro o estado de comunidad. La
+primera version de este plan confundio "predicados del archivo" con "predicados que dependen del
+candado".
+
+**Y el que mas importa no se arregla tocando `isLeaderOf`.** `canReadSellerOperational` comprueba el
+rol **a mano y con retorno anticipado**:
+
+```ts
+if (actor.role === "seller" || actor.role === "seller_logistics") return actor.sellerId === seller.id;
+if (actor.role === "community_leader") return !!seller.communityId && seller.communityId === actor.communityId;
+```
+
+Una tienda-lider entra por la **primera** rama y devuelve `false` para todas las tiendas de su
+comunidad. Hay que reescribirlo como union de los dos derechos, no como cadena de exclusion.
 
 ### H2. No hay colision posible entre "lidera" y "pertenece"
 
@@ -49,7 +63,37 @@ necesita saberlo **al congelar el precio de un pedido**, donde no hay sesion del
 **Consecuencia:** el documento de la comunidad gana `leaderUid`. Es la unica forma de que RF_20
 funcione, y de paso hace auditable quien lidera sin leer los reclamos de nadie.
 
-### H5. Las reglas de Firestore repiten el mismo candado, dos veces
+### H6. `leaderUid` no existe, y desplegar RF_20 sin migrar apaga el cashback de todas
+
+`grep leaderUid` sobre el repositorio da **cero resultados**, y `createCommunityLeader` escribe nueve
+campos en el documento de la comunidad, ninguno de ellos el lider.
+
+**Consecuencia, y es la mas grave de este plan:** desplegar la regla de RF_20 —sin `leaderUid` se
+cobra tarifa base— convertiria **todas las comunidades vivas en comunidades sin lider**. Tarifa base
+y **cashback cero** en cada pedido nuevo, sin error y sin aviso. Es literalmente la regla de oro #5.
+
+Hacen falta **dos** piezas que la primera version no tenia: escribir `leaderUid` en el alta, y
+**rellenar las comunidades que ya existen**. La migracion va **antes** de que RF_20 llegue a
+produccion, no despues.
+
+### H7. Una comunidad desactivada tiene que dejar de cobrar el sobreprecio
+
+El caso limite "la comunidad que lidera se desactiva" se apoyaba solo en `leaderUid`. Pero
+`planLeaderStatusChange` pone `status: "disabled"` y **declara que no toca nada mas**. Si el precio
+solo mira `leaderUid`, una comunidad desactivada **sigue cobrando de mas**. RF_20 tiene que mirar las
+dos cosas: sin lider **o** desactivada, tarifa base.
+
+### H8. `Session` no vive donde el plan decia
+
+No esta en `src/lib/types.ts`: es `type Session = Omit<LocalAccount, "password">` en
+**`operations-app.tsx:177`**. El corte de tareas que separaba "los tipos" de "la pantalla" era
+inviable: son el mismo archivo.
+
+### H5. Las reglas de Firestore repiten el mismo candado, **y hay una tercera capa**
+
+**`storage.rules:24`** tiene su propio `isCommunityLeaderOf()` que exige el rol. Sin tocarlo, una
+tienda-lider pasara el predicado y la callable de logo, y **Storage la denegara**. Son tres capas
+independientes, no dos.
 
 `firestore.rules:34-42`: `isCommunityLeader()` y `sellerInMyCommunity()` comprueban las dos
 `role() == "community_leader"`. Mismo cambio, misma razon. **Sin esto, el servidor sigue negando**
@@ -63,7 +107,8 @@ aunque los predicados de las callables pasen: son dos capas independientes.
 |---|---|
 | `functions/src/community-access.ts` *(modificar)* | `isLeaderOf` deja de mirar el rol. Se anaden `leadsCommunity(actor)`, `isCreditorOf(actor, communityId)` y el predicado que separa **liderar** de **ser acreedor** (RF_23). |
 | `functions/src/community-grant.ts` **(nuevo)** | `planLeadershipGrant` y `planLeadershipRevoke`: que reclamos quedan, que se escribe en la comunidad, y que **no** se toca. Puros. Cubre RF_04, RF_05, RF_06, RF_17, RF_18, RF_19. |
-| `functions/src/community-pricing.ts` *(modificar)* | Una comunidad **sin `leaderUid`** resuelve a tarifa base y no causa cashback (RF_20), conservando lo ya congelado (RF_21). |
+| `functions/src/community-pricing.ts` *(modificar)* | Una comunidad **sin `leaderUid` o desactivada** resuelve a tarifa base y no causa cashback (RF_20, H7), conservando lo ya congelado (RF_21). |
+| `scripts/backfill-leader-uid.js` **(nuevo)** | Rellena `leaderUid` en las comunidades que ya existen (H6). Se corre **antes** de desplegar RF_20. |
 | `src/lib/session-hats.ts` **(nuevo)** | Que papeles tiene una cuenta, cual esta activo, y si debe verse el selector (RF_07, RF_11). Puro, sin React. |
 | `src/lib/community-view.ts` *(modificar)* | El reparto del cashback de la tienda del propio lider (RF_13). |
 
@@ -72,14 +117,15 @@ aunque los predicados de las callables pasen: son dos capas independientes.
 | Archivo | Responsabilidad |
 |---|---|
 | `functions/src/communities.ts` *(modificar)* | Callables `grantCommunityLeadership` y `revokeCommunityLeadership`, sobre los planes puros y con la reversion de la spec 001 RF_55. |
-| `functions/src/roles.ts` *(modificar)* | `setUserRole` conserva `communityId` en vez de borrarlo: hoy lo pierde al reescribir los reclamos. |
-| `firestore.rules` *(modificar)* | Los dos candados de H5. |
+| `functions/src/roles.ts` *(modificar)* | **`setUserRole` Y `createManagedUser`** conservan `communityId`: las dos reescriben los reclamos con el mismo patron y las dos lo borrarian. |
+| `functions/src/community-stats.ts` *(modificar)* | Construye su `Actor` **inline**, aparte de `actorFrom`. Sin anadirle `communityStanding`, un acreedor seguiria pasando `canReadCommunityStats`. |
+| `firestore.rules`, `storage.rules` *(modificar)* | Los candados de H5. **Tres capas, no dos.** Y al quitar el rol hay que exigir que `communityId` exista y no sea vacio, o se abren lecturas de dinero a cuentas sin comunidad. |
 
 ### Cliente
 
 | Archivo | Responsabilidad |
 |---|---|
-| `src/lib/types.ts` *(modificar)* | `Session` gana `ledCommunityId?` y `communityStanding?: "leader" \| "creditor"`. `profileId` pasa a ser **solo** la identidad operativa. |
+| `src/components/operations-app.tsx` *(modificar)* | Ahi vive `Session` (H8). Gana `ledCommunityId?` y `communityStanding?`; `profileId` pasa a ser **solo** la identidad operativa. |
 | `src/lib/firebase/state-store.ts` *(modificar)* | `FirestoreStateContext` gana `ledCommunityId?`. Los objetivos del lider se **suman** a los del papel operativo (RF_15, RF_16). |
 | `src/components/operations-app.tsx` *(modificar)* | El selector de papel y el reparto de vistas. |
 

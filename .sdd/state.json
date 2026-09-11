@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "analyze",
+  "phase": "implement",
   "activeSpec": {
     "file": "specs/003_doble_rol.md",
     "status": "approved"
@@ -27,6 +27,8 @@
       ],
       "files": [
         "functions/src/community-access.ts",
+        "functions/src/communities.ts",
+        "functions/src/community-stats.ts",
         "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
@@ -37,17 +39,7 @@
         "RF_04",
         "RF_06",
         "RF_17",
-        "RF_18"
-      ],
-      "files": [
-        "functions/src/community-grant.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": false,
-      "done": false
-    },
-    "T4": {
-      "requirements": [
+        "RF_18",
         "RF_19"
       ],
       "files": [
@@ -57,7 +49,7 @@
       "testWritten": false,
       "done": false
     },
-    "T5": {
+    "T4": {
       "requirements": [
         "RF_05",
         "RF_22"
@@ -69,7 +61,43 @@
       "testWritten": false,
       "done": false
     },
+    "T5": {
+      "requirements": [
+        "RF_23",
+        "RF_11"
+      ],
+      "files": [
+        "functions/src/community-grant.ts",
+        "functions/src/orders.ts",
+        "src/lib/community-grant.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
     "T6": {
+      "requirements": [
+        "RF_17"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "functions/src/community-grant.ts",
+        "src/lib/community-grant.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T7": {
+      "requirements": [
+        "RF_20"
+      ],
+      "files": [
+        "scripts/backfill-leader-uid.js",
+        "docs/migraciones.md"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T8": {
       "requirements": [
         "RF_20",
         "RF_21",
@@ -82,7 +110,7 @@
       "testWritten": false,
       "done": false
     },
-    "T7": {
+    "T9": {
       "requirements": [
         "RF_17",
         "RF_05"
@@ -95,36 +123,34 @@
       "testWritten": false,
       "done": false
     },
-    "T8": {
+    "T10": {
       "requirements": [
         "RNF_02"
       ],
       "files": [
         "firestore.rules",
+        "storage.rules",
         "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
       "done": false
     },
-    "T9": {
+    "T11": {
       "requirements": [
         "RF_07",
         "RF_10",
         "RF_11"
       ],
       "files": [
-        "src/lib/types.ts",
         "src/lib/session-hats.ts",
         "src/lib/session-hats.test.ts"
       ],
       "testWritten": false,
       "done": false
     },
-    "T10": {
+    "T12": {
       "requirements": [
         "RF_07",
-        "RF_08",
-        "RF_09",
         "RF_10"
       ],
       "files": [
@@ -134,7 +160,21 @@
       "testWritten": false,
       "done": false
     },
-    "T11": {
+    "T13": {
+      "requirements": [
+        "RF_07",
+        "RF_08",
+        "RF_09"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/session-hats.test.ts",
+        "src/lib/community-access.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T14": {
       "requirements": [
         "RF_15",
         "RF_16",
@@ -147,7 +187,7 @@
       "testWritten": false,
       "done": false
     },
-    "T12": {
+    "T15": {
       "requirements": [
         "RF_13",
         "RF_14",
@@ -156,7 +196,8 @@
       "files": [
         "src/lib/community-view.ts",
         "src/lib/community-view.test.ts",
-        "functions/src/community-pricing.ts"
+        "functions/src/community-pricing.ts",
+        "src/lib/community-pricing.test.ts"
       ],
       "testWritten": false,
       "done": false
