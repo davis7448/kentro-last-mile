@@ -18,7 +18,12 @@ import { AggregateField, getFirestore, type Query } from "firebase-admin/firesto
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 import { canReadCommunityStats, type Actor } from "./community-access";
-import { buildCommunityStats, type RawCommunityAggregates } from "./community-stats-math";
+import {
+  buildCommunityStats,
+  metricDateSource,
+  type CommunityMetric,
+  type RawCommunityAggregates
+} from "./community-stats-math";
 
 const isoDate = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha invalida.");
 const statsSchema = z.object({
@@ -47,9 +52,14 @@ export const getCommunityStats = onCall(async (request) => {
   const from = startDate ? `${startDate}T00:00:00.000Z` : "";
   const to = endDate ? `${endDate}T23:59:59.999Z` : "";
 
-  /** Un eje por campo de fecha. Rotulados en el resultado: no se mezclan en silencio. */
-  const onAxis = (field: "createdAt" | "pickedUpAt" | "closedAt", sellerId?: string): Query => {
-    let q: Query = db.collection("orders").where("communityId", "==", communityId);
+  /**
+   * La consulta pide su eje por METRICA, no por nombre de campo: coleccion y campo salen de
+   * `metricDateSource`, la misma funcion de la que sale el rotulo que ve el lider. Asi no
+   * pueden divergir.
+   */
+  const onAxis = (metric: CommunityMetric, sellerId?: string): Query => {
+    const { collection, field } = metricDateSource(metric);
+    let q: Query = db.collection(collection).where("communityId", "==", communityId);
     if (sellerId) q = q.where("sellerId", "==", sellerId);
     if (from) q = q.where(field, ">=", from);
     if (to) q = q.where(field, "<=", to);
@@ -63,12 +73,13 @@ export const getCommunityStats = onCall(async (request) => {
   const perStore = await Promise.all(
     sellerIds.map(async (sellerId) => {
       const [created, dispatched, delivered, failed] = await Promise.all([
-        countOf(onAxis("createdAt", sellerId)),
-        countOf(onAxis("pickedUpAt", sellerId)),
-        countOf(onAxis("closedAt", sellerId).where("status", "==", "delivered")),
+        countOf(onAxis("created", sellerId)),
+        countOf(onAxis("dispatched", sellerId)),
+        // Entregados y fallidos comparten eje (cierre) y por tanto campo: los separa el status.
+        countOf(onAxis("delivered", sellerId).where("status", "==", "delivered")),
         // `failed_visit` en POSITIVO, igual que en order-stats: restar las no cobrables deja
         // que una categoria nueva se cuele como cobrable sin que nadie se entere.
-        countOf(onAxis("closedAt", sellerId).where("status", "==", "failed"))
+        countOf(onAxis("failed", sellerId).where("status", "==", "failed"))
       ]);
       return { sellerId, created, dispatched, delivered, failed };
     })
@@ -81,12 +92,13 @@ export const getCommunityStats = onCall(async (request) => {
    * es la misma funcion pura en los dos lados (`buildCommunityStats`), asi que no pueden
    * divergir.
    */
+  const cashbackSource = metricDateSource("cashback");
   let entries: Query = db
-    .collection("walletEntries")
+    .collection(cashbackSource.collection)
     .where("ownerType", "==", "community_leader")
     .where("ownerId", "==", communityId);
-  if (from) entries = entries.where("createdAt", ">=", from);
-  if (to) entries = entries.where("createdAt", "<=", to);
+  if (from) entries = entries.where(cashbackSource.field, ">=", from);
+  if (to) entries = entries.where(cashbackSource.field, "<=", to);
   const accrued = await entries.aggregate({ total: AggregateField.sum("amountCop") }).get();
   const cashbackAccruedCop = Number(accrued.data().total) || 0;
 

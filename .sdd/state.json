@@ -1,11 +1,10 @@
 {
   "version": 1,
-  "phase": "implement",
+  "phase": "verify",
   "activeSpec": {
     "file": "specs/001_lider_de_comunidad.md",
     "status": "approved"
   },
-  "activeTask": "T29",
   "tasks": {
     "T1": {
       "requirements": [
@@ -402,8 +401,8 @@
         "docs/rendimiento.md"
       ],
       "testWritten": true,
-      "done": false,
-      "blocked": "RNF_01 MEDIDO Y NO SE CUMPLE (10-09-2026): el lider baja un asiento de cashback por pedido -- 100 pedidos/100 docs, 10.000 pedidos/10.000 docs (2,67 MB). La suscripcion de wallet de community_leader en state-store.ts no tiene ventana ni limite. Cifras en src/lib/community-cashback-entries.test.ts (bloque T28) y en docs/rendimiento.md. Arreglarlo cae FUERA del alcance de T28: lo recoge T42, que al cerrarse desbloquea esta. RNF_02 si esta cubierto y verde."
+      "done": true,
+      "blocked": "RESUELTO 11-09-2026 por T42: la suscripcion de wallet del lider se elimino, la cuenta de documentos ya no crece con el volumen (0 con 100 y con 10.000 pedidos) y docs/rendimiento.md esta reescrito."
     },
     "T29": {
       "requirements": [
@@ -415,8 +414,8 @@
         "functions/src/community-signup.ts",
         "src/lib/community-signup.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T30": {
       "requirements": [
@@ -427,8 +426,8 @@
         "functions/src/community-signup.ts",
         "src/lib/community-signup.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T31": {
       "requirements": [
@@ -464,10 +463,11 @@
         "functions/src/settlement-math.ts",
         "src/lib/settlement-math.test.ts",
         "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
+        "src/lib/community-view.test.ts",
+        "src/components/operations-app.tsx"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T34": {
       "requirements": [
@@ -478,8 +478,8 @@
         "src/lib/community-view.test.ts",
         "src/components/operations-app.tsx"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T35": {
       "requirements": [
@@ -490,8 +490,8 @@
         "functions/src/orders.ts",
         "src/lib/community-access.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T36": {
       "requirements": [
@@ -502,8 +502,8 @@
         "functions/src/communities.ts",
         "src/lib/community-access.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T37": {
       "requirements": [
@@ -515,7 +515,7 @@
         "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
-      "done": false
+      "done": true
     },
     "T38": {
       "requirements": [
@@ -527,8 +527,8 @@
         "src/lib/community-stats.test.ts",
         "src/components/operations-app.tsx"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T39": {
       "requirements": [
@@ -541,8 +541,8 @@
         "functions/src/communities.ts",
         "src/lib/community-pricing.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T40": {
       "requirements": [
@@ -556,8 +556,8 @@
         "src/lib/community-slug.test.ts",
         "src/lib/community-view.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T41": {
       "requirements": [
@@ -571,8 +571,8 @@
         "src/lib/community-view.test.ts",
         "src/components/operations-app.tsx"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T42": {
       "requirements": [
@@ -583,8 +583,8 @@
         "src/lib/community-cashback-entries.test.ts",
         "docs/rendimiento.md"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T43": {
       "requirements": [
@@ -596,8 +596,8 @@
         "src/lib/community-view.ts",
         "src/lib/community-view.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T44": {
       "requirements": [
@@ -624,10 +624,11 @@
         "src/lib/firebase/auth.ts",
         "src/components/operations-app.tsx",
         "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts"
+        "src/lib/community-access.test.ts",
+        "storage.rules"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T46": {
       "requirements": [
@@ -640,7 +641,7 @@
         "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
-      "done": false
+      "done": true
     },
     "T47": {
       "requirements": [
@@ -652,8 +653,8 @@
         "functions/src/community-pricing.ts",
         "src/lib/community-pricing.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

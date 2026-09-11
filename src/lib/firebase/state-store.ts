@@ -460,12 +460,23 @@ export function subscribeFirestoreState(
       : context?.role === "community_leader"
         ? [
             /**
-             * Espejo de getOrdersForContext: CERO pedidos. El lider de comunidad solo necesita
-             * su propia comunidad, sus tiendas y sus cortes; las cifras llegan agregadas del
-             * servidor. Tocar este bloque sin tocar el otro hace que el primer pintado y el
-             * listener muestren cosas distintas.
+             * Espejo de getOrdersForContext y de getWalletForContext: CERO pedidos y CERO
+             * asientos de wallet. El lider de comunidad solo necesita su propia comunidad, sus
+             * tiendas y sus cortes.
+             *
+             * Aqui hubo una suscripcion a sus asientos `community_cashback` sin ventana ni
+             * limite: uno por pedido cerrado de su comunidad, 10.000 documentos y 2,67 MB con
+             * 10.000 pedidos, creciendo para siempre. No se acoto, se ELIMINO, porque
+             * `CommunityLeaderView` no lee `state.wallet` en ningun punto: el cashback CAUSADO
+             * llega agregado del servidor (`getCommunityStats` -> `cashbackAccruedCop`) y el
+             * PAGADO sale de estos mismos `settlements` via `communityCashbackPaidCop`. Acotar
+             * por corte tampoco habria servido: todo asiento nace sin liquidar, asi que dentro
+             * del periodo abierto la cuenta seguiria subiendo uno a uno.
+             *
+             * `settlements` NO se puede quitar: de ahi sale el cashback pagado, y sin el la
+             * cifra cae a cero en silencio. Tocar este bloque sin tocar el otro hace que el
+             * primer pintado y el listener muestren cosas distintas.
              */
-            { key: "wallet", target: query(walletRef, where("ownerType", "==", "community_leader"), where("ownerId", "==", context.profileId)) },
             { key: "settlements", target: query(settlementRef, where("kind", "==", "community_leader"), where("ownerId", "==", context.profileId)) }
           ]
       : context?.role === "driver"
@@ -960,7 +971,10 @@ async function getWalletForContext(context?: FirestoreStateContext): Promise<Wal
   if (context?.role === "driver") {
     return getCollection<WalletEntry>("walletEntries", where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId));
   }
-  if (context?.role === "messenger" || context?.role === "seller_logistics") return Promise.resolve([]);
+  // El lider de comunidad va aqui desde T42: su suscripcion de wallet se elimino, asi que esta
+  // funcion dejo de estar tapada por `skip` y sin esta rama caeria al `getCollection` final —
+  // la coleccion ENTERA — que ademas le devolverian las reglas como 403.
+  if (context?.role === "messenger" || context?.role === "seller_logistics" || context?.role === "community_leader") return Promise.resolve([]);
   return getCollection<WalletEntry>("walletEntries");
 }
 

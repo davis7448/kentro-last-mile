@@ -3,6 +3,7 @@ import type {
   BulkSignupDisableReport,
   BulkSignupDisableSkipReason
 } from "../../functions/src/community-containment";
+import type { CommunityStats } from "../../functions/src/community-stats-math";
 import type { Role } from "./types";
 
 /**
@@ -148,4 +149,343 @@ export function buildBulkSignupDisableView(report: BulkSignupDisableReport): Bul
     skipped: tallyByReason(report.untouched, BULK_DISABLE_SKIP_LABELS),
     blocked: [...report.blocked]
   };
+}
+
+// --- La comunidad que todavia no tiene tiendas (RF_32) ---------------------------------------
+
+/**
+ * RF_32: la RUTA de invitacion de una comunidad, o `null` si todavia no hay slug que repartir.
+ *
+ * Ruta y no URL a proposito: el origen lo pone la pantalla, que es quien vive en el navegador.
+ * Asi esto se puede probar sin `window`, y una funcion de dominio no queda atada a que exista.
+ *
+ * El `null` es el punto entero de la funcion. La plantilla que habia en el JSX interpolaba el
+ * slug tal cual, asi que una comunidad recien creada producia una ruta con un hueco dentro:
+ * copiable, mandable por WhatsApp y abrible, y llevaba a una pantalla de registro que no
+ * resuelve ninguna comunidad. El lider no tenia forma de enterarse de que repartia una ruta
+ * rota. Y es justo la comunidad SIN TIENDAS —la que describe RF_32— la que mas probablemente no
+ * tiene slug aun, porque nunca ha captado a nadie por el enlace. Se recorta ademas porque un
+ * espacio al final se escapa a `%20` al pegarlo y deja de resolver la comunidad: el mismo
+ * enlace roto con otra cara.
+ */
+export function communityInvitePath(community: { slug?: string | null }): string | null {
+  const slug = typeof community?.slug === "string" ? community.slug.trim() : "";
+  return slug.length > 0 ? `/registro/${slug}` : null;
+}
+
+export type EmptyCommunityView = {
+  hasStores: boolean;
+  totals: CommunityStats["totals"];
+  invitePath: string | null;
+};
+
+/**
+ * RF_32: lo que ve un lider cuya comunidad todavia no tiene tiendas.
+ *
+ * Las cifras en cero Y el enlace, juntos y decididos en el mismo sitio: el panel no puede
+ * quedarse en blanco, y el enlace es lo unico accionable que tiene un lider sin tiendas. Los
+ * totales se pasan tal cual salen de `buildCommunityStats` —la vista no reinterpreta un cero ni
+ * lo esconde por serlo, que es justo como un panel acaba en blanco—, y que falte el enlace no
+ * puede llevarse las cifras por delante: sin slug se pintan igual, solo que sin nada que
+ * repartir.
+ */
+export function buildEmptyCommunityView(
+  community: { slug?: string | null },
+  stats: CommunityStats
+): EmptyCommunityView {
+  return {
+    hasStores: stats.emptiness !== "no_stores",
+    totals: stats.totals,
+    invitePath: communityInvitePath(community)
+  };
+}
+
+// --- El cashback que ya se pago (RF_49) -------------------------------------------------------
+
+/**
+ * RF_49: cuanto cashback de esta comunidad esta YA PAGADO, sumando los cortes del propio lider.
+ *
+ * Se calcula en cliente por una razon concreta: lo pagado no se puede agregar en servidor sin
+ * denormalizar el estado del corte en cada asiento de wallet, y duplicar ese dato es justo la
+ * clase de dependencia fragil que acaba divergiendo. Los cortes del lider, en cambio, ya los
+ * descarga el rol para pintar su propia pantalla, asi que la cifra sale de datos que estan a mano.
+ *
+ * Causado y pagado son DOS cifras distintas y ninguna sustituye a la otra: lo causado es lo que la
+ * comunidad ha generado; lo pagado es lo que ya salio de caja. Mientras el corte siga `pending`,
+ * el cashback esta causado y PENDIENTE, y por eso no suma aqui — contarlo como pagado le diria al
+ * lider que ya cobro un dinero que todavia se le debe.
+ *
+ * `netCop` ausente, nulo o ilegible cuenta como 0 y nunca produce `NaN`: un solo asiento sucio
+ * contaminaria el total entero y la pantalla mostraria "NaN" donde deberia ir una cifra de dinero.
+ * Un string numerico si cuenta, via `Number(...)`, que es lo que hace el codigo de hoy.
+ */
+export function communityCashbackPaidCop(
+  settlements: { kind: string; ownerId: string; status: string; netCop: number }[],
+  communityId: string
+): number {
+  return settlements
+    .filter((item) => item.kind === "community_leader" && item.ownerId === communityId)
+    .filter((item) => item.status === "paid" || item.status === "reconciled")
+    .reduce((total, item) => total + (Number(item.netCop) || 0), 0);
+}
+
+// --- El corte de cashback que hay que girarle al lider (RF_49) --------------------------------
+
+/** Lo que necesita una fila de liquidacion de lider para pintarse y para viajar al callable. */
+export type CommunityLeaderLiquidationRow = {
+  communityId: string;
+  communityName: string;
+  leaderName: string;
+  /** Los asientos que ese corte va a sellar. Sin ellos el corte se crea y no sella nada. */
+  walletEntryIds: string[];
+  orderIds: string[];
+  orders: number;
+  /** Neto: las reversas restan y el resultado NO se recorta a cero. */
+  cashbackCop: number;
+};
+
+type CommunityLeaderEntryLike = {
+  id: string;
+  ownerType: string;
+  ownerId: string;
+  type: string;
+  amountCop: number;
+  orderId?: string;
+  settlementId?: string;
+};
+
+type CommunityCatalogEntry = { id: string; name: string; leaderName?: string };
+
+/** Un texto que se pueda leer, o el respaldo. Nunca un hueco en una tabla de dinero. */
+function nonEmptyText(value: unknown, fallback: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > 0 ? text : fallback;
+}
+
+/** Un importe sucio vale 0 y jamas NaN: un solo asiento roto pinta "NaN" donde va la plata. */
+function copOrZero(value: unknown): number {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+/**
+ * RF_49: las filas de "cashback pendiente por girar" de la pantalla de liquidaciones.
+ *
+ * Va aparte de `LiquidationRow` (operations-app.tsx) a proposito: aquel tipo lleva un
+ * `role: "seller" | "driver"` que gobierna una quincena de ramas de render y de acciones, y
+ * ensancharlo para meter una tercera figura obligaria a revisarlas todas. El precedente es
+ * `buildSupplierLiquidationRows`, que hizo lo mismo con los proveedores.
+ *
+ * Reglas que no son evidentes y que estan atadas en `community-view.test.ts`:
+ *
+ * - El filtro mira `ownerType` Y `type`. `ownerId` no es unico entre colecciones: una tienda y
+ *   una comunidad pueden compartir id, y filtrar solo por el le giraria al lider el saldo de una
+ *   tienda entera.
+ * - Entra solo lo que NO tiene `settlementId`. Un asiento ya cortado que vuelve a entrar le
+ *   cuesta a la plataforma el mismo cashback dos veces.
+ * - La suma es NETA. `correctOrderStatus` compensa un cashback ya causado con un asiento
+ *   negativo en el periodo abierto; sumar solo los positivos paga un pedido que acabo fallido. Y
+ *   no se recorta a cero: un neto negativo es un descuento del proximo giro, que es lo que es.
+ * - La fila existe si hay ASIENTOS pendientes, no si el neto es positivo. Con un neto de cero
+ *   exacto (un cashback y su reversa) hay que cortar igual: si no, ese par queda pendiente para
+ *   siempre y muerde el neto del mes siguiente.
+ * - Una comunidad que no esta en el catalogo produce fila igual, con nombres de respaldo. El
+ *   catalogo llega recortado por rol, y perder la fila seria bajar un saldo en silencio, que es
+ *   justo la regla 5 del proyecto.
+ * - El orden sale del catalogo (las huerfanas detras, por id), nunca del orden en que Firestore
+ *   entregue los asientos: si las filas bailan entre renders, se marca pagado el corte de otra
+ *   comunidad.
+ */
+export function buildCommunityLeaderLiquidationRows(
+  communities: CommunityCatalogEntry[],
+  entries: CommunityLeaderEntryLike[]
+): CommunityLeaderLiquidationRow[] {
+  const pendingByCommunity = new Map<string, CommunityLeaderEntryLike[]>();
+  for (const entry of entries) {
+    if (entry?.ownerType !== "community_leader") continue;
+    if (entry.type !== "community_cashback") continue;
+    if (nonEmptyText(entry.settlementId, "") !== "") continue;
+    const communityId = nonEmptyText(entry.ownerId, "");
+    if (!communityId) continue;
+    const bucket = pendingByCommunity.get(communityId);
+    if (bucket) bucket.push(entry);
+    else pendingByCommunity.set(communityId, [entry]);
+  }
+
+  const known = new Set(communities.map((community) => community.id));
+  const orphanIds = [...pendingByCommunity.keys()].filter((id) => !known.has(id)).sort();
+
+  const buildRow = (
+    communityId: string,
+    catalog: CommunityCatalogEntry | undefined
+  ): CommunityLeaderLiquidationRow => {
+    const own = pendingByCommunity.get(communityId) ?? [];
+    const orderIds: string[] = [];
+    const seenOrders = new Set<string>();
+    for (const entry of own) {
+      const orderId = nonEmptyText(entry.orderId, "");
+      // Los ajustes manuales de cashback no cuelgan de ningun pedido: un "" en la lista viaja al
+      // callable y deja el corte apuntando a un pedido que no existe.
+      if (!orderId || seenOrders.has(orderId)) continue;
+      seenOrders.add(orderId);
+      orderIds.push(orderId);
+    }
+    return {
+      communityId,
+      communityName: nonEmptyText(catalog?.name, `Comunidad ${communityId}`),
+      leaderName: nonEmptyText(catalog?.leaderName, "Lider sin registrar"),
+      walletEntryIds: own.map((entry) => entry.id),
+      orderIds,
+      orders: orderIds.length,
+      cashbackCop: own.reduce((total, entry) => total + copOrZero(entry.amountCop), 0)
+    };
+  };
+
+  return [
+    ...communities
+      .filter((community) => pendingByCommunity.has(community.id))
+      .map((community) => buildRow(community.id, community)),
+    ...orphanIds.map((communityId) => buildRow(communityId, undefined))
+  ];
+}
+
+// --- La lista de comunidades del administrador (RF_34) ----------------------------------------
+
+/** Los tres conceptos que una comunidad puede tener a precio propio. */
+type AdminCommunityPricing = {
+  sellerDeliveredFeeCop: number;
+  sellerFailedFeeCop: number;
+  fulfillmentFeeCop: number;
+};
+
+/**
+ * Una fila de la tarjeta de comunidades del admin.
+ *
+ * Deliberadamente NO lleva `linkStatus` ni `status`: son estado del documento, no cifras
+ * derivadas, y la pantalla los lee de `community` directamente. Meterlos aqui obligaria a esta
+ * funcion a conocer el ciclo de vida del enlace para no ganar nada.
+ */
+export type AdminCommunityRow = {
+  communityId: string;
+  name: string;
+  leaderName: string;
+  stores: number;
+  pricing: AdminCommunityPricing;
+  /**
+   * Cashback CAUSADO: todo lo que la comunidad ha generado, este cortado o no.
+   * No confundir con lo pagado (`communityCashbackPaidCop`), que es lo que ya salio de caja.
+   */
+  cashbackAccruedCop: number;
+};
+
+type AdminCommunityLike = {
+  id: string;
+  name: string;
+  leaderName?: string;
+  pricing?: { sellerDeliveredFeeCop?: number; sellerFailedFeeCop?: number; fulfillmentFeeCop?: number };
+};
+
+type AdminSellerLike = { id: string; communityId?: string };
+
+type AdminCashbackEntryLike = {
+  ownerType: string;
+  ownerId: string;
+  type: string;
+  amountCop: number;
+  settlementId?: string;
+};
+
+/**
+ * Un importe cuenta solo si YA es un numero utilizable. Un `"1500"` que viene de un documento mal
+ * escrito no se coacciona: sumarlo daria por buena una cifra que nadie escribio como plata, y el
+ * siguiente string ("1.500", "1500 COP") sumaria 0 sin avisar. Lo que no sea numero finito vale 0,
+ * que es lo unico que no envenena un total entero con `NaN`.
+ */
+function numericCopOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Precio vigente de un concepto: el propio de la comunidad si lo tiene, y si no el global.
+ *
+ * `??` y no `||`, y no es un detalle de estilo: una comunidad con un concepto a 0 —envio gratis
+ * en fallidos, por ejemplo— es un precio decidido, no un hueco. Con `||` se pintaria el precio
+ * global y el admin cobraria de mas creyendo que ve el precio real.
+ */
+function communityPriceOr(own: number | undefined, fallback: number): number {
+  return typeof own === "number" && Number.isFinite(own) ? own : fallback;
+}
+
+/**
+ * RF_34: lo que el administrador ve de cada comunidad — quien la lidera, cuantas tiendas tiene,
+ * a que precios cobra hoy y cuanto cashback ha causado.
+ *
+ * Reglas que no son evidentes y que estan atadas en `community-view.test.ts`:
+ *
+ * - **Sale una fila por comunidad del catalogo, siempre.** Una recien creada, sin tiendas y sin un
+ *   solo asiento, se pinta con ceros. Si desapareciera de la lista por no tener movimiento, el
+ *   admin no podria ni ver su enlace ni corregirle los precios: justo la comunidad que mas lo
+ *   necesita. Y aqui no hay fila huerfana (a diferencia de `buildCommunityLeaderLiquidationRows`):
+ *   el admin descarga el catalogo entero, asi que un `ownerId` que no este en el es un id muerto,
+ *   no una comunidad que falte.
+ * - **El causado suma TODOS los asientos, con `settlementId` o sin el.** Es la diferencia con las
+ *   filas de liquidacion, que solo miran lo pendiente por girar. Filtrar por pendiente aqui dejaria
+ *   la cifra en cero en cuanto se hiciera el primer corte, y las comunidades mas productivas —las
+ *   que ya cobraron— se leerian como si no generaran nada.
+ * - La suma es NETA: `correctOrderStatus` compensa un cashback ya causado con un asiento negativo,
+ *   y sumar en valor absoluto haria que una entrega revertida pareciera generar el doble.
+ * - El filtro mira `ownerType` Y `type`. `ownerId` no es unico entre colecciones, y la wallet del
+ *   lider tambien lleva pagos de corte: sumarlo todo infla la cifra con la que se deciden precios.
+ * - El orden es el del catalogo, nunca el orden en que Firestore entregue asientos o tiendas.
+ */
+export function buildAdminCommunityList(input: {
+  communities: AdminCommunityLike[];
+  sellers: AdminSellerLike[];
+  entries: AdminCashbackEntryLike[];
+  settings: AdminCommunityPricing;
+}): AdminCommunityRow[] {
+  const { communities, sellers, entries, settings } = input;
+
+  // Un recorrido por coleccion en vez de un filtro por comunidad: con el catalogo entero y la
+  // wallet completa del admin, lo segundo es cuadratico.
+  const storesByCommunity = new Map<string, number>();
+  for (const seller of sellers) {
+    const communityId = nonEmptyText(seller?.communityId, "");
+    if (!communityId) continue;
+    storesByCommunity.set(communityId, (storesByCommunity.get(communityId) ?? 0) + 1);
+  }
+
+  const accruedByCommunity = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry?.ownerType !== "community_leader") continue;
+    if (entry.type !== "community_cashback") continue;
+    const communityId = nonEmptyText(entry.ownerId, "");
+    if (!communityId) continue;
+    accruedByCommunity.set(
+      communityId,
+      (accruedByCommunity.get(communityId) ?? 0) + numericCopOrZero(entry.amountCop)
+    );
+  }
+
+  return communities.map((community) => ({
+    communityId: community.id,
+    name: nonEmptyText(community.name, `Comunidad ${community.id}`),
+    leaderName: nonEmptyText(community.leaderName, "Lider sin registrar"),
+    stores: storesByCommunity.get(community.id) ?? 0,
+    pricing: {
+      sellerDeliveredFeeCop: communityPriceOr(
+        community.pricing?.sellerDeliveredFeeCop,
+        settings.sellerDeliveredFeeCop
+      ),
+      sellerFailedFeeCop: communityPriceOr(
+        community.pricing?.sellerFailedFeeCop,
+        settings.sellerFailedFeeCop
+      ),
+      fulfillmentFeeCop: communityPriceOr(
+        community.pricing?.fulfillmentFeeCop,
+        settings.fulfillmentFeeCop
+      )
+    },
+    cashbackAccruedCop: accruedByCommunity.get(community.id) ?? 0
+  }));
 }

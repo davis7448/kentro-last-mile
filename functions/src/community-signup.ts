@@ -13,8 +13,10 @@ import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 import { normalizeSlug } from "./community-slug";
+import { buildSignupSellerDoc } from "./community-signup-doc";
 import {
   MASS_SIGNUP_WINDOW_MINUTES,
+  mapSignupAuthError,
   parseSignupInput,
   resolveSignupSlug,
   shouldRaiseMassSignupAlert,
@@ -103,10 +105,10 @@ export const registerSellerBySlug = onCall(async (request) => {
       displayName: input.value.responsibleName
     });
   } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-    if (code === "auth/email-already-exists") {
-      throw new HttpsError("already-exists", "Ese correo ya tiene una cuenta. Inicia sesion.");
-    }
+    const rejection = mapSignupAuthError(error);
+    if (rejection) throw new HttpsError(rejection.code, rejection.message);
+    // Sin envolver ni traducir: un `HttpsError("internal", ...)` perderia el codigo original
+    // del fallo de Auth en los registros, que es lo unico que queda para diagnosticarlo.
     throw error;
   }
 
@@ -115,25 +117,18 @@ export const registerSellerBySlug = onCall(async (request) => {
   try {
     const settingsSnap = await db.collection("settings").doc("app").get();
     const activeCityId = String(settingsSnap.data()?.activeCityId ?? "city-cali");
-    await db.collection("sellers").doc(sellerId).set({
-      id: sellerId,
-      name: input.value.storeName,
-      shopDomain: "",
-      cityId: activeCityId,
-      bankAccount: "",
-      email: input.value.email,
-      contactEmail: input.value.email,
-      contactName: input.value.responsibleName,
-      contactPhone: input.value.phone,
-      communityId,
-      communityJoinedAt: now,
-      communitySignupSlug: normalizeSlug(slugParsed.data.slug),
-      // RF_44: entra y se mueve por la app, pero no crea pedidos hasta completar ciudad,
-      // punto de recogida y cuenta bancaria.
-      onboardingComplete: false,
-      createdAt: now,
-      updatedAt: now
-    });
+    await db
+      .collection("sellers")
+      .doc(sellerId)
+      .set(
+        buildSignupSellerDoc(input.value, {
+          sellerId,
+          communityId,
+          slug: slugParsed.data.slug,
+          activeCityId,
+          nowIso: now
+        })
+      );
     sellerWritten = true;
     await auth.setCustomUserClaims(user.uid, { role: "seller", sellerId });
   } catch (error) {

@@ -19,6 +19,34 @@ service firebase.storage {
         && request.auth.token.role == "messenger";
     }
 
+    function isCommunityLeaderOf(communityId) {
+      return signedIn()
+        && request.auth.token.role == "community_leader"
+        && request.auth.token.communityId == communityId;
+    }
+
+    /**
+     * Logo de comunidad (RF_14, RF_16). Espejo de `canEditCommunityBrand`
+     * (functions/src/community-access.ts): el administrador, para poder corregir, y el lider de
+     * ESA comunidad. El de la vecina no, que aqui la ruta es la unica frontera entre marcas.
+     *
+     * La lectura es PUBLICA a proposito, y es una decision, no un descuido: /registro/[slug] se
+     * abre SIN sesion y RF_14 exige que muestre la marca de quien invita. Con `signedIn()` el
+     * visitante veria un hueco justo en la primera pantalla de la comunidad. Un logo es marca
+     * publica: aqui no hay dato personal ni cifra de dinero.
+     *
+     * El tope son los mismos 512 KB de `LOGO_MAX_BYTES` (functions/src/community-pricing.ts), que
+     * es lo que dice el mensaje de rechazo de la callable. Si alli sube, aqui tambien: un limite
+     * mas estricto en Storage haria fallar la subida ANTES de que el servidor pueda explicar por
+     * que, y el lider veria un error de permisos en vez del motivo.
+     */
+    match /communities/{communityId}/{fileName} {
+      allow read: if true;
+      allow write: if (isAdmin() || isCommunityLeaderOf(communityId))
+        && request.resource.size <= 512 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /evidence/{orderId}/{fileName} {
       allow read: if signedIn();
       allow write: if signedIn()

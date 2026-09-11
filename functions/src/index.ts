@@ -12,7 +12,6 @@ export {
   disableCommunitySignupsInRange,
   dismissMassSignupAlert,
   getMyStoreTariff,
-  raiseCommunityPricesToFloor,
   reassignSellerCommunity,
   scheduleCommunityPrice,
   setCommunityLeaderStatus,
@@ -20,6 +19,7 @@ export {
   setCommunityLogo,
   setCommunitySlug
 } from "./communities";
+export { onSettingsFloorRaise } from "./community-floor-trigger";
 export { getCommunityBySlug, registerSellerBySlug } from "./community-signup";
 export { getCommunityStats } from "./community-stats";
 export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, getOrderAuditTrail, reconcileInventoryReservations, recordDriverCashReceipt, recordSellerAbono, recordSupplierAbono, rejectSellerPayout, requestSellerPayout, unassignMessengerFromOrders, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";

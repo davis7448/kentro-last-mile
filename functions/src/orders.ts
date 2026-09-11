@@ -25,6 +25,7 @@ import {
   type WalletEntryDoc
 } from "./settlement-math";
 import { createCommunityPricingResolver } from "./community-order-pricing";
+import { operationalDataBlockMessage } from "./community-access";
 import {
   buildWalletEntries,
   isLiquidationWalletType,
@@ -278,20 +279,14 @@ export const createManualOrder = onCall(async (request) => {
    * RF_44: una tienda registrada por enlace entra a la app, pero no crea pedidos hasta tener
    * ciudad, punto de recogida y cuenta bancaria. Sin eso no hay donde recoger ni a quien pagar.
    *
-   * Se compara contra `false` EXPLICITO a proposito: las tiendas que ya existian no tienen el
-   * campo, y tratarlas como incompletas dejaria a toda la plataforma sin poder crear pedidos.
+   * La decision y el texto viven en `community-access.ts`, como funcion pura y probada: aqui
+   * dentro no se puede afirmar nada sin registrar una tienda de verdad y llamar a la callable.
+   * Alli esta tambien el porque de comparar contra `false` EXPLICITO —las tiendas que ya
+   * existian no tienen el campo, y tratarlas como incompletas dejaria a toda la plataforma sin
+   * poder crear pedidos—. El `HttpsError` se sigue construyendo aqui.
    */
-  if (sellerData.onboardingComplete === false) {
-    const faltan = [
-      !sellerData.cityId ? "ciudad" : "",
-      !sellerData.pickupAddress ? "punto de recogida" : "",
-      !sellerData.bankAccount ? "cuenta bancaria" : ""
-    ].filter(Boolean);
-    throw new HttpsError(
-      "failed-precondition",
-      `Completa los datos de tu tienda antes de crear pedidos: ${faltan.join(", ") || "datos pendientes"}.`
-    );
-  }
+  const bloqueo = operationalDataBlockMessage(sellerData);
+  if (bloqueo) throw new HttpsError("failed-precondition", bloqueo);
 
   /**
    * El precio de comunidad se congela AQUI, antes de abrir la transaccion: son lecturas de

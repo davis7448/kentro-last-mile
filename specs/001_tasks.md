@@ -167,7 +167,7 @@
   * Accion: Tarifa vigente consultable en cualquier momento y subida programada con su fecha de entrada.
   * Verificacion: Una tienda con subida programada la ve antes de que le cobren.
 
-- [ ] **T28: No regresion y medicion**
+- [x] **T28: No regresion y medicion**
   * Requisitos cubiertos: RNF_01, RNF_02
   * Archivos: `src/lib/community-cashback-entries.test.ts`, `docs/rendimiento.md`
   * Accion: Prueba de que un pedido sin comunidad produce los mismos asientos que hoy; medir el panel con 100 y con 10.000 pedidos y anotar la cifra real.
@@ -223,13 +223,13 @@ identificador del requisito, igual que en T1–T28.
 
 ### 1. Alta por enlace — el camino que mas dinero y mas datos personales toca
 
-- [ ] **T29: Documento de alta por enlace**
+- [x] **T29: Documento de alta por enlace**
   * Requisitos cubiertos: RF_07, RF_08
   * Archivos: `functions/src/community-signup-doc.ts`, `functions/src/community-signup.ts`, `src/lib/community-signup.test.ts`
   * Accion: Extraer de `registerSellerBySlug` el armado del documento a `buildSignupSellerDoc(input, { communityId, slug, activeCityId, nowIso })`, puro. La callable pasa a llamarlo; no cambia lo que escribe.
   * Verificacion: `RF_07` la tienda nace operativa sin ningun campo de aprobacion pendiente y con `onboardingComplete: false`; `RF_08` los tres campos de procedencia (`communityId`, `communityJoinedAt`, `communitySignupSlug` normalizado) estan y son los del enlace usado.
 
-- [ ] **T30: Correo ya registrado**
+- [x] **T30: Correo ya registrado**
   * Requisitos cubiertos: RF_10
   * Archivos: `functions/src/community-signup-validate.ts`, `functions/src/community-signup.ts`, `src/lib/community-signup.test.ts`
   * Accion: `mapSignupAuthError(code)` puro. Solo `auth/email-already-exists` se traduce; cualquier otro codigo se relanza en vez de tragarse.
@@ -252,20 +252,20 @@ identificador del requisito, igual que en T1–T28.
 
 ### 3. Dinero y vista del admin
 
-- [ ] **T33: Reparto causado/pagado del cashback**
+- [x] **T33: Reparto causado/pagado del cashback**
   * Requisitos cubiertos: RF_49
   * Archivos: `functions/src/settlement-math.ts`, `src/lib/settlement-math.test.ts`, `src/lib/community-view.ts`, `src/lib/community-view.test.ts`
   * **Depende de T43**, que va once posiciones despues: sin ella no existe la pantalla que crea el corte, asi que el recorrido real de esta tarea no se puede hacer hasta entonces. Implementar T43 antes, o dejar el recorrido pendiente por escrito.
   * Accion: El cashback se rotula causado y pendiente mientras el corte no este pagado, y pagado al marcarlo. **Solo la aritmetica**: la pantalla que crea el corte no existe y la construye T43.
   * Verificacion: Los dos estados del mismo corte. **"Solo el admin lo marca" NO se prueba aqui**: vive en `orders.ts:1402`, que importa `firebase-admin` y la raiz no puede importarlo — va como script con usuario desechable, igual que T32.
 
-- [ ] **T34: Cashback causado en la lista de comunidades del admin**
+- [x] **T34: Cashback causado en la lista de comunidades del admin**
   * Requisitos cubiertos: RF_34
   * Archivos: `src/lib/community-view.ts`, `src/lib/community-view.test.ts`, `src/components/operations-app.tsx`
   * Accion: **No es una extraccion: falta funcionalidad.** La tarjeta del admin (`operations-app.tsx:3947-4010`) muestra precios, tiendas y estado, pero **no el cashback causado** que RF_34 exige. Selector puro `buildAdminCommunityList(state)` con las cuatro cifras, y pintarlo.
   * Verificacion: Dos comunidades no se mezclan; una sin tiendas sale en cero, no ausente; el cashback sale del mismo sitio que el del lider (RNF_02: una sola formula).
 
-- [ ] **T35: Veto de pedidos sin datos operativos**
+- [x] **T35: Veto de pedidos sin datos operativos**
   * Requisitos cubiertos: RF_44
   * Archivos: `functions/src/community-access.ts`, `functions/src/orders.ts`, `src/lib/community-access.test.ts`
   * Accion: Extraer a `missingOperationalData(seller)` la condicion que hoy vive suelta en `orders.ts`.
@@ -273,13 +273,13 @@ identificador del requisito, igual que en T1–T28.
 
 ### 4. Las mitades sueltas de dos MUST de dinero
 
-- [ ] **T36: Reasignar no mueve el cashback ya causado**
+- [x] **T36: Reasignar no mueve el cashback ya causado**
   * Requisitos cubiertos: RF_11
   * Archivos: `functions/src/community-access.ts`, `functions/src/communities.ts`, `src/lib/community-access.test.ts`
   * Accion: `planSellerReassignment(seller, communityIdNuevo, nowIso)` declara los campos que toca; los asientos no estan entre ellos.
   * Verificacion: El plan no incluye asiento alguno; los pedidos ya creados conservan su precio congelado y los nuevos toman el de la comunidad nueva.
 
-- [ ] **T37: Desactivar a un lider no borra la deuda**
+- [x] **T37: Desactivar a un lider no borra la deuda**
   * Requisitos cubiertos: RF_51
   * Archivos: `functions/src/community-access.ts`, `functions/src/communities.ts`, `src/lib/community-access.test.ts`
   * Accion: Afirmar en prueba que la desactivacion no marca ni elimina asientos de cashback pendientes. `communities.ts` entra en alcance porque el consumidor es `setCommunityLeaderStatus` (mismo patron que T36).
@@ -287,7 +287,7 @@ identificador del requisito, igual que en T1–T28.
 
 ### 5. El eje de fecha real
 
-- [ ] **T38: RF_46 en la consulta, no en el rotulo**
+- [x] **T38: RF_46 en la consulta, no en el rotulo**
   * Requisitos cubiertos: RF_46
   * Archivos: `functions/src/community-stats-math.ts`, `functions/src/community-stats.ts`, `src/lib/community-stats.test.ts`, `src/components/operations-app.tsx`
   * Accion: `axisForMetric(metric)` decide el eje **semantico** (`"creacion" | "despacho" | "cierre"`), y **el rotulo y la consulta salen de esa misma funcion**, de modo que no puedan divergir. `getCommunityStats` la usa en `onAxis`.
@@ -296,7 +296,7 @@ identificador del requisito, igual que en T1–T28.
 
 ### 6. Precio visible para la tienda
 
-- [ ] **T39: La tienda ve su tarifa y la subida que viene**
+- [x] **T39: La tienda ve su tarifa y la subida que viene**
   * Requisitos cubiertos: RNF_04, RF_28, RF_40
   * Archivos: `functions/src/community-pricing.ts`, `functions/src/communities.ts`, `src/lib/community-pricing.test.ts`
   * Accion: Nucleo puro de la respuesta de `getMyStoreTariff`; `cancelScheduledCommunityPrice` admite cancelar y rebajar antes de la fecha.
@@ -304,14 +304,15 @@ identificador del requisito, igual que en T1–T28.
 
 ### 7. Los parciales que quedaban
 
-- [ ] **T40: Un rechazo conserva lo anterior**
+- [x] **T40: Un rechazo conserva lo anterior**
   * Requisitos cubiertos: RF_04, RF_16
   * Archivos: `functions/src/community-slug.ts`, `functions/src/community-pricing.ts`, `functions/src/communities.ts`, `src/lib/community-slug.test.ts`, `src/lib/community-view.test.ts`
   * Nota de alcance: `validateLogo` vive en `community-pricing.ts:160` (si, ahi); entra por si la prueba obliga a retocarlo.
+  * **Ademas (anadido el 10-09-2026, al cerrar T47):** retirar `raiseCommunityPricesToFloor` de `communities.ts:292`, que queda muerta y **duplicando el criterio de piso** ahora que existe `planFloorRaise`. No es un borrado limpio: la vieja compara contra el `pricing` literal (tiene el bug del `fromCop` rancio que T47 corrige), escribe una `note` en el historial y firma con el uid del admin en vez de `system:floor`, y no borra programadas muertas. Decidir que pasa con el historial ya escrito antes de quitarla.
   * Accion: Probar el MUST que falta en ambos: tras un rechazo, el slug y el logo anteriores siguen ahi.
   * Verificacion: Slug en uso, reservado y con caracteres no permitidos → los tres explican el motivo y conservan el anterior; logo invalido conserva el anterior.
 
-- [ ] **T41: Lo que el lider no puede tocar y la comunidad vacia**
+- [x] **T41: Lo que el lider no puede tocar y la comunidad vacia**
   * Requisitos cubiertos: RF_27, RF_32
   * Archivos: `functions/src/community-access.ts`, `src/lib/community-access.test.ts`, `src/lib/community-view.ts`, `src/lib/community-view.test.ts`, `src/components/operations-app.tsx`
   * Accion: Completar el veto de RF_27 y la pantalla de comunidad vacia. **RF_35 sale de esta tarea**: no era un parcial de prueba sino funcionalidad ausente, y se va a T47.
@@ -319,7 +320,7 @@ identificador del requisito, igual que en T1–T28.
 
 ### 8. La carga del panel del lider
 
-- [ ] **T42: Acotar el cashback que baja el lider (desbloquea T28)**
+- [x] **T42: Acotar el cashback que baja el lider (desbloquea T28)**
   * Requisitos cubiertos: RNF_01
   * Archivos: `src/lib/firebase/state-store.ts`, `src/lib/community-cashback-entries.test.ts`, `docs/rendimiento.md`
   * Accion: **La suscripcion de wallet del lider se ELIMINA, no se acota.** `CommunityLeaderView` no lee `state.wallet` en ningun punto: el cashback causado llega agregado de `getCommunityStats` y el pagado sale de `state.settlements` (`operations-app.tsx:4059-4064`). Bajar un asiento por pedido para no leerlo es puro peso.
@@ -339,7 +340,7 @@ las respalde. Cada una lleva **dos**: (a) el predicado de quien ve el control sa
 va en la evidencia de `/sdd-verify`, con captura. La exencion escrita de este documento cubre solo
 RNF_03 y RNF_05; estas tres no se acogen a ella.
 
-- [ ] **T43: Corte de lider en la pantalla de liquidaciones**
+- [x] **T43: Corte de lider en la pantalla de liquidaciones**
   * Requisitos cubiertos: RF_49
   * Archivos: `src/components/operations-app.tsx`, `src/lib/firebase/auth.ts`, `src/lib/community-view.ts`, `src/lib/community-view.test.ts`
   * Accion: `LiquidationRow.role` solo admite `"seller" | "driver"` (`operations-app.tsx:6111`), asi que **la pantalla no puede crear un corte de `community_leader`** aunque `createSettlement` lo acepte (`orders.ts:1226`). Anadir el tipo, la fila y el envoltorio. **Son DOS barreras, no una:** `createFirebaseSettlement` tipa `kind: "seller" | "driver" | "supplier"` en `src/lib/firebase/auth.ts:423`; arreglar solo el `role` deja `tsc` en rojo.
@@ -353,19 +354,20 @@ RNF_03 y RNF_05; estas tres no se acogen a ella.
   * **Cabo suelto anotado al cerrar (10-09-2026):** `functions/src/communities.ts:414` decide el permiso con un `actor.role !== "admin"` suelto, no con `canBulkDisableCommunitySignups`. Funciona igual hoy, pero si la interfaz y el servidor deciden por caminos distintos acaban diciendo cosas distintas. `communities.ts` no estaba en el alcance de T44 y el coder acerto al no tocarlo. Recogerlo al abrir la siguiente tarea que toque ese archivo (T36 o T37).
   * Verificacion: La spec lo declara el unico remedio ante un enlace filtrado. Confirmacion explicita antes de ejecutar —es una accion en bloque y dificil de revertir—; el recuento de la respuesta se muestra tal cual, sin redondear ni resumir.
 
-- [ ] **T45: Carga del logo del lider**
+- [x] **T45: Carga del logo del lider**
   * Requisitos cubiertos: RF_14, RF_16
-  * Archivos: `src/lib/firebase/auth.ts`, `src/components/operations-app.tsx`
+  * Archivos: `src/lib/firebase/auth.ts`, `src/components/operations-app.tsx`, `storage.rules`
+  * **Hallazgo al implementar (11-09-2026):** `storage.rules` solo tiene regla para `evidence/`. **No hay ninguna para logos**, asi que Storage denegaria la subida por defecto — el plan la daba por hecha y no estaba. Ademas la lectura tiene que ser **publica**: la pantalla de registro se abre sin sesion y RF_14 exige que muestre el logo del lider.
   * Accion: Envoltorio de `setCommunityLogo` y el control de subida en el panel del lider.
   * Verificacion: Con logo, el registro y el panel de sus tiendas lo muestran en lugar del de la plataforma (RF_14); un logo invalido conserva el anterior y dice por que (RF_16).
 
-- [ ] **T46: Reasignar una tienda de comunidad**
+- [x] **T46: Reasignar una tienda de comunidad**
   * Requisitos cubiertos: RF_11
   * Archivos: `src/lib/firebase/auth.ts`, `src/components/operations-app.tsx`
   * Accion: Envoltorio de `reassignSellerCommunity` y el control, **solo en la vista de admin**.
   * Verificacion: Ni la tienda ni el lider ven el control; el cashback ya causado no se mueve (T36); los pedidos ya creados conservan su precio congelado.
 
-- [ ] **T47: Disparador de la elevacion al piso**
+- [x] **T47: Disparador de la elevacion al piso**
   * Requisitos cubiertos: RF_35
   * Archivos: `functions/src/community-floor-trigger.ts`, `functions/src/index.ts`, `functions/src/community-pricing.ts`, `src/lib/community-pricing.test.ts`
   * Accion: `raiseCommunityPricesToFloor` no la llama nadie y la tarifa base la escribe el cliente directo a `settings/app` (`state-store.ts:293`). Trigger `onDocumentUpdated` sobre `settings/app`, por lo razonado en el plan §4.7: se dispara escriba quien escriba y no se puede saltar desde el navegador. El nucleo de decision —que comunidades y que conceptos suben— va en `community-pricing.ts`, puro.

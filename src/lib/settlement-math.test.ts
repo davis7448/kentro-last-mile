@@ -234,3 +234,63 @@ describe("T8 · cortes de lider de comunidad", () => {
     expect(isLiquidationWalletType("community_cashback")).toBe(true);
   });
 });
+
+describe("T33 · el corte del lider convierte el cashback causado en pagado", () => {
+  // RF_49 parte en dos: la ARITMETICA del corte (aqui) y el REPARTO causado/pagado que pinta el
+  // panel (en community-view.test.ts). Lo que NO se cubre en ninguno de los dos es "nadie mas
+  // puede marcarlo pagado": esa autorizacion vive en functions/src/orders.ts, que importa
+  // firebase-admin y por tanto no se puede cargar desde la raiz del repo.
+  const cashbackT33 = (id: string, amountCop: number): WalletEntryDoc => ({
+    id,
+    ownerType: "community_leader",
+    ownerId: "com-1",
+    orderId: id.split("-")[1] ?? "o1",
+    type: "community_cashback",
+    amountCop,
+    description: "Cashback comunidad",
+    createdAt: "2026-09-08T10:00:00.000Z"
+  });
+
+  it("RF_49: el neto que se marca pagado es la suma de los cashbacks del periodo, menos el 4x1000", () => {
+    // Este es el numero que el lider ve como "pagado" en cuanto el corte cambia de estado. Si el
+    // corte y el panel no salen de la misma aritmetica, el lider ve una cifra y cobra otra.
+    const totals = settlementTotals("community_leader", [cashbackT33("we-o1", 5000), cashbackT33("we-o2", 7000)]);
+    expect(totals.grossNetCop).toBe(12000);
+    expect(totals.gmfCop).toBe(48);
+    expect(totals.netCop).toBe(11952);
+  });
+
+  it("RF_49: una reversa de correccion netea contra su cashback y no se cuenta dos veces", () => {
+    // Un pedido corregido de entregado a fallido deja el asiento original MAS su reversa. Sumar
+    // valores absolutos pagaria el cashback de un pedido que nunca se entrego.
+    const totals = settlementTotals("community_leader", [
+      cashbackT33("we-o1", 9000),
+      cashbackT33("we-o2", 4000),
+      cashbackT33("we-o2-correction-reverse", -4000)
+    ]);
+    expect(totals.grossNetCop).toBe(9000);
+    expect(totals.netCop).toBe(8964);
+    // La trampa concreta: 13.000 es lo que sale si la reversa se suma en absoluto.
+    expect(totals.grossNetCop).not.toBe(13000);
+  });
+
+  it("RF_49: el corte del lider no arrastra COD ni pago a domiciliario: solo su cashback", () => {
+    const soloCashback = [cashbackT33("we-o1", 6000)];
+    const totals = settlementTotals("community_leader", soloCashback);
+    expect(totals.codCop).toBe(0);
+    expect(totals.driverPayCop).toBe(0);
+    expect(totals.productCostCop).toBe(0);
+    expect(totals.platformMarginCop).toBe(0);
+    expect(totals.feesCop).toBe(0);
+    expect(totals.grossNetCop).toBe(6000);
+
+    // Los asientos de la tienda del mismo pedido no pueden inflar lo que se le paga al lider:
+    // el cashback ya es una fraccion del margen, no el recaudo.
+    const conAsientosDeTienda = settlementTotals("community_leader", soloCashback, [
+      entry({ id: "cod", ownerType: "seller", type: "cod_revenue", amountCop: 180000, orderId: "o1" }),
+      entry({ id: "dp", ownerType: "driver", type: "driver_earning", amountCop: 9000, orderId: "o1" })
+    ]);
+    expect(conAsientosDeTienda.netCop).toBe(totals.netCop);
+    expect(conAsientosDeTienda.codCop).toBe(0);
+  });
+});

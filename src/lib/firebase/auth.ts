@@ -2,7 +2,9 @@
 
 import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import type { BulkSignupDisableReport } from "../../../functions/src/community-containment";
+import { validateLogo } from "../../../functions/src/community-pricing";
 import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { clearFirebaseLocalCache, getFirebaseClient } from "./client";
 
@@ -421,7 +423,9 @@ export async function setFirebaseStoreUchatConfig(input: { sellerId: string; api
 }
 
 export async function createFirebaseSettlement(input: {
-  kind: "seller" | "driver" | "supplier";
+  // `community_leader` (RF_49): el callable ya lo acepta desde T8. Faltaba aqui, y era lo unico
+  // que impedia cortar el cashback de una comunidad desde la pantalla de liquidaciones.
+  kind: "seller" | "driver" | "supplier" | "community_leader";
   ownerId: string;
   startDate: string;
   endDate: string;
@@ -571,6 +575,96 @@ export async function cancelScheduledCommunityPrice(input: { communityId: string
   return (await callable(input)).data;
 }
 
+/**
+ * RF_14, RF_16: el logo de la comunidad. Sube el archivo y registra la marca resultante.
+ *
+ * Dos pasos y en este orden: primero Storage (el objeto tiene que existir antes de que nadie lo
+ * apunte) y despues la callable, que es quien decide. Si la callable rechaza, en Storage queda un
+ * archivo huerfano al que no apunta nada y la comunidad conserva su logo anterior — que es justo
+ * lo que pide RF_16. Al reves (escribir primero y subir despues) un fallo de subida dejaria la
+ * marca apuntando a un objeto inexistente, o sea la pantalla de registro con la imagen rota.
+ *
+ * El rechazo NO se atrapa: sube tal cual con su mensaje, porque el limite concreto ("El logo
+ * supera 512 KB") es la mitad util del requisito. Un `catch` que lo convierta en "no se pudo"
+ * deja al lider sin saber que cambiar.
+ *
+ * Los limites se comprueban aqui ANTES de gastar la subida, con la MISMA funcion probada que usa
+ * el servidor (`validateLogo`): no hay dos definiciones del tope que puedan discrepar, y el
+ * servidor sigue validando por su cuenta porque esto es un cliente y miente cuando quiere.
+ */
+export async function setCommunityLogo(input: { communityId: string; file: File }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  if (!client.auth.currentUser) throw new Error("Debes iniciar sesion para cambiar el logo.");
+
+  const contentType = input.file.type;
+  const sizeBytes = input.file.size;
+  const check = validateLogo({ contentType, sizeBytes });
+  if (!check.ok) throw new Error(check.reason);
+
+  // El nombre sale del tipo ya validado y de un instante, no del archivo del usuario: asi la ruta
+  // no puede traer espacios, acentos ni barras, y la regla de Storage —que reparte permisos por
+  // `communities/{communityId}/...`— ve siempre la comunidad correcta en el segmento.
+  const extension = contentType.slice("image/".length).replace("+xml", "");
+  const path = `communities/${input.communityId}/logo-${Date.now()}.${extension}`;
+  const logoRef = ref(client.storage, path);
+  const task = uploadBytesResumable(logoRef, input.file, { contentType });
+  await new Promise<void>((resolve, reject) => {
+    // Techo duro, por el mismo motivo que en `uploadEvidenceImage`: sin el, el SDK reintenta en
+    // silencio hasta diez minutos y el boton se queda "Subiendo..." para siempre.
+    const timer = setTimeout(() => {
+      task.cancel();
+      reject(new Error("La subida del logo tardo demasiado. Reintenta cuando tengas mejor senal."));
+    }, 60_000);
+    task.on(
+      "state_changed",
+      null,
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve();
+      }
+    );
+  });
+
+  // Se guarda la URL de descarga y no la ruta cruda porque es lo que se PINTA: la pantalla de
+  // registro hace `<img src={marca.logoPath}>` (src/app/registro/[slug]/signup-form.tsx) y una
+  // ruta de Storage ahi es una imagen rota. `planLogoChange` trata el valor como una cadena
+  // opaca, asi que la decision de que forma tiene vive aqui, donde se consume.
+  const logoPath = await getDownloadURL(logoRef);
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "setCommunityLogo");
+  return (await callable({ communityId: input.communityId, logoPath, contentType, sizeBytes })).data as {
+    ok: boolean;
+    changed: boolean;
+    logoPath: string;
+  };
+}
+
+/**
+ * RF_11: mover una tienda de comunidad, o sacarla de la suya sin ponerle otra.
+ *
+ * Un destino vacio es una operacion legitima —desadscribir— y por eso la clave se OMITE en vez de
+ * viajar vacia: el serializador de las callables convierte `undefined` en `null`, y el esquema del
+ * servidor espera `string | ausente`. Mandar `null` haria fallar la desadscripcion por
+ * "invalid-argument", que es un error incomprensible para lo que el administrador acaba de pedir.
+ */
+export async function reassignSellerCommunity(input: { sellerId: string; communityId?: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const destino = typeof input.communityId === "string" ? input.communityId.trim() : "";
+  const payload: { sellerId: string; communityId?: string } = { sellerId: input.sellerId };
+  if (destino) payload.communityId = destino;
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "reassignSellerCommunity");
+  return (await callable(payload)).data as {
+    ok: boolean;
+    changed: boolean;
+    previousCommunityId: string | null;
+  };
+}
+
 export async function setCommunitySlug(input: { communityId: string; slug: string }) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
@@ -646,10 +740,14 @@ export async function fetchMyStoreTariff() {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
   const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getMyStoreTariff");
+  // Espejo exacto de `StoreTariffView` (functions/src/community-pricing.ts). Es un `as`, no una
+  // validacion: si miente, `tsc` no se entera y el error sale en pantalla. Mentia en dos sitios
+  // — `communityName` llega `null` (no ausente) para una tienda sin comunidad, y `scheduled` ya
+  // no es el documento crudo sino el aviso de cuatro claves que arma `buildStoreTariffView`.
   return (await callable({})).data as {
     communityId: string | null;
-    communityName?: string;
+    communityName: string | null;
     current: Record<string, number>;
-    scheduled: Record<string, { toCop: number; effectiveAt: string }> | null;
+    scheduled: Record<string, { field: string; fromCop: number; toCop: number; effectiveAt: string }> | null;
   };
 }

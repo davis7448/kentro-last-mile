@@ -137,46 +137,67 @@ momento; las reglas se lo prohiben y `getOrdersForContext` devuelve `[]` para el
 llegan agregadas del servidor por `getCommunityStats`, que solo hace `count()` y `sum()`.
 
 Lo que si descarga: su comunidad (1 documento), las tiendas de su comunidad (N, decenas como
-mucho), sus cortes y **un asiento de cashback por cada pedido de la comunidad**. Ese ultimo es
-el problema: ver abajo.
+mucho) y sus cortes. Nada mas: ni un pedido ni un asiento de wallet.
 
-### RNF_01 NO se cumple: medido el 10 de septiembre de 2026
+### RNF_01 se cumple: la suscripcion de wallet del lider se elimino (11-09-2026)
 
 | Pedidos en el periodo | Asientos que baja el lider | Peso |
 |---|---|---|
-| 100 | 100 | 27,3 KB |
-| 10.000 | 10.000 | 2,67 MB |
+| 100 | 0 (antes de T42: 100) | 0 KB (antes de T42: 27,3 KB) |
+| 10.000 | 0 (antes de T42: 10.000) | 0 KB (antes de T42: 2,67 MB) |
 
-**Uno a uno con el volumen.** RNF_01 exige que las dos cifras fueran la misma y no lo son.
+**La cuenta no depende del volumen porque la consulta ya no existe.** RNF_01 exige que las dos
+filas den lo mismo, y dan lo mismo: cero.
 
-El presupuesto "CERO pedidos" es cierto y enganoso a la vez. El lider efectivamente no consulta
-`orders`. Pero `buildWalletEntries` emite un asiento `community_cashback` por pedido cobrable, y
-la suscripcion de wallet del rol no los acota:
+Lo que resolvio el requisito no fue encontrar como acotar la consulta, sino descubrir que **no
+habia que consultar nada**. `CommunityLeaderView` no lee `state.wallet` en ningun punto —
+comprobado sobre el cuerpo entero de la vista—. Las dos cifras de cashback del panel salen de otro
+sitio:
 
-```js
-// src/lib/firebase/state-store.ts
-{ key: "wallet", target: query(walletRef,
-    where("ownerType", "==", "community_leader"),
-    where("ownerId", "==", context.profileId)) }   // sin ventana, sin limite, sin settlementId
-```
+- **CAUSADO**: agregado en el servidor, `getCommunityStats` -> `cashbackAccruedCop`, que solo hace
+  `count()` y `sum()` en Firestore y no descarga un solo documento.
+- **PAGADO**: `communityCashbackPaidCop` sobre `state.settlements`, que son decenas de documentos.
+- **PENDIENTE**: la resta de los dos. Tampoco necesita un asiento.
 
-Comparese con el rol `seller`, dos bloques mas arriba, que si filtra `where("settlementId","==","")`.
-El lider no lo hace. Y aun anadiendolo la cuenta no se acota: todo asiento nace sin liquidar, asi
-que dentro de un periodo abierto siguen siendo 10.000. **Acotar esto pide una ventana de fecha o
-agregacion en servidor, no un filtro mas.** Es la misma deuda que ya tiene el admin con
-`walletEntries` (3,58 MB, el 68% de su carga) y por la misma razon.
+O sea que el rol bajaba un documento por pedido cerrado de su comunidad **para no leerlo**. En T42
+la suscripcion se ELIMINO; no se acoto.
+
+Por que acotarla no habria bastado: el filtro `where("settlementId","==","")` que si tiene el rol
+`seller` no sirve aqui, porque todo asiento nace sin liquidar y dentro de un periodo abierto la
+cuenta seguiria subiendo uno a uno (lo fija una prueba, para que nadie "arregle" RNF_01 anadiendo
+ese where). Acotar de verdad habria pedido una ventana de fecha o agregacion en servidor.
+
+**No confundirlo con la deuda del admin.** El administrador tambien baja `walletEntries` entera
+(3,58 MB, el 68% de su carga) y eso sigue pendiente —ver "Pendiente", mas arriba—, pero es un caso
+**distinto**: ahi el dato SI se lee. Seis consumidores necesitan asientos ya liquidados, y
+`buildAdminCommunityList` deriva de ellos el cashback causado por comunidad. Por eso ese caso pide
+agregacion en servidor o rescate por id, y este solo pedia borrar la consulta.
 
 **Como se midio, y por que no contra produccion.** `buildWalletEntries` es puro y determinista, asi
-que la cuenta se deriva exacta sin datos reales: `src/lib/community-cashback-entries.test.ts`,
-bloque `T28 · RNF_01`, reproduce literalmente el filtro de la suscripcion y cuenta. Las cifras estan
-fijadas ahi, de modo que cualquier arreglo las pone en rojo y obliga a reescribirlas.
+que la cuenta se deriva exacta sin datos reales. En `src/lib/community-cashback-entries.test.ts` hay
+**tres** bloques `T42 · RNF_01`:
+
+1. *la carga del lider frente al volumen* — cuenta los documentos con 100 y con 10.000 pedidos. Va
+   con control negativo (tienda y domiciliario, que si crecen: 18.000 y 10.000 asientos con 10.000
+   pedidos) para que un espejo roto que devuelva cero para todo el mundo no deje pasar la prueba en
+   vacio.
+2. *la consulta de wallet del lider no existe en el codigo* — lee `state-store.ts` COMO TEXTO y
+   comprueba que la rama del lider no abre ningun target de `wallet`, que conserva `settlements`, y
+   que `getWalletForContext` tiene rama propia que devuelve vacio.
+3. *las cifras del panel no salen de la wallet del navegador* — fija la procedencia de las dos
+   cifras (agregado del servidor y cortes). Es lo que justifica que la suscripcion sobrara: si
+   manana alguien hace depender el panel de `state.wallet`, esta prueba es la que lo discute.
+
+El segundo es una comprobacion de fuente y puede dar falso rojo si alguien reescribe el bloque con
+otra sintaxis. Se acepta a proposito: el fallo que previene es silencioso —la app funciona, solo
+baja megabytes de mas—, y un rojo que obliga a mirar la consulta sale barato comparado con eso.
 
 Medirlo contra produccion habria exigido meter 10.000 pedidos sinteticos en la coleccion `orders`
 de la plataforma viva, que es la fuente de verdad del dinero: contaminaria `getPlatformPosition`,
 `getOrderStats`, los cortes y el panel del admin. **No se hizo a proposito.** Lo que si falta tomar
 contra produccion, cuando exista una comunidad real, es el tiempo hasta ver cifras en el perfil de
 red de las demas mediciones; la cuenta de documentos, que es la mitad sustantiva del requisito, ya
-esta respondida y la respuesta es que no cumple.
+esta respondida.
 
 El instrumento de siempre sigue sirviendo para esa segunda mitad:
 
@@ -184,6 +205,11 @@ El instrumento de siempre sigue sirviendo para esa segunda mitad:
 localStorage.setItem("kentro-perf","1")
 ```
 
-**La trampa a vigilar aqui** es la de siempre en este proyecto: `getOrdersForContext` y los
-targets de `subscribeFirestoreState` son dos sitios y hay que tocar los dos. Si solo se toca
-uno, el primer pintado y el listener muestran cosas distintas.
+**La trampa a vigilar aqui** es la de siempre en este proyecto: la carga inicial y los targets de
+`subscribeFirestoreState` son dos sitios y hay que tocar los dos. Si solo se toca uno, el primer
+pintado y el listener muestran cosas distintas. En T42 el segundo sitio era `getWalletForContext`,
+que ademas **estaba mal**: no tenia rama de `community_leader`, asi que el lider caia al
+`getCollection("walletEntries")` final —la coleccion ENTERA— bajo un comentario que llama a esa
+funcion "espejo exacto" de la suscripcion. Quedaba tapado porque la suscripcion metia `wallet` en
+`skip`; al quitarla, sin esa rama el primer pintado habria pedido la coleccion completa y las
+reglas habrian respondido 403.

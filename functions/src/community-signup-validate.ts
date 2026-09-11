@@ -82,6 +82,39 @@ export function signupRollbackPlan(state: { authUserCreated: boolean; sellerWrit
   return { deleteAuthUser: false, reason: "" };
 }
 
+/** El unico codigo de Auth que significa "ese correo ya tiene cuenta". */
+const EMAIL_ALREADY_EXISTS = "auth/email-already-exists";
+
+export type SignupAuthRejection = { code: "already-exists"; message: string };
+
+/**
+ * RF_10: que se responde cuando el correo del registro ya tiene cuenta.
+ *
+ * Recibe el error y NADA MAS —ni la comunidad, ni el enlace, ni el correo— a proposito. Este
+ * formulario es la unica superficie de la plataforma que se usa sin sesion: quien tenga el
+ * enlace de un lider puede probar correos uno a uno, y si por la respuesta se pudiera deducir
+ * a que comunidad pertenece un correo, tendria la cartera de tiendas del lider sin registrarse.
+ * Lo que no entra en esta funcion no puede salir en su mensaje, hoy ni cuando a alguien se le
+ * ocurra hacerlo mas "util".
+ *
+ * El texto se REDACTA aqui; el `message` que trae Auth es texto de un tercero y no se reenvia
+ * ni decide nada. Y solo el codigo exacto cuenta: traducir un `auth/internal-error` a "ese
+ * correo ya existe" manda a iniciar sesion a quien no tiene cuenta y borra el rastro del fallo
+ * real en los registros. Todo lo demas devuelve `undefined`, que significa "esto no es cosa
+ * mia: propagalo tal cual".
+ *
+ * Devuelve la descripcion del rechazo, no un `HttpsError`: eso vive en `firebase-functions` y
+ * lo construye la callable. Este modulo se mantiene puro para poder probarse entero.
+ */
+export function mapSignupAuthError(error: unknown): SignupAuthRejection | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  if (typeof code !== "string" || code !== EMAIL_ALREADY_EXISTS) return undefined;
+  // Ni una palabra sobre la cuenta existente: solo a donde tiene que ir quien se equivoco de
+  // formulario. La cuenta ajena no se toca, asi que tampoco hay nada que ordenar sobre ella.
+  return { code: "already-exists", message: "Ese correo ya tiene una cuenta. Inicia sesion." };
+}
+
 /** RF_13: solo avisa. Devolver `true` no impide ni una sola alta. */
 export function shouldRaiseMassSignupAlert(recentSignupIsoDates: string[], nowIso: string): boolean {
   const now = Date.parse(nowIso);

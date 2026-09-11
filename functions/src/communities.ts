@@ -15,24 +15,29 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
 import {
+  canBulkDisableCommunitySignups,
   canCreateCommunityLeader,
   canEditCommunityBrand,
   canEditCommunityPricing,
   canSetCommunityLeaderStatus,
   canSetCommunityLinkStatus,
   canReassignSellerCommunity,
+  isUnsetField,
+  planLeaderStatusChange,
+  planSellerReassignment,
   type Actor
 } from "./community-access";
 import {
   buildPriceHistoryEntry,
+  buildStoreTariffView,
   COMMUNITY_PRICING_FIELDS,
-  resolveCommunityPricing,
+  planLogoChange,
+  planScheduledRaiseCancellation,
   scheduleEffectiveAt,
-  validateLogo,
-  type CommunityPricingField
+  type LogoWrite
 } from "./community-pricing";
 import { resolveTariffs } from "./wallet-entries";
-import { isRetiredSlugStillValid, validateSlug } from "./community-slug";
+import { isRetiredSlugStillValid, normalizeSlug, planSlugChange, validateSlug, type SlugWrite } from "./community-slug";
 import {
   planBulkSignupDisable,
   planMassSignupAlertDismissal,
@@ -120,12 +125,19 @@ export const setCommunityLeaderStatus = onCall(async (request) => {
   }
   const parsed = z.object({ communityId: text, status: z.enum(["active", "disabled"]) }).safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
-  const db = getFirestore();
-  await db.collection("communities").doc(parsed.data.communityId).update({
-    status: parsed.data.status,
-    updatedAt: new Date().toISOString()
-  });
-  return { ok: true };
+  const ref = getFirestore().collection("communities").doc(parsed.data.communityId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+  const data = snap.data() ?? {};
+  // La decision —y sobre todo el alcance— vive en el plan puro: asi se puede afirmar sobre la
+  // operacion ENTERA que no alcanza al cashback pendiente ni al historial de precios.
+  const plan = planLeaderStatusChange(
+    { id: snap.id, status: typeof data.status === "string" ? data.status : undefined },
+    parsed.data.status,
+    new Date().toISOString()
+  );
+  if (plan.changed) await ref.update(plan.communityUpdate);
+  return { ok: true, changed: plan.changed, previousStatus: plan.previousStatus };
 });
 
 /** RF_05, RF_06: revocar impide altas nuevas y no altera a las tiendas ya registradas. */
@@ -144,6 +156,24 @@ export const setCommunityLinkStatus = onCall(async (request) => {
 });
 
 /**
+ * Traduce el plan a la transaccion y nada mas: aqui no se decide que se escribe ni sobre que.
+ * `merge` respeta lo que ya tenga el documento (retirar el slug viejo); `set` lo reemplaza
+ * entero, que es lo que le quita el `retiredAt` a un slug propio recuperado.
+ */
+function applySlugWrites(
+  db: ReturnType<typeof getFirestore>,
+  transaction: FirebaseFirestore.Transaction,
+  writes: readonly SlugWrite[]
+): void {
+  for (const write of writes) {
+    const ref = db.collection(write.collection).doc(write.docId);
+    if (write.op === "set") transaction.set(ref, write.data);
+    else if (write.op === "merge") transaction.set(ref, write.data, { merge: true });
+    else transaction.update(ref, write.data);
+  }
+}
+
+/**
  * RF_03: cambiar el nombre corto no rompe los enlaces repartidos. El anterior se marca como
  * retirado y sigue admitiendo altas treinta dias.
  */
@@ -154,32 +184,55 @@ export const setCommunitySlug = onCall(async (request) => {
   if (!canEditCommunityBrand(actor, parsed.data.communityId)) {
     throw new HttpsError("permission-denied", "No puedes cambiar el enlace de esta comunidad.");
   }
-  const next = validateSlug(parsed.data.slug);
-  if (!next.ok) throw new HttpsError("invalid-argument", next.reason);
-
   const db = getFirestore();
   const now = new Date().toISOString();
   const communityRef = db.collection("communities").doc(parsed.data.communityId);
-  const nextSlugRef = db.collection("communitySlugs").doc(next.slug);
+  // Solo para poder LEER de quien es el nombre pedido. Si no normaliza a nada no hay documento
+  // que consultar y el plan lo rechaza igual: `doc("")` seria un error de Firestore, no un juicio.
+  const normalized = normalizeSlug(parsed.data.slug);
+  const nextSlugRef = normalized ? db.collection("communitySlugs").doc(normalized) : null;
 
+  let effectiveSlug = "";
+  let changed = false;
   await db.runTransaction(async (transaction) => {
-    const [communitySnap, nextSnap] = await Promise.all([transaction.get(communityRef), transaction.get(nextSlugRef)]);
+    const [communitySnap, nextSnap] = await Promise.all([
+      transaction.get(communityRef),
+      nextSlugRef ? transaction.get(nextSlugRef) : Promise.resolve(null)
+    ]);
     if (!communitySnap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
-    const current = String(communitySnap.data()?.slug ?? "");
-    if (current === next.slug) return;
-    if (nextSnap.exists) throw new HttpsError("already-exists", "Ese nombre corto ya esta en uso.");
-    if (current) {
-      transaction.set(
-        db.collection("communitySlugs").doc(current),
-        { communityId: communityRef.id, retiredAt: now },
-        { merge: true }
-      );
+    const current = communitySnap.data()?.slug;
+    const owner = nextSnap?.exists ? nextSnap.data()?.communityId : null;
+
+    // Quien decide es el plan, y decide con DATOS: de quien es el documento, no si existe. Un
+    // slug retirado sobrevive 30 dias (RF_03), asi que "existe" no significa "es de otro" — y
+    // rechazar por eso le impedia al lider volver a su propio enlace anterior.
+    const plan = planSlugChange({
+      community: { id: communityRef.id, slug: typeof current === "string" ? current : undefined },
+      requestedSlug: parsed.data.slug,
+      takenByCommunityId: typeof owner === "string" ? owner : null,
+      nowIso: now
+    });
+    // RF_04: se sale ANTES de tocar nada, y el nombre corto anterior sigue vigente. Que eso sea
+    // cierto no depende ya de donde este este `throw`: el plan rechazado no trae escrituras.
+    if (!plan.ok) {
+      throw new HttpsError(plan.reasonCode === "taken" ? "already-exists" : "invalid-argument", plan.reason);
     }
-    transaction.set(nextSlugRef, { communityId: communityRef.id });
-    transaction.update(communityRef, { slug: next.slug, updatedAt: now });
+    applySlugWrites(db, transaction, plan.writes);
+    effectiveSlug = plan.effectiveSlug;
+    changed = plan.changed;
   });
-  return { slug: next.slug };
+  return { slug: effectiveSlug, changed };
 });
+
+/** Traduce el plan del logo. Un solo campo de destino, y ninguna decision aqui. */
+async function applyLogoWrites(
+  db: ReturnType<typeof getFirestore>,
+  writes: readonly LogoWrite[]
+): Promise<void> {
+  for (const write of writes) {
+    await db.collection(write.collection).doc(write.docId).update(write.data);
+  }
+}
 
 /** RF_16: un logo fuera de formato o de tamano se rechaza y se conserva el anterior. */
 export const setCommunityLogo = onCall(async (request) => {
@@ -196,14 +249,27 @@ export const setCommunityLogo = onCall(async (request) => {
   if (!canEditCommunityBrand(actor, parsed.data.communityId)) {
     throw new HttpsError("permission-denied", "No puedes cambiar la marca de esta comunidad.");
   }
-  // Una sola definicion de los limites, la que esta probada.
-  const logo = validateLogo({ contentType: parsed.data.contentType, sizeBytes: parsed.data.sizeBytes });
-  if (!logo.ok) throw new HttpsError("invalid-argument", logo.reason);
-  await getFirestore().collection("communities").doc(parsed.data.communityId).update({
-    logoPath: parsed.data.logoPath,
-    updatedAt: new Date().toISOString()
+  const db = getFirestore();
+  const ref = db.collection("communities").doc(parsed.data.communityId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+  const currentLogoPath = snap.data()?.logoPath;
+
+  // Una sola definicion de los limites y de que se escribe, la que esta probada.
+  const plan = planLogoChange({
+    community: { id: ref.id, logoPath: typeof currentLogoPath === "string" ? currentLogoPath : undefined },
+    file: {
+      logoPath: parsed.data.logoPath,
+      contentType: parsed.data.contentType,
+      sizeBytes: parsed.data.sizeBytes
+    },
+    nowIso: new Date().toISOString()
   });
-  return { ok: true };
+  // RF_16: el rechazo no llega a Firestore, y ya no por donde este el `throw` sino porque el plan
+  // rechazado viene sin escrituras. El logo anterior —y con el la marca de RF_14— se queda.
+  if (!plan.ok) throw new HttpsError("invalid-argument", plan.reason);
+  await applyLogoWrites(db, plan.writes);
+  return { ok: true, changed: plan.changed, logoPath: plan.effectiveLogoPath };
 });
 
 const priceSchema = z.object({
@@ -284,53 +350,40 @@ export const cancelScheduledCommunityPrice = onCall(async (request) => {
   if (!canEditCommunityPricing(actor, parsed.data.communityId)) {
     throw new HttpsError("permission-denied", "Solo el lider cambia los precios de su comunidad.");
   }
-  await getFirestore().collection("communities").doc(parsed.data.communityId).update({
-    [`scheduled.${parsed.data.field}`]: FieldValue.delete(),
-    updatedAt: new Date().toISOString()
+  const { communityId, field } = parsed.data;
+  const ref = getFirestore().collection("communities").doc(communityId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+  const now = new Date().toISOString();
+  // El reloj lo mira el planificador. Borrar sin mirarlo no cancelaba nada pasada la fecha:
+  // bajaba el precio vigente en silencio, porque la programada nunca se escribe en `pricing`.
+  const plan = planScheduledRaiseCancellation({ id: communityId, ...snap.data() }, field, now);
+  if (!plan.ok) throw new HttpsError("failed-precondition", plan.reason);
+
+  await ref.update({
+    [`scheduled.${plan.field}`]: FieldValue.delete(),
+    updatedAt: now
   });
   return { ok: true };
 });
 
 /**
- * RF_35: cuando el administrador sube una base por encima del precio de alguna comunidad,
- * esos precios suben solos hasta el nuevo piso y su cashback de ese concepto queda en cero.
- * Se hace aqui y no al leer, para que el aviso salga una sola vez y la funcion pura siga pura.
+ * RF_35 lo hace ahora `onSettingsFloorRaise` (`community-floor-trigger.ts`), sobre el plan puro
+ * `planFloorRaise`. Aqui vivia `raiseCommunityPricesToFloor`, una callable que hacia lo mismo y
+ * a la que no llamaba nadie —ni el cliente ni el servidor—: la tarifa base la escribe el
+ * navegador directo a `settings/app`, asi que una elevacion que hay que invocar a mano no se
+ * invoca nunca. Se retira porque duplicaba el criterio de piso, y dos copias de esa regla acaban
+ * diciendo cosas distintas: la vieja comparaba contra el `pricing` LITERAL y no contra el precio
+ * vigente, asi que una subida programada ya vencida le dejaba un `fromCop` rancio en el
+ * historial; tampoco quitaba las programadas que el piso nuevo deja sin sentido, que es como una
+ * subida revivia sola sin los ocho dias de aviso de RF_28.
+ *
+ * El historial que ESCRIBIO no se reescribe ni se corrige. Sus entradas llevan una `note` y van
+ * firmadas con el uid del administrador que la invoco, mientras que las del trigger firman
+ * `system:floor`; esa diferencia es exacta y hay que conservarla, porque cuenta lo que de verdad
+ * paso: entonces la elevacion la lanzo una persona. Un historial de precios que se reescribe
+ * para que quede uniforme deja de ser historial.
  */
-export const raiseCommunityPricesToFloor = onCall(async (request) => {
-  const actor = actorFrom(request);
-  if (actor.role !== "admin") throw new HttpsError("permission-denied", "Solo un administrador.");
-  const parsed = z
-    .object({ field: z.enum(COMMUNITY_PRICING_FIELDS), floorCop: z.number().int().nonnegative() })
-    .safeParse(request.data);
-  if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
-  const { field, floorCop } = parsed.data;
-
-  const db = getFirestore();
-  const now = new Date().toISOString();
-  const snap = await db.collection("communities").get();
-  const raised: string[] = [];
-  for (const doc of snap.docs) {
-    const current = Number(doc.data()?.pricing?.[field as CommunityPricingField]);
-    if (!Number.isFinite(current) || current >= floorCop) continue;
-    await doc.ref.update({
-      [`pricing.${field}`]: floorCop,
-      [`floorRaisedAt.${field}`]: now,
-      updatedAt: now
-    });
-    await doc.ref.collection("priceHistory").doc().set({
-      field,
-      fromCop: current,
-      toCop: floorCop,
-      effectiveAt: now,
-      actorUid: actor.uid,
-      actorRole: actor.role,
-      createdAt: now,
-      note: "Elevacion automatica al nuevo piso de Kentro."
-    });
-    raised.push(doc.id);
-  }
-  return { raised };
-});
 
 /** RF_53: el aviso de captacion masiva se descarta sin desactivar a nadie. */
 export const dismissMassSignupAlert = onCall(async (request) => {
@@ -411,12 +464,16 @@ async function disableAuthAccess(
  */
 export const disableCommunitySignupsInRange = onCall(async (request) => {
   const actor = actorFrom(request);
-  if (actor.role !== "admin") throw new HttpsError("permission-denied", "Solo un administrador.");
   const parsed = z
     .object({ communityId: text, fromIso: text, toIso: text })
     .safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
   const { communityId, fromIso, toIso } = parsed.data;
+  // Por el predicado probado y no por un `role !== "admin"` suelto: la interfaz decide con este
+  // mismo, y dos caminos distintos para el mismo permiso acaban diciendo cosas distintas.
+  if (!canBulkDisableCommunitySignups(actor, communityId)) {
+    throw new HttpsError("permission-denied", "Solo un administrador.");
+  }
 
   const db = getFirestore();
   const auth = getAuth();
@@ -457,13 +514,26 @@ export const reassignSellerCommunity = onCall(async (request) => {
   }
   const parsed = z.object({ sellerId: text, communityId: z.string().trim().optional() }).safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
-  const now = new Date().toISOString();
-  await getFirestore().collection("sellers").doc(parsed.data.sellerId).update({
-    communityId: parsed.data.communityId || FieldValue.delete(),
-    communityJoinedAt: parsed.data.communityId ? now : FieldValue.delete()
-  });
-  // El cashback ya causado se queda con el lider que lo causo: no se toca ningun asiento.
-  return { ok: true };
+  const ref = getFirestore().collection("sellers").doc(parsed.data.sellerId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La tienda no existe.");
+  const data = snap.data() ?? {};
+  // El cashback ya causado se queda con el lider que lo causo. Eso ya no es un comentario:
+  // el plan declara su alcance completo (`sellers`) y esta probado sobre la estructura entera.
+  const plan = planSellerReassignment(
+    { id: snap.id, communityId: typeof data.communityId === "string" ? data.communityId : undefined },
+    parsed.data.communityId,
+    new Date().toISOString()
+  );
+  if (plan.changed) {
+    // La unica traduccion del marcador, y el unico punto donde `FieldValue` toca esta operacion.
+    await ref.update(
+      Object.fromEntries(
+        Object.entries(plan.sellerUpdate).map(([key, value]) => [key, isUnsetField(value) ? FieldValue.delete() : value])
+      )
+    );
+  }
+  return { ok: true, changed: plan.changed, previousCommunityId: plan.previousCommunityId };
 });
 
 /** Reexportado para que `community-signup` no duplique la regla de vigencia del slug. */
@@ -491,24 +561,14 @@ export const getMyStoreTariff = onCall(async (request) => {
   ]);
   const base = resolveTariffs(settingsSnap.data() ?? {}, undefined);
   const communityId = typeof sellerSnap.data()?.communityId === "string" ? String(sellerSnap.data()?.communityId) : "";
+  // Sin comunidad tambien pasa por la funcion pura: la respuesta tiene que tener la MISMA forma
+  // con comunidad y sin ella. Devolver `base` tal cual le filtraba a la tienda lo que se le paga
+  // al mensajero, que no es tarifa de nadie.
   if (!communityId) {
-    return { communityId: null, current: base, scheduled: null };
+    return buildStoreTariffView(base, undefined, now);
   }
 
   const communitySnap = await db.collection("communities").doc(communityId).get();
   const community = communitySnap.data() ?? {};
-  const current = resolveCommunityPricing(base, { id: communityId, ...community }, now);
-  // Solo lo que aun no ha entrado en vigor: lo vencido ya esta dentro de `current`.
-  const scheduled = Object.fromEntries(
-    COMMUNITY_PRICING_FIELDS.map((field) => [field, community.scheduled?.[field] ?? null]).filter(
-      ([, change]) => change && String((change as { effectiveAt?: string }).effectiveAt ?? "") > now
-    )
-  );
-
-  return {
-    communityId,
-    communityName: String(community.name ?? ""),
-    current,
-    scheduled: Object.keys(scheduled).length > 0 ? scheduled : null
-  };
+  return buildStoreTariffView(base, { id: communityId, ...community }, now);
 });

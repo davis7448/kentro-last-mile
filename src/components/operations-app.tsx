@@ -69,10 +69,11 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, setCommunityLeaderStatus, setCommunityLinkStatus } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, buildBulkSignupDisableView, type BulkSignupDisableOutcome, type BulkSignupDisableView } from "@/lib/community-view";
-import { canBulkDisableCommunitySignups, type Actor } from "../../functions/src/community-access";
-import { buildCommunityStats, dateAxisLabel, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
+import { disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, type BulkSignupDisableOutcome, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
+import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
+import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
@@ -4031,6 +4032,236 @@ function BulkSignupDisableReportCard({
 }
 
 /**
+ * RF_14, RF_16: subir el logo de una comunidad.
+ *
+ * Quien lo ve lo decide `canEditCommunityBrand`, IMPORTADO del mismo modulo que usa la callable
+ * (`functions/src/community-access.ts`) y no reescrito aqui como un `role === "admin"` suelto:
+ * dos copias de un permiso acaban diciendo cosas distintas, y la que se ve en pantalla es la que
+ * el usuario cree que manda. Por eso el permiso se comprueba DENTRO y el llamador solo pone el
+ * control donde toca.
+ *
+ * Sale tambien cuando la comunidad no tiene logo todavia —si solo apareciera donde ya hay uno,
+ * una comunidad recien creada no podria cargar el primero nunca— y sigue saliendo despues de un
+ * rechazo, para poder reintentar.
+ *
+ * RF_16: si el logo nuevo no vale, se pinta el error CON EL LOGO ANTERIOR todavia puesto. Eso no
+ * es un adorno: el estado local solo se mueve en el exito, asi que un rechazo no puede dejar a la
+ * comunidad sin marca (que es como se convierte en Kentro sin que nadie se entere).
+ */
+function CommunityLogoControl({
+  actor,
+  community
+}: {
+  actor: Actor;
+  community: { id: string; name?: string; logoPath?: string };
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  if (!canEditCommunityBrand(actor, community.id)) return null;
+
+  // La marca que se pinta: la recien subida si la hubo y, si no, la que ya tenia la comunidad.
+  // `brandFor` es quien decide (RF_15), y ante un rechazo `uploaded` sigue nulo: el anterior.
+  const brand = brandFor({ name: community.name, logoPath: uploaded ?? community.logoPath });
+
+  const subir = async (file: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setDone(false);
+    try {
+      const result = await setCommunityLogo({ communityId: community.id, file });
+      setUploaded(result.logoPath);
+      setDone(true);
+    } catch (cause) {
+      // El mensaje llega TAL CUAL del servidor ("El logo supera 512 KB", "Formato no admitido...")
+      // porque el limite concreto es la mitad util del aviso: sin el no se sabe que cambiar.
+      setError(cause instanceof Error ? cause.message : "No se pudo cambiar el logo.");
+    } finally {
+      setBusy(false);
+      // Permite volver a elegir EL MISMO archivo despues de un rechazo: sin esto, el `change` no
+      // se dispara la segunda vez y el control parece muerto.
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl bg-field p-3">
+      <p className="text-sm font-semibold">Logo de la comunidad</p>
+      <p className="mt-1 text-xs text-ink-60">
+        Es la marca que ve quien abre el enlace de invitacion. PNG, JPG, WEBP o SVG, hasta{" "}
+        {Math.round(LOGO_MAX_BYTES / 1024)} KB.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {brand.kind === "community" ? (
+          // <img> y no next/image, igual que en la pantalla de registro: la URL la aporta el lider
+          // y no esta en el dominio permitido de next/image, que la rechazaria en produccion.
+          <img
+            src={brand.logoPath}
+            alt={`Logo de ${brand.name}`}
+            className="h-12 w-12 shrink-0 rounded-2xl bg-panel object-contain"
+          />
+        ) : (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-panel text-center text-[10px] leading-tight text-ink-60">
+            Sin logo
+          </span>
+        )}
+        <input
+          ref={fileRef}
+          className="hidden"
+          type="file"
+          accept={LOGO_CONTENT_TYPES.join(",")}
+          onChange={(event) => void subir(event.target.files?.[0] ?? null)}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+          className="focus-ring rounded-full bg-acid px-4 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60"
+        >
+          {busy ? "Subiendo logo..." : brand.kind === "community" ? "Cambiar logo" : "Subir logo"}
+        </button>
+      </div>
+      {error && (
+        // RF_16: el error se pinta al lado del logo de siempre, que arriba sigue en pantalla.
+        <p className="mt-3 rounded-2xl border border-rust/20 bg-rust/10 p-3 text-xs text-rust">
+          {error} El logo anterior sigue puesto.
+        </p>
+      )}
+      {done && !error && <p className="mt-3 text-xs text-ink-60">Logo actualizado.</p>}
+    </div>
+  );
+}
+
+/**
+ * RF_11: a que comunidad pertenece una tienda.
+ *
+ * Solo el administrador (`canReassignSellerCommunity`, importado). Y es a proposito que NO se
+ * agrupe con el control del logo, aunque caigan en la misma pantalla: el lider gobierna su marca
+ * (RF_14) y no gobierna a que comunidad pertenece una tienda — ni la suya, que es justo quien
+ * mas motivo tendria para retenerla, ni la del vecino para llevarsela. Pintar los dos bajo la
+ * misma condicion le daria al lider un control que el servidor le va a negar.
+ *
+ * La confirmacion es explicita y dice lo que de verdad cambia: el cashback YA CAUSADO se queda
+ * con el lider que lo genero (eso lo garantiza `planSellerReassignment`, no esta pantalla); lo
+ * que se mueve es la tarifa de los pedidos FUTUROS de esa tienda.
+ */
+function SellerCommunityReassignPanel({ actor, state }: { actor: Actor; state: AppState }) {
+  const [sellerId, setSellerId] = useState("");
+  const [target, setTarget] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  if (!canReassignSellerCommunity(actor)) return null;
+
+  const seller = state.sellers.find((item) => item.id === sellerId);
+  const communityName = (id?: string) =>
+    id ? state.communities.find((item) => item.id === id)?.name ?? id : "sin comunidad";
+
+  // Sin `useEffect` de sincronizacion: el destino se coloca al elegir tienda, que es el unico
+  // momento en que cambia el dato de origen. Un efecto aqui solo anadiria un aviso de
+  // `exhaustive-deps` y un render de mas para llegar al mismo sitio.
+  const elegirTienda = (id: string) => {
+    setSellerId(id);
+    setTarget(state.sellers.find((item) => item.id === id)?.communityId ?? "");
+    setError(null);
+    setMessage(null);
+  };
+
+  const reasignar = async () => {
+    if (!seller) return;
+    const destino = communityName(target || undefined);
+    const confirmado = window.confirm(
+      `Mover la tienda ${seller.name} de ${communityName(seller.communityId)} a ${destino}?\n\n` +
+        "El cashback que ya causo se queda con el lider que lo genero y no se mueve. Lo que cambia " +
+        "es el precio de sus PEDIDOS FUTUROS: pasan a la tarifa de la comunidad de destino."
+    );
+    if (!confirmado) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await reassignSellerCommunity({ sellerId: seller.id, communityId: target || undefined });
+      setMessage(
+        result.changed
+          ? `${seller.name} quedo en ${destino}.`
+          : `${seller.name} ya estaba en ${destino}: no se cambio nada.`
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo reasignar la tienda.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-2xl border border-white/10 p-3">
+      <p className="text-sm font-semibold">Comunidad de una tienda</p>
+      <p className="mt-1 text-xs text-ink-60">
+        Ni la tienda ni el lider cambian esto por su cuenta. Dejar el destino en blanco la deja sin
+        comunidad.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-semibold text-ink-60">
+          Tienda
+          <select
+            className="focus-ring w-full min-w-0 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-normal text-fg"
+            value={sellerId}
+            onChange={(event) => elegirTienda(event.target.value)}
+          >
+            <option value="">Selecciona la tienda</option>
+            {[...state.sellers]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-ink-60">
+          Comunidad de destino
+          <select
+            className="focus-ring w-full min-w-0 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-normal text-fg"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+            disabled={!seller}
+          >
+            <option value="">Sin comunidad</option>
+            {state.communities.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {seller && (
+        <p className="mt-2 text-xs text-ink-60">
+          Hoy pertenece a <span className="font-semibold text-fg">{communityName(seller.communityId)}</span>.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={!seller || busy}
+        onClick={() => void reasignar()}
+        className="focus-ring mt-3 rounded-full bg-field px-4 py-2 text-xs font-semibold disabled:opacity-50"
+      >
+        {busy ? "Reasignando..." : "Reasignar tienda"}
+      </button>
+      {error && (
+        <p className="mt-3 rounded-2xl border border-rust/20 bg-rust/10 p-3 text-xs text-rust">{error}</p>
+      )}
+      {message && !error && <p className="mt-3 rounded-2xl bg-field p-3 text-xs text-ink-70">{message}</p>}
+    </div>
+  );
+}
+
+/**
  * Comunidades, para el administrador.
  *
  * Muestra lo que hace falta para gobernarlas sin abrir la consola de Firebase: quien las lidera,
@@ -4055,6 +4286,38 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
   const [containment, setContainment] = useState<BulkSignupDisableView | null>(null);
 
   const actor: Actor = { uid: session.id, role: session.role };
+
+  /**
+   * Las cifras de cada comunidad las decide el nucleo (RF_34), no este JSX: antes las tiendas y
+   * los tres precios se derivaban inline dentro del render y no habia donde probarlos.
+   *
+   * OJO con `state.wallet`: de ahi sale `cashbackAccruedCop`, y es justo la coleccion que
+   * `docs/rendimiento.md` marca como PENDIENTE DE RECORTAR para el administrador (10.452 asientos,
+   * 3,58 MB, el 68% de su carga). Si alguien acota esa suscripcion a una ventana de fechas, esta
+   * cifra BAJA EN SILENCIO —no falla, no avisa: muestra menos cashback del que la comunidad
+   * genero— porque lo causado incluye asientos tan viejos como la comunidad. Es la regla 5 del
+   * CLAUDE.md. Quien acote la wallet tiene que rescatar estos asientos por id o agregarlos en
+   * servidor, como se hizo con `getPlatformPosition`.
+   *
+   * El hook va ANTES del `return` anticipado de mas abajo. `react-hooks/rules-of-hooks` es error
+   * en este repo por un fallo que llego a produccion: un `useMemo` tras un return solo reventaba
+   * (React #310) en el primer render sin cache, o sea solo en movil.
+   */
+  const communityRows = useMemo(() => {
+    const rows = buildAdminCommunityList({
+      communities: state.communities,
+      sellers: state.sellers,
+      entries: state.wallet,
+      settings: state.settings
+    });
+    // `linkStatus` y `status` no viajan en la fila: son estado del documento, no cifras
+    // derivadas, y la tarjeta los sigue leyendo de `community`. Por eso se emparejan aqui.
+    const byId = new Map(state.communities.map((community) => [community.id, community]));
+    return rows.flatMap((row) => {
+      const community = byId.get(row.communityId);
+      return community ? [{ row, community }] : [];
+    });
+  }, [state.communities, state.sellers, state.wallet, state.settings]);
 
   // El informe viene con ids: sin nombre, el administrador no sabe a por cual ir.
   const sellerName = (sellerId: string) =>
@@ -4130,31 +4393,45 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
   return (
     <Card>
       {error && <p className="mb-3 rounded-2xl bg-field p-3 text-sm text-red-300">{error}</p>}
-      <PaginatedList items={state.communities} pageSize={8} empty={<p className="text-sm text-ink-60">Sin comunidades.</p>}>
-        {(community) => {
+      <PaginatedList items={communityRows} pageSize={8} empty={<p className="text-sm text-ink-60">Sin comunidades.</p>}>
+        {({ row, community }) => {
           const pendingAlert =
             community.massSignupAlertAt &&
             (!community.massSignupAlertDismissedAt || community.massSignupAlertDismissedAt < community.massSignupAlertAt);
-          const stores = state.sellers.filter((seller) => seller.communityId === community.id).length;
+          // Lo PAGADO sale de los cortes del lider (RF_49) y no de la wallet, asi que se calcula
+          // donde ya estaba y no se duplica dentro de `buildAdminCommunityList`.
+          const cashbackPaidCop = communityCashbackPaidCop(state.settlements, community.id);
           // RF_41: la contencion la dispara el administrador, no el lider — ni el de esta comunidad,
           // que es justo quien mas motivos tendria para querer tapar una fuga de su propio enlace.
           const puedeContener = canBulkDisableCommunitySignups(actor, community.id);
           const contencionAbierta = containmentFor === community.id;
+          // La ruta la decide el nucleo (RF_27, T41) y no una interpolacion: una comunidad sin
+          // slug pintaba "/registro/" a secas, que parece un enlace y no resuelve nada.
+          const invitePath = communityInvitePath(community);
           return (
             <div key={community.id} className="rounded-2xl border border-white/10 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-semibold">{community.name}</p>
-                <span className="text-xs text-ink-60">/registro/{community.slug}</span>
+                <p className="font-semibold">{row.name}</p>
+                <span className="text-xs text-ink-60">{invitePath ?? "Sin enlace todavia"}</span>
               </div>
               <p className="mt-1 text-sm text-ink-60">
-                {community.leaderName} · {stores} tiendas ·{" "}
+                {row.leaderName} · {row.stores} tiendas ·{" "}
                 {community.linkStatus === "active" ? "enlace activo" : "enlace revocado"} ·{" "}
                 {community.status === "active" ? "lider activo" : "lider desactivado"}
               </p>
               <p className="mt-1 text-xs text-ink-60">
-                Entrega {formatCop(community.pricing?.sellerDeliveredFeeCop ?? state.settings.sellerDeliveredFeeCop)} ·
-                Fallido {formatCop(community.pricing?.sellerFailedFeeCop ?? state.settings.sellerFailedFeeCop)} ·
-                Manejo {formatCop(community.pricing?.fulfillmentFeeCop ?? state.settings.fulfillmentFeeCop)}
+                Entrega {formatCop(row.pricing.sellerDeliveredFeeCop)} ·
+                Fallido {formatCop(row.pricing.sellerFailedFeeCop)} ·
+                Manejo {formatCop(row.pricing.fulfillmentFeeCop)}
+              </p>
+              {/*
+                Dos cifras distintas y rotuladas, nunca una sola: lo CAUSADO es lo que la comunidad
+                ha generado desde que existe (este cortado o no) y lo PAGADO es lo que ya salio de
+                caja. Fundirlas le diria al admin que ya giro un dinero que todavia debe.
+              */}
+              <p className="mt-1 text-xs text-ink-60">
+                Cashback causado <span className="tabular font-semibold text-fg">{formatCop(row.cashbackAccruedCop)}</span> ·
+                pagado <span className="tabular font-semibold text-fg">{formatCop(cashbackPaidCop)}</span>
               </p>
               {pendingAlert && (
                 <p className="mt-2 rounded-2xl bg-field p-3 text-xs">
@@ -4309,12 +4586,9 @@ function CommunityLeaderView({
         if (cancelled) return;
         setSellerNames(data.sellerNames ?? {});
         // Lo PAGADO no se puede agregar en servidor sin denormalizar un campo en cada asiento,
-        // asi que se completa aqui con los cortes que este rol ya descarga. La aritmetica es la
-        // misma funcion pura en los dos lados, asi que no pueden divergir.
-        const paidCop = state.settlements
-          .filter((item) => item.kind === "community_leader" && item.ownerId === communityId)
-          .filter((item) => item.status === "paid" || item.status === "reconciled")
-          .reduce((total, item) => total + (Number(item.netCop) || 0), 0);
+        // asi que se completa aqui con los cortes que este rol ya descarga. La regla vive en el
+        // nucleo, no inline: dos copias de la misma formula de dinero acaban divergiendo.
+        const paidCop = communityCashbackPaidCop(state.settlements, communityId);
         const raw = { ...(data.raw as unknown as RawCommunityAggregates), cashbackPaidCop: paidCop };
         setStats(buildCommunityStats(raw));
       })
@@ -4329,7 +4603,12 @@ function CommunityLeaderView({
     };
   }, [communityId, startDate, endDate, state.settlements]);
 
-  const inviteUrl = typeof window !== "undefined" ? `${window.location.origin}/registro/${communitySlug(state, communityId)}` : "";
+  // La ruta la decide el nucleo (RF_32) y el origen lo pone la pantalla, que es quien vive en el
+  // navegador. Sin slug no hay ruta: antes esto interpolaba el slug dentro de la plantilla y una
+  // comunidad que aun no tenia ninguno repartia un enlace con un hueco dentro, copiable y
+  // abrible, que no resolvia ninguna comunidad.
+  const invitePath = communityInvitePath({ slug: communitySlug(state, communityId) });
+  const inviteUrl = invitePath && typeof window !== "undefined" ? `${window.location.origin}${invitePath}` : "";
 
   if (loading) {
     return (
@@ -4349,13 +4628,26 @@ function CommunityLeaderView({
   }
 
   if (!stats || stats.emptiness === "no_stores") {
-    // Comunidad vacia: en vez de una pantalla en blanco, el enlace para llenarla.
+    // Comunidad vacia: en vez de una pantalla en blanco, las cifras en cero y el enlace para
+    // llenarla (RF_32). Las dos cosas salen juntas de la misma funcion pura para que no puedan
+    // separarse: sin slug se pintan los ceros igual, solo que sin enlace que repartir.
+    const empty = buildEmptyCommunityView(
+      { slug: communitySlug(state, communityId) },
+      stats ?? buildCommunityStats(EMPTY_COMMUNITY_AGGREGATES)
+    );
     return (
       <Card>
         <p className="text-base font-semibold">Todavia no tienes tiendas</p>
         <p className="mt-1 text-sm text-ink-60">
           Comparte tu enlace de invitacion: quien se registre por el entra directo a tu comunidad.
         </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Metric icon={<Boxes size={20} />} label="Pedidos creados" value={String(empty.totals.created)} />
+          <Metric icon={<Truck size={20} />} label="Despachados" value={String(empty.totals.dispatched)} />
+          <Metric icon={<Check size={20} />} label="Entregados" value={String(empty.totals.delivered)} />
+          <Metric icon={<X size={20} />} label="Fallidos" value={String(empty.totals.failed)} />
+        </div>
+        {/* Sin ruta no hay enlace: `inviteUrl` queda vacio y aqui no se pinta nada. */}
         {inviteUrl && <p className="mt-3 break-all rounded-2xl bg-field p-3 text-sm text-acid">{inviteUrl}</p>}
       </Card>
     );
@@ -4385,17 +4677,17 @@ function CommunityLeaderView({
       </Card>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric icon={<Boxes size={20} />} label={`Pedidos creados (${dateAxisLabel("created")})`} value={String(stats.totals.created)} />
-        <Metric icon={<Truck size={20} />} label={`Despachados (${dateAxisLabel("dispatched")})`} value={String(stats.totals.dispatched)} />
-        <Metric icon={<Check size={20} />} label={`Entregados (${dateAxisLabel("closed")})`} value={String(stats.totals.delivered)} />
-        <Metric icon={<X size={20} />} label={`Fallidos (${dateAxisLabel("closed")})`} value={String(stats.totals.failed)} />
+        <Metric icon={<Boxes size={20} />} label={`Pedidos creados (${metricDateSource("created").label})`} value={String(stats.totals.created)} />
+        <Metric icon={<Truck size={20} />} label={`Despachados (${metricDateSource("dispatched").label})`} value={String(stats.totals.dispatched)} />
+        <Metric icon={<Check size={20} />} label={`Entregados (${metricDateSource("delivered").label})`} value={String(stats.totals.delivered)} />
+        <Metric icon={<X size={20} />} label={`Fallidos (${metricDateSource("failed").label})`} value={String(stats.totals.failed)} />
       </div>
 
       <Card>
         <p className="text-sm font-semibold">Tu cashback</p>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
-            <p className="text-xs text-ink-60">Causado ({dateAxisLabel("closed")})</p>
+            <p className="text-xs text-ink-60">Causado ({metricDateSource("cashback").label})</p>
             <p className="tabular text-2xl font-bold">{money(stats.totals.cashbackAccruedCop)}</p>
           </div>
           <div>
@@ -4465,11 +4757,35 @@ function CommunityLeaderView({
   );
 }
 
-/** El nombre corto vive en la comunidad; el lider solo tiene su id hasta que se carga. */
-function communitySlug(state: AppState, communityId: string): string {
+/**
+ * El nombre corto con el que se registran las tiendas de una comunidad. Solo lo conoce quien ya
+ * entro por el enlace: se lee de las tiendas captadas.
+ *
+ * Devuelve `undefined` cuando todavia no hay ninguna, y ahi esta el cambio: antes caia al id de
+ * la comunidad, que NO es un slug y no resuelve nada en `/registro/[slug]`. Repartir esa ruta es
+ * el mismo fallo que repartir una con un hueco dentro, solo que con mejor aspecto. Sin slug, no
+ * hay enlace que dar (RF_32).
+ */
+function communitySlug(state: AppState, communityId: string): string | undefined {
   const seller = state.sellers.find((item) => item.communityId === communityId);
-  return seller?.communitySignupSlug ?? communityId;
+  return seller?.communitySignupSlug;
 }
+
+/**
+ * Cifras en cero de verdad, para cuando el panel del lider no tiene ni respuesta del servidor.
+ * RF_32 pide ceros y enlace, no una pantalla en blanco, y los ceros salen del mismo nucleo que
+ * los calcula siempre en vez de escribirse a mano aqui.
+ */
+const EMPTY_COMMUNITY_AGGREGATES: RawCommunityAggregates = {
+  storeCount: 0,
+  createdByStore: {},
+  dispatchedByStore: {},
+  deliveredByStore: {},
+  failedByStore: {},
+  cashbackAccruedCop: 0,
+  cashbackPaidCop: 0,
+  ordersWithoutCashbackByZoneFloor: 0
+};
 
 function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, sellerFilter, historyStart, searchingHistory, onStartDate, onEndDate, onStatusFilter, onSellerFilter, onSelectRange, periodStats = null, periodStatsError = null, view = "operations" }: { state: AppState; setState: (state: AppState) => void; session: Session; onNavigate: (view: AppView) => void; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; sellerFilter: string; historyStart?: string; searchingHistory?: boolean; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSellerFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; view?: AppView }) {
   const [adminOrderTab, setAdminOrderTab] = useState<"operation" | "failed">("operation");
@@ -7032,6 +7348,13 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   // (SettlementConfirmModal) muestra "saldo a pagar" y 4x1000, y en este caso ambos son cero.
   const [collectTarget, setCollectTarget] = useState<LiquidationRow | null>(null);
   const [paySupplierTarget, setPaySupplierTarget] = useState<SupplierLiquidationRow | null>(null);
+  // Cashback del lider de comunidad (RF_49). Va por su propia fila y su propio estado: meterlo en
+  // `LiquidationRow` obligaria a ensanchar su `role: "seller" | "driver"`, que gobierna una
+  // quincena de ramas de render y de acciones. Mismo precedente que los proveedores.
+  const [payCommunityLeaderTarget, setPayCommunityLeaderTarget] = useState<CommunityLeaderLiquidationRow | null>(null);
+  // Confirmacion de exito: un corte con neto cero no cambia ninguna cifra de la pantalla, asi que
+  // sin este mensaje el admin no tiene forma de saber que se hizo algo.
+  const [communityLeaderMessage, setCommunityLeaderMessage] = useState<string | null>(null);
   // LO PENDIENTE POR LIQUIDAR NO SE FILTRA POR FECHA. Antes todo colgaba de `rangeEntries`, con
   // un rango por defecto de 7 dias: cualquier movimiento sin liquidar mas viejo quedaba invisible
   // en las filas Y fuera del corte, porque el rango tambien viajaba al callable. Un corte es el
@@ -7041,7 +7364,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   // (`!settlementId`) y lo no pagado al proveedor (`!supplierSettlementId`). Un product_cost puede
   // estar ya liquidado con la tienda y seguir pendiente con el proveedor, asi que el segundo caso
   // no se puede derivar del primero.
-  const { rows, sellerRows, driverRows, storeRows, supplierRows, blockedSellerAudits, openAudits } = useMemo(() => {
+  const { rows, sellerRows, driverRows, storeRows, supplierRows, communityLeaderRows, blockedSellerAudits, openAudits } = useMemo(() => {
     const openEntries = selectOpenWalletEntries(state.wallet);
     const audits = buildLiquidationOrderAudits(state, openEntries);
     const auditByOrderId = new Map(audits.map((audit) => [audit.orderId, audit]));
@@ -7071,6 +7394,11 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
       driverRows: driverLiquidationRows,
       storeRows: buildStoreLiquidationRows(state, eligiblePendingSellerEntries),
       supplierRows: buildSupplierLiquidationRows(state, supplierPendingEntries),
+      // El cashback del lider no pasa por la compuerta de COD de las tiendas: es margen ya
+      // causado al cerrar el pedido, no plata que haya que esperar del domiciliario. Se le pasan
+      // los asientos abiertos tal cual porque el constructor ya descarta lo que tiene
+      // `settlementId`; volver a filtrarlo aqui solo daria dos sitios donde equivocarse.
+      communityLeaderRows: buildCommunityLeaderLiquidationRows(state.communities, openEntries),
       blockedSellerAudits: audits.filter((audit) => pendingSellerOrderIds.has(audit.orderId) && audit.paymentMethod === "cod" && !audit.sellerEligible),
       openAudits: audits
     };
@@ -7079,7 +7407,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
     // y cada recalculo cuesta ~169 ms medidos. Con el ledger completo cargado eso encadenaba
     // recalculos hasta congelar la pestana.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.wallet, state.orders, state.sellers, state.drivers, state.settlements, state.suppliers, state.shopifyStores, state.zones, state.settings]);
+  }, [state.wallet, state.orders, state.sellers, state.drivers, state.settlements, state.suppliers, state.communities, state.shopifyStores, state.zones, state.settings]);
 
   // El rango de fechas SOLO alimenta el resumen del periodo; no toca lo pendiente.
   //
@@ -7118,6 +7446,10 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const totalDriverReceivable = driverRows.reduce((sum, row) => sum + row.payoutCop, 0);
   const totalSellerPayable = sellerRows.reduce((sum, row) => sum + row.payoutCop, 0);
   const totalSupplierPayable = supplierRows.reduce((sum, row) => sum + row.payoutCop, 0);
+  // NETO, sin recortar a cero: una reversa de cashback resta, y un total negativo significa que
+  // los lideres deben mas de lo que se les debe. Taparlo con un Math.max mostraria plata que no
+  // hay que girar.
+  const totalCommunityLeaderPayable = communityLeaderRows.reduce((sum, row) => sum + row.cashbackCop, 0);
   const totalBlockedSellerPayable = blockedSellerAudits.reduce((sum, audit) => sum + Math.max(0, audit.sellerNetCop), 0);
   const platformMargin = periodSummary.platformMarginCop;
   const totalPending = rows.reduce((sum, row) => sum + Math.abs(row.netCop), 0);
@@ -7240,6 +7572,47 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
       .finally(() => setBusyId(null));
   };
 
+  /**
+   * Corte del cashback pendiente de una comunidad (RF_49).
+   *
+   * Los ids de asiento viajan explicitos, como en el proveedor: son exactamente los que pinta la
+   * fila, asi que lo que se sella es lo que se vio. El rango va abierto porque un corte es todo lo
+   * que se debe, no lo de esta semana.
+   */
+  const closeCommunityLeaderRow = (row: CommunityLeaderLiquidationRow, chargeGmf?: boolean, note?: string) => {
+    if (row.walletEntryIds.length === 0) {
+      setError("No hay cashback pendiente para esta comunidad.");
+      return;
+    }
+    setBusyId(`community_leader-${row.communityId}`);
+    setError(null);
+    setCommunityLeaderMessage(null);
+    void createFirebaseSettlement({
+      kind: "community_leader",
+      ownerId: row.communityId,
+      startDate: "",
+      endDate: "",
+      walletEntryIds: row.walletEntryIds,
+      chargeGmf,
+      note
+    })
+      .then(async ({ settlement, walletEntries }) => {
+        // Solo se marca pagado lo que de verdad sale del banco. Con neto cero (un cashback y su
+        // reversa que se netean) o negativo no hay giro, pero el corte se crea igual para que esos
+        // asientos dejen de estar pendientes; queda como pendiente en "Cortes cerrados".
+        if (row.cashbackCop <= 0) {
+          mergeSettlement(settlement, walletEntries);
+          setCommunityLeaderMessage(`Corte creado para ${row.communityName} sin giro (neto ${formatCop(row.cashbackCop)}). Queda pendiente en Cortes cerrados.`);
+          return;
+        }
+        const { settlement: paidSettlement } = await updateFirebaseSettlementStatus({ settlementId: settlement.id, status: "paid" });
+        mergeSettlement(paidSettlement, walletEntries);
+        setCommunityLeaderMessage(`Cashback girado a ${row.leaderName} (${row.communityName}): ${formatCop(paidSettlement.netCop)}.`);
+      })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo girar el cashback del lider."))
+      .finally(() => setBusyId(null));
+  };
+
   const changeStatus = (settlement: Settlement, status: "paid" | "reconciled", paidAmountCop?: number) => {
     setBusyId(`${settlement.id}-${status}`);
     setError(null);
@@ -7351,6 +7724,26 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
           }}
         />
       )}
+      {payCommunityLeaderTarget && (
+        <SettlementConfirmModal
+          title="Girar cashback al lider"
+          accountName={`${payCommunityLeaderTarget.leaderName} · ${payCommunityLeaderTarget.communityName}`}
+          receivableCop={payCommunityLeaderTarget.cashbackCop}
+          // La comunidad no tiene ficha de pago en efectivo: el cashback se gira por banco.
+          paysInCash={false}
+          // Con neto cero o negativo no sale plata, y el 4x1000 solo grava lo que sale.
+          allowGmfToggle={payCommunityLeaderTarget.cashbackCop > 0}
+          busy={busyId === `community_leader-${payCommunityLeaderTarget.communityId}`}
+          error={error}
+          confirmLabel={payCommunityLeaderTarget.cashbackCop > 0 ? "Girar cashback" : "Cerrar corte"}
+          onCancel={() => setPayCommunityLeaderTarget(null)}
+          onConfirm={(chargeGmf, note) => {
+            const target = payCommunityLeaderTarget;
+            setPayCommunityLeaderTarget(null);
+            closeCommunityLeaderRow(target, chargeGmf, note);
+          }}
+        />
+      )}
 
       {error && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
 
@@ -7361,7 +7754,7 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
           <p className="text-xs font-semibold uppercase text-deep/70">Pendiente total por conciliar</p>
           <p className="tabular mt-1 text-3xl font-extrabold text-deep">{formatCop(totalPending)}</p>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-y divide-white/[0.06] overflow-hidden rounded-3xl border border-white/[0.06] bg-panel sm:grid-cols-4 sm:divide-y-0">
+        <div className="grid grid-cols-2 divide-x divide-y divide-white/[0.06] overflow-hidden rounded-3xl border border-white/[0.06] bg-panel sm:grid-cols-5 sm:divide-y-0">
           <div className="p-3">
             <p className="text-[11px] leading-tight text-ink-60">Tiendas por pagar</p>
             <p className="tabular text-lg font-bold">{formatCop(totalSellerPayable)}</p>
@@ -7369,6 +7762,10 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
           <div className="p-3">
             <p className="text-[11px] leading-tight text-ink-60">Proveedores</p>
             <p className="tabular text-lg font-bold">{formatCop(totalSupplierPayable)}</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[11px] leading-tight text-ink-60">Cashback lideres</p>
+            <p className={`tabular text-lg font-bold ${totalCommunityLeaderPayable < 0 ? "text-rust" : ""}`}>{formatCop(totalCommunityLeaderPayable)}</p>
           </div>
           <div className="p-3">
             <p className="text-[11px] leading-tight text-ink-60">Domiciliarios deben entregar</p>
@@ -7423,6 +7820,14 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
             onAbono={(row) => setAbonoTarget({ sellerId: row.id, sellerName: row.name, receivableCop: row.receivableCop })}
           />
           <SupplierLiquidationTable rows={supplierRows} busyId={busyId} onClose={(row) => setPaySupplierTarget(row)} />
+          <CommunityLeaderLiquidationTable
+            rows={communityLeaderRows}
+            totalCop={totalCommunityLeaderPayable}
+            busyId={busyId}
+            message={communityLeaderMessage}
+            onDismissMessage={() => setCommunityLeaderMessage(null)}
+            onClose={(row) => setPayCommunityLeaderTarget(row)}
+          />
           {/* El domiciliario que debe efectivo NOS paga: eso va por el modal de cobro. El que tiene
               saldo a favor si es un giro, y ahi el modal de pago (con 4x1000) es el correcto. */}
           <LiquidationTable
@@ -8519,6 +8924,102 @@ function SupplierAbonoModal({
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * RF_49: el corte con el que el cashback del lider pasa de causado a pagado.
+ *
+ * Se pinta como los proveedores y no como una fila mas de `LiquidationRow`, porque el `role` de
+ * aquella gobierna una quincena de ramas de render y de acciones que aqui no aplican.
+ *
+ * Tres casos que NO se esconden, y por que: una fila en cero (reversas que netean) hay que poder
+ * cortarla igual, o sus asientos siguen pendientes para siempre; un neto negativo se muestra
+ * negativo en vez de recortarse a cero; y una comunidad cuyos asientos ya no casan con ninguna
+ * comunidad viva sale con nombre de respaldo. Esconder cualquiera de las tres seria bajar un
+ * saldo en silencio.
+ */
+function CommunityLeaderLiquidationTable({
+  rows,
+  totalCop,
+  busyId,
+  message,
+  onDismissMessage,
+  onClose
+}: {
+  rows: CommunityLeaderLiquidationRow[];
+  totalCop: number;
+  busyId: string | null;
+  message: string | null;
+  onDismissMessage: () => void;
+  onClose: (row: CommunityLeaderLiquidationRow) => void;
+}) {
+  const { page, setPage, totalPages, visibleItems } = usePaginatedItems(rows, 10);
+  return (
+    <Card>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-bold">Cashback de lideres pendiente de girar</h2>
+          <p className="text-sm text-ink-60">Causado por los pedidos de cada comunidad y todavia sin cortar.</p>
+        </div>
+        <span className="shrink-0 text-sm font-bold text-mint tabular">{formatCop(totalCop)}</span>
+      </div>
+      {message && (
+        <button
+          type="button"
+          onClick={onDismissMessage}
+          className="mb-3 w-full rounded-2xl bg-mint/10 px-3 py-2 text-left text-sm font-semibold text-fg"
+        >
+          {message}
+        </button>
+      )}
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-60">Ninguna comunidad tiene cashback pendiente en este rango.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-normal text-ink-60">
+                <th className="py-2 pr-3 font-semibold">Comunidad</th>
+                <th className="py-2 pr-3 font-semibold">Lider</th>
+                <th className="py-2 pr-3 font-semibold">Pedidos</th>
+                <th className="py-2 pr-3 font-semibold">Movimientos</th>
+                <th className="py-2 pr-3 font-semibold">Cashback</th>
+                <th className="py-2 text-right font-semibold">Accion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((row) => (
+                <tr key={row.communityId} className="border-b border-white/5 last:border-0">
+                  <td className="py-3 pr-3 font-semibold">{row.communityName}</td>
+                  <td className="py-3 pr-3">{row.leaderName}</td>
+                  <td className="py-3 pr-3">{row.orders}</td>
+                  <td className="py-3 pr-3">{row.walletEntryIds.length}</td>
+                  <td className={`py-3 pr-3 font-bold ${row.cashbackCop < 0 ? "text-rust" : "text-mint"}`}>
+                    <span className="tabular">{formatCop(row.cashbackCop)}</span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:cursor-not-allowed disabled:bg-field disabled:text-ink-60"
+                      type="button"
+                      disabled={busyId === `community_leader-${row.communityId}`}
+                      onClick={() => onClose(row)}
+                    >
+                      {busyId === `community_leader-${row.communityId}`
+                        ? "Guardando..."
+                        : row.cashbackCop > 0
+                          ? "Girar cashback"
+                          : "Cerrar corte"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <PaginationControls page={page} totalPages={totalPages} totalItems={rows.length} onPageChange={setPage} />
+        </div>
+      )}
+    </Card>
   );
 }
 
