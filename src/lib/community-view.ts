@@ -825,3 +825,31 @@ export function validateCommunityGrantForm(
 
   return { ok: true, value: { name, slug: slug.slug, targetEmail } };
 }
+
+/**
+ * RF_14: el distintivo de comunidad que ve una TIENDA en su propio panel.
+ *
+ * RF_14 pide la marca del lider en dos sitios —la pantalla de registro del enlace y **el panel de
+ * las tiendas de su comunidad**— y solo se habia construido el primero.
+ *
+ * Se alimenta de lo que la tienda ya puede saber: la respuesta de su propia consulta de tarifa. El
+ * documento de la comunidad **no** lo puede leer, y las reglas hacen bien en negarlo, porque lleva
+ * el correo y el telefono del lider.
+ *
+ * A diferencia de `brandFor`, **sin logo NO cae a la marca de la plataforma**: pertenecer a una
+ * comunidad es un hecho que hay que ensenar, y el nombre basta para decirlo. Caer a "Kentro" le
+ * esconderia a la tienda a que comunidad pertenece, que es justo lo que este distintivo existe
+ * para decir.
+ */
+export type CommunityBadge = { kind: "community"; name: string; logoPath: string | null };
+
+export function communityBadgeFor(tariff: {
+  communityId: string | null;
+  communityName: string | null;
+  logoPath?: string | null;
+}): CommunityBadge | null {
+  const name = typeof tariff.communityName === "string" ? tariff.communityName.trim() : "";
+  if (!tariff.communityId || !name) return null;
+  const logoPath = typeof tariff.logoPath === "string" && tariff.logoPath.trim() ? tariff.logoPath.trim() : null;
+  return { kind: "community", name, logoPath };
+}

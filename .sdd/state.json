@@ -2,7 +2,7 @@
   "version": 1,
   "phase": "deploy",
   "activeSpec": {
-    "file": "specs/003_doble_rol.md",
+    "file": "specs/001_lider_de_comunidad.md",
     "status": "approved"
   },
   "tasks": {
@@ -236,6 +236,40 @@
         "src/components/operations-app.tsx",
         "src/lib/community-view.ts",
         "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T18": {
+      "requirements": [
+        "RNF_05",
+        "RNF_03",
+        "RF_43"
+      ],
+      "files": [
+        "src/app/registro/[slug]/signup-form.tsx",
+        "src/app/privacy/page.tsx",
+        "src/app/api-tiendas/page.tsx",
+        "src/app/shopify-app-store-review/page.tsx",
+        "docs/design-system.md",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T19": {
+      "requirements": [
+        "RF_14",
+        "RF_15"
+      ],
+      "files": [
+        "functions/src/community-pricing.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-pricing.test.ts",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/firebase/auth.ts"
       ],
       "testWritten": true,
       "done": true

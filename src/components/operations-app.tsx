@@ -71,7 +71,7 @@ import {
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
@@ -3917,7 +3917,26 @@ function StoreTariffCard() {
   return (
     <Card>
       <p className="text-sm font-semibold">Tu tarifa</p>
-      {tariff.communityName && <p className="mt-1 text-xs text-ink-60">Comunidad: {tariff.communityName}</p>}
+      {/*
+        RF_14: la marca del lider tambien en el panel de sus tiendas, no solo en la pantalla de
+        registro. Sale de `communityBadgeFor`, no de leer el documento de la comunidad: las reglas
+        se lo niegan a la tienda, y hacen bien — ese documento lleva el correo y el telefono del
+        lider. Sin logo cargado se ensena el nombre igual: pertenecer a una comunidad es un hecho
+        que hay que decir, y caer a la marca de la plataforma se lo esconderia.
+      */}
+      {(() => {
+        const badge = communityBadgeFor(tariff);
+        if (!badge) return null;
+        return (
+          <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-field px-3 py-1 text-xs font-semibold">
+            {badge.logoPath ? (
+              // <img> y no next/image: la URL la aporta el lider y no esta en el dominio permitido.
+              <img src={badge.logoPath} alt={badge.name} className="h-5 w-5 rounded-full object-contain" />
+            ) : null}
+            {badge.name}
+          </span>
+        );
+      })()}
       <div className="mt-3 space-y-2">
         {Object.entries(labels).map(([field, label]) => {
           const upcoming = tariff.scheduled?.[field];

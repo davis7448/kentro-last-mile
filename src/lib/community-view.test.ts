@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
-import { brandFor, roleLabel, shouldOpenCommunitiesPanel } from "./community-view";
+import { brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel } from "./community-view";
 import { buildPriceHistoryEntry, LOGO_MAX_BYTES, validateLogo } from "../../functions/src/community-pricing";
 import { validateSlug } from "../../functions/src/community-slug";
 
@@ -2793,5 +2794,95 @@ describe("T17 · RF_17: los dos caminos llegan hasta la pantalla", () => {
     expect(callable, "grantCommunityLeadership no acepta crear la comunidad").toMatch(/\bname\b/);
     expect(callable, "el nombre corto de la comunidad nueva no se reserva").toContain("communitySlugs");
     expect(callable, "el nombre corto no pasa por validateSlug").toContain("validateSlug");
+  });
+});
+
+/**
+ * T18 · RNF_05: ninguna pantalla publica pinta el texto del color del fondo.
+ *
+ * El token `ink` se llama como la tinta y significa lo contrario: `--c-ink` es **el fondo de
+ * pagina** (`rgb(14,17,22)` en oscuro). Usar `text-ink` sobre `bg-field` (`rgb(33,40,50)`) da un
+ * contraste de 1,2:1 — el texto existe, ocupa su sitio y no se ve.
+ *
+ * Paso en las CUATRO paginas publicas a la vez, que es la senal de que no fue un descuido sino una
+ * lectura razonable de un nombre enganoso. El resto de la aplicacion usa `text-fg`.
+ *
+ * La prueba mira la fuente porque el fallo es invisible para todo lo demas: compila, tipa, pasa el
+ * linter, y solo se ve abriendo la pagina.
+ */
+describe("T18 · el texto no se pinta del color del fondo", () => {
+  const PUBLICAS = [
+    "src/app/registro/[slug]/signup-form.tsx",
+    "src/app/privacy/page.tsx",
+    "src/app/api-tiendas/page.tsx",
+    "src/app/shopify-app-store-review/page.tsx"
+  ];
+
+  for (const ruta of PUBLICAS) {
+    it(`RNF_05: ${ruta} no usa text-ink, que es el color del FONDO`, () => {
+      const fuente = readFileSync(join(process.cwd(), ruta), "utf8");
+      // Control positivo: si el lector fallara, esto lo delata antes que la asercion real.
+      expect(fuente.length).toBeGreaterThan(200);
+      // `text-ink-60` y `text-ink-70` SI son colores de texto validos; el desnudo no.
+      expect(fuente).not.toMatch(/text-ink["\s]/);
+    });
+  }
+
+  it("RNF_03, RF_43: el formulario publico deja ver la contrasena, sin pedir un sexto campo", () => {
+    const fuente = readFileSync(join(process.cwd(), "src/app/registro/[slug]/signup-form.tsx"), "utf8");
+    expect(fuente).toContain("showPassword");
+    /**
+     * RF_43 es tajante: **exactamente cinco datos y ni uno mas**, con su motivo escrito — cada campo
+     * extra en un formulario abierto en un movil es una tienda que no se registra.
+     *
+     * Se cuentan los campos y no se busca la palabra "confirmar": buscar la palabra caza tambien el
+     * comentario que explica por que NO esta, y una guarda que se dispara con su propia
+     * documentacion no sirve. Cinco `<Field`, ni uno mas. Un "confirmar contrasena" seria el sexto y
+     * esta cuenta lo veria.
+     */
+    const campos = fuente.match(/<Field[\s\n]/g) ?? [];
+    expect(campos.length, "RF_43 pide exactamente cinco datos en el formulario publico").toBe(5);
+  });
+});
+
+/**
+ * T19 · RF_14: la marca del lider tambien en el panel de SUS TIENDAS.
+ *
+ * RF_14 pide el logo en dos sitios: la pantalla de registro del enlace **y el panel de las tiendas
+ * de su comunidad**. Solo se construyo el primero.
+ *
+ * La tienda NO puede leer el documento de su comunidad —las reglas lo niegan, y hacen bien: ese
+ * documento lleva el correo y el telefono del lider—. Su ventana es `getMyStoreTariff`, la callable
+ * que ya existe para RNF_04 y que ya le devuelve el nombre. Le faltaba el logo.
+ */
+describe("T19 · la tienda ve la marca de su comunidad", () => {
+  const marcaDeTienda = (tariff: { communityId: string | null; communityName: string | null; logoPath?: string | null }) =>
+    communityBadgeFor(tariff);
+
+  it("RF_14: con logo, la tienda ve la marca de su comunidad y su nombre", () => {
+    const badge = marcaDeTienda({ communityId: "com-1", communityName: "Andes", logoPath: "communities/com-1/logo.png" });
+    expect(badge).toEqual({ kind: "community", name: "Andes", logoPath: "communities/com-1/logo.png" });
+  });
+
+  it("RF_15: sin logo cargado, la tienda ve el nombre de su comunidad, no un hueco", () => {
+    const badge = marcaDeTienda({ communityId: "com-1", communityName: "Andes", logoPath: null });
+    // Sin logo NO cae a la plataforma: pertenecer a una comunidad es un hecho que hay que
+    // ensenar, y el nombre basta. Caer a "Kentro" le escondería a la tienda a que comunidad
+    // pertenece, que es justo lo que este distintivo existe para decir.
+    expect(badge).toEqual({ kind: "community", name: "Andes", logoPath: null });
+  });
+
+  it("RF_14: una tienda sin comunidad no lleva distintivo, y eso no es un error", () => {
+    expect(marcaDeTienda({ communityId: null, communityName: null })).toBeNull();
+  });
+
+  it("RF_14: una comunidad sin nombre tampoco pinta un distintivo vacio", () => {
+    expect(marcaDeTienda({ communityId: "com-1", communityName: "   " })).toBeNull();
+  });
+
+  it("RF_14: el distintivo llega a la pantalla y no se reimplementa en el JSX", () => {
+    const fuente = readFileSync(join(process.cwd(), "src/components/operations-app.tsx"), "utf8");
+    expect(fuente.length).toBeGreaterThan(100_000);
+    expect(fuente).toContain("communityBadgeFor");
   });
 });

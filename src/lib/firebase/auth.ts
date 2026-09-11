@@ -811,6 +811,8 @@ export async function fetchMyStoreTariff() {
   return (await callable({})).data as {
     communityId: string | null;
     communityName: string | null;
+    /** RF_14: la marca del lider, para el distintivo del panel de sus tiendas. */
+    logoPath: string | null;
     current: Record<string, number>;
     scheduled: Record<string, { field: string; fromCop: number; toCop: number; effectiveAt: string }> | null;
   };

@@ -17,6 +17,13 @@ export default function SignupForm({ slug }: { slug: string }) {
   const [brand, setBrand] = useState<Brand>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ email: "", password: "", responsibleName: "", phone: "", storeName: "" });
+  /**
+   * RF_43 pide CINCO datos y ni uno mas, asi que aqui no hay "confirmar contrasena": seria el
+   * sexto, y la spec lo prohibe con su motivo escrito — cada campo extra en un formulario abierto
+   * en un movil es una tienda que no se registra. El ojo resuelve el mismo problema, escribirla mal
+   * sin darse cuenta, sin anadir nada que rellenar.
+   */
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +110,15 @@ export default function SignupForm({ slug }: { slug: string }) {
         <Field label="Tu nombre" value={form.responsibleName} onChange={(v) => setForm({ ...form, responsibleName: v })} disabled={disabled} />
         <Field label="Telefono" type="tel" inputMode="tel" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} disabled={disabled} />
         <Field label="Correo" type="email" inputMode="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} disabled={disabled} />
-        <Field label="Contrasena" type="password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} disabled={disabled} />
+        <Field
+          label="Contrasena"
+          type={showPassword ? "text" : "password"}
+          value={form.password}
+          onChange={(v) => setForm({ ...form, password: v })}
+          disabled={disabled}
+          hint="Minimo 6 caracteres."
+          action={{ label: showPassword ? "Ocultar" : "Ver", onClick: () => setShowPassword((current) => !current) }}
+        />
 
         {error && <p className="rounded-2xl bg-field p-3 text-sm text-red-300">{error}</p>}
 
@@ -125,7 +140,9 @@ function Field({
   onChange,
   type = "text",
   inputMode,
-  disabled
+  disabled,
+  hint,
+  action
 }: {
   label: string;
   value: string;
@@ -133,19 +150,30 @@ function Field({
   type?: string;
   inputMode?: "tel" | "email";
   disabled?: boolean;
+  hint?: string;
+  action?: { label: string; onClick: () => void };
 }) {
   return (
     <label className="block text-xs text-ink-60">
-      {label}
+      <span className="flex items-baseline justify-between gap-2">
+        {label}
+        {action && (
+          <button type="button" onClick={action.onClick} className="focus-ring rounded-full px-2 py-1 text-xs font-semibold text-acid">
+            {action.label}
+          </button>
+        )}
+      </span>
       <input
+        aria-label={label}
         type={type}
         inputMode={inputMode}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         required
-        className="mt-1 w-full rounded-xl bg-field px-3 py-3 text-base text-ink outline-none focus:ring-2 focus:ring-acid/40"
+        className="mt-1 w-full rounded-xl bg-field px-3 py-3 text-base text-fg outline-none focus:ring-2 focus:ring-acid/40"
       />
+      {hint ? <span className="mt-1 block px-1 text-xs text-ink-60">{hint}</span> : null}
     </label>
   );
 }

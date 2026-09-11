@@ -321,6 +321,12 @@ export type StoreTariffRaiseNotice = {
 export type StoreTariffView = {
   communityId: string | null;
   communityName: string | null;
+  /**
+   * RF_14: la marca del lider tambien en el panel de sus tiendas. Viaja por aqui y no leyendo el
+   * documento de la comunidad, porque las reglas se lo niegan a la tienda — y hacen bien: ese
+   * documento lleva el correo y el telefono del lider.
+   */
+  logoPath: string | null;
   current: StoreTariffPrices;
   /** Solo lo que aun NO ha entrado en vigor. `null` —no `{}`— si no queda nada pendiente. */
   scheduled: Partial<Record<CommunityPricingField, StoreTariffRaiseNotice>> | null;
@@ -345,7 +351,7 @@ export type StoreTariffView = {
  */
 export function buildStoreTariffView(
   base: Partial<Record<CommunityPricingField, number>>,
-  community: (CommunityLike & { name?: string }) | undefined,
+  community: (CommunityLike & { name?: string; logoPath?: string }) | undefined,
   nowIso: string
 ): StoreTariffView {
   const current = resolveCommunityPricing(base, community, nowIso);
@@ -376,6 +382,7 @@ export function buildStoreTariffView(
   return {
     communityId: community ? community.id : null,
     communityName: community ? String(community.name ?? "") : null,
+    logoPath: community && typeof community.logoPath === "string" && community.logoPath.trim() ? community.logoPath : null,
     current: {
       sellerDeliveredFeeCop: current.sellerDeliveredFeeCop,
       sellerFailedFeeCop: current.sellerFailedFeeCop,

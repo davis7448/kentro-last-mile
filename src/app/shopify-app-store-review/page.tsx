@@ -30,7 +30,7 @@ const notes = [
 
 export default function ShopifyAppStoreReviewPage() {
   return (
-    <main className="min-h-screen bg-field px-4 py-8 text-ink">
+    <main className="min-h-screen bg-field px-4 py-8 text-fg">
       <article className="mx-auto max-w-3xl rounded-lg border border-black/10 bg-white p-6 shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-normal text-black/50">Kentro</p>
         <h1 className="mt-2 text-3xl font-bold">Shopify App Store Review</h1>

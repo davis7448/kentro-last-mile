@@ -40,7 +40,7 @@ function Table({ head, rows }: { head: string[]; rows: string[][] }) {
 
 export default function ApiTiendasPage() {
   return (
-    <main className="min-h-screen bg-field px-4 py-8 text-ink">
+    <main className="min-h-screen bg-field px-4 py-8 text-fg">
       <article className="mx-auto grid max-w-3xl gap-6 rounded-lg border border-black/10 bg-white p-6 shadow-panel">
         <header>
           <p className="text-sm font-semibold uppercase tracking-normal text-black/50">Kentro</p>
