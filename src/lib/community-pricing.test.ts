@@ -8,17 +8,35 @@ import {
   SCHEDULED_RAISE_NOTICE_DAYS
 } from "../../functions/src/community-pricing";
 import type { Community, CommunityPricingFields, ScheduledPriceChange } from "./types";
+import { buildStoreTariffView as vistaTarifaDeTienda } from "../../functions/src/community-pricing";
 
 const BASE = { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000 };
 const T0 = "2026-09-01T00:00:00.000Z";
 const day = 24 * 60 * 60 * 1000;
 const at = (days: number) => new Date(Date.parse(T0) + days * day).toISOString();
 
-function community(pricing: CommunityPricingFields = {}, extra: Partial<Community> = {}): Community {
+/**
+ * Una comunidad tal como la ve `resolveCommunityPricing` DESPUES de la spec 003: el documento
+ * entero, con el `leaderUid` que la concesion escribe (`community-grant.ts`) y la revocacion
+ * borra. El campo es opcional en el tipo porque en el documento es opcional de verdad: hay
+ * comunidades creadas antes de que existiera, y son exactamente las que no deben cobrar de mas.
+ */
+type ComunidadConLider = Community & { leaderUid?: string };
+
+const UID_LIDER = "uid-lider-ana";
+
+/**
+ * La comunidad SANA: activa y CON lider, el unico estado en el que el precio propio se cobra.
+ * Es el punto de partida de T3, T4, T5, T39 y T47, que hablan de precios, pisos y programadas
+ * dando por hecho que hay quien los cobre. Si aqui falta el `leaderUid`, toda comunidad del
+ * archivo nace huerfana y esas cinco tandas piden sobreprecio a una comunidad que, por RF_20,
+ * debe cobrar la base: el archivo se contradice solo. Para el caso huerfano esta `sinLider`.
+ */
+function community(pricing: CommunityPricingFields = {}, extra: Partial<Community> = {}): ComunidadConLider {
   return {
     id: "com-1", name: "Comunidad", slug: "comunidad",
     leaderName: "Ana", leaderEmail: "ana@x.co", leaderPhone: "3000000000",
-    linkStatus: "active", status: "active", pricing,
+    linkStatus: "active", status: "active", pricing, leaderUid: UID_LIDER,
     createdAt: T0, updatedAt: T0, ...extra
   };
 }
@@ -900,5 +918,171 @@ describe("T47 · elevacion automatica al piso", () => {
     expect(plan.raisedFields).toEqual(["fulfillmentFeeCop"]);
     expect(plan.communities[0].communityUpdate["pricing.fulfillmentFeeCop"]).toBe(2500);
     expect(plan.communities[0].historyEntries[0].fromCop).toBe(2000);
+  });
+});
+
+/**
+ * Comunidad viva y con lider: el unico estado en el que el sobreprecio tiene a quien pagarse.
+ * Es ya lo que construye `community`; se conserva el nombre porque en T8 el contraste con
+ * `sinLider` es el objeto de la prueba y decirlo en el nombre es lo que la hace legible.
+ */
+function conLider(pricing: CommunityPricingFields = {}, extra: Partial<Community> = {}): ComunidadConLider {
+  return { ...community(pricing, extra), leaderUid: UID_LIDER };
+}
+
+/**
+ * Comunidad huerfana: el campo AUSENTE, que es como queda tras `planLeaderRevocation`.
+ * Se BORRA de verdad, no se deja sin poner: ausente y presente-pero-vacio son dos casos
+ * distintos y ambos se prueban por separado aqui abajo.
+ */
+function sinLider(pricing: CommunityPricingFields = {}, extra: Partial<Community> = {}): ComunidadConLider {
+  const huerfana = community(pricing, extra);
+  delete huerfana.leaderUid;
+  return huerfana;
+}
+
+describe("T8 · una comunidad sin lider cobra la base", () => {
+  it("RF_20: sin lider se cobra la tarifa base y no se causa cashback", () => {
+    // Precio propio por encima de la base en los tres conceptos. Con lider seria 15.000/14.000/3.000.
+    const huerfana = sinLider({
+      sellerDeliveredFeeCop: 15000,
+      sellerFailedFeeCop: 14000,
+      fulfillmentFeeCop: 3000
+    });
+
+    expect(resolveCommunityPricing(BASE, huerfana, T0)).toEqual(BASE);
+
+    // El cashback no se puede quedar colgado: sin lider no hay a quien abonarselo. Y la unica
+    // forma de que no exista es que el precio congelado sea IGUAL a la base, concepto a concepto.
+    const congelado = freezeOrderPricing(BASE, huerfana, T0);
+    expect(congelado).toBeDefined();
+    expect(congelado!.sellerDeliveredFeeCop).toBe(congelado!.baseDeliveredFeeCop);
+    expect(congelado!.sellerFailedFeeCop).toBe(congelado!.baseFailedFeeCop);
+    expect(congelado!.fulfillmentFeeCop).toBe(congelado!.baseFulfillmentFeeCop);
+    expect(cashbackForFrozenPricing(congelado).totalCop).toBe(0);
+  });
+
+  it("RF_20: la comprobacion del lider va ANTES del piso y de las programadas", () => {
+    // Comunidad huerfana cuyo precio literal esta POR DEBAJO de la base (11.000 < 12.000) pero con
+    // una subida programada ya vencida a 18.000. Si la comprobacion del lider se hiciera al final
+    // —sobre los valores ya resueltos, o solo sobre `pricing`— los 18.000 de la programada
+    // ganarian igual y la tienda seguiria pagando 6.000 de mas por pedido sin que nadie los cobre.
+    const huerfana = sinLider(
+      { sellerDeliveredFeeCop: 11000 },
+      { scheduled: programada("sellerDeliveredFeeCop", 11000, 18000, at(1)) }
+    );
+
+    // `applyScheduledChanges` NO cambia: sigue diciendo que quiso cobrar el lider, y de ella
+    // dependen el historial y la elevacion al piso (T47). La decision vive en el resolutor.
+    expect(applyScheduledChanges(huerfana, at(3)).sellerDeliveredFeeCop).toBe(18000);
+
+    expect(resolveCommunityPricing(BASE, huerfana, at(3)).sellerDeliveredFeeCop).toBe(12000);
+    // Y, mas fuerte: una comunidad sin lider tiene que dar EXACTAMENTE lo mismo que no tener
+    // comunidad. Si queda un solo camino por el que el precio propio se cuele, esto lo caza.
+    expect(resolveCommunityPricing(BASE, huerfana, at(3))).toEqual(
+      resolveCommunityPricing(BASE, undefined, at(3))
+    );
+  });
+
+  it("RF_20: una comunidad desactivada tambien cobra la base, aunque conserve su leaderUid", () => {
+    // `planLeaderStatusChange` declara que desactivar no toca NADA mas que el estado: el
+    // `leaderUid` y el `pricing` se quedan escritos tal cual. Sin esta comprobacion, desactivar
+    // una comunidad la deja cobrando sobreprecio indefinidamente.
+    const apagada = conLider({ sellerDeliveredFeeCop: 15000 }, { status: "disabled" });
+
+    expect(resolveCommunityPricing(BASE, apagada, T0)).toEqual(BASE);
+    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, apagada, T0)).totalCop).toBe(0);
+  });
+
+  it("RF_20: el enlace de registro revocado NO cambia el precio, porque sigue habiendo lider", () => {
+    // `linkStatus: "revoked"` solo cierra la pantalla de alta de tiendas. Confundirlo con quedarse
+    // sin lider le quitaria el ingreso a un lider que sigue trabajando.
+    const enlaceCerrado = conLider({ sellerDeliveredFeeCop: 15000 }, { linkStatus: "revoked" });
+
+    expect(resolveCommunityPricing(BASE, enlaceCerrado, T0).sellerDeliveredFeeCop).toBe(15000);
+    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, enlaceCerrado, T0)).deliveredCop).toBe(3000);
+  });
+
+  it("RF_20: con leaderUid y comunidad activa no cambia nada de lo de hoy", () => {
+    // La no regresion: el caso normal, con precio propio y una programada vencida, sigue igual.
+    const viva = conLider(
+      { sellerDeliveredFeeCop: 15000 },
+      { scheduled: programada("fulfillmentFeeCop", 2000, 3000, at(1)) }
+    );
+
+    const precio = resolveCommunityPricing(BASE, viva, at(3));
+    expect(precio.sellerDeliveredFeeCop).toBe(15000);
+    expect(precio.sellerFailedFeeCop).toBe(12000);
+    expect(precio.fulfillmentFeeCop).toBe(3000);
+    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, viva, at(3))).totalCop).toBe(4000);
+  });
+
+  it("RF_20: un leaderUid en cadena vacia cuenta como sin lider", () => {
+    const huerfana: ComunidadConLider = { ...community({ sellerDeliveredFeeCop: 15000 }), leaderUid: "" };
+
+    expect(resolveCommunityPricing(BASE, huerfana, T0)).toEqual(BASE);
+    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, huerfana, T0)).totalCop).toBe(0);
+  });
+
+  it("RF_20: un leaderUid en blanco cuenta como sin lider", () => {
+    // Mismo criterio que `community-grant.ts` para decidir quien lidera hoy: un uid que al
+    // recortarlo no queda nada no es un lider. Dos criterios distintos para "sin lider" es como
+    // se llega a cobrar un sobreprecio que el panel del lider no muestra.
+    const huerfana: ComunidadConLider = { ...community({ sellerDeliveredFeeCop: 15000 }), leaderUid: "   " };
+
+    expect(resolveCommunityPricing(BASE, huerfana, T0)).toEqual(BASE);
+  });
+
+  it("RF_20: una comunidad sin lider no le anuncia a la tienda una subida que nunca llegara", () => {
+    // La vista de la tienda sale del mismo resolutor (T39). Si `current` cae a la base pero el
+    // aviso se sigue calculando contra la programada, la tienda ve "subira a 16.000 el dia 8" de
+    // una comunidad que no tiene quien suba nada.
+    const huerfana = sinLider(
+      { sellerDeliveredFeeCop: 13000 },
+      { scheduled: programada("sellerDeliveredFeeCop", 13000, 16000, at(8)) }
+    );
+
+    const vista = vistaTarifaDeTienda(BASE_COMPLETA, huerfana, at(3));
+    expect(vista.current.sellerDeliveredFeeCop).toBe(12000);
+    expect(vista.scheduled).toBeNull();
+  });
+
+  it("RF_21: lo ya congelado en un pedido no cambia cuando la comunidad se queda sin lider", () => {
+    const viva = conLider({ sellerDeliveredFeeCop: 15000 });
+    const congelado = freezeOrderPricing(BASE, viva, T0);
+    expect(congelado!.sellerDeliveredFeeCop).toBe(15000);
+
+    // Se le revoca el lider. Los pedidos NUEVOS entran ya a la base...
+    const huerfana = sinLider({ sellerDeliveredFeeCop: 15000 });
+    expect(resolveCommunityPricing(BASE, huerfana, at(30)).sellerDeliveredFeeCop).toBe(12000);
+
+    // ...y el que entro antes conserva su precio y su cashback, un mes despues.
+    expect(congelado!.sellerDeliveredFeeCop).toBe(15000);
+    expect(congelado!.baseDeliveredFeeCop).toBe(12000);
+    expect(cashbackForFrozenPricing(congelado).deliveredCop).toBe(3000);
+
+    // La garantia estructural, no solo el resultado: el cashback de un pedido se calcula con UN
+    // argumento, el congelado. No hay parametro por el que pueda enterarse de que la comunidad
+    // cambio, asi que no existe forma de que un cierre posterior lo recalcule a la baja.
+    expect(cashbackForFrozenPricing.length).toBe(1);
+  });
+
+  it("RF_12: la tienda del propio lider causa cashback igual que cualquier otra", () => {
+    const viva = conLider({ sellerDeliveredFeeCop: 15000 });
+
+    // Mismo pedido, misma comunidad: uno de la tienda del lider, otro de una tienda cualquiera.
+    const deLaTiendaDelLider = freezeOrderPricing(BASE, viva, T0);
+    const deOtraTienda = freezeOrderPricing(BASE, viva, T0);
+    expect(deLaTiendaDelLider).toEqual(deOtraTienda);
+    expect(cashbackForFrozenPricing(deLaTiendaDelLider)).toEqual(cashbackForFrozenPricing(deOtraTienda));
+    expect(cashbackForFrozenPricing(deLaTiendaDelLider).totalCop).toBe(3000);
+
+    // La ausencia de rama especial, afirmada de la unica forma que no depende del resultado: ni
+    // el precio ni el congelado ni el cashback reciben la tienda, su id o su dueño. Sin ese dato
+    // a la vista no hay donde escribir "si la tienda es del lider, entonces...". Si alguien
+    // quisiera distinguirla tendria que anadir un parametro, y esto lo caza al instante.
+    expect(resolveCommunityPricing.length).toBe(3);
+    expect(freezeOrderPricing.length).toBe(3);
+    expect(cashbackForFrozenPricing.length).toBe(1);
   });
 });

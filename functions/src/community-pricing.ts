@@ -39,7 +39,36 @@ export type CommunityLike = {
   id: string;
   pricing?: Partial<Record<CommunityPricingField, number>>;
   scheduled?: Partial<Record<CommunityPricingField, ScheduledChange>>;
+  /**
+   * Quien lidera HOY. Opcional porque en el documento es opcional de verdad: hay comunidades
+   * anteriores a la concesion de rol y `planLeaderRevocation` lo BORRA, no lo vacia.
+   */
+  leaderUid?: string;
+  /** `disabled` conserva `leaderUid` y `pricing` intactos: apagar no borra nada (RF_20). */
+  status?: "active" | "disabled";
 };
+
+/**
+ * RF_20: si la comunidad cobra su precio propio, o solo la base.
+ *
+ * Solo hay UN estado en el que el sobreprecio tiene a quien pagarse: comunidad viva y con lider.
+ * Sin lider —o desactivada— el sobreprecio se le cobraria a la tienda para no abonarselo a nadie.
+ *
+ * Un `status` ausente NO es activo: el lado seguro es cobrar la base, porque equivocarse hacia
+ * ese lado no le cobra de mas a nadie.
+ *
+ * "Sin lider" se decide con el mismo criterio que `community-grant.ts` —un uid que al recortarlo
+ * no queda nada no es un lider—: dos criterios distintos para lo mismo es como se llega a cobrar
+ * un sobreprecio que el panel del lider no muestra.
+ *
+ * `linkStatus: "revoked"` no entra aqui a proposito: eso solo cierra la pantalla de alta de
+ * tiendas y el lider sigue trabajando.
+ */
+function chargesOwnPricing(community: CommunityLike | undefined): community is CommunityLike {
+  if (!community) return false;
+  if (community.status !== "active") return false;
+  return (community.leaderUid ?? "").trim() !== "";
+}
 
 export type FrozenPricing = {
   communityId: string;
@@ -95,7 +124,17 @@ export function resolveCommunityPricing(
   community: CommunityLike | undefined,
   nowIso: string
 ): PricingValues {
-  const own = community ? applyScheduledChanges(community, nowIso) : {};
+  // La comprobacion del lider va AQUI, antes del piso y de las programadas, y no al final sobre
+  // los valores ya resueltos. El caso que lo obliga: una comunidad huerfana con `pricing` en
+  // 11.000 —por DEBAJO de la base de 12.000— y una subida programada ya vencida a 18.000. Una
+  // guarda puesta despues del bucle, o puesta solo sobre `community.pricing`, deja pasar los
+  // 18.000 de la programada: la tienda seguiria pagando 6.000 de mas por pedido y ese sobreprecio
+  // no lo cobraria nadie. Sin lider, esto tiene que dar EXACTAMENTE lo mismo que no tener
+  // comunidad.
+  //
+  // Y no puede vivir dentro de `applyScheduledChanges`: esa funcion dice que quiso cobrar el
+  // lider, y de ella dependen el `fromCop` del historial (RF_39) y la elevacion al piso (RF_35).
+  const own = chargesOwnPricing(community) ? applyScheduledChanges(community, nowIso) : {};
   const values = {} as PricingValues;
   for (const field of COMMUNITY_PRICING_FIELDS) {
     const floor = Number(base[field]) || 0;
@@ -313,8 +352,13 @@ export function buildStoreTariffView(
   const now = Date.parse(nowIso);
   const scheduled: Partial<Record<CommunityPricingField, StoreTariffRaiseNotice>> = {};
 
+  // RF_20: una comunidad sin lider —o desactivada— no puede anunciar una subida. Su precio propio
+  // ya no se cobra, asi que la fecha prometida no traeria ningun cambio: seria avisarle a la
+  // tienda de un cobro que no va a existir. No basta con que `current` caiga a la base, porque el
+  // aviso se calcula contra `change.toCop`, que sigue por encima.
+  const cobraPropio = chargesOwnPricing(community);
   for (const field of COMMUNITY_PRICING_FIELDS) {
-    const change = community?.scheduled?.[field];
+    const change = cobraPropio ? community.scheduled?.[field] : undefined;
     if (!change) continue;
     const effective = Date.parse(change.effectiveAt);
     if (!Number.isFinite(effective) || !Number.isFinite(now)) continue;
