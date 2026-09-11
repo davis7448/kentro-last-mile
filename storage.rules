@@ -19,10 +19,16 @@ service firebase.storage {
         && request.auth.token.role == "messenger";
     }
 
+    // Spec 003: liderar NO es un papel, es una atribucion. Una tienda puede liderar sin dejar de
+    // vender, asi que exigir `role == "community_leader"` la dejaria fuera. El vinculo es el
+    // `communityId` del reclamo, y quien no lo tiene no lidera nada: por eso se exige no vacio.
+    // Un acreedor conserva el vinculo para cobrar pero YA NO gobierna, y por eso se le excluye.
     function isCommunityLeaderOf(communityId) {
       return signedIn()
-        && request.auth.token.role == "community_leader"
-        && request.auth.token.communityId == communityId;
+        && request.auth.token.communityId is string
+        && request.auth.token.communityId != ""
+        && request.auth.token.communityId == communityId
+        && request.auth.token.communityStanding != "creditor";
     }
 
     /**

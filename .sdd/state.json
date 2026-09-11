@@ -140,8 +140,9 @@
         "storage.rules",
         "src/lib/community-access.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true,
+      "note": "Las reglas no son probables en Vitest (no hay @firebase/rules-unit-testing). Su canal es sesion real con usuario desechable, declarado. El predicado equivalente si esta probado en community-access.test.ts."
     },
     "T11": {
       "requirements": [
@@ -153,17 +154,20 @@
         "src/lib/session-hats.ts",
         "src/lib/session-hats.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T12": {
       "requirements": [
         "RF_07",
+        "RF_08",
+        "RF_09",
         "RF_10"
       ],
       "files": [
         "src/components/operations-app.tsx",
-        "src/lib/session-hats.test.ts"
+        "src/lib/session-hats.test.ts",
+        "src/lib/community-access.test.ts"
       ],
       "testWritten": false,
       "done": false
@@ -192,8 +196,8 @@
         "src/lib/firebase/state-store.ts",
         "src/lib/state-store-targets.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T15": {
       "requirements": [
@@ -1108,5 +1112,5 @@
       }
     }
   },
-  "activeTask": "T10"
+  "activeTask": "T12"
 }

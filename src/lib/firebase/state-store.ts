@@ -48,6 +48,19 @@ const collectionNames = [
 export type FirestoreStateContext = {
   role: Role;
   profileId: string;
+  /** Comunidad que lidera esta cuenta, si lidera alguna. Liderar NO es un rol: viaja aparte, asi
+   *  que una misma cuenta puede ser tienda (o domiciliario, o mensajero) y ademas lider, y con
+   *  solo `role` no habria forma de distinguirla de una tienda cualquiera — su rama de vendedor
+   *  ganaria siempre y sus cortes de comunidad no se pedirian jamas: el cashback PAGADO saldria
+   *  en cero, que no parece un error sino un dato.
+   *
+   *  Sale SIEMPRE del reclamo del token, nunca de lo que este mostrando la interfaz: quien
+   *  decide que se descarga es el permiso, no la pantalla.
+   *
+   *  Para un lider PURO `profileId` ya ES el id de la comunidad, asi que este campo puede venir
+   *  vacio; para una cuenta con dos papeles `profileId` es el del papel operativo y el vinculo
+   *  solo llega por aqui. De ahi el `communityId ?? profileId` de las consultas de cortes. */
+  communityId?: string;
   /** Fecha (YYYY-MM-DD) desde la que se traen los pedidos ya cerrados. Los activos NO se
    *  acotan nunca: son la operacion del dia y tienen que estar completos siempre. */
   historyStart?: string;
@@ -106,6 +119,10 @@ type WatchedKey =
 
 type LoadOptions = { skip?: ReadonlySet<WatchedKey> };
 
+/** Una consulta observada por la suscripcion. Varias entradas pueden compartir `key` (el rol
+ *  driver observa "orders" con dos consultas distintas) y el estado se rearma uniendolas. */
+type TargetEntry = { key: WatchedKey; target: Query<DocumentData, DocumentData> };
+
 // Solo se piden los ultimos 50 eventos: el unico consumidor (AuditBar) pinta 4 filas
 // y la coleccion completa ya supera los 7.000 documentos.
 const AUDIT_LIMIT = 50;
@@ -143,22 +160,37 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
   const skipped = <T,>(key: WatchedKey, load: () => Promise<T[]>): Promise<T[]> => (skip?.has(key) ? Promise.resolve([]) : load());
   // seller_logistics ve lo operativo de su tienda igual que el vendedor, pero sin datos financieros.
   const storeRole = role === "seller" || role === "seller_logistics";
+  // Hermano de `storeRole` para el otro eje: liderar una comunidad viaja APARTE del rol, asi que
+  // una cuenta puede ser tienda (o domiciliario) y ademas lider. Todo lo que depende del vinculo
+  // —la comunidad propia, sus tiendas y sus cortes— se decide con esto y no con `role`, que para
+  // una cuenta con dos papeles diria "seller" y se llevaria por delante la mitad de la pantalla.
+  // Para un lider PURO `profileId` ES el id de la comunidad; para una cuenta doble es el de la
+  // tienda y el vinculo llega aparte.
+  const communityId = context ? context.communityId ?? (role === "community_leader" ? context.profileId : "") : "";
   const [settingsSnapshot, cities, zones, communities, sellers, shopifyStores, storeWebhookConfigs, shopifyInstallRequests, shopifySyncIssues, drivers, messengers, pickupBatches, suppliers, productCatalog, inventory, orders, wallet, settlements, payouts, audit, cashSnapshots] = await Promise.all([
     getDoc(doc(client.db, ...settingsPath)),
     getCollection<City>("cities"),
     getCollection<Zone>("zones"),
     role === "admin"
       ? getCollection<Community>("communities")
-      : role === "community_leader" && context
-        ? getOwnDocument<Community>("communities", context.profileId)
+      // Por el VINCULO, no por el rol: sin el documento de la comunidad no hay precios congelados
+      // ni sobreprecio que pintar, y una cuenta que vende y ademas lidera se quedaria sin la cifra
+      // de la que sale todo lo demas de su pantalla de comunidad.
+      : communityId
+        ? getOwnDocument<Community>("communities", communityId)
         : Promise.resolve([]),
-    storeRole && context
-      ? getOwnDocument<Seller>("sellers", context.profileId)
-      : role === "community_leader" && context
-        // Solo las tiendas de SU comunidad. Las reglas ya lo exigen; esto evita ademas pedir
-        // la coleccion entera y comerse un 403 con la pantalla en blanco.
-        ? getCollection<Seller>("sellers", where("communityId", "==", context.profileId))
-        : role === "admin" ? getCollection<Seller>("sellers") : Promise.resolve([]),
+    role === "admin"
+      ? getCollection<Seller>("sellers")
+      // Las dos cosas a la vez, no una o la otra: sin la tienda propia el vendedor-lider pierde su
+      // tienda (y con ella su saldo); sin las de la comunidad, el desglose por tienda sale vacio. Y
+      // si su tienda no pertenece a su propia comunidad, elegir una rama pierde una de las dos
+      // seguro. Cada mitad se pide solo si aplica, asi que ningun rol pide de mas.
+      : Promise.all([
+          storeRole && context ? getOwnDocument<Seller>("sellers", context.profileId) : Promise.resolve<Seller[]>([]),
+          // Solo las tiendas de SU comunidad. Las reglas ya lo exigen; esto evita ademas pedir
+          // la coleccion entera y comerse un 403 con la pantalla en blanco.
+          communityId ? getCollection<Seller>("sellers", where("communityId", "==", communityId)) : Promise.resolve<Seller[]>([])
+        ]).then(([propias, deLaComunidad]) => mergeById(propias, deLaComunidad)),
     skipped("shopifyStores", () => storeRole && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([])),
     skipped("storeWebhookConfigs", () => storeRole && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([])),
     skipped("shopifyInstallRequests", () => storeRole && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([])),
@@ -433,8 +465,51 @@ export function subscribeFirestoreState(
     ];
   };
 
-  const targets: Array<{ key: WatchedKey; target: Query<DocumentData, DocumentData> }> =
-    context?.role === "seller_logistics"
+  // Liderar una comunidad NO es un rol: viaja aparte del `role`, en `context.communityId`. Por eso
+  // lo que se observa es una SUMA — los objetivos del papel operativo mas los del vinculo — y no
+  // una rama mas de la cadena de ternarios: como rama, la comunidad solo ganaria cuando el rol
+  // fuese `community_leader`, y para un vendedor que ademas lidera gana siempre la de vendedor.
+  const targets: Array<TargetEntry> = [...roleTargets(), ...communityTargets()];
+
+  /**
+   * Lo que aporta el vinculo con la comunidad: UN objetivo, los cortes del lider. De ahi sale el
+   * cashback PAGADO (`state.settlements`), asi que sin esta consulta la cifra cae a cero sin que
+   * nada falle ni avise.
+   *
+   * Ni pedidos ni asientos de wallet, a proposito: eso es lo que mantiene la descarga de una
+   * cuenta con dos papeles en "como mucho la suma". La suscripcion de wallet del lider crecia un
+   * documento por pedido cerrado de su comunidad (10.000 documentos con 10.000 pedidos) y se
+   * elimino entera; volver a abrirla aqui por la puerta de atras seria el mismo fallo.
+   */
+  function communityTargets(): TargetEntry[] {
+    // Para un lider PURO `profileId` ES el id de la comunidad; para una cuenta con dos papeles es
+    // el del papel operativo y el vinculo llega aparte. Sin el `??`, un lider puro se quedaria
+    // sin sus propios cortes.
+    const ownerId = context?.communityId ?? (context?.role === "community_leader" ? context.profileId : "");
+    if (!ownerId) return [];
+    return [{ key: "settlements", target: query(settlementRef, where("kind", "==", "community_leader"), where("ownerId", "==", ownerId)) }];
+  }
+
+  /** Lo que baja el papel operativo de la cuenta. Ninguna rama mira el vinculo con la comunidad:
+   *  sumar la comunidad no puede quitarle nada a la tienda ni al domiciliario, que en esa misma
+   *  pantalla tienen sus propias cifras de dinero. */
+  function roleTargets(): TargetEntry[] {
+    return context?.role === "driver"
+      ? [
+          // El lider bajaba 4.127 pedidos (~6,9 MB) — el 95% de la coleccion entera — en un movil
+          // y SIN cache persistente, asi que los repetia enteros en cada apertura. Con la misma
+          // particion que ya usaban admin y tienda son ~289 (~0,5 MB). Lo que queda fuera de la
+          // ventana y hace falta para el saldo se trae por id: ver pinDriverOrders.
+          ...orderTargets(where("driverId", "==", context.profileId)),
+          { key: "orders", target: query(orderRef, where("driverId", "==", null), where("status", "==", "ready_to_assign")) },
+          { key: "messengers", target: query(messengerRef, where("leaderDriverId", "==", context.profileId)) },
+          { key: "pickupBatches", target: query(pickupBatchRef, where("driverId", "==", context.profileId)) },
+          // Sin recortar: calculateDriverFinancialSummary desglosa cada corte cerrado pedido a
+          // pedido leyendo sus asientos driver_earning, que ya tienen settlementId.
+          { key: "wallet", target: query(walletRef, where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId)) },
+          { key: "settlements", target: query(settlementRef, where("kind", "==", "driver"), where("ownerId", "==", context.profileId)) }
+        ]
+      : context?.role === "seller_logistics"
       ? [
           ...orderTargets(where("sellerId", "==", context.profileId)),
           { key: "inventory", target: query(inventoryRef, where("sellerId", "==", context.profileId)) },
@@ -458,43 +533,26 @@ export function subscribeFirestoreState(
           { key: "payouts", target: query(payoutRef, where("sellerId", "==", context.profileId)) }
         ]
       : context?.role === "community_leader"
-        ? [
-            /**
-             * Espejo de getOrdersForContext y de getWalletForContext: CERO pedidos y CERO
-             * asientos de wallet. El lider de comunidad solo necesita su propia comunidad, sus
-             * tiendas y sus cortes.
-             *
-             * Aqui hubo una suscripcion a sus asientos `community_cashback` sin ventana ni
-             * limite: uno por pedido cerrado de su comunidad, 10.000 documentos y 2,67 MB con
-             * 10.000 pedidos, creciendo para siempre. No se acoto, se ELIMINO, porque
-             * `CommunityLeaderView` no lee `state.wallet` en ningun punto: el cashback CAUSADO
-             * llega agregado del servidor (`getCommunityStats` -> `cashbackAccruedCop`) y el
-             * PAGADO sale de estos mismos `settlements` via `communityCashbackPaidCop`. Acotar
-             * por corte tampoco habria servido: todo asiento nace sin liquidar, asi que dentro
-             * del periodo abierto la cuenta seguiria subiendo uno a uno.
-             *
-             * `settlements` NO se puede quitar: de ahi sale el cashback pagado, y sin el la
-             * cifra cae a cero en silencio. Tocar este bloque sin tocar el otro hace que el
-             * primer pintado y el listener muestren cosas distintas.
-             */
-            { key: "settlements", target: query(settlementRef, where("kind", "==", "community_leader"), where("ownerId", "==", context.profileId)) }
-          ]
-      : context?.role === "driver"
-        ? [
-          // El lider bajaba 4.127 pedidos (~6,9 MB) — el 95% de la coleccion entera — en un movil
-          // y SIN cache persistente, asi que los repetia enteros en cada apertura. Con la misma
-          // particion que ya usaban admin y tienda son ~289 (~0,5 MB). Lo que queda fuera de la
-          // ventana y hace falta para el saldo se trae por id: ver pinDriverOrders.
-          ...orderTargets(where("driverId", "==", context.profileId)),
-          { key: "orders", target: query(orderRef, where("driverId", "==", null), where("status", "==", "ready_to_assign")) },
-          { key: "messengers", target: query(messengerRef, where("leaderDriverId", "==", context.profileId)) },
-          { key: "pickupBatches", target: query(pickupBatchRef, where("driverId", "==", context.profileId)) },
-          // Sin recortar: calculateDriverFinancialSummary desglosa cada corte cerrado pedido a
-          // pedido leyendo sus asientos driver_earning, que ya tienen settlementId.
-          { key: "wallet", target: query(walletRef, where("ownerType", "==", "driver"), where("ownerId", "==", context.profileId)) },
-          { key: "settlements", target: query(settlementRef, where("kind", "==", "driver"), where("ownerId", "==", context.profileId)) }
-        ]
-        : context?.role === "messenger"
+        ? /**
+           * Quien SOLO lidera no tiene papel operativo: cero objetivos aqui. Sus cortes se los da
+           * `communityTargets`, que para un lider puro toma la comunidad de `profileId`.
+           *
+           * Esta rama tiene que seguir existiendo aunque devuelva vacio: sin ella un lider puro
+           * cae en la rama por defecto, que es la del ADMIN — colecciones enteras y un 403 con la
+           * pantalla en blanco.
+           *
+           * Espejo de getOrdersForContext y de getWalletForContext: CERO pedidos y CERO asientos
+           * de wallet. Aqui hubo una suscripcion a sus asientos `community_cashback` sin ventana
+           * ni limite: uno por pedido cerrado de su comunidad, 10.000 documentos y 2,67 MB con
+           * 10.000 pedidos, creciendo para siempre. No se acoto, se ELIMINO, porque
+           * `CommunityLeaderView` no lee `state.wallet` en ningun punto: el cashback CAUSADO
+           * llega agregado del servidor (`getCommunityStats` -> `cashbackAccruedCop`) y el PAGADO
+           * sale de los `settlements` via `communityCashbackPaidCop`. Acotar por corte tampoco
+           * habria servido: todo asiento nace sin liquidar, asi que dentro del periodo abierto la
+           * cuenta seguiria subiendo uno a uno.
+           */
+          []
+      : context?.role === "messenger"
           ? [
               // Mismo motivo que el lider: el mensajero con mas ruta bajaba sus 896 pedidos
               // historicos para trabajar sobre los de hoy.
@@ -524,6 +582,7 @@ export function subscribeFirestoreState(
               // recargue: exactamente el sintoma que este flujo venia a arreglar.
               { key: "payouts", target: payoutRef }
             ];
+  }
 
   // Antes cada snapshot disparaba una recarga COMPLETA del estado (19 lecturas de
   // colecciones enteras), asi que una sola escritura ajena costaba megabytes. Ahora
@@ -978,15 +1037,32 @@ async function getWalletForContext(context?: FirestoreStateContext): Promise<Wal
   return getCollection<WalletEntry>("walletEntries");
 }
 
+/**
+ * Espejo obligado de los objetivos de `subscribeFirestoreState`: este es el primer pintado y
+ * aquella el listener, y si divergen la pantalla cambia de cifra sola sin que nada falle.
+ *
+ * UNION, no eleccion. Los cortes del papel operativo y, si la cuenta ademas lidera, los de su
+ * comunidad. Antes esto eran tres `if` con retorno anticipado y el de vendedor ganaba siempre:
+ * para un vendedor-lider, el cashback PAGADO —que sale de `state.settlements`— salia en cero, y
+ * un cero asi no se ve como un error sino como un dato.
+ */
 async function getSettlementsForContext(context?: FirestoreStateContext): Promise<Settlement[]> {
-  if (context?.role === "seller") {
-    return getCollection<Settlement>("settlements", where("kind", "==", "seller"), where("ownerId", "==", context.profileId));
-  }
-  if (context?.role === "driver") {
-    return getCollection<Settlement>("settlements", where("kind", "==", "driver"), where("ownerId", "==", context.profileId));
-  }
-  if (context?.role === "messenger" || context?.role === "seller_logistics") return Promise.resolve([]);
-  return getCollection<Settlement>("settlements", true);
+  const operativos =
+    context?.role === "seller"
+      ? getCollection<Settlement>("settlements", where("kind", "==", "seller"), where("ownerId", "==", context.profileId))
+      : context?.role === "driver"
+        ? getCollection<Settlement>("settlements", where("kind", "==", "driver"), where("ownerId", "==", context.profileId))
+        : context?.role === "messenger" || context?.role === "seller_logistics" || context?.role === "community_leader"
+          ? Promise.resolve<Settlement[]>([])
+          : getCollection<Settlement>("settlements", true);
+  // Para un lider PURO `profileId` ES el id de la comunidad; para una cuenta con dos papeles es
+  // el del papel operativo y el vinculo llega aparte.
+  const ownerId = context?.communityId ?? (context?.role === "community_leader" ? context.profileId : "");
+  const deLaComunidad = ownerId
+    ? getCollection<Settlement>("settlements", where("kind", "==", "community_leader"), where("ownerId", "==", ownerId))
+    : Promise.resolve<Settlement[]>([]);
+  const [delRol, delVinculo] = await Promise.all([operativos, deLaComunidad]);
+  return mergeById(delRol, delVinculo);
 }
 
 function writeEntities<T extends { id: string }>(

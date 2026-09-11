@@ -31,15 +31,36 @@ service cloud.firestore {
     }
 
     // Lider de COMUNIDAD. Nada que ver con isDriver, que es el lider LOGISTICO.
+    //
+    // Spec 003: liderar NO es un papel, es una atribucion propia de la cuenta — una tienda puede
+    // liderar sin dejar de vender, y exigir `role()` la dejaria fuera. El vinculo es el
+    // `communityId` del reclamo; un vendedor nunca lo lleva (la pertenencia de su tienda vive en
+    // el documento del vendedor), asi que no hay ambiguedad posible.
+    //
+    // Las dos guardas NO son adorno: `isCommunityLeader` gobierna lecturas de `walletEntries` y
+    // `settlements`, asi que sin exigir que el reclamo exista y no sea vacio se abriria el dinero
+    // a cuentas sin comunidad. Y un ACREEDOR conserva el vinculo para poder cobrar lo causado
+    // pero ya no gobierna: aqui se le excluye, y sus cortes se le abren mas abajo por su propia via.
+    function hasCommunityClaim(communityId) {
+      return signedIn()
+        && request.auth.token.communityId is string
+        && request.auth.token.communityId != ""
+        && request.auth.token.communityId == communityId;
+    }
+
     function isCommunityLeader(communityId) {
-      return role() == "community_leader" && request.auth.token.communityId == communityId;
+      return hasCommunityClaim(communityId) && request.auth.token.communityStanding != "creditor";
+    }
+
+    // RF_22: a quien la plataforma le sigue debiendo, aunque ya no lidere.
+    function isCommunityCreditor(communityId) {
+      return hasCommunityClaim(communityId);
     }
 
     // Una tienda es de la comunidad del lider que consulta.
     function sellerInMyCommunity(sellerId) {
-      return role() == "community_leader"
-        && exists(/databases/$(database)/documents/sellers/$(sellerId))
-        && get(/databases/$(database)/documents/sellers/$(sellerId)).data.communityId == request.auth.token.communityId;
+      return isCommunityLeader(get(/databases/$(database)/documents/sellers/$(sellerId)).data.communityId)
+        && exists(/databases/$(database)/documents/sellers/$(sellerId));
     }
 
     function isMessenger(messengerId) {
@@ -208,7 +229,11 @@ service cloud.firestore {
         || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId))
         // Su PROPIO cashback si; el saldo de sus tiendas no. RF_31 prohibe lo de las tiendas,
         // no lo suyo: sin esto el lider no podria ver lo que se le debe.
-        || (resource.data.ownerType == "community_leader" && isCommunityLeader(resource.data.ownerId));
+        //
+        // Spec 003 RF_22: va por ACREEDOR y no por lider. Dejar de liderar no es dejar de ser
+        // acreedor — a quien se retiro se le sigue debiendo, y con `isCommunityLeader` aqui se le
+        // apagaria la pantalla desde la que cobra.
+        || (resource.data.ownerType == "community_leader" && isCommunityCreditor(resource.data.ownerId));
       allow write: if isAdmin();
     }
 
@@ -216,7 +241,8 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (resource.data.kind == "seller" && isSeller(resource.data.ownerId))
         || (resource.data.kind == "driver" && isDriver(resource.data.ownerId))
-        || (resource.data.kind == "community_leader" && isCommunityLeader(resource.data.ownerId));
+        // RF_22: sus cortes los ve mientras se le deba, lidere o no.
+        || (resource.data.kind == "community_leader" && isCommunityCreditor(resource.data.ownerId));
       allow write: if isAdmin();
     }
 
