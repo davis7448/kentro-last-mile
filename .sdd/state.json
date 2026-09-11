@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "phase": "deploy",
+  "phase": "plan",
   "activeSpec": {
-    "file": "specs/001_lider_de_comunidad.md",
+    "file": "specs/002_entorno_de_verificacion.md",
     "status": "approved"
   },
   "tasks": {
@@ -660,5 +660,12 @@
   "testCommand": "npm test",
   "deployUrl": "https://kentro-last-mile.web.app",
   "activePlan": "specs/001_plan.md",
-  "activeTasks": "specs/001_tasks.md"
+  "activeTasks": "specs/001_tasks.md",
+  "specs": {
+    "001": {
+      "file": "specs/001_lider_de_comunidad.md",
+      "status": "implementada",
+      "deployed": "2026-09-11"
+    }
+  }
 }
