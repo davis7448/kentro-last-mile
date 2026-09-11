@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
 import { brandFor, roleLabel } from "./community-view";
 import { buildPriceHistoryEntry, LOGO_MAX_BYTES, validateLogo } from "../../functions/src/community-pricing";
+import { validateSlug } from "../../functions/src/community-slug";
 
 describe("T1 · rol de lider de comunidad", () => {
   it("RF_01: distingue al lider de comunidad del lider logistico en la etiqueta visible", () => {
@@ -1665,5 +1668,389 @@ describe("T34 · lista de comunidades del admin", () => {
     expect(communities).toEqual(copiaComunidades);
     expect(sellers).toEqual(copiaSellers);
     expect(entries).toEqual(copiaEntries);
+  });
+});
+
+/**
+ * T48 · RF_01 — el guarda de fuente: que la interfaz use LA etiqueta, no una suya.
+ *
+ * RF_01 ya estaba "cubierto" por los dos casos de T1 y la pantalla mentia igual: hay DOS
+ * `roleLabel`. El de `src/lib/community-view.ts` devuelve "Lider de comunidad"; el de
+ * `src/components/operations-app.tsx` es una cadena de ternarios sin rama para
+ * `community_leader`, asi que cae en el `else` y devuelve "Mensajero". La interfaz usa el
+ * segundo en seis sitios, incluida la cabecera de sesion: hoy, en produccion, un lider de
+ * comunidad ve "Mensajero" junto a su nombre.
+ *
+ * Probar la funcion buena no detecta eso. Lo unico que lo detecta es atar QUIEN la llama, y eso
+ * se comprueba leyendo `operations-app.tsx` COMO TEXTO: el fichero no se puede importar (es un
+ * componente cliente de Next con `@/` y JSX que arrastra medio SDK, y la suite corre en Node).
+ *
+ * Con lo que implica una comprobacion de fuente: si alguien reescribe el import con otra forma
+ * sintactica, esto se pone rojo sin que nada este mal. Se acepta a proposito — el fallo real es
+ * silencioso (la app funciona, solo etiqueta mal a un rol entero) y un falso rojo que obliga a
+ * mirar el import es barato al lado.
+ *
+ * Cada `expect` negativo (no contiene X) va con uno positivo sobre otra cosa del mismo fichero,
+ * para que un extractor roto que devuelva cadena vacia no deje pasar la prueba en vacio.
+ */
+const OPERATIONS_APP_SOURCE = readFileSync(
+  fileURLToPath(new URL("../components/operations-app.tsx", import.meta.url)),
+  "utf8"
+);
+
+/** La linea de import de un modulo concreto dentro de `operations-app.tsx`. */
+function lineaDeImportDe(modulo: string): string {
+  const linea = OPERATIONS_APP_SOURCE.split("\n").find(
+    (l) => l.trimStart().startsWith("import") && l.includes(`from "${modulo}"`)
+  );
+  expect(linea, `operations-app.tsx ya no importa nada de ${modulo}; actualizar esta prueba`).toBeTruthy();
+  return linea ?? "";
+}
+
+describe("T48 · RF_01: la interfaz etiqueta los roles con la funcion unica", () => {
+  it("RF_01: operations-app.tsx no define su propio roleLabel", () => {
+    expect(OPERATIONS_APP_SOURCE).not.toMatch(/function roleLabel/);
+    expect(OPERATIONS_APP_SOURCE).not.toMatch(/const roleLabel\s*=/);
+
+    // Control positivo del mismo extractor: si el fichero se leyera vacio (ruta mal, encoding),
+    // los dos `not.toMatch` de arriba pasarian sin comprobar nada. `statusLabel` es otra funcion
+    // local del mismo fichero que T48 no toca: mientras exista, el texto se leyo de verdad.
+    expect(OPERATIONS_APP_SOURCE.length).toBeGreaterThan(100_000);
+    expect(OPERATIONS_APP_SOURCE).toMatch(/function statusLabel/);
+  });
+
+  it("RF_01: operations-app.tsx importa roleLabel de @/lib/community-view", () => {
+    const linea = lineaDeImportDe("@/lib/community-view");
+    expect(linea).toContain("roleLabel");
+
+    // Control positivo: `brandFor` ya viaja en ese mismo import hoy. Si el extractor devolviera
+    // la linea equivocada (o vacia), esta asercion cae y no la anterior por casualidad.
+    expect(linea).toContain("brandFor");
+  });
+
+  it("RF_01: la cabecera de sesion sigue pasando por roleLabel", () => {
+    // El sitio concreto donde un lider ve "Mensajero" junto a su nombre. Si alguien "arregla"
+    // RF_01 borrando la llamada en vez de arreglando la funcion, la etiqueta desaparece y esto
+    // lo caza. Es una asercion positiva: no puede pasar en vacio.
+    expect(OPERATIONS_APP_SOURCE).toContain("roleLabel(session.role)");
+  });
+});
+
+/**
+ * T48 · RF_50, RF_02, RF_04 — la validacion previa del formulario de alta de lider.
+ *
+ * `createCommunityLeader` esta desplegada y con envoltorio en `src/lib/firebase/auth.ts`, pero
+ * NADA de la interfaz la llama: no se puede crear una comunidad desde el panel. Antes de abrir
+ * ese formulario hace falta la funcion pura que decide si lo tecleado vale, para que el error se
+ * vea en el campo y no como un `invalid-argument` generico devuelto por el servidor.
+ *
+ * Regla que fija la constitucion y que estas pruebas amarran: el criterio del nombre corto vive
+ * en UN solo sitio (`validateSlug`, en functions/src/community-slug.ts, ya probado por T2). Aqui
+ * se comprueba comparando el motivo devuelto con el de `validateSlug` LETRA A LETRA: una regla
+ * reimplementada con otra prosa falla aunque acierte el veredicto.
+ *
+ * Carga diferida: la funcion todavia no existe y un import estatico tumbaria el fichero entero.
+ */
+type CommunityLeaderFormInput = {
+  name: string;
+  slug: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPhone: string;
+  password: string;
+};
+
+type CommunityLeaderFormResult =
+  | { ok: true; value: CommunityLeaderFormInput }
+  | { ok: false; field: keyof CommunityLeaderFormInput; reason: string };
+
+type CommunityLeaderFormOptions = { takenSlugs?: readonly string[] };
+
+type ValidarFormulario = (
+  input: CommunityLeaderFormInput,
+  options?: CommunityLeaderFormOptions
+) => CommunityLeaderFormResult;
+
+async function cargarValidador(): Promise<ValidarFormulario> {
+  const mod: Record<string, unknown> = await import("./community-view");
+  const fn = mod.validateCommunityLeaderForm;
+  expect(
+    typeof fn,
+    "src/lib/community-view.ts todavia no exporta validateCommunityLeaderForm"
+  ).toBe("function");
+  return fn as ValidarFormulario;
+}
+
+/** Los seis campos bien rellenados. Cada caso estropea exactamente uno. */
+const FORMULARIO_VALIDO: CommunityLeaderFormInput = {
+  name: "Comunidad Andes",
+  slug: "comunidad-andes",
+  leaderName: "Marta Ruiz",
+  leaderEmail: "marta@andes.co",
+  leaderPhone: "+573001112233",
+  password: "clave-segura"
+};
+
+const conCampo = (campo: keyof CommunityLeaderFormInput, valor: string): CommunityLeaderFormInput => ({
+  ...FORMULARIO_VALIDO,
+  [campo]: valor
+});
+
+describe("T48 · RF_50: el formulario valida antes de llamar a la callable", () => {
+  it("RF_50: con los seis campos bien, acepta", async () => {
+    const validar = await cargarValidador();
+    const res = validar(FORMULARIO_VALIDO);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value).toEqual(FORMULARIO_VALIDO);
+  });
+
+  it("RF_50: el nombre de la comunidad vacio se rechaza senalando 'name'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("name", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("name");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: el nombre corto vacio se rechaza senalando 'slug'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("slug", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: el nombre del lider vacio se rechaza senalando 'leaderName'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("leaderName", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("leaderName");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: el correo vacio se rechaza senalando 'leaderEmail'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("leaderEmail", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("leaderEmail");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: el telefono vacio se rechaza senalando 'leaderPhone'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("leaderPhone", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("leaderPhone");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: la contrasena vacia se rechaza senalando 'password'", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("password", ""));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("password");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: un campo con solo espacios cuenta como vacio, no como relleno", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("leaderName", "   "));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("leaderName");
+  });
+
+  it("RF_50: con varios campos mal, senala el primero en orden de formulario", async () => {
+    // El orden de comprobacion se fija aqui a proposito: sin el, "que campo se senala" queda al
+    // azar del implementador y la prueba anterior podria pasar por otro motivo.
+    const validar = await cargarValidador();
+    const res = validar({ ...FORMULARIO_VALIDO, name: "", password: "" });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("name");
+  });
+
+  it("RF_50: no inventa valores por defecto ni campos de mas", async () => {
+    const validar = await cargarValidador();
+    const res = validar({
+      name: "  Comunidad Andes  ",
+      slug: "comunidad-andes",
+      leaderName: "  Marta Ruiz  ",
+      leaderEmail: "  marta@andes.co  ",
+      leaderPhone: "  +573001112233  ",
+      password: "clave-segura"
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Recorta, que es lo que hace `z.string().trim()` en el servidor. Nada mas: ni rellena el
+    // telefono, ni deduce el nombre corto del nombre, ni anade banderas que el servidor no espera.
+    expect(res.value).toEqual(FORMULARIO_VALIDO);
+    expect(Object.keys(res.value).sort()).toEqual([
+      "leaderEmail",
+      "leaderName",
+      "leaderPhone",
+      "name",
+      "password",
+      "slug"
+    ]);
+  });
+
+  it("RF_50: no muta el objeto que recibe", async () => {
+    const validar = await cargarValidador();
+    const entrada: CommunityLeaderFormInput = { ...FORMULARIO_VALIDO, leaderEmail: "  Marta@Andes.CO  " };
+    const copia: CommunityLeaderFormInput = { ...entrada };
+    validar(entrada);
+    expect(entrada).toEqual(copia);
+  });
+});
+
+describe("T48 · RF_02, RF_04: el nombre corto se valida con validateSlug, no con una regla nueva", () => {
+  it("RF_02: acepta el nombre corto normalizado, igual que lo guardara el servidor", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("slug", "Comunidad Andes"));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // `validateSlug` devuelve el slug ya normalizado; el formulario debe enviar ESE, no lo
+    // tecleado. Si enviara lo tecleado, el enlace que se le ensena al lider no seria el suyo.
+    expect(res.value.slug).toBe(validateSlug("Comunidad Andes").ok ? "comunidad-andes" : "");
+    expect(res.value.slug).toBe("comunidad-andes");
+  });
+
+  it("RF_04: un nombre corto reservado se rechaza con el motivo exacto de validateSlug", async () => {
+    const validar = await cargarValidador();
+    const esperado = validateSlug("admin");
+    expect(esperado.ok).toBe(false);
+    const res = validar(conCampo("slug", "admin"));
+    expect(res.ok).toBe(false);
+    if (res.ok || esperado.ok) return;
+    expect(res.field).toBe("slug");
+    // Letra a letra: una regla reimplementada aqui con otra prosa falla aunque acierte.
+    expect(res.reason).toBe(esperado.reason);
+  });
+
+  it("RF_04: un nombre corto con caracteres no permitidos se rechaza con el motivo de validateSlug", async () => {
+    const validar = await cargarValidador();
+    const esperado = validateSlug("@@@");
+    expect(esperado.ok).toBe(false);
+    const res = validar(conCampo("slug", "@@@"));
+    expect(res.ok).toBe(false);
+    if (res.ok || esperado.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason).toBe(esperado.reason);
+  });
+
+  it("RF_04: un nombre corto demasiado corto se rechaza con el motivo de validateSlug", async () => {
+    const validar = await cargarValidador();
+    const esperado = validateSlug("ab");
+    expect(esperado.ok).toBe(false);
+    const res = validar(conCampo("slug", "ab"));
+    expect(res.ok).toBe(false);
+    if (res.ok || esperado.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason).toBe(esperado.reason);
+  });
+
+  it("RF_04: un nombre corto demasiado largo se rechaza con el motivo de validateSlug", async () => {
+    const validar = await cargarValidador();
+    const largo = "a".repeat(40);
+    const esperado = validateSlug(largo);
+    expect(esperado.ok).toBe(false);
+    const res = validar(conCampo("slug", largo));
+    expect(res.ok).toBe(false);
+    if (res.ok || esperado.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason).toBe(esperado.reason);
+  });
+
+  it("RF_02: un nombre corto ya en uso se rechaza antes de ir al servidor", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("slug", "comunidad-andes"), { takenSlugs: ["comunidad-andes"] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+    // El motivo tiene que distinguirse del de forma invalida: "ya esta en uso" se arregla
+    // cambiando el nombre, "no vale" se arregla escribiendolo bien.
+    expect(res.reason.toLowerCase()).toContain("uso");
+  });
+
+  it("RF_02: el choque de nombre corto se compara ya normalizado", async () => {
+    // Tecleado con mayusculas y espacios, en uso en su forma normalizada. Comparar el texto
+    // crudo dejaria pasar el duplicado y lo cazaria la transaccion del servidor con un
+    // `already-exists` sin campo, que es justo lo que este formulario existe para evitar.
+    const validar = await cargarValidador();
+    const res = validar(conCampo("slug", "Comunidad Andes"), { takenSlugs: ["comunidad-andes"] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("slug");
+  });
+
+  it("RF_02: un nombre corto libre pasa aunque haya otros ocupados", async () => {
+    // Control positivo del caso anterior: sin el, una implementacion que rechazara todo slug
+    // cuando `takenSlugs` no esta vacio pasaria las dos pruebas de arriba.
+    const validar = await cargarValidador();
+    const res = validar(conCampo("slug", "comunidad-pacifico"), {
+      takenSlugs: ["comunidad-andes", "comunidad-caribe"]
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.slug).toBe("comunidad-pacifico");
+  });
+});
+
+describe("T48 · RF_50: correo y contrasena se comprueban como los comprueba el servidor", () => {
+  it("RF_50: un correo con forma invalida se rechaza senalando 'leaderEmail'", async () => {
+    const validar = await cargarValidador();
+    for (const correo of ["marta", "marta@", "@andes.co", "marta andes@x.co"]) {
+      const res = validar(conCampo("leaderEmail", correo));
+      expect(res.ok, `deberia rechazar el correo ${correo}`).toBe(false);
+      if (res.ok) continue;
+      expect(res.field).toBe("leaderEmail");
+      expect(res.reason.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("RF_50: el correo se normaliza a minusculas, igual que hace el servidor al crear la cuenta", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("leaderEmail", "  Marta.Ruiz@Andes.CO  "));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Si se enviara tal cual, el lider entraria con un correo distinto del que se le dijo y
+    // "no existe la cuenta" seria el sintoma.
+    expect(res.value.leaderEmail).toBe("marta.ruiz@andes.co");
+  });
+
+  it("RF_50: una contrasena mas corta que el minimo del servidor se rechaza aqui", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("password", "12345"));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("password");
+    expect(res.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("RF_50: el minimo es exactamente el del servidor: seis caracteres pasan", async () => {
+    // Frontera pegada a `z.string().min(6)` de `createLeaderSchema`. Validar aqui con un minimo
+    // MAS estricto que el del servidor es un fallo igual: bloquea altas que el backend acepta.
+    const validar = await cargarValidador();
+    const res = validar(conCampo("password", "123456"));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.password).toBe("123456");
+  });
+
+  it("RF_50: la contrasena no se recorta ni se toca; los espacios cuentan", async () => {
+    const validar = await cargarValidador();
+    const res = validar(conCampo("password", " abc123 "));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.password).toBe(" abc123 ");
   });
 });

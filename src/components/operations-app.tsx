@@ -69,8 +69,8 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, type BulkSignupDisableOutcome, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { createCommunityLeader, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
@@ -478,10 +478,6 @@ function AppSkeleton() {
       <div className="h-64 animate-pulse rounded-3xl border border-white/10 bg-panel" />
     </div>
   );
-}
-
-function roleLabel(role: Role) {
-  return role === "admin" ? "Admin" : role === "seller" ? "Vendedor" : role === "seller_logistics" ? "Logistico tienda" : role === "driver" ? "Lider logistico" : "Mensajero";
 }
 
 function statusLabel(status: string) {
@@ -4261,6 +4257,180 @@ function SellerCommunityReassignPanel({ actor, state }: { actor: Actor; state: A
   );
 }
 
+/** Los seis campos vacios. Un solo sitio: el formulario se limpia tras crear y al descartar. */
+const COMMUNITY_LEADER_FORM_EMPTY: CommunityLeaderFormInput = {
+  name: "",
+  slug: "",
+  leaderName: "",
+  leaderEmail: "",
+  leaderPhone: "",
+  password: ""
+};
+
+/**
+ * RF_50: el alta de un lider de comunidad, que hasta ahora no tenia pantalla.
+ *
+ * `createCommunityLeader` llevaba desplegada y con envoltorio desde el principio, pero nada la
+ * llamaba: las comunidades solo podian nacer desde la consola de Firebase o un script. Esto es
+ * lo unico que crea la figura, y por eso vive aqui y NO en el alta de usuarios de mas abajo: un
+ * lider necesita comunidad, enlace reservado y cuenta de Auth en la misma operacion.
+ *
+ * Va como componente propio y hermano de `AdminCommunitiesPanel`, no dentro de el, por dos
+ * razones concretas: sus `useState` no pueden quedar detras del `return` anticipado de aquel
+ * panel (`react-hooks/rules-of-hooks` es error en este repo por un fallo que solo reventaba en
+ * movil), y sobre todo porque aquel `return` se dispara cuando NO hay ni una comunidad — o sea,
+ * el formulario se esconderia justo en el momento en que hace falta crear la primera.
+ *
+ * El veredicto no se improvisa aqui: lo da `validateCommunityLeaderForm`, que esta probado y usa
+ * el mismo `validateSlug` que el servidor. La pantalla solo decide donde se pinta el motivo —en
+ * el campo senalado, que es lo que pide RF_04— y envia lo NORMALIZADO (`res.value`), nunca lo
+ * tecleado: el enlace que se ensena despues tiene que ser el que quedo guardado.
+ */
+function CreateCommunityLeaderForm({ communities }: { communities: Community[] }) {
+  const [form, setForm] = useState<CommunityLeaderFormInput>(COMMUNITY_LEADER_FORM_EMPTY);
+  const [invalid, setInvalid] = useState<{ field: keyof CommunityLeaderFormInput; reason: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ communityId: string; slug: string } | null>(null);
+
+  // Los nombres cortos ya tomados, para cazar el choque antes de la transaccion: el servidor lo
+  // rechaza con un `already-exists` que no dice que campo hay que corregir.
+  const takenSlugs = communities.flatMap((community) => (community.slug ? [community.slug] : []));
+
+  const escribir = (field: keyof CommunityLeaderFormInput, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    // El motivo deja de ser cierto en cuanto se toca el campo que senalaba.
+    setInvalid((current) => (current && current.field === field ? null : current));
+  };
+
+  const crear = async () => {
+    setError(null);
+    const veredicto = validateCommunityLeaderForm(form, { takenSlugs });
+    if (!veredicto.ok) {
+      setInvalid({ field: veredicto.field, reason: veredicto.reason });
+      return;
+    }
+    setInvalid(null);
+    setBusy(true);
+    try {
+      // Lo normalizado y no lo tecleado: el slug ya paso por `validateSlug` y el correo por
+      // minusculas, que es exactamente con lo que el servidor va a crear la cuenta.
+      const result = await createCommunityLeader(veredicto.value);
+      setCreated({ communityId: result.communityId, slug: result.slug });
+      setForm(COMMUNITY_LEADER_FORM_EMPTY);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo crear el lider de comunidad.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const invitePath = created ? communityInvitePath({ slug: created.slug }) : null;
+  const inviteUrl =
+    invitePath && typeof window !== "undefined" ? `${window.location.origin}${invitePath}` : invitePath ?? "";
+
+  const campo = (
+    field: keyof CommunityLeaderFormInput,
+    label: string,
+    options?: { type?: string; placeholder?: string; hint?: string }
+  ) => {
+    const fallado = invalid?.field === field;
+    return (
+      <label className="grid gap-1 text-xs font-semibold text-ink-60">
+        {label}
+        <input
+          type={options?.type ?? "text"}
+          value={form[field]}
+          placeholder={options?.placeholder}
+          aria-invalid={fallado}
+          onChange={(event) => escribir(field, event.target.value)}
+          className={`focus-ring rounded-full border bg-panel px-3 py-2 text-sm font-normal text-fg ${
+            fallado ? "border-rust/40" : "border-white/10"
+          }`}
+        />
+        {fallado ? (
+          <span className="px-1 text-xs font-normal text-rust">{invalid?.reason}</span>
+        ) : options?.hint ? (
+          <span className="px-1 text-xs font-normal text-ink-60">{options.hint}</span>
+        ) : null}
+      </label>
+    );
+  };
+
+  return (
+    <Card>
+      <h2 className="font-bold">Crear lider de comunidad</h2>
+      <p className="mt-1 text-sm text-ink-60">
+        Crea la comunidad, reserva su enlace de invitacion y abre la cuenta del lider en una sola
+        operacion. Las tiendas que se registren por ese enlace quedan adscritas a el.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {campo("name", "Nombre de la comunidad", { placeholder: "Comunidad Andes" })}
+        {campo("slug", "Nombre corto del enlace", {
+          placeholder: "comunidad-andes",
+          hint: "Se guarda en minusculas y con guiones."
+        })}
+        {campo("leaderName", "Nombre del lider", { placeholder: "Marta Ruiz" })}
+        {campo("leaderEmail", "Correo del lider", { type: "email", placeholder: "marta@andes.co" })}
+        {campo("leaderPhone", "Telefono del lider", { type: "tel", placeholder: "+57 300 111 2233" })}
+        {campo("password", "Contrasena temporal", {
+          type: "password",
+          hint: "Minimo 6 caracteres. El lider la cambia despues."
+        })}
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void crear()}
+        className="focus-ring mt-4 rounded-full bg-acid px-4 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60"
+      >
+        {busy ? "Creando la comunidad..." : "Crear lider de comunidad"}
+      </button>
+
+      {busy && (
+        <p className="mt-3 text-xs text-ink-60" aria-live="polite">
+          Se estan creando la comunidad, la reserva del enlace y la cuenta. No cierres la pantalla.
+        </p>
+      )}
+
+      {error && !busy && (
+        <p className="mt-3 rounded-2xl border border-rust/20 bg-rust/10 p-3 text-xs text-rust">{error}</p>
+      )}
+
+      {/*
+        El enlace es lo primero que el lider necesita, y sin verlo aqui habria que ir a buscarlo a
+        la lista. `communityInvitePath` decide si existe: una comunidad sin nombre corto no puede
+        pintar una ruta con un hueco dentro, que se copia y se reparte igual sin resolver nada.
+      */}
+      {created && !busy && !error && (
+        <div className="mt-3 rounded-2xl border border-white/10 bg-field p-3">
+          <p className="text-sm font-semibold">Lider creado</p>
+          {inviteUrl ? (
+            <>
+              <p className="mt-1 break-all text-xs text-ink-70">{inviteUrl}</p>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(inviteUrl)}
+                className="focus-ring mt-2 rounded-full bg-panel px-4 py-2 text-xs font-semibold hover:bg-white/10"
+              >
+                Copiar enlace de invitacion
+              </button>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-ink-60">La comunidad quedo creada pero todavia sin enlace.</p>
+          )}
+        </div>
+      )}
+
+      {!created && !busy && !error && !invalid && (
+        <p className="mt-3 text-xs text-ink-60">Todavia no has creado ningun lider en esta sesion.</p>
+      )}
+    </Card>
+  );
+}
+
 /**
  * Comunidades, para el administrador.
  *
@@ -4945,6 +5115,12 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
             <AdminUsersPanel state={state} setState={setState} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Comunidades" summary={`${state.communities.length} con enlace propio`}>
+            {/*
+              El alta va FUERA de `AdminCommunitiesPanel` a proposito: aquel panel se corta con un
+              `return` anticipado cuando no hay ni una comunidad, y ahi dentro el formulario
+              desapareceria justo en el momento en que hace falta crear la primera.
+            */}
+            <CreateCommunityLeaderForm communities={state.communities} />
             <AdminCommunitiesPanel state={state} session={session} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Lideres logisticos" summary={`${state.drivers.length} activos`}>
@@ -5531,6 +5707,13 @@ function AdminUsersPanel({ state, setState }: { state: AppState; setState: (stat
         <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Nombre" value={name} onChange={(event) => setName(event.target.value)} required />
         <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Contrasena temporal" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
+        {/*
+          Aqui NO va "Lider de comunidad", y no es un olvido: esta alta solo crea una cuenta con
+          un rol. Un lider de comunidad necesita ademas su comunidad y la reserva de su enlace,
+          y eso solo lo hace `createCommunityLeader` en una sola operacion (formulario "Crear
+          lider de comunidad", en Comunidades). Anadirlo a esta lista por simetria crearia un
+          lider sin comunidad: entraria a un panel que le pide un `communityId` que no existe.
+        */}
         <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={role} onChange={(event) => { setRole(event.target.value as Role); setLinkSellerId(""); }}>
           <option value="seller">Vendedor</option>
           <option value="seller_logistics">Logistico de tienda (sin finanzas)</option>

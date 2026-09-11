@@ -4,6 +4,7 @@ import type {
   BulkSignupDisableSkipReason
 } from "../../functions/src/community-containment";
 import type { CommunityStats } from "../../functions/src/community-stats-math";
+import { normalizeSlug, validateSlug } from "../../functions/src/community-slug";
 import type { Role } from "./types";
 
 /**
@@ -488,4 +489,110 @@ export function buildAdminCommunityList(input: {
     },
     cashbackAccruedCop: accruedByCommunity.get(community.id) ?? 0
   }));
+}
+
+// --- El alta de un lider de comunidad, antes de llamar al servidor (RF_50, RF_02, RF_04) ------
+
+/** Los seis campos del formulario de alta, tal y como los espera `createCommunityLeader`. */
+export type CommunityLeaderFormInput = {
+  name: string;
+  slug: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPhone: string;
+  password: string;
+};
+
+/**
+ * En el rechazo viaja el CAMPO, no solo la prosa: RF_04 pide explicar el motivo, y un mensaje
+ * suelto encima del formulario obliga a adivinar cual de los seis campos hay que tocar.
+ */
+export type CommunityLeaderFormResult =
+  | { ok: true; value: CommunityLeaderFormInput }
+  | { ok: false; field: keyof CommunityLeaderFormInput; reason: string };
+
+/**
+ * Los nombres cortos ya tomados, tal y como los tiene la pantalla (crudos: el catalogo guarda
+ * el normalizado, pero quien llame no tiene por que saberlo). Se comparan normalizados.
+ */
+export type CommunityLeaderFormOptions = { takenSlugs?: readonly string[] };
+
+/**
+ * Forma de correo. Existe para adelantar el veredicto de `z.string().email()` del servidor, no
+ * para ser mas lista que el: un correo que el backend acepta y esta pantalla rechaza es un alta
+ * bloqueada sin motivo. Pide algo antes de la arroba, un dominio sin espacios y al menos un
+ * punto con extension detras, que es lo que distingue los cuatro casos que fallan de verdad
+ * ("marta", "marta@", "@andes.co", "marta andes@x.co").
+ */
+const LEADER_EMAIL_SHAPE = /^[^\s@,;]+@[^\s@,;.]+(?:\.[^\s@,;.]+)+$/;
+
+/** El minimo del servidor, ni uno mas. Vive aqui con nombre para que se vea que esta pegado. */
+const LEADER_PASSWORD_MIN = 6;
+
+/**
+ * RF_50, RF_02, RF_04: decide si lo tecleado en el alta de un lider de comunidad puede viajar.
+ *
+ * Existe porque `createCommunityLeader` crea comunidad, reserva de slug y cuenta de Auth en una
+ * sola llamada: lo que devuelve cuando algo no cuadra es un `invalid-argument` generico o un
+ * `already-exists` sin campo, y el administrador se queda mirando seis casillas sin saber cual
+ * corregir. Aqui el error sale CON el campo.
+ *
+ * Reglas que no son evidentes y que estan atadas en `community-view.test.ts`:
+ *
+ * - **El orden de comprobacion es el del formulario** (nombre, nombre corto, lider, correo,
+ *   telefono, contrasena) y con varios campos mal se senala el primero. Sin un orden fijado,
+ *   "que campo se senala" queda al azar del implementador y cambia al reordenar el codigo.
+ * - **El motivo del nombre corto es, letra a letra, el de `validateSlug`.** La regla del slug
+ *   vive en UN solo sitio (`functions/src/community-slug.ts`, ya probado): reimplementarla aqui
+ *   con otra prosa produce dos criterios que divergen en cuanto alguien toque uno.
+ * - **El choque con un slug ya tomado se compara NORMALIZADO.** "Comunidad Andes" y
+ *   "comunidad-andes" son el mismo enlace; comparar lo tecleado deja pasar el duplicado hasta la
+ *   transaccion del servidor, que es justo lo que esto evita.
+ * - **`value` sale como lo normaliza el servidor**: recortado, con el slug que devuelve
+ *   `validateSlug` y el correo en minusculas. Si la pantalla enviara lo tecleado, el enlace que
+ *   se le ensena al lider no seria el suyo y entraria con un correo distinto del que se le dijo.
+ * - **La contrasena no se toca: ni `trim`.** Los espacios son parte de la clave, y recortarla
+ *   aqui crearia la cuenta con una contrasena distinta de la que el administrador apunto.
+ * - **El minimo de contrasena es exactamente el del servidor (6).** Ser mas estricto tambien es
+ *   un fallo: bloquea altas que el backend acepta.
+ * - No inventa valores por defecto: lo que entra vacio sale rechazado, y nunca deduce el nombre
+ *   corto del nombre de la comunidad.
+ */
+export function validateCommunityLeaderForm(
+  input: CommunityLeaderFormInput,
+  options?: CommunityLeaderFormOptions
+): CommunityLeaderFormResult {
+  const reject = (
+    field: keyof CommunityLeaderFormInput,
+    reason: string
+  ): CommunityLeaderFormResult => ({ ok: false, field, reason });
+
+  const name = typeof input?.name === "string" ? input.name.trim() : "";
+  if (!name) return reject("name", "Escribe el nombre de la comunidad.");
+
+  const slug = validateSlug(typeof input?.slug === "string" ? input.slug : "");
+  if (!slug.ok) return reject("slug", slug.reason);
+  const taken = new Set((options?.takenSlugs ?? []).map((value) => normalizeSlug(value)));
+  if (taken.has(slug.slug)) {
+    return reject("slug", `El nombre corto "${slug.slug}" ya esta en uso por otra comunidad. Elige otro.`);
+  }
+
+  const leaderName = typeof input?.leaderName === "string" ? input.leaderName.trim() : "";
+  if (!leaderName) return reject("leaderName", "Escribe el nombre del lider.");
+
+  const leaderEmail = typeof input?.leaderEmail === "string" ? input.leaderEmail.trim().toLowerCase() : "";
+  if (!leaderEmail) return reject("leaderEmail", "Escribe el correo con el que entrara el lider.");
+  if (!LEADER_EMAIL_SHAPE.test(leaderEmail)) {
+    return reject("leaderEmail", "Ese correo no tiene forma de correo. Revisa la arroba y el dominio.");
+  }
+
+  const leaderPhone = typeof input?.leaderPhone === "string" ? input.leaderPhone.trim() : "";
+  if (!leaderPhone) return reject("leaderPhone", "Escribe el telefono del lider.");
+
+  const password = typeof input?.password === "string" ? input.password : "";
+  if (password.length < LEADER_PASSWORD_MIN) {
+    return reject("password", `La contrasena temporal necesita al menos ${LEADER_PASSWORD_MIN} caracteres.`);
+  }
+
+  return { ok: true, value: { name, slug: slug.slug, leaderName, leaderEmail, leaderPhone, password } };
 }

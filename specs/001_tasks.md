@@ -421,3 +421,23 @@ callable desplegada y ningun boton que la llamara.
 La auditoria encontro `testWritten: true` en T9, T12, T16, T17, T18, T19, T21, T22, T23, T25, T26
 y T27 sin prueba que lo respalde. Se han puesto en `false`. Siguen `done: true` —el codigo existe
 y funciona—; lo que no existia era la prueba, y esa deuda la recogen T29–T42.
+
+
+---
+
+## 10. La pantalla que faltaba (anadida el 11-09-2026, tras el despliegue)
+
+Al preguntar como se crea una comunidad desde el panel, la respuesta resulto ser **que no se
+puede**. `createCommunityLeader` esta desplegada y tiene envoltorio en `src/lib/firebase/auth.ts:675`,
+pero **nada en la interfaz la llama**, y el formulario de alta de usuarios
+(`operations-app.tsx:5535`) ofrece cinco roles sin `community_leader` entre ellos.
+
+Es la **quinta** callable sin superficie. Las cuatro de §2.1 se encontraron porque se busco por
+ellas; esta se colo porque **si** tenia envoltorio, y tener envoltorio se confundio con tener boton.
+
+- [x] **T48: Alta de lider de comunidad desde el panel**
+  * Requisitos cubiertos: RF_50, RF_01, RF_02, RF_04
+  * Archivos: `src/lib/community-view.ts`, `src/lib/community-view.test.ts`, `src/components/operations-app.tsx`
+  * Accion: formulario en el panel del admin que llame a `createCommunityLeader({ name, slug, leaderName, leaderEmail, leaderPhone, password })`, con validacion previa del nombre corto para explicar el motivo antes de ir al servidor (RF_04). **Y retirar el `roleLabel` duplicado.**
+  * **El fallo del rotulo esta en produccion ahora mismo:** hay dos `roleLabel` —el bueno en `src/lib/community-view.ts:16`, probado por RF_01, y una cadena de ternarios en `operations-app.tsx:483` que **cae en "Mensajero"** para un lider de comunidad—. La interfaz usa el segundo en seis sitios, incluida la cabecera de sesion. Un lider que entre hoy **ve "Mensajero" junto a su nombre**.
+  * Verificacion: la prueba de RF_01 deja de cubrir solo la funcion pura y pasa a atar que **la pantalla use esa y no otra**. Trazabilidad no es superficie, y este caso lo enseña mejor que ninguno: RF_01 estaba "cubierto" y la interfaz mentia igual.
