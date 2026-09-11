@@ -214,6 +214,17 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T16": {
+      "requirements": [
+        "RF_08",
+        "RF_09"
+      ],
+      "files": [
+        "src/lib/session-hats.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

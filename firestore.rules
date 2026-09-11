@@ -58,9 +58,11 @@ service cloud.firestore {
     }
 
     // Una tienda es de la comunidad del lider que consulta.
+    // El `exists` va ANTES del `get`: al reves, un sellerId inexistente deniega por error de
+    // evaluacion en vez de por predicado falso, y eso no se distingue en un registro.
     function sellerInMyCommunity(sellerId) {
-      return isCommunityLeader(get(/databases/$(database)/documents/sellers/$(sellerId)).data.communityId)
-        && exists(/databases/$(database)/documents/sellers/$(sellerId));
+      return exists(/databases/$(database)/documents/sellers/$(sellerId))
+        && isCommunityLeader(get(/databases/$(database)/documents/sellers/$(sellerId)).data.communityId);
     }
 
     function isMessenger(messengerId) {

@@ -302,3 +302,51 @@ describe("T11 · RF_10: cambiar de sombrero no exige volver a entrar", () => {
     }
   });
 });
+
+/**
+ * T16 · RF_08 y RF_09: que la PANTALLA reparta por sombrero, no por papel.
+ *
+ * La auditoria de la spec 003 los encontro huerfanos: el reparto estaba implementado y no lo
+ * probaba nada, y la guarda que T13 prometia —atar la pantalla al nucleo de este modulo— no
+ * llegaba a existir. Sin ella se puede reescribir el selector con una copia local de la condicion
+ * y la suite sigue verde. Es exactamente la leccion de `roleLabel` en la spec 001: probar la
+ * funcion correcta no dice nada sobre quien la llama.
+ *
+ * Son comprobaciones de TEXTO sobre la fuente, con su falso rojo posible si alguien reformatea. Se
+ * acepta a proposito: el fallo que previenen es silencioso —compila, tipa, pasa `react-hooks`— y
+ * solo se ve abriendo la pantalla con la cuenta adecuada, que es justo lo que nadie hace.
+ */
+describe("T16 · el reparto de vistas sale del sombrero, no del papel", () => {
+  const FUENTE = readFileSync(
+    fileURLToPath(new URL("../components/operations-app.tsx", import.meta.url)),
+    "utf8"
+  );
+
+  it("RF_08, RF_09: la pantalla importa el nucleo de sombreros y no reimplementa la condicion", () => {
+    // Control positivo: si el lector fallara, lo delata antes que las aserciones reales.
+    expect(FUENTE.length).toBeGreaterThan(100_000);
+    expect(FUENTE).toMatch(/from "@\/lib\/session-hats"/);
+    expect(FUENTE).toContain("defaultHat");
+    expect(FUENTE).toContain("shouldShowHatSelector");
+  });
+
+  it("RF_09: con el sombrero de comunidad se despacha la vista de comunidad ANTES que la del papel", () => {
+    const porSombrero = FUENTE.indexOf('activeHat === "community"');
+    const porPapel = FUENTE.indexOf('session.role === "messenger") return <MessengerView');
+    expect(porSombrero, "el reparto por sombrero desaparecio de la pantalla").toBeGreaterThan(-1);
+    expect(porPapel, "el reparto por papel desaparecio; si se renombro, actualizar esta prueba").toBeGreaterThan(-1);
+    // Si el papel decidiera primero, una tienda que ademas lidera nunca veria su comunidad.
+    expect(porSombrero).toBeLessThan(porPapel);
+  });
+
+  it("RF_09: la vista de comunidad recibe la comunidad, no el perfil operativo", () => {
+    // `profileId` paso a ser SOLO la identidad operativa: seguir leyendo de ahi le pintaria a la
+    // tienda las cifras de una comunidad que no existe.
+    expect(FUENTE).toMatch(/<CommunityLeaderView[\s\S]{0,200}communityId=\{/);
+    expect(FUENTE).not.toMatch(/<CommunityLeaderView[\s\S]{0,200}session=\{session\}/);
+  });
+
+  it("RF_08: el selector solo se pinta cuando el nucleo dice que hay donde elegir", () => {
+    expect(FUENTE).toMatch(/shouldShowHatSelector\(/);
+  });
+});
