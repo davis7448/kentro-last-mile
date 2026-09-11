@@ -658,7 +658,7 @@
     }
   },
   "testCommand": "npm test",
-  "deployUrl": null,
+  "deployUrl": "https://kentro-last-mile.web.app",
   "activePlan": "specs/001_plan.md",
   "activeTasks": "specs/001_tasks.md"
 }

@@ -114,3 +114,55 @@ errores y los 3 avisos conocidos, `next build` correcto y `functions/npm run bui
 **Functions antes que hosting, sin excepcion:** `disableCommunitySignupsInRange` cambio su forma de
 retorno (de `{ disabled: string[] }` al informe completo). Hosting primero dejaria al panel nuevo
 recibiendo la forma vieja.
+
+
+---
+
+## Despliegue a produccion — 11-09-2026
+
+Lanzado en los cuatro pasos del orden obligatorio, esperando a que cada uno terminara.
+
+| Paso | Resultado |
+|---|---|
+| 1. `firestore:indexes` | Desplegado. **39/39 READY** comprobado por sondeo (los 9 nuevos tardaron ~5 min) |
+| 2. `functions` | 66/66 desplegadas. **0 borradas** |
+| 3. `firestore:rules` + `storage` | Las dos compiladas y publicadas |
+| 4. `hosting` | Publicado en https://kentro-last-mile.web.app |
+
+### Dos cosas que pasaron y conviene dejar escritas
+
+**`onSettingsFloorRaise` fallo en el primer intento.** Es el primer trigger de Eventarc del
+proyecto y la identidad de servicio no existia todavia; el reintento la genero
+(`generating the service identity for eventarc.googleapis.com`) y la funcion se creo sin tocar
+nada mas. Si se despliega un trigger nuevo en un proyecto sin ninguno, contar con ese reintento.
+
+**El guard bloqueo `--only hosting`.** El hosting de Next.js lleva su propia funcion SSR
+(`ssrkentrolastmile`), asi que `--only hosting` arrastra `functions` y dispara el predeploy. Se
+levanto con `ALLOW_FUNCTIONS_DEPLOY=1` **despues** de comprobar 66 locales / 66 desplegadas y cero
+borrados, que es exactamente la condicion que el guard existe para proteger.
+
+### Comprobacion en vivo
+
+```
+portada                         HTTP 200 en 0,22 s
+cache-control de la portada     no-cache, must-revalidate   <- la trampa del CLAUDE.md, correcta
+/registro/<slug inexistente>    HTTP 200
+getCommunityBySlug              HTTP 200 -> {"result":{"acceptsSignups":false}}
+```
+
+Esa ultima linea es la que antes daba 404: la callable ya vive, y ante un slug inexistente responde
+**sin revelar si la comunidad existe**, que es lo que pide RF_09.
+
+### E2E contra produccion (evidencia en `PROD_*`)
+
+| Recorrido | Carga | Consola | 4xx/5xx | Desborde |
+|---|---|---|---|---|
+| `PROD_RNF_03_registro-movil` | 2.233 ms | 1 (favicon) | 0 | no |
+| `PROD_RNF_05_portada-movil` | 1.925 ms | 0 | 0 | no |
+
+iPhone 390x844 con UA de iOS 14.8. El unico error de consola es `/favicon.ico` 404: cosmetico,
+preexistente y ajeno a esta spec (tampoco existen `manifest.json` ni `apple-touch-icon.png`).
+
+**Lo que sigue sin poder verificarse no cambia con el despliegue:** produccion sigue teniendo cero
+comunidades. El recorrido completo de registro, la contencion de punta a punta y el panel del lider
+necesitan una comunidad real creada por un administrador, o emuladores.
