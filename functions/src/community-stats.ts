@@ -17,7 +17,8 @@
 import { AggregateField, getFirestore, type Query } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { z } from "zod";
-import { canReadCommunityStats, type Actor } from "./community-access";
+import { canReadCommunityStats } from "./community-access";
+import { actorFrom } from "./communities";
 import {
   buildCommunityStats,
   metricDateSource,
@@ -33,12 +34,15 @@ const statsSchema = z.object({
 });
 
 export const getCommunityStats = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesion.");
-  const actor: Actor = {
-    uid: request.auth.uid,
-    role: String(request.auth.token.role ?? ""),
-    communityId: typeof request.auth.token.communityId === "string" ? request.auth.token.communityId : undefined
-  };
+  /**
+   * El actor lo construye `actorFrom` y no un literal aqui, y eso es una correccion de RF_23, no
+   * una limpieza. Esta callable se armaba el suyo a mano con tres campos, asi que la posicion no
+   * llegaba: un acreedor RETIRADO —que conserva su `communityId` porque le siguen debiendo
+   * dinero— pasaba el permiso y seguia viendo las ventas, los pedidos y el rendimiento de tiendas
+   * que ya no dirige. Un permiso duplicado se olvida de actualizar exactamente una vez, y esa vez
+   * ya paso.
+   */
+  const actor = actorFrom(request);
 
   const parsed = statsSchema.safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Periodo invalido.", parsed.error.flatten());

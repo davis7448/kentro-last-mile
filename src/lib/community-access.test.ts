@@ -1225,3 +1225,618 @@ describe("T46 · quien ve el control de reasignar una tienda de comunidad (RF_11
     expect(canReassignSellerCommunity.length).toBe(1);
   });
 });
+
+// -------------------------------------------------------------------------------------------
+// T1 · spec 003 · una cuenta puede ser tienda y lider a la vez
+//
+// Hoy una cuenta tiene un papel y solo uno. El candado es `isLeaderOf`, que exige
+// `role === "community_leader"` ademas del vinculo de comunidad, y de el cuelgan CUATRO
+// predicados: `canEditCommunityPricing`, `canEditCommunityBrand`, `canReadCommunityStats` y
+// —por el primero— `canEditTariffConcept`. Los otros nueve booleanos del archivo no dependen
+// de el, y por eso la tabla de no regresion de abajo los recorre igual: lo que hay que demostrar
+// no es que cambien los cuatro, es que NO cambian los otros nueve.
+//
+// El que mas importa no se arregla tocando `isLeaderOf`: `canReadSellerOperational` comprueba el
+// papel A MANO y con retorno anticipado, asi que una tienda-lider entra por la rama de vendedor y
+// sale con `false` para todas las tiendas de su comunidad. Es una CADENA DE EXCLUSION donde
+// deberia ser una UNION DE DERECHOS.
+//
+// Un vendedor nunca lleva `communityId` en sus reclamos (`community-signup.ts:133` pone
+// `{ role: "seller", sellerId }`); la pertenencia de su tienda a una comunidad vive en el
+// DOCUMENTO del vendedor. Asi que `communityId` en el `Actor` significa siempre "lidera esa
+// comunidad", sin ambiguedad, y esa es justamente la distincion de RF_03.
+// -------------------------------------------------------------------------------------------
+
+/** Una tienda de com-1 que NO es la del actor: el hermano de comunidad. */
+const otraTiendaDeCom1 = { id: "seller-7", communityId: "com-1" };
+
+/** El caso de la spec: la cuenta de `seller-1`, que ademas lidera com-1. */
+const tiendaLider: Actor = {
+  uid: "u-dual",
+  role: "seller",
+  sellerId: "seller-1",
+  communityId: "com-1"
+};
+
+/**
+ * RF_03: su tienda PERTENECE a com-1 (documento), pero la cuenta no lidera nada (reclamos).
+ * Pertenecer y liderar son dos hechos distintos.
+ */
+const vendedorDeCom1: Actor = { uid: "u-miembro", role: "seller", sellerId: "seller-7" };
+
+/** Caso limite de la spec: lidera com-1 y su tienda pertenece a OTRA comunidad. Legitimo. */
+const liderConTiendaEnOtraComunidad: Actor = {
+  uid: "u-cruzado",
+  role: "seller",
+  sellerId: "seller-9",
+  communityId: "com-1"
+};
+
+/**
+ * Los dieciseis booleanos que una cuenta obtiene frente a com-1 y a cuatro tiendas concretas.
+ * Se nombra cada celda por lo que PREGUNTA y no por quien pregunta, para que la misma tabla sirva
+ * para los seis papeles sin que ninguna etiqueta mienta segun quien la lea.
+ */
+type VectorDePermisos = {
+  crearLider: boolean;
+  activarLider: boolean;
+  cortarEnlace: boolean;
+  editarPrecios: boolean;
+  editarMarca: boolean;
+  verCifras: boolean;
+  verOperativoDeSeller1: boolean;
+  verOperativoDeSeller7DeCom1: boolean;
+  verOperativoDeSeller9DeCom2: boolean;
+  verOperativoDeSellerSinComunidad: boolean;
+  verDineroDeSeller1: boolean;
+  verDineroDeSeller7DeCom1: boolean;
+  desactivarEnBloque: boolean;
+  reasignarComunidad: boolean;
+  editarSusTresTarifas: boolean;
+  editarAlgunPagoATerceros: boolean;
+};
+
+const permisosSobreCom1 = (actor: Actor): VectorDePermisos => ({
+  crearLider: canCreateCommunityLeader(actor),
+  activarLider: canSetCommunityLeaderStatus(actor),
+  cortarEnlace: canSetCommunityLinkStatus(actor),
+  editarPrecios: canEditCommunityPricing(actor, "com-1"),
+  editarMarca: canEditCommunityBrand(actor, "com-1"),
+  verCifras: canReadCommunityStats(actor, "com-1"),
+  verOperativoDeSeller1: canReadSellerOperational(actor, sellerPropio),
+  verOperativoDeSeller7DeCom1: canReadSellerOperational(actor, otraTiendaDeCom1),
+  verOperativoDeSeller9DeCom2: canReadSellerOperational(actor, sellerAjeno),
+  verOperativoDeSellerSinComunidad: canReadSellerOperational(actor, sellerSinComunidad),
+  verDineroDeSeller1: canReadSellerFinancials(actor, sellerPropio),
+  verDineroDeSeller7DeCom1: canReadSellerFinancials(actor, otraTiendaDeCom1),
+  desactivarEnBloque: canBulkDisableCommunitySignups(actor, "com-1"),
+  reasignarComunidad: canReassignSellerCommunity(actor),
+  // "los tres" y "alguno" a proposito: para conceder hace falta que pueda con TODOS los suyos,
+  // y para que salte el veto basta con que se cuele UNO de los de terceros.
+  editarSusTresTarifas: CONCEPTOS_DEL_LIDER.every((concepto) =>
+    canEditTariffConcept(actor, "com-1", concepto)
+  ),
+  editarAlgunPagoATerceros: CONCEPTOS_VETADOS.some((concepto) =>
+    canEditTariffConcept(actor, "com-1", concepto)
+  )
+});
+
+const NADA: VectorDePermisos = {
+  crearLider: false,
+  activarLider: false,
+  cortarEnlace: false,
+  editarPrecios: false,
+  editarMarca: false,
+  verCifras: false,
+  verOperativoDeSeller1: false,
+  verOperativoDeSeller7DeCom1: false,
+  verOperativoDeSeller9DeCom2: false,
+  verOperativoDeSellerSinComunidad: false,
+  verDineroDeSeller1: false,
+  verDineroDeSeller7DeCom1: false,
+  desactivarEnBloque: false,
+  reasignarComunidad: false,
+  editarSusTresTarifas: false,
+  editarAlgunPagoATerceros: false
+};
+
+const TODO: VectorDePermisos = {
+  crearLider: true,
+  activarLider: true,
+  cortarEnlace: true,
+  editarPrecios: false, // el precio de una comunidad lo fija su lider, tambien frente al admin
+  editarMarca: true,
+  verCifras: true,
+  verOperativoDeSeller1: true,
+  verOperativoDeSeller7DeCom1: true,
+  verOperativoDeSeller9DeCom2: true,
+  verOperativoDeSellerSinComunidad: true,
+  verDineroDeSeller1: true,
+  verDineroDeSeller7DeCom1: true,
+  desactivarEnBloque: true,
+  reasignarComunidad: true,
+  editarSusTresTarifas: true,
+  editarAlgunPagoATerceros: true
+};
+
+/**
+ * Quitar la atribucion de liderazgo de unos reclamos, sin tocar nada mas.
+ *
+ * Se escribe campo a campo y no con un `delete`: la tabla de no regresion tiene que hablar de
+ * cuentas de UN SOLO papel, y una cuenta de un solo papel es exactamente esto.
+ */
+const sinLiderazgo = (actor: Actor): Actor => ({
+  uid: actor.uid,
+  role: actor.role,
+  sellerId: actor.sellerId,
+  driverId: actor.driverId
+});
+
+/**
+ * RNF_01, LA TABLA. Los seis papeles de hoy, con reclamos SIN `communityId`, y el permiso exacto
+ * que tienen hoy. Esta funcionalidad la pidio un papel y la usan seis: romper a los otros cinco
+ * seria un precio que nadie acepto.
+ */
+const PERMISOS_DE_HOY: Record<RolDeLaPlataforma, VectorDePermisos> = {
+  admin: TODO,
+  // Una tienda ve su propia tienda —operacion y dinero— y ninguna otra.
+  seller: { ...NADA, verOperativoDeSeller1: true, verDineroDeSeller1: true },
+  // El logistico de tienda confirma y edita pedidos de SU tienda, SIN acceso financiero.
+  seller_logistics: { ...NADA, verOperativoDeSeller1: true },
+  driver: NADA,
+  messenger: NADA,
+  // Un lider SIN comunidad adscrita es una cuenta de dato viejo: no gobierna nada.
+  community_leader: NADA
+};
+
+describe("T1 · spec 003 · la cuenta que es tienda y lider a la vez (RF_01, RF_02, RF_03, RNF_01)", () => {
+  beforeEach(cargarVetoDeTarifas);
+
+  it("RNF_01: los SEIS papeles de hoy, sin atribucion de liderazgo, conservan permiso por permiso", () => {
+    // El caso mas importante de la tarea. Se compara papel a papel y no de golpe para que el
+    // diff diga CUAL se rompio; el rol viaja dentro del objeto comparado justamente para eso.
+    // `TODOS_LOS_ROLES` obliga ademas a `tsc` a cubrir la union entera: un septimo papel no
+    // compila hasta que alguien escriba aqui que permisos tiene.
+    for (const rol of TODOS_LOS_ROLES) {
+      const actor = sinLiderazgo(ACTOR_POR_ROL[rol]);
+      expect({ rol, ...permisosSobreCom1(actor) }).toEqual({ rol, ...PERMISOS_DE_HOY[rol] });
+    }
+  });
+
+  it("RNF_01: el lider puro sigue viendo y gobernando exactamente lo mismo que hoy", () => {
+    // El sexto papel con su atribucion puesta, que es como vive de verdad. Su vector entero, no
+    // un par de asertos sueltos: la union de derechos no puede quitarle nada por el camino, y
+    // sobre todo no puede darle el dinero de sus tiendas (RF_31), que nunca fue suyo.
+    expect(permisosSobreCom1(lider)).toEqual({
+      ...NADA,
+      editarPrecios: true,
+      editarMarca: true,
+      verCifras: true,
+      verOperativoDeSeller1: true,
+      verOperativoDeSeller7DeCom1: true,
+      editarSusTresTarifas: true
+    });
+  });
+
+  it("RNF_01: los dos predicados que no miran al actor quedan fuera del cambio", () => {
+    // `leaderCanSignIn` y `communityAcceptsSignups` deciden sobre el estado de la comunidad y no
+    // reciben actor. Se dejan atados porque el cambio de T1 es "el permiso deja de mirar el
+    // papel", y la forma facil de estropearlo es empezar a pasarles quien pregunta.
+    expect(leaderCanSignIn.length).toBe(1);
+    expect(communityAcceptsSignups.length).toBe(1);
+    expect(leaderCanSignIn({ status: "active" })).toBe(true);
+    expect(leaderCanSignIn({ status: "disabled" })).toBe(false);
+    expect(communityAcceptsSignups({ status: "active", linkStatus: "active" })).toBe(true);
+    expect(communityAcceptsSignups({ status: "active", linkStatus: "revoked" })).toBe(false);
+  });
+
+  it("RF_01: la cuenta de una tienda que ademas lidera com-1 gobierna com-1", () => {
+    // Los tres predicados que cuelgan directamente del candado. Hoy los tres dicen que no por una
+    // sola razon: el papel de la cuenta es "seller" y no "community_leader".
+    expect(canEditCommunityPricing(tiendaLider, "com-1")).toBe(true);
+    expect(canEditCommunityBrand(tiendaLider, "com-1")).toBe(true);
+    expect(canReadCommunityStats(tiendaLider, "com-1")).toBe(true);
+  });
+
+  it("RF_01: y fija las tres tarifas de su comunidad, sin tocar el pago a terceros", () => {
+    // El cuarto predicado, que cuelga del candado por medio de `canEditCommunityPricing`. El veto
+    // de RF_27 no se ablanda por llevar dos sombreros: subirse el cashback bajandole el pago al
+    // mensajero seguiria saliendo del bolsillo de quien lleva la caja.
+    for (const concepto of CONCEPTOS_DEL_LIDER) {
+      expect(canEditTariffConcept(tiendaLider, "com-1", concepto)).toBe(true);
+    }
+    for (const concepto of CONCEPTOS_VETADOS) {
+      expect(canEditTariffConcept(tiendaLider, "com-1", concepto)).toBe(false);
+    }
+  });
+
+  it("RF_01: y sigue siendo tienda — su propia operacion y su propio dinero intactos", () => {
+    // RF_04 en su version de permisos: recibir el liderazgo no le quita lo que ya tenia. Esto hoy
+    // pasa, y esta escrito para que siga pasando cuando la cadena se convierta en union.
+    expect(canReadSellerOperational(tiendaLider, sellerPropio)).toBe(true);
+    expect(canReadSellerFinancials(tiendaLider, sellerPropio)).toBe(true);
+  });
+
+  it("RF_01, RF_02: y ve la operacion de las tiendas de SU comunidad — union, no exclusion", () => {
+    // EL FALLO CONCRETO. `canReadSellerOperational` pregunta por el papel con retorno anticipado:
+    // `if (actor.role === "seller") return actor.sellerId === seller.id`. La cuenta entra por esa
+    // rama, `seller-1 !== seller-7`, y sale con `false` SIN llegar nunca a la rama de lider. No es
+    // que le falte un permiso: es que el primer derecho que se le reconoce le cancela el segundo.
+    expect(canReadSellerOperational(tiendaLider, otraTiendaDeCom1)).toBe(true);
+    // Y con el candado de `isLeaderOf` arreglado esto seguiria roto, porque este predicado no lo
+    // usa. Por eso el caso va aparte: es el que no se arregla en el sitio evidente.
+    expect(canReadSellerOperational(lider, otraTiendaDeCom1)).toBe(true);
+  });
+
+  it("RF_01: pero NO ve el dinero de las tiendas de su comunidad", () => {
+    // RF_31 no se toca. El saldo, la deuda y el recaudo de una tienda no son del lider ni siendo
+    // ademas tienda: la union es de los derechos que cada papel YA tenia, no una suma nueva. Si
+    // alguien "unifica" tambien `canReadSellerFinancials`, una tienda vecina queda expuesta.
+    expect(canReadSellerFinancials(tiendaLider, otraTiendaDeCom1)).toBe(false);
+    expect(canReadSellerFinancials(tiendaLider, sellerAjeno)).toBe(false);
+    expect(canReadSellerFinancials(lider, otraTiendaDeCom1)).toBe(false);
+  });
+
+  it("RF_01: la union no le concede NADA de administrador", () => {
+    // Dos papeles no son tres. Crear lideres, activarlos, cortar enlaces, cerrar accesos en bloque
+    // y reasignar la comunidad de una tienda siguen siendo del administrador.
+    expect(canCreateCommunityLeader(tiendaLider)).toBe(false);
+    expect(canSetCommunityLeaderStatus(tiendaLider)).toBe(false);
+    expect(canSetCommunityLinkStatus(tiendaLider)).toBe(false);
+    expect(canBulkDisableCommunitySignups(tiendaLider, "com-1")).toBe(false);
+    expect(canReassignSellerCommunity(tiendaLider)).toBe(false);
+  });
+
+  it("RF_01: ni le concede nada sobre la comunidad del vecino", () => {
+    // Llevar dos sombreros no amplia el radio: lo que gobierna es SU comunidad y solo esa.
+    expect(canEditCommunityPricing(tiendaLider, "com-2")).toBe(false);
+    expect(canEditCommunityBrand(tiendaLider, "com-2")).toBe(false);
+    expect(canReadCommunityStats(tiendaLider, "com-2")).toBe(false);
+    expect(canReadSellerOperational(tiendaLider, sellerAjeno)).toBe(false);
+  });
+
+  it("RF_02: el liderazgo es atribucion de la cuenta y no se deduce del papel operativo", () => {
+    // Mismos reclamos de comunidad, distinto papel operativo, misma respuesta. Es la forma
+    // ejecutable de "MUST NOT deducirla del papel": si el predicado sigue leyendo `role`, estas
+    // cuatro igualdades no pueden cumplirse a la vez.
+    const comoLider: Actor = { uid: "u-x", role: "community_leader", communityId: "com-1" };
+    const comoTienda: Actor = { uid: "u-x", role: "seller", sellerId: "seller-1", communityId: "com-1" };
+    expect(canEditCommunityPricing(comoTienda, "com-1")).toBe(canEditCommunityPricing(comoLider, "com-1"));
+    expect(canEditCommunityBrand(comoTienda, "com-1")).toBe(canEditCommunityBrand(comoLider, "com-1"));
+    expect(canReadCommunityStats(comoTienda, "com-1")).toBe(canReadCommunityStats(comoLider, "com-1"));
+    expect(canReadSellerOperational(comoTienda, otraTiendaDeCom1)).toBe(
+      canReadSellerOperational(comoLider, otraTiendaDeCom1)
+    );
+    // Que pasa con un domiciliario o un mensajero que llevara `communityId` NO se ata aqui a
+    // proposito: la spec 003 declara fuera de alcance "cualquier otra combinacion de papeles", y
+    // una prueba que fijara esa respuesta estaria decidiendo por una spec que no existe. Quien
+    // escribe los reclamos es la operacion de conceder el liderazgo (T3), no este predicado.
+  });
+
+  it("RF_03: liderar no es pertenecer — la tienda de com-1 sin atribucion no lidera nada", () => {
+    // `vendedorDeCom1` vende desde `seller-7`, cuyo DOCUMENTO dice `communityId: "com-1"`. Eso la
+    // hace miembro, no jefa. Confundir las dos cosas convertiria a cada tienda de una comunidad en
+    // lider de ella: veria las cifras de la comunidad y la operacion de sus competidoras.
+    expect(canEditCommunityPricing(vendedorDeCom1, "com-1")).toBe(false);
+    expect(canEditCommunityBrand(vendedorDeCom1, "com-1")).toBe(false);
+    expect(canReadCommunityStats(vendedorDeCom1, "com-1")).toBe(false);
+    expect(canReadSellerOperational(vendedorDeCom1, sellerPropio)).toBe(false);
+    // Su propia tienda si, claro: es suya por `sellerId`, no por comunidad.
+    expect(canReadSellerOperational(vendedorDeCom1, otraTiendaDeCom1)).toBe(true);
+  });
+
+  it("RF_03: y al reves — se lidera com-1 con la tienda propia dentro de com-2", () => {
+    // Caso limite escrito en la spec: "cuenta que lidera una comunidad y cuya tienda pertenece a
+    // OTRA". Los dos hechos son independientes, asi que los dos derechos se conceden por separado:
+    // su tienda por `sellerId` (esta en com-2) y las de com-1 por la atribucion.
+    expect(canReadSellerOperational(liderConTiendaEnOtraComunidad, sellerAjeno)).toBe(true);
+    expect(canReadSellerOperational(liderConTiendaEnOtraComunidad, otraTiendaDeCom1)).toBe(true);
+    expect(canEditCommunityPricing(liderConTiendaEnOtraComunidad, "com-1")).toBe(true);
+    // Pertenecer a com-2 no la hace lider de com-2, ni con el otro sombrero puesto.
+    expect(canEditCommunityPricing(liderConTiendaEnOtraComunidad, "com-2")).toBe(false);
+    expect(canReadCommunityStats(liderConTiendaEnOtraComunidad, "com-2")).toBe(false);
+  });
+
+  it("RF_01: una atribucion vacia o ausente no concede absolutamente nada", () => {
+    // Dos cadenas vacias son iguales, y de ahi sale el permiso por accidente: el dia que la
+    // pantalla todavia no sabe que comunidad mira, o que un documento guarda `communityId: ""`.
+    const tiendaConAtribucionVacia: Actor = {
+      uid: "u-vacio",
+      role: "seller",
+      sellerId: "seller-1",
+      communityId: ""
+    };
+    const tiendaDeComunidadVacia = { id: "seller-8", communityId: "" };
+    expect(canEditCommunityPricing(tiendaConAtribucionVacia, "")).toBe(false);
+    expect(canEditCommunityBrand(tiendaConAtribucionVacia, "")).toBe(false);
+    expect(canReadCommunityStats(tiendaConAtribucionVacia, "")).toBe(false);
+    expect(canReadSellerOperational(tiendaConAtribucionVacia, tiendaDeComunidadVacia)).toBe(false);
+    expect(canReadSellerOperational(lider, tiendaDeComunidadVacia)).toBe(false);
+    // Sin el campo tampoco: `undefined === undefined` es cierto, y una tienda sin comunidad no
+    // puede acabar visible para cualquiera que tampoco tenga atribucion.
+    expect(canReadSellerOperational(sinLiderazgo(tiendaLider), sellerSinComunidad)).toBe(false);
+    expect(canReadSellerOperational(tiendaLider, sellerSinComunidad)).toBe(false);
+  });
+
+  it("RF_01: el vector completo de la tienda-lider, celda a celda", () => {
+    // El resumen de la tarea en una sola comparacion: exactamente la union de lo que tiene una
+    // tienda (su operacion y su dinero) y lo que tiene un lider de com-1 (precio, marca, cifras,
+    // tarifas propias y la operacion de sus tiendas). Ni una celda de mas.
+    expect(permisosSobreCom1(tiendaLider)).toEqual({
+      ...NADA,
+      editarPrecios: true,
+      editarMarca: true,
+      verCifras: true,
+      verOperativoDeSeller1: true,
+      verOperativoDeSeller7DeCom1: true,
+      verDineroDeSeller1: true,
+      editarSusTresTarifas: true
+    });
+  });
+
+  it("RF_02: los predicados siguen sin mutar al actor ni cambiar de aridad", () => {
+    // La union se escribe dentro de estas firmas. Si para resolverla alguien decidiera anotar el
+    // papel activo en el actor —o recibir de la pantalla cual lleva puesto—, RNF_02 se rompe: un
+    // selector de interfaz no puede conceder ni retirar un solo permiso.
+    expect(canReadSellerOperational.length).toBe(2);
+    expect(canEditCommunityPricing.length).toBe(2);
+    const actor: Actor = { uid: "u-dual", role: "seller", sellerId: "seller-1", communityId: "com-1" };
+    canReadSellerOperational(actor, otraTiendaDeCom1);
+    canEditCommunityPricing(actor, "com-1");
+    canEditTariffConcept(actor, "com-1", CONCEPTOS_DEL_LIDER[0]);
+    expect(actor).toEqual({ uid: "u-dual", role: "seller", sellerId: "seller-1", communityId: "com-1" });
+  });
+});
+
+// -------------------------------------------------------------------------------------------
+// T2 · spec 003 · RF_23, RF_22: liderar se retira, ser acreedor se extingue solo con la deuda.
+//
+// Hoy el modelo tiene un solo eje: o llevas `communityId` en los reclamos y lo gobiernas TODO de
+// esa comunidad, o no lo llevas y no tienes nada que ver con ella. Retirar el liderazgo hoy es,
+// por fuerza, quitar el `communityId` — y eso borra de un golpe el unico vinculo por el que la
+// plataforma sabe que a esa cuenta todavia le debe cashback causado. Dejar de liderar acabaria
+// siendo dejar de cobrar, que es exactamente lo que RF_22 prohibe.
+//
+// T2 parte el eje en dos con `communityStanding`:
+//   - `leader`   -> causa cashback nuevo y gobierna precios, marca y cifras. Lo de hoy.
+//   - `creditor` -> ve y cobra lo YA causado. Nada mas. No gobierna, no causa, no mira cifras.
+//
+// El vinculo (`communityId`) sobrevive al retiro; lo que se apaga es el gobierno. La deuda se
+// extingue sola cuando llega a cero, y esa es una cuenta de dinero, no un permiso.
+// -------------------------------------------------------------------------------------------
+
+/**
+ * Tipo pedido al nucleo con `import type` por la misma razon que `TariffConcept` en T41: un
+ * import de tipo lo borra el transpilador, asi que no es un error de enlace de ESM y no se lleva
+ * por delante los 95 casos ya verdes. Lo que si hace es poner rojo `npx tsc --noEmit` hasta que
+ * `Actor` declare `communityStanding`, que es la mitad en compilacion de esta tarea.
+ */
+import type { CommunityStanding } from "../../functions/src/community-access";
+
+type IsCreditorOf = (actor: Actor, communityId: string) => boolean;
+
+/**
+ * `isCreditorOf` es el predicado NUEVO que esta tarea pide, y el unico que sobrevive al retiro.
+ * Se carga en diferido, igual que `canEditTariffConcept`: `community-access.ts` ya existe, asi
+ * que un import de VALOR de un export que todavia no esta si es un error de enlace y tumbaria el
+ * archivo entero, los 95 verdes incluidos.
+ */
+let isCreditorOf: IsCreditorOf;
+
+const cargarAcreedor = async (): Promise<void> => {
+  const modulo = (await import("../../functions/src/community-access")) as unknown as {
+    isCreditorOf?: IsCreditorOf;
+  };
+  // Cuando todavia no existe se deja un sustituto que revienta AL LLAMARLO, en vez de tumbar el
+  // `beforeEach`: si el cargador fallara aqui, los casos que no preguntan por la acreencia —los de
+  // RF_23— moririan antes de ejecutar una sola asercion y se pondrian verdes el dia que alguien
+  // exporte el predicado, sin haber comprobado nunca que el acreedor deja de gobernar.
+  isCreditorOf =
+    modulo.isCreditorOf ??
+    (() => {
+      throw new Error(
+        "T2: functions/src/community-access.ts debe exportar `isCreditorOf(actor, communityId)`."
+      );
+    });
+};
+
+/**
+ * La tabla de los dos papeles. Un `Record` sobre la union completa: un tercer valor de
+ * `CommunityStanding` sin entrada aqui no compila, y quien lo anada tendra que escribir en esta
+ * linea si gobierna y si cobra. No hay tercera casilla silenciosa.
+ */
+const LO_QUE_DA_CADA_POSICION: Record<CommunityStanding, { gobierna: boolean; cobra: boolean }> = {
+  leader: { gobierna: true, cobra: true },
+  creditor: { gobierna: false, cobra: true }
+};
+
+/** La tienda de `seller-1` que lidero com-1 y a la que se le retiro el liderazgo. */
+const tiendaAcreedora: Actor = {
+  uid: "u-retirada",
+  role: "seller",
+  sellerId: "seller-1",
+  communityId: "com-1",
+  communityStanding: "creditor"
+};
+
+/** El lider puro retirado: sigue vinculado a com-1 solo porque la plataforma le debe dinero. */
+const acreedorPuro: Actor = {
+  uid: "u-exlider",
+  role: "community_leader",
+  communityId: "com-1",
+  communityStanding: "creditor"
+};
+
+/** El mismo lider de siempre, pero con la posicion escrita en los reclamos en vez de implicita. */
+const liderExplicito: Actor = {
+  uid: "u-lider-exp",
+  role: "community_leader",
+  communityId: "com-1",
+  communityStanding: "leader"
+};
+
+describe("T2 · spec 003 · dejar de liderar no es dejar de ser acreedor (RF_22, RF_23, RNF_01)", () => {
+  beforeEach(cargarVetoDeTarifas);
+  beforeEach(cargarAcreedor);
+
+  it("RF_23: un acreedor no fija el precio ni cambia la marca de la comunidad que lidero", () => {
+    // Los precios son el instrumento con el que un lider causa cashback NUEVO: cada peso que
+    // sube el fee de sus tiendas es cashback que se genera a su favor. Dejarle la mano puesta
+    // despues del retiro no es un permiso de mas, es una fabrica de deuda futura sobre una
+    // comunidad que ya no dirige.
+    expect(canEditCommunityPricing(tiendaAcreedora, "com-1")).toBe(false);
+    expect(canEditCommunityPricing(acreedorPuro, "com-1")).toBe(false);
+    expect(canEditCommunityBrand(tiendaAcreedora, "com-1")).toBe(false);
+    expect(canEditCommunityBrand(acreedorPuro, "com-1")).toBe(false);
+    // Que el acreedor no la toque no se la quita a nadie mas: el administrador sigue pudiendo.
+    expect(canEditCommunityBrand(admin, "com-1")).toBe(true);
+  });
+
+  it("RF_23: un acreedor no ve las cifras de la comunidad ni la operacion de sus tiendas", () => {
+    // Lo que la comunidad haga a partir de hoy ya no es asunto suyo. Las cifras son ventas,
+    // pedidos y rendimiento de tiendas de otro; verlas seria seguir mirando el negocio que
+    // dejo de dirigir, y su acreencia no se lee ahi sino en sus cortes pendientes.
+    expect(canReadCommunityStats(tiendaAcreedora, "com-1")).toBe(false);
+    expect(canReadCommunityStats(acreedorPuro, "com-1")).toBe(false);
+    expect(canReadSellerOperational(acreedorPuro, sellerPropio)).toBe(false);
+    expect(canReadSellerOperational(tiendaAcreedora, otraTiendaDeCom1)).toBe(false);
+    // Su PROPIA tienda si, por `sellerId`: esa nunca fue un derecho de liderazgo (RF_01).
+    expect(canReadSellerOperational(tiendaAcreedora, sellerPropio)).toBe(true);
+  });
+
+  it("RF_23: un acreedor no toca NINGUN concepto de tarifa, ni los que fueron suyos", () => {
+    // Los seis, no solo los tres vetados: el retiro apaga tambien los tres que si eran suyos.
+    // Se recorre `TARIFF_CONCEPTS` y no una lista a mano para que un concepto de pago nuevo
+    // quede cerrado para el acreedor por defecto, sin que nadie tenga que acordarse.
+    for (const concepto of tariffConcepts) {
+      expect({ concepto, puede: canEditTariffConcept(tiendaAcreedora, "com-1", concepto) }).toEqual({
+        concepto,
+        puede: false
+      });
+      expect({ concepto, puede: canEditTariffConcept(acreedorPuro, "com-1", concepto) }).toEqual({
+        concepto,
+        puede: false
+      });
+    }
+  });
+
+  it("RF_22: un acreedor SI sigue siendo acreedor de la comunidad que lidero", () => {
+    // El predicado que abre sus cortes pendientes y su cobro. Es el unico derecho que sobrevive
+    // al retiro, y tiene que ser AFIRMATIVO y con nombre propio: si "puede cobrar" se dedujera
+    // de "lidera", retirar el liderazgo apagaria el cobro en el mismo commit y en silencio.
+    expect(isCreditorOf(tiendaAcreedora, "com-1")).toBe(true);
+    expect(isCreditorOf(acreedorPuro, "com-1")).toBe(true);
+    // De SU comunidad y de ninguna otra, con el mismo candado que `isLeaderOf`: dos ausencias
+    // no pueden compararse iguales y convertir a cualquiera en acreedor de todo.
+    expect(isCreditorOf(acreedorPuro, "com-2")).toBe(false);
+    expect(isCreditorOf(acreedorPuro, "")).toBe(false);
+    expect(isCreditorOf({ uid: "u-nada", role: "seller", sellerId: "seller-1" }, "com-1")).toBe(false);
+  });
+
+  it("RF_23: quien lidera tambien cobra — liderar incluye ser acreedor de lo suyo", () => {
+    // Ser acreedor no es el premio de consolacion del retirado: es una de las dos mitades de
+    // liderar, y la que se queda. Si `isCreditorOf` exigiera `standing === "creditor"`, el lider
+    // en activo dejaria de ver su propio cashback mientras lo causa.
+    expect(isCreditorOf(liderExplicito, "com-1")).toBe(true);
+    expect(isCreditorOf(lider, "com-1")).toBe(true);
+    expect(isCreditorOf(tiendaLider, "com-1")).toBe(true);
+    // Y la posicion escrita como "leader" no le quita nada de lo que ya tenia implicito.
+    expect(permisosSobreCom1(liderExplicito)).toEqual(permisosSobreCom1(lider));
+  });
+
+  it("RF_23, RNF_01: un Actor sin `communityStanding` es un LIDER, no un acreedor", () => {
+    // MIGRACION SILENCIOSA, el caso que mas caro sale. Hoy no hay un solo reclamo en produccion
+    // con `communityStanding`: los emite `community-signup.ts` y `communities.ts` sin el campo.
+    // Si la ausencia se leyera como `creditor`, el despliegue de T2 retiraria a TODOS los lideres
+    // vivos a la vez —sin precios, sin marca, sin cifras, sin tarifas— sin que nadie lo decida y
+    // sin nada en el log. Un fallo asi no se ve en local, donde el fixture lleva el campo puesto.
+    expect(permisosSobreCom1(lider)).toEqual(permisosSobreCom1(liderExplicito));
+    expect(canEditCommunityPricing(lider, "com-1")).toBe(true);
+    expect(canReadCommunityStats(lider, "com-1")).toBe(true);
+    expect(canEditCommunityBrand(lider, "com-1")).toBe(true);
+    // Y la tienda-lider de T1, que tampoco lo lleva, conserva la union entera de T1.
+    expect(permisosSobreCom1(tiendaLider)).toEqual({
+      ...NADA,
+      editarPrecios: true,
+      editarMarca: true,
+      verCifras: true,
+      verOperativoDeSeller1: true,
+      verOperativoDeSeller7DeCom1: true,
+      verDineroDeSeller1: true,
+      editarSusTresTarifas: true
+    });
+    expect(isCreditorOf(lider, "com-1")).toBe(true);
+  });
+
+  it("RNF_01: los SEIS papeles sin `communityId` siguen sin gobernar y sin cobrar nada", () => {
+    // La misma tabla de T1, sin duplicarla: `communityStanding` no puede conceder por su cuenta
+    // lo que `communityId` no concedia. Una cuenta sin vinculo con la comunidad no es acreedora
+    // de ella aunque alguien le escriba la posicion en los reclamos.
+    for (const rol of TODOS_LOS_ROLES) {
+      const actor = sinLiderazgo(ACTOR_POR_ROL[rol]);
+      expect({ rol, ...permisosSobreCom1(actor) }).toEqual({ rol, ...PERMISOS_DE_HOY[rol] });
+      expect({ rol, acreedor: isCreditorOf(actor, "com-1") }).toEqual({ rol, acreedor: false });
+      const conPosicion: Actor = { ...actor, communityStanding: "creditor" };
+      expect({ rol, ...permisosSobreCom1(conPosicion) }).toEqual({ rol, ...PERMISOS_DE_HOY[rol] });
+      expect({ rol, acreedor: isCreditorOf(conPosicion, "com-1") }).toEqual({ rol, acreedor: false });
+    }
+  });
+
+  it("RF_23: el acreedor retirado queda exactamente como la tienda que ya era, ni una celda mas", () => {
+    // El resumen de la tarea en una comparacion: retirar el liderazgo de una tienda-lider la
+    // devuelve al vector de un vendedor corriente (su operacion y su dinero), y el unico rastro
+    // del liderazgo pasado es la acreencia, que no vive en esta tabla.
+    expect(permisosSobreCom1(tiendaAcreedora)).toEqual(PERMISOS_DE_HOY.seller);
+    // Y el lider puro retirado se queda en NADA: su papel nunca le dio nada por si mismo.
+    expect(permisosSobreCom1(acreedorPuro)).toEqual(NADA);
+  });
+
+  it("RF_22: un administrador no se vuelve acreedor de una comunidad por ser administrador", () => {
+    // `isCreditorOf` contesta "a quien le debe dinero la plataforma", no "quien manda". Colarle
+    // el `isAdmin` de cortesia que llevan sus vecinos le pondria al administrador los cortes
+    // pendientes de cada comunidad en su propia pantalla de cobro, como si fueran suyos.
+    expect(isCreditorOf(admin, "com-1")).toBe(false);
+    expect(isCreditorOf(otroLider, "com-1")).toBe(false);
+  });
+
+  it("RNF_02: la posicion se lee de los reclamos, no se anota ni se pregunta a la pantalla", () => {
+    // Misma guarda que en T1: dos argumentos, actor intacto. Si la posicion activa llegara desde
+    // un selector de interfaz, un retirado volveria a gobernar con solo cambiar de pestana.
+    expect(isCreditorOf.length).toBe(2);
+    const actor: Actor = {
+      uid: "u-inmutable",
+      role: "seller",
+      sellerId: "seller-1",
+      communityId: "com-1",
+      communityStanding: "creditor"
+    };
+    isCreditorOf(actor, "com-1");
+    canEditCommunityPricing(actor, "com-1");
+    canReadSellerOperational(actor, otraTiendaDeCom1);
+    canEditTariffConcept(actor, "com-1", CONCEPTOS_DEL_LIDER[0]);
+    expect(actor).toEqual({
+      uid: "u-inmutable",
+      role: "seller",
+      sellerId: "seller-1",
+      communityId: "com-1",
+      communityStanding: "creditor"
+    });
+  });
+
+  it("RF_23: la tabla de las dos posiciones, celda a celda", () => {
+    // Lo que dice la spec, escrito como dato y comprobado contra los predicados. Existe para que
+    // una tercera posicion futura (un "suspendido", por ejemplo) no pueda anadirse sin declarar
+    // aqui si gobierna y si cobra: el `Record` sobre la union no compila sin su fila.
+    const observado: Record<CommunityStanding, { gobierna: boolean; cobra: boolean }> = {
+      leader: {
+        gobierna: canEditCommunityPricing(liderExplicito, "com-1"),
+        cobra: isCreditorOf(liderExplicito, "com-1")
+      },
+      creditor: {
+        gobierna: canEditCommunityPricing(acreedorPuro, "com-1"),
+        cobra: isCreditorOf(acreedorPuro, "com-1")
+      }
+    };
+    expect(observado).toEqual(LO_QUE_DA_CADA_POSICION);
+  });
+});

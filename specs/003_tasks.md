@@ -20,7 +20,7 @@
 
 ## 1. Que los seis papeles de hoy sigan funcionando
 
-- [ ] **T1: Los predicados dejan de mirar el rol**
+- [x] **T1: Los predicados dejan de mirar el rol**
   * Requisitos: RF_01, RF_02, RF_03, RNF_01
   * Archivos: `functions/src/community-access.ts`, `src/lib/community-access.test.ts`
   * Accion: `isLeaderOf` comprueba **solo** el vinculo de comunidad. De el cuelgan **cuatro** predicados —`canEditCommunityPricing`, `canEditCommunityBrand`, `canReadCommunityStats` y, por el primero, `canEditTariffConcept`—, no trece: el archivo exporta trece booleanos pero los otros nueve no dependen del candado.

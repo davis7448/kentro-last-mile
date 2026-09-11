@@ -37,6 +37,7 @@ import {
   type LogoWrite
 } from "./community-pricing";
 import { leaderEmailPrecheck, leaderRollbackPlan } from "./community-leader-create";
+import { planLeadershipGrant, planLeadershipRevoke } from "./community-grant";
 import { resolveTariffs } from "./wallet-entries";
 import { isRetiredSlugStillValid, normalizeSlug, planSlugChange, validateSlug, type SlugWrite } from "./community-slug";
 import {
@@ -49,12 +50,24 @@ import {
 
 const text = z.string().trim().min(1);
 
-function actorFrom(request: { auth?: { uid: string; token: Record<string, unknown> } | null }): Actor {
+/**
+ * El actor sale de los RECLAMOS y de ningun otro sitio (RNF_02): nada de leerlo del cuerpo de la
+ * peticion ni de un selector de la interfaz, o un retirado volveria a gobernar cambiando de
+ * pestana.
+ *
+ * La posicion se compara contra `"creditor"` LITERAL en vez de hacer un `as CommunityStanding`
+ * sobre el token, y la diferencia es la que importa: asi solo el retiro explicito se reconoce, y
+ * cualquier otra cosa —basura, ausencia, o un tercer valor que alguien invente manana— cae en
+ * `undefined`, que el nucleo lee como `leader`. Con el `as` pasaria sin ruido un `"leader"`
+ * escrito a mano en un reclamo, y esa es precisamente la via para devolverse el mando.
+ */
+export function actorFrom(request: { auth?: { uid: string; token: Record<string, unknown> } | null }): Actor {
   if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesion.");
   return {
     uid: request.auth.uid,
     role: String(request.auth.token.role ?? ""),
     communityId: typeof request.auth.token.communityId === "string" ? request.auth.token.communityId : undefined,
+    communityStanding: request.auth.token.communityStanding === "creditor" ? "creditor" : undefined,
     sellerId: typeof request.auth.token.sellerId === "string" ? request.auth.token.sellerId : undefined
   };
 }
@@ -139,6 +152,17 @@ export const createCommunityLeader = onCall(async (request) => {
     uid = user.uid;
     state.authUserCreated = true;
 
+    // RF_18: quien lidera lo dice el DOCUMENTO, que es el unico sitio donde ese hecho es unico
+    // (lo leen `planLeadershipGrant` y `planLeadershipRevoke`). Una comunidad recien creada sin
+    // `leaderUid` no tendria lider para ellos, asi que la primera concesion a otra cuenta se
+    // veria como un alta limpia y NO degradaria a este: dos lideres vivos.
+    //
+    // Va entre `authUserCreated` y `roleAssigned` a proposito. Despues de `state.roleAssigned`
+    // el alta ya esta completa para `leaderRollbackPlan`, que entonces no borraria nada: un
+    // fallo aqui dejaria la comunidad escrita y sin `leaderUid`, que es justo el estado que
+    // este `update` existe para evitar.
+    await communityRef.update({ leaderUid: uid, leaderGrantedAt: now, updatedAt: now });
+
     await auth.setCustomUserClaims(uid, { role: "community_leader", communityId: communityRef.id });
     state.roleAssigned = true;
   } catch (error) {
@@ -203,6 +227,301 @@ export const setCommunityLeaderStatus = onCall(async (request) => {
   );
   if (plan.changed) await ref.update(plan.communityUpdate);
   return { ok: true, changed: plan.changed, previousStatus: plan.previousStatus };
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * RF_17, RF_05, RF_23: conceder y retirar el mando de una comunidad.
+ *
+ * Las dos callables son CABLEADO. Quien decide es `community-grant.ts`, que es puro y esta
+ * probado desde la raiz; aqui solo se lee el estado, se traduce el plan a escrituras y se
+ * deshace lo escrito si algo revienta a mitad.
+ * ------------------------------------------------------------------------------------------- */
+
+/** Traduce el marcador a Firestore. El unico punto donde `FieldValue` toca estas operaciones. */
+function withDeletions(update: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(update).map(([key, value]) => [key, isUnsetField(value) ? FieldValue.delete() : value])
+  );
+}
+
+/**
+ * Lee la cuenta destino y devuelve sus reclamos. Si no existe se contesta `not-found` en vez de
+ * dejar salir el `auth/user-not-found` crudo, que en una callable llega al cliente como
+ * `internal` y no dice que fue lo que no se encontro.
+ */
+async function claimsOf(auth: ReturnType<typeof getAuth>, uid: string): Promise<Record<string, unknown>> {
+  try {
+    const user = await auth.getUser(uid);
+    return user.customClaims ?? {};
+  } catch (error) {
+    if ((error as { code?: string }).code === "auth/user-not-found") {
+      throw new HttpsError("not-found", "Esa cuenta no existe.");
+    }
+    throw error;
+  }
+}
+
+/**
+ * Aplica un PARCHE de reclamos sobre los que la cuenta tiene AHORA MISMO, y devuelve los de
+ * antes para poder deshacerlo.
+ *
+ * `setCustomUserClaims` REEMPLAZA: lo que no vaya en la llamada desaparece. Por eso se leen
+ * justo antes de escribir y el parche se aplica encima. Esto —y nada mas que esto— es lo que
+ * conserva `sellerId`, `driverId` y `messengerId` de la cuenta: el plan ni los nombra, asi que
+ * no hay forma de olvidarse de copiarlos.
+ *
+ * La lectura va aqui dentro, y no se reusa la que hizo el planificador, porque entre una y otra
+ * la cuenta pudo cambiar (otra callable, otro administrador): partir de reclamos rancios los
+ * revertiria sin que nadie lo pidiera.
+ */
+async function applyClaimsPatch(
+  auth: ReturnType<typeof getAuth>,
+  uid: string,
+  patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const current = await claimsOf(auth, uid);
+  const next: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isUnsetField(value)) delete next[key];
+    else next[key] = value;
+  }
+  await auth.setCustomUserClaims(uid, next);
+  return current;
+}
+
+type UndoStep = { label: string; run: () => Promise<void> };
+
+/**
+ * RF_55, aplicado a este camino: lo que se escribio a medias se deshace en ORDEN INVERSO, cada
+ * paso en su propio `try` —que falle uno no puede impedir los demas— y el error ORIGINAL sale
+ * intacto, porque traducirlo aqui borraria el rastro del real.
+ */
+async function undoAll(steps: readonly UndoStep[], event: string, reason: string): Promise<void> {
+  for (const step of steps) {
+    try {
+      await step.run();
+    } catch (undoError) {
+      console.error(event, { step: step.label, reason, error: undoError });
+    }
+  }
+}
+
+const grantLeadershipSchema = z.object({ communityId: text, targetUid: text });
+
+/**
+ * RF_04, RF_17, RF_18, RF_19: conceder el liderazgo de una comunidad a una cuenta que YA opera
+ * en la plataforma. Traspasar no es otra callable: es el caso en que la comunidad ya tenia
+ * lider, y sale del mismo plan.
+ *
+ * La comunidad tiene que EXISTIR (`exists: true`). `planLeadershipGrant` admite `exists: false`
+ * y devolveria `create_and_grant`, pero crearla aqui la dejaria sin `slug` y sin reserva en
+ * `communitySlugs`: la comunidad fantasma de RF_55, con el agravante de que su enlace de alta
+ * no existiria. Comunidades las crea `createCommunityLeader`, que si reserva el nombre corto.
+ */
+export const grantCommunityLeadership = onCall(async (request) => {
+  const actor = actorFrom(request);
+  // Por el predicado probado y no por un `role !== "admin"` suelto: conceder el mando es el
+  // mismo permiso que crear al lider, y dos caminos para el mismo permiso acaban divergiendo.
+  if (!canCreateCommunityLeader(actor)) {
+    throw new HttpsError("permission-denied", "Solo un administrador concede el liderazgo de una comunidad.");
+  }
+  const parsed = grantLeadershipSchema.safeParse(request.data);
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
+  const { communityId, targetUid } = parsed.data;
+
+  const db = getFirestore();
+  const auth = getAuth();
+  const communityRef = db.collection("communities").doc(communityId);
+  const communitySnap = await communityRef.get();
+  if (!communitySnap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+  const community = communitySnap.data() ?? {};
+  const targetClaims = await claimsOf(auth, targetUid);
+
+  const now = new Date().toISOString();
+  const outcome = planLeadershipGrant({
+    targetUid,
+    // Solo lo que el plan lee. La identidad operativa (`sellerId` y compania) no se le pasa a
+    // proposito: lo que el plan no puede nombrar, tampoco puede pisarlo.
+    targetClaims: {
+      role: String(targetClaims.role ?? ""),
+      communityId: typeof targetClaims.communityId === "string" ? targetClaims.communityId : undefined,
+      communityStanding: targetClaims.communityStanding === "creditor" ? "creditor" : undefined
+    },
+    community: {
+      id: communitySnap.id,
+      leaderUid: typeof community.leaderUid === "string" ? community.leaderUid : undefined,
+      exists: true
+    },
+    nowIso: now
+  });
+
+  if (!outcome.ok) {
+    // `invalid-input` es un dato mal formado; los otros dos son el estado del sistema diciendo
+    // que no, y su motivo NOMBRA la otra comunidad para que el administrador pueda resolverlo.
+    throw new HttpsError(outcome.code === "invalid-input" ? "invalid-argument" : "failed-precondition", outcome.reason);
+  }
+  if (outcome.kind === "noop") {
+    return { ok: true, kind: outcome.kind, changed: false, communityId: outcome.communityId, reason: outcome.reason };
+  }
+
+  const undo: UndoStep[] = [];
+  try {
+    // ORDEN: degradar, promover, y el documento al final.
+    //
+    // Degradar primero porque el instante intermedio importa: al reves habria un momento con DOS
+    // cuentas llevando el sombrero de la misma comunidad (RF_18). El documento va ultimo porque
+    // es lo unico que no necesita reversion: si commitea, ya no queda nada que pueda fallar.
+    if (outcome.demote) {
+      const demote = outcome.demote;
+      const previous = await applyClaimsPatch(auth, demote.uid, demote.claimsPatch);
+      undo.unshift({
+        label: `demote:${demote.uid}`,
+        run: () => auth.setCustomUserClaims(demote.uid, previous)
+      });
+    }
+    if (outcome.promote) {
+      const promote = outcome.promote;
+      const previous = await applyClaimsPatch(auth, promote.uid, promote.claimsPatch);
+      undo.unshift({
+        label: `promote:${promote.uid}`,
+        run: () => auth.setCustomUserClaims(promote.uid, previous)
+      });
+    }
+    if (outcome.communityUpdate) {
+      await communityRef.update(withDeletions({ ...outcome.communityUpdate, updatedAt: now }));
+    }
+  } catch (error) {
+    await undoAll(undo, "community_leadership_grant_rollback_failed", outcome.reason);
+    throw error;
+  }
+
+  return {
+    ok: true,
+    kind: outcome.kind,
+    changed: true,
+    communityId: outcome.communityId,
+    previousLeaderUid: outcome.demote?.uid ?? "",
+    reason: outcome.reason
+  };
+});
+
+/**
+ * Lo que la plataforma le debe HOY al lider de esta comunidad por lo ya causado: sus asientos de
+ * cashback que todavia no entraron en ningun corte.
+ *
+ * Tres detalles que no se pueden tocar:
+ *
+ *  - El filtro por `type` va EN MEMORIA. El indice de `firestore.indexes.json` cubre las tres
+ *    igualdades (`ownerType`, `ownerId`, `settlementId`) pero no `type`; anadirlo a la consulta
+ *    la dejaria sin indice, y una consulta sin indice falla EN DURO. El retiro entero se caeria.
+ *  - Se suma en NETO: las reversas restan, que es justo lo que debe pasar. Una cuenta a la que
+ *    se le revirtio lo que se le habia abonado no esta saldada, y el plan lo sabe.
+ *  - `Number(...)` crudo, SIN `|| 0`. Un asiento corrupto produce `NaN`, y `estaSaldado` lee el
+ *    `NaN` como "no saldado" y conserva el vinculo. Leerlo como cero apagaria un cobro por un
+ *    dato ilegible, y sin dejar rastro de que existia.
+ */
+async function pendingCommunityCashbackCop(
+  db: ReturnType<typeof getFirestore>,
+  communityId: string
+): Promise<number> {
+  const snap = await db
+    .collection("walletEntries")
+    .where("ownerType", "==", "community_leader")
+    .where("ownerId", "==", communityId)
+    .where("settlementId", "==", "")
+    .get();
+
+  let pendingCop = 0;
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (data.type !== "community_cashback") continue;
+    pendingCop += Number(data.amountCop);
+  }
+  return pendingCop;
+}
+
+const revokeLeadershipSchema = z.object({ communityId: text, targetUid: text });
+
+/**
+ * RF_05, RF_22, RF_23: retirar el mando. Deja de liderar, no deja de trabajar —el parche no
+ * nombra su `role` ni su identidad operativa— y si todavia se le debe algo CONSERVA el vinculo
+ * de acreedor, que es lo unico por lo que la plataforma sabe a quien pagarle lo ya causado.
+ * Quien apaga ese vinculo es el cierre que termina de pagarlo, no un segundo retiro.
+ */
+export const revokeCommunityLeadership = onCall(async (request) => {
+  const actor = actorFrom(request);
+  // El mismo predicado con el que se activa o desactiva a un lider: tambien `isAdmin`.
+  if (!canSetCommunityLeaderStatus(actor)) {
+    throw new HttpsError("permission-denied", "Solo un administrador retira el liderazgo de una comunidad.");
+  }
+  const parsed = revokeLeadershipSchema.safeParse(request.data);
+  if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
+  const { communityId, targetUid } = parsed.data;
+
+  const db = getFirestore();
+  const auth = getAuth();
+  const communityRef = db.collection("communities").doc(communityId);
+  const communitySnap = await communityRef.get();
+  if (!communitySnap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+  const community = communitySnap.data() ?? {};
+  const targetClaims = await claimsOf(auth, targetUid);
+
+  const now = new Date().toISOString();
+  const outcome = planLeadershipRevoke({
+    targetUid,
+    targetClaims: {
+      role: String(targetClaims.role ?? ""),
+      communityId: typeof targetClaims.communityId === "string" ? targetClaims.communityId : undefined,
+      communityStanding: targetClaims.communityStanding === "creditor" ? "creditor" : undefined
+    },
+    community: {
+      id: communitySnap.id,
+      leaderUid: typeof community.leaderUid === "string" ? community.leaderUid : undefined
+    },
+    // La cifra, no un booleano: quien decide si eso cuenta como saldado es el plan, en un solo
+    // sitio y con la misma regla que usa el cierre del acreedor.
+    pendingCashbackCop: await pendingCommunityCashbackCop(db, communityId),
+    nowIso: now
+  });
+
+  if (!outcome.ok) {
+    throw new HttpsError(outcome.code === "invalid-input" ? "invalid-argument" : "failed-precondition", outcome.reason);
+  }
+  if (outcome.kind === "noop") {
+    return { ok: true, kind: outcome.kind, changed: false, communityId: outcome.communityId, reason: outcome.reason };
+  }
+
+  const undo: UndoStep[] = [];
+  try {
+    // ORDEN: primero los reclamos, el documento al final. Igual que en la concesion, el instante
+    // intermedio es el que manda: el poder se ejerce con los RECLAMOS (RNF_02), asi que quitarlos
+    // primero retira el mando de verdad antes de anunciarlo en el documento. Y el documento, al
+    // ir ultimo, no necesita reversion.
+    if (outcome.revoke) {
+      const revoke = outcome.revoke;
+      const previous = await applyClaimsPatch(auth, revoke.uid, revoke.claimsPatch);
+      undo.unshift({
+        label: `revoke:${revoke.uid}`,
+        run: () => auth.setCustomUserClaims(revoke.uid, previous)
+      });
+    }
+    if (outcome.communityUpdate) {
+      // `leaderUid: UNSET_FIELD` sale del documento: seguir acreedor no es seguir liderando.
+      await communityRef.update(withDeletions({ ...outcome.communityUpdate, updatedAt: now }));
+    }
+  } catch (error) {
+    await undoAll(undo, "community_leadership_revoke_rollback_failed", outcome.reason);
+    throw error;
+  }
+
+  return {
+    ok: true,
+    kind: outcome.kind,
+    changed: true,
+    communityId: outcome.communityId,
+    keptAsCreditor: outcome.kind === "revoke_keep_creditor",
+    reason: outcome.reason
+  };
 });
 
 /** RF_05, RF_06: revocar impide altas nuevas y no altera a las tiendas ya registradas. */
@@ -591,12 +910,10 @@ export const reassignSellerCommunity = onCall(async (request) => {
     new Date().toISOString()
   );
   if (plan.changed) {
-    // La unica traduccion del marcador, y el unico punto donde `FieldValue` toca esta operacion.
-    await ref.update(
-      Object.fromEntries(
-        Object.entries(plan.sellerUpdate).map(([key, value]) => [key, isUnsetField(value) ? FieldValue.delete() : value])
-      )
-    );
+    // Por el mismo traductor que el retiro del liderazgo: dos copias de esta conversion acaban
+    // diciendo cosas distintas, y la que se equivoque PERSISTIRA un marcador en vez de borrar
+    // el campo.
+    await ref.update(withDeletions(plan.sellerUpdate));
   }
   return { ok: true, changed: plan.changed, previousCommunityId: plan.previousCommunityId };
 });

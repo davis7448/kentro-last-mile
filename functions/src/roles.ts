@@ -6,6 +6,28 @@ type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger";
 
 const VALID_ROLES: Role[] = ["admin", "seller", "seller_logistics", "driver", "messenger"];
 
+/**
+ * Spec 003: el liderazgo de una comunidad **no es un papel**, es una atribucion aparte que viaja en
+ * `communityId` + `communityStanding`. Estas dos escrituras de reclamos los borrarian al reescribir
+ * el juego entero, asi que cambiarle el papel operativo a alguien le quitaria su comunidad —y, si
+ * era acreedor, le apagaria un cobro pendiente— sin que nadie lo hubiera pedido. Por eso se leen los
+ * reclamos actuales y esos dos campos se conservan.
+ *
+ * `VALID_ROLES` sigue SIN `community_leader`, y eso es correcto: conceder el liderazgo es otra
+ * operacion (`grantCommunityLeadership`), porque necesita comunidad y enlace, no solo un rol.
+ */
+function preservedCommunityClaims(current: Record<string, unknown>): {
+  communityId?: string;
+  communityStanding?: string;
+} {
+  const communityId = typeof current.communityId === "string" && current.communityId ? current.communityId : undefined;
+  if (!communityId) return {};
+  return {
+    communityId,
+    communityStanding: current.communityStanding === "creditor" ? "creditor" : undefined
+  };
+}
+
 export const setUserRole = onCall(async (request) => {
   const uid = String(request.data?.uid ?? "");
   const role = String(request.data?.role ?? "") as Role;
@@ -23,11 +45,13 @@ export const setUserRole = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Only admins can assign roles.");
   }
 
+  const currentClaims = (await getAuth().getUser(uid)).customClaims ?? {};
   await getAuth().setCustomUserClaims(uid, {
     role,
     sellerId: role === "seller" || role === "seller_logistics" ? sellerId : undefined,
     driverId: role === "driver" ? driverId : undefined,
-    messengerId: role === "messenger" ? messengerId : undefined
+    messengerId: role === "messenger" ? messengerId : undefined,
+    ...preservedCommunityClaims(currentClaims)
   });
 
   return { ok: true };
@@ -71,7 +95,10 @@ export const createManagedUser = onCall(async (request) => {
     role,
     sellerId: role === "seller" || role === "seller_logistics" ? profileId : undefined,
     driverId: role === "driver" ? profileId : undefined,
-    messengerId: role === "messenger" ? profileId : undefined
+    messengerId: role === "messenger" ? profileId : undefined,
+    // Una cuenta que ya existia puede llevar atribucion de comunidad; reescribir sin conservarla
+    // se la quitaria (ver la nota de `preservedCommunityClaims`).
+    ...preservedCommunityClaims(user.customClaims ?? {})
   });
 
   if (profileId) {

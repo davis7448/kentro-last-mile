@@ -13,10 +13,32 @@
 import { COMMUNITY_PRICING_FIELDS } from "./community-pricing";
 import { tariffFields } from "./wallet-entries";
 
+/**
+ * RF_22, RF_23: las dos mitades en que se parte liderar una comunidad.
+ *
+ *  - `leader`   -> gobierna (precios, marca, cifras, operacion de sus tiendas) Y cobra.
+ *  - `creditor` -> solo cobra lo YA causado. No gobierna, no causa cashback nuevo, no mira cifras.
+ *
+ * Existe porque el vinculo y el gobierno estaban en el mismo campo. Retirar a un lider era, por
+ * fuerza, quitarle el `communityId`, y eso borraba de un golpe el unico rastro por el que la
+ * plataforma sabe que todavia le debe cashback causado: dejar de liderar acababa siendo dejar de
+ * cobrar, justo lo que RF_22 prohibe. El vinculo sobrevive al retiro; lo que se apaga es el mando.
+ */
+export type CommunityStanding = "leader" | "creditor";
+
 export type Actor = {
   uid: string;
   role: string;
   communityId?: string;
+  /**
+   * AUSENTE SIGNIFICA `leader`, y no es una comodidad de escritura: es lo unico que hace que
+   * esta tarea se pueda desplegar. Hoy no hay un solo reclamo en produccion que lleve el campo
+   * —`community-signup.ts` y `communities.ts` emiten `{ role, communityId }` a secas—, asi que
+   * leer la ausencia como `creditor` retiraria a TODOS los lideres vivos en el instante del
+   * despliegue: sin precios, sin marca, sin cifras y sin tarifas, sin que nadie lo haya decidido
+   * y sin una linea en el log. La posicion se escribe para RETIRAR, nunca para conceder.
+   */
+  communityStanding?: CommunityStanding;
   sellerId?: string;
   driverId?: string;
 };
@@ -25,8 +47,49 @@ type SellerLike = { id: string; communityId?: string };
 type CommunityStatusLike = { status: string; linkStatus?: string };
 
 const isAdmin = (actor: Actor) => actor.role === "admin";
+
+/**
+ * RF_02: liderar una comunidad es una ATRIBUCION de la cuenta, no un papel operativo.
+ *
+ * Ya no se exige `role === "community_leader"` porque eso hacia los dos hechos excluyentes: una
+ * misma cuenta puede vender desde su tienda y ademas liderar una comunidad (spec 003), y con el
+ * papel en el candado el segundo sombrero no existia. Mirar solo `communityId` es inequivoco
+ * porque un vendedor NUNCA lleva `communityId` en sus reclamos —`community-signup.ts` emite
+ * `{ role: "seller", sellerId }` y la pertenencia de su tienda a una comunidad vive en el
+ * DOCUMENTO del vendedor—, asi que este campo en el actor solo puede significar "lidera esa
+ * comunidad". RF_03: pertenecer no es liderar, y por eso la pertenencia no se consulta aqui.
+ *
+ * `!!actor.communityId` no es adorno defensivo: sin el, dos ausencias se comparan iguales
+ * (`undefined === undefined`) y cualquier cuenta sin atribucion gobernaria cualquier comunidad
+ * sin identificar. Lo mismo con `!!communityId` y el `""` que llega de una pantalla que todavia
+ * no sabe que comunidad mira.
+ *
+ * RF_23: al vinculo se le suma ahora la POSICION. Un acreedor retirado conserva el `communityId`
+ * —es lo que sostiene su cobro— pero ya no gobierna nada, y el gobierno es justo lo que este
+ * predicado concede. `?? "leader"` porque la ausencia del campo es el estado de todos los
+ * reclamos vivos: ver el comentario de `communityStanding` en `Actor`.
+ */
 const isLeaderOf = (actor: Actor, communityId: string) =>
-  actor.role === "community_leader" && !!communityId && actor.communityId === communityId;
+  isCreditorOf(actor, communityId) && (actor.communityStanding ?? "leader") === "leader";
+
+/**
+ * RF_22: a quien le debe dinero la plataforma por una comunidad. El VINCULO, sin mirar la
+ * posicion.
+ *
+ * Es el unico derecho que sobrevive al retiro, y por eso tiene nombre propio y se responde en
+ * afirmativo. Si "puede cobrar" se dedujera de "lidera", retirar el liderazgo apagaria el cobro
+ * en el mismo commit y en silencio, que es exactamente lo que RF_22 prohibe: la acreencia no se
+ * retira, se extingue sola cuando la deuda llega a cero, y eso es una cuenta de dinero, no un
+ * permiso. Al reves tambien: el lider en activo cobra mientras causa, asi que esto NO puede
+ * exigir `standing === "creditor"`.
+ *
+ * Sin el `isAdmin` de cortesia que llevan sus vecinos, a proposito: esta pregunta es "a quien le
+ * deben", no "quien manda". Concedersela al administrador le pondria en su pantalla de cobro los
+ * cortes pendientes de todas las comunidades como si fueran suyos.
+ */
+export function isCreditorOf(actor: Actor, communityId: string): boolean {
+  return !!communityId && !!actor.communityId && actor.communityId === communityId;
+}
 
 /** RF_50: la figura del lider no se autoproclama; la crea un administrador. */
 export function canCreateCommunityLeader(actor: Actor): boolean {
@@ -68,12 +131,27 @@ export function canReadCommunityStats(actor: Actor, communityId: string): boolea
   return isAdmin(actor) || isLeaderOf(actor, communityId);
 }
 
-/** RF_52: un lider ve la operacion de las tiendas de SU comunidad. Sin comunidad, no hay vinculo. */
+/**
+ * RF_52: un lider ve la operacion de las tiendas de SU comunidad. Sin comunidad, no hay vinculo.
+ *
+ * Se contesta por UNION de derechos y no por cadena de exclusion, y la diferencia no es de
+ * estilo. Esto era una escalera de retornos anticipados por papel: una cuenta que vende desde
+ * `seller-1` y ademas lidera com-1 entraba por la rama de vendedor, `seller-1 !== seller-7`, y
+ * salia con `false` sin llegar NUNCA a la rama de lider. No es que le faltara un permiso: es que
+ * el primer derecho que se le reconocia le cancelaba el segundo (spec 003, RF_01/RF_02).
+ *
+ * Arreglar `isLeaderOf` no bastaba, porque este predicado no lo usaba: comprobaba el papel a
+ * mano. Ahora se evaluan los dos titulos y se suman.
+ *
+ * La union es de los derechos que cada papel YA tenia por separado, no una suma nueva: el dinero
+ * de las tiendas de la comunidad sigue fuera (RF_31, `canReadSellerFinancials`).
+ */
 export function canReadSellerOperational(actor: Actor, seller: SellerLike): boolean {
   if (isAdmin(actor)) return true;
-  if (actor.role === "seller" || actor.role === "seller_logistics") return actor.sellerId === seller.id;
-  if (actor.role === "community_leader") return !!seller.communityId && seller.communityId === actor.communityId;
-  return false;
+  const esSuTienda =
+    (actor.role === "seller" || actor.role === "seller_logistics") && actor.sellerId === seller.id;
+  const lideraSuComunidad = !!seller.communityId && isLeaderOf(actor, seller.communityId);
+  return esSuTienda || lideraSuComunidad;
 }
 
 /**
