@@ -2054,3 +2054,106 @@ describe("T48 · RF_50: correo y contrasena se comprueban como los comprueba el 
     expect(res.value.password).toBe(" abc123 ");
   });
 });
+
+/**
+ * T46 (reabierta) · RF_11 — guarda de fuente: un componente definido no es una pantalla.
+ *
+ * T46 se cerro dandola por buena con `SellerCommunityReassignPanel` definido en
+ * `operations-app.tsx` y montado en NINGUN sitio. La verificacion de cierre busco
+ * `canReassignSellerCommunity` en el archivo, lo encontro... dentro del componente muerto.
+ * Es la tercera vez en esta spec que "existe el codigo" se confunde con "existe la pantalla"
+ * (antes: cuatro callables sin envoltorio, y una con envoltorio pero sin boton).
+ *
+ * Nada del tooling actual lo caza: `eslint.config.mjs` solo activa `react-hooks`, asi que
+ * `no-unused-vars` no corre; y `tsc --noEmit` no marca funciones de modulo sin usar.
+ *
+ * Por eso esto se lee COMO TEXTO, con lo que implica: es un extractor por regex sobre fuente,
+ * no un analisis del AST. Si alguien define un componente de otra forma sintactica
+ * (`const X = () => ...`) se le escapa, y si lo renombra puede ponerse rojo sin que nada este
+ * mal. Se acepta a proposito: el fallo que previene es SILENCIOSO — compila, pasa los tipos,
+ * pasa el lint y no se ve en ninguna pantalla.
+ *
+ * Cada afirmacion negativa (este conjunto esta vacio) va con un control positivo sobre un
+ * componente que SI se monta, para que un extractor roto no pase la prueba en vacio.
+ */
+/** Sufijos que, por convencion del archivo, identifican un componente de pantalla. */
+const SUFIJOS_DE_COMPONENTE = /(Panel|Table|Card|Form)$/;
+
+/**
+ * Excepciones LEGITIMAS: componentes definidos aqui y montados desde otro archivo, o elegidos
+ * dinamicamente (`const Componente = mapa[clave]`), que por tanto nunca aparecen como `<X`.
+ *
+ * La lista va explicita y comentada a proposito. Un filtro silencioso (por ejemplo, ignorar
+ * todo lo exportado) volveria a dejar pasar exactamente el fallo de T46. Anadir un nombre aqui
+ * obliga a escribir AL LADO desde donde se monta.
+ */
+const MONTADOS_FUERA_DE_ESTE_ARCHIVO: readonly string[] = [
+  // Vacia hoy: todo componente de pantalla de este archivo se monta en este archivo.
+];
+
+/** Componentes de pantalla DEFINIDOS en el archivo (`function X(` a nivel de modulo). */
+function componentesDefinidos(): Set<string> {
+  const nombres = new Set<string>();
+  const patron = /^(?:export\s+)?function\s+([A-Za-z0-9_]+)\s*[(<]/gm;
+  for (const coincidencia of OPERATIONS_APP_SOURCE.matchAll(patron)) {
+    const nombre = coincidencia[1];
+    if (SUFIJOS_DE_COMPONENTE.test(nombre)) nombres.add(nombre);
+  }
+  return nombres;
+}
+
+/** Componentes USADOS como elemento JSX (`<X ...>` o `<X/>`) en el archivo. */
+function componentesMontados(): Set<string> {
+  const nombres = new Set<string>();
+  const patron = /<([A-Z][A-Za-z0-9_]*)[\s/>]/g;
+  for (const coincidencia of OPERATIONS_APP_SOURCE.matchAll(patron)) {
+    nombres.add(coincidencia[1]);
+  }
+  return nombres;
+}
+
+describe("T46 · RF_11: los componentes definidos tienen que estar montados", () => {
+  it("RF_11: los dos extractores funcionan — un componente que SI se monta sale en ambos", () => {
+    // Control positivo, primero. Sin el, las dos pruebas siguientes podrian pasar en vacio:
+    // un extractor que devuelve conjuntos vacios tambien da diferencia vacia.
+    const definidos = componentesDefinidos();
+    const montados = componentesMontados();
+
+    expect(definidos.has("AdminCommunitiesPanel"), "el extractor de definiciones no ve `function AdminCommunitiesPanel(`").toBe(true);
+    expect(montados.has("AdminCommunitiesPanel"), "el extractor de JSX no ve `<AdminCommunitiesPanel`").toBe(true);
+
+    // Y que los conjuntos tengan tamano real, no uno o dos por casualidad.
+    expect(definidos.size).toBeGreaterThan(20);
+    expect(montados.size).toBeGreaterThan(20);
+  });
+
+  it("RF_11: `SellerCommunityReassignPanel` no solo se define: se monta", () => {
+    // El fallo concreto de T46. Definirlo no es implementarlo: mientras no aparezca como
+    // elemento JSX, ninguna tienda puede reasignar comunidad desde la aplicacion.
+    expect(
+      componentesDefinidos().has("SellerCommunityReassignPanel"),
+      "SellerCommunityReassignPanel dejo de definirse; si se renombro, actualizar esta prueba"
+    ).toBe(true);
+    expect(
+      OPERATIONS_APP_SOURCE.includes("<SellerCommunityReassignPanel"),
+      "SellerCommunityReassignPanel esta definido pero no se renderiza en ninguna parte: es una pantalla que el usuario no puede abrir"
+    ).toBe(true);
+  });
+
+  it("RF_11: ningun componente *Panel/*Table/*Card/*Form queda sin montar", () => {
+    // El caso general, que es el que de verdad vale: cierra la clase de fallo entera, no solo
+    // la instancia de T46.
+    const definidos = componentesDefinidos();
+    const montados = componentesMontados();
+
+    const muertos = [...definidos]
+      .filter((nombre) => !montados.has(nombre))
+      .filter((nombre) => !MONTADOS_FUERA_DE_ESTE_ARCHIVO.includes(nombre))
+      .sort();
+
+    expect(
+      muertos,
+      `componentes definidos y nunca montados: ${muertos.join(", ")}. O se renderizan, o se borran, o se justifican en MONTADOS_FUERA_DE_ESTE_ARCHIVO diciendo desde donde se montan.`
+    ).toEqual([]);
+  });
+});

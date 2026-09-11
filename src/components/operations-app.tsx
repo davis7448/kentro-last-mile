@@ -5122,6 +5122,14 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
             */}
             <CreateCommunityLeaderForm communities={state.communities} />
             <AdminCommunitiesPanel state={state} session={session} />
+            {/*
+              RF_11: mover una tienda de comunidad. El componente existia desde T46 y se quedo sin
+              montar — definido, tipado, con su predicado importado, y en ninguna pantalla. Ni el
+              lint (deliberadamente estrecho) ni `tsc` marcan una funcion de modulo sin usar, asi
+              que el unico guarda es la prueba de `community-view.test.ts` que cruza componentes
+              definidos contra componentes montados.
+            */}
+            <SellerCommunityReassignPanel actor={{ uid: session.id, role: session.role }} state={state} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Lideres logisticos" summary={`${state.drivers.length} activos`}>
           <Card>

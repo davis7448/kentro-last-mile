@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "implement",
+  "phase": "deploy",
   "activeSpec": {
     "file": "specs/001_lider_de_comunidad.md",
     "status": "approved"
@@ -638,9 +638,10 @@
         "src/lib/firebase/auth.ts",
         "src/components/operations-app.tsx",
         "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts"
+        "src/lib/community-access.test.ts",
+        "src/lib/community-view.test.ts"
       ],
-      "testWritten": false,
+      "testWritten": true,
       "done": true
     },
     "T47": {
@@ -876,6 +877,5 @@
         "done": false
       }
     }
-  },
-  "activeTask": "T48"
+  }
 }
