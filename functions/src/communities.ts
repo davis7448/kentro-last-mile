@@ -306,17 +306,99 @@ async function undoAll(steps: readonly UndoStep[], event: string, reason: string
   }
 }
 
-const grantLeadershipSchema = z.object({ communityId: text, targetUid: text });
+/**
+ * RF_17: los DOS caminos caben en el mismo esquema, y cada par de campos es excluyente.
+ *
+ *  - La comunidad: o `communityId` (ya existe) o `name` + `slug` (se crea en el mismo acto).
+ *  - La cuenta: o `targetUid` o `targetEmail`.
+ *
+ * Los cuatro campos son opcionales para Zod y obligatorios de a pares para la callable, que
+ * rechaza explicitamente "las dos cosas a la vez" y "ninguna de las dos". Un esquema que
+ * aceptara ambas dejaria la ambiguedad viva hasta el momento de escribir: con `communityId` Y
+ * `name`, "cual manda" seria una decision del orden de los `if`, y la mitad de las veces se
+ * crearia una comunidad que ya existia.
+ */
+const grantLeadershipSchema = z.object({
+  communityId: text.optional(),
+  name: text.optional(),
+  slug: text.optional(),
+  targetUid: text.optional(),
+  targetEmail: z.string().trim().email().optional()
+});
+
+/** La cuenta destino, ya resuelta: quien administra conoce el correo, casi nunca el uid. */
+type GrantTarget = { uid: string; email: string; displayName: string; claims: Record<string, unknown> };
+
+/**
+ * RF_17: encuentra la cuenta a la que se le va a conceder el mando, por uid o por correo.
+ *
+ * El correo existe porque es el caso REAL que dejo el camino cerrado: un administrador intento
+ * crear un lider con el correo de una cuenta que ya era tienda, la precomprobacion de RF_55 lo
+ * rechazo bien, y despues no habia forma de darle el liderazgo a esa cuenta. Quien administra
+ * tiene el correo delante; el uid hay que ir a buscarlo a la consola de Firebase.
+ *
+ * Se busca en MINUSCULAS porque asi lo guarda Auth: con lo tecleado tal cual, una cuenta que si
+ * existe se contestaria como inexistente.
+ *
+ * Y cuando no hay cuenta, el motivo DICE que hay que crearla primero. Esta callable no crea
+ * cuentas a proposito —para eso esta `createCommunityLeader`, que ademas pone contrasena— y un
+ * "no existe" a secas deja al administrador sin saber cual de los dos caminos le toca.
+ */
+async function resolveGrantTarget(
+  auth: ReturnType<typeof getAuth>,
+  input: { targetUid?: string; targetEmail?: string }
+): Promise<GrantTarget> {
+  const uid = (input.targetUid ?? "").trim();
+  const email = (input.targetEmail ?? "").trim().toLowerCase();
+  if (uid && email) {
+    throw new HttpsError("invalid-argument", "Indica la cuenta por uid o por correo, no por las dos cosas.");
+  }
+  if (!uid && !email) {
+    throw new HttpsError("invalid-argument", "Indica a que cuenta se le concede el liderazgo: uid o correo.");
+  }
+
+  try {
+    const user = uid ? await auth.getUser(uid) : await auth.getUserByEmail(email);
+    return {
+      uid: user.uid,
+      email: (user.email ?? "").toLowerCase(),
+      displayName: user.displayName ?? "",
+      // Se leen aqui solo para PLANIFICAR. Quien escribe reclamos es `applyClaimsPatch`, que
+      // vuelve a leerlos justo antes de escribir: entre una lectura y otra la cuenta pudo
+      // cambiar, y partir de reclamos rancios los revertiria sin que nadie lo pidiera.
+      claims: user.customClaims ?? {}
+    };
+  } catch (error) {
+    if ((error as { code?: string }).code === "auth/user-not-found") {
+      throw new HttpsError(
+        "not-found",
+        email
+          ? `No hay ninguna cuenta con el correo ${email}. Crea primero la cuenta y despues concedele el liderazgo.`
+          : "Esa cuenta no existe."
+      );
+    }
+    throw error;
+  }
+}
 
 /**
  * RF_04, RF_17, RF_18, RF_19: conceder el liderazgo de una comunidad a una cuenta que YA opera
  * en la plataforma. Traspasar no es otra callable: es el caso en que la comunidad ya tenia
  * lider, y sale del mismo plan.
  *
- * La comunidad tiene que EXISTIR (`exists: true`). `planLeadershipGrant` admite `exists: false`
- * y devolveria `create_and_grant`, pero crearla aqui la dejaria sin `slug` y sin reserva en
- * `communitySlugs`: la comunidad fantasma de RF_55, con el agravante de que su enlace de alta
- * no existiria. Comunidades las crea `createCommunityLeader`, que si reserva el nombre corto.
+ * RF_17 pide DOS caminos y aqui estan los dos:
+ *
+ *  - Sobre una comunidad que ya existe (`communityId`).
+ *  - Creandola en el mismo acto (`name` + `slug`), que es el unico camino posible cuando no hay
+ *    ninguna comunidad todavia. Antes no estaba, y con cero comunidades el mando no se podia
+ *    conceder por ningun lado: `createCommunityLeader` exige abrir una cuenta nueva —y falla,
+ *    bien, si el correo ya tiene una— y esto exigia una comunidad previa que nadie podia crear.
+ *
+ * La comunidad nueva se escribe DENTRO de la misma transaccion que reserva su nombre corto,
+ * copiado de `createCommunityLeader`: dos administradores concediendo a la vez no pueden quedarse
+ * con el mismo enlace, y una comunidad sin reserva es una comunidad cuyo enlace de alta no
+ * existe (la fantasma de RF_55, con agravante). Nace SIN `leaderUid`: se lo pone el
+ * `communityUpdate` del plan al final, que es el unico sitio donde se decide quien lidera.
  */
 export const grantCommunityLeadership = onCall(async (request) => {
   const actor = actorFrom(request);
@@ -327,30 +409,64 @@ export const grantCommunityLeadership = onCall(async (request) => {
   }
   const parsed = grantLeadershipSchema.safeParse(request.data);
   if (!parsed.success) throw new HttpsError("invalid-argument", "Datos invalidos.");
-  const { communityId, targetUid } = parsed.data;
+  const input = parsed.data;
+
+  const sobreUnaQueExiste = Boolean(input.communityId);
+  const pideCrearla = Boolean(input.name || input.slug);
+  if (sobreUnaQueExiste && pideCrearla) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Indica una comunidad que ya existe o los datos de una nueva, no las dos cosas."
+    );
+  }
+  if (!sobreUnaQueExiste && !pideCrearla) {
+    throw new HttpsError("invalid-argument", "Indica que comunidad se concede: su id, o su nombre y nombre corto.");
+  }
+  // Media comunidad nueva no es ninguna: sin nombre corto no hay enlace que reservar, y sin
+  // nombre la lista del administrador la pintaria como "Comunidad com-1730000000000".
+  if (pideCrearla && !(input.name && input.slug)) {
+    throw new HttpsError("invalid-argument", "Una comunidad nueva necesita nombre y nombre corto.");
+  }
 
   const db = getFirestore();
   const auth = getAuth();
-  const communityRef = db.collection("communities").doc(communityId);
-  const communitySnap = await communityRef.get();
-  if (!communitySnap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
-  const community = communitySnap.data() ?? {};
-  const targetClaims = await claimsOf(auth, targetUid);
+  const target = await resolveGrantTarget(auth, input);
+
+  const communityRef = db.collection("communities").doc(input.communityId ?? `com-${Date.now()}`);
+  let leaderUidActual: string | undefined;
+  let nueva: { name: string; slug: string; slugRef: typeof communityRef } | null = null;
+  if (sobreUnaQueExiste) {
+    const communitySnap = await communityRef.get();
+    if (!communitySnap.exists) throw new HttpsError("not-found", "La comunidad no existe.");
+    const community = communitySnap.data() ?? {};
+    leaderUidActual = typeof community.leaderUid === "string" ? community.leaderUid : undefined;
+  } else {
+    // La MISMA regla del enlace que el alta, y del mismo sitio: `validateSlug`. Aceptar aqui un
+    // nombre corto que aquel rechaza produciria enlaces de invitacion que no resuelven.
+    const slug = validateSlug(input.slug ?? "");
+    if (!slug.ok) throw new HttpsError("invalid-argument", slug.reason);
+    nueva = { name: input.name ?? "", slug: slug.slug, slugRef: db.collection("communitySlugs").doc(slug.slug) };
+  }
+  // `const` para que el estrechamiento sobreviva hasta dentro del `try`.
+  const creacion = nueva;
 
   const now = new Date().toISOString();
   const outcome = planLeadershipGrant({
-    targetUid,
+    targetUid: target.uid,
     // Solo lo que el plan lee. La identidad operativa (`sellerId` y compania) no se le pasa a
     // proposito: lo que el plan no puede nombrar, tampoco puede pisarlo.
     targetClaims: {
-      role: String(targetClaims.role ?? ""),
-      communityId: typeof targetClaims.communityId === "string" ? targetClaims.communityId : undefined,
-      communityStanding: targetClaims.communityStanding === "creditor" ? "creditor" : undefined
+      role: String(target.claims.role ?? ""),
+      communityId: typeof target.claims.communityId === "string" ? target.claims.communityId : undefined,
+      communityStanding: target.claims.communityStanding === "creditor" ? "creditor" : undefined
     },
     community: {
-      id: communitySnap.id,
-      leaderUid: typeof community.leaderUid === "string" ? community.leaderUid : undefined,
-      exists: true
+      id: communityRef.id,
+      leaderUid: leaderUidActual,
+      // `false` es lo que hace que el plan devuelva `create_and_grant`. La decision de crear se
+      // toma UNA vez, aqui, y se lee de vuelta en `outcome.createCommunity`: duplicarla abajo
+      // con otro `if` es como se acaba creando una comunidad que el plan no planeo.
+      exists: sobreUnaQueExiste
     },
     nowIso: now
   });
@@ -363,14 +479,58 @@ export const grantCommunityLeadership = onCall(async (request) => {
   if (outcome.kind === "noop") {
     return { ok: true, kind: outcome.kind, changed: false, communityId: outcome.communityId, reason: outcome.reason };
   }
+  // Lo que pidio el administrador y lo que decidio el plan salen del MISMO `exists`, asi que
+  // esto no puede fallar — y por eso mismo se afirma antes de escribir nada: si alguna vez
+  // divergieran, el precio seria media comunidad creada o un `update` sobre un documento que no
+  // existe, y las dos cosas se arreglan a mano en produccion.
+  if (outcome.createCommunity !== (creacion !== null)) {
+    throw new HttpsError("internal", "La concesion no supo si habia que crear la comunidad.");
+  }
 
   const undo: UndoStep[] = [];
   try {
-    // ORDEN: degradar, promover, y el documento al final.
+    // ORDEN: la comunidad (con su enlace), degradar, promover, y el documento al final.
     //
-    // Degradar primero porque el instante intermedio importa: al reves habria un momento con DOS
-    // cuentas llevando el sombrero de la misma comunidad (RF_18). El documento va ultimo porque
-    // es lo unico que no necesita reversion: si commitea, ya no queda nada que pueda fallar.
+    // Degradar antes de promover porque el instante intermedio importa: al reves habria un
+    // momento con DOS cuentas llevando el sombrero de la misma comunidad (RF_18). El documento
+    // va ultimo porque es lo unico que no necesita reversion: si commitea, ya no queda nada que
+    // pueda fallar.
+    if (creacion) {
+      await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(creacion.slugRef);
+        if (existing.exists) throw new HttpsError("already-exists", "Ese nombre corto ya esta en uso.");
+        transaction.set(communityRef, {
+          id: communityRef.id,
+          name: creacion.name,
+          slug: creacion.slug,
+          // De la cuenta destino, no de un campo tecleado: es la misma cuenta que va a liderar,
+          // y dos copias del nombre que pueden discrepar son una copia de mas.
+          ...(target.displayName ? { leaderName: target.displayName } : {}),
+          ...(target.email ? { leaderEmail: target.email } : {}),
+          linkStatus: "active",
+          status: "active",
+          pricing: {},
+          createdAt: now,
+          updatedAt: now
+        });
+        transaction.set(creacion.slugRef, { communityId: communityRef.id });
+      });
+      // RF_55: en orden inverso al de creacion y el ENLACE antes que la comunidad —es la reserva
+      // la que bloquea el reintento con el mismo nombre corto—, igual que en el alta. Los dos
+      // `unshift` dejan la pila en `[promote, slug, community]`.
+      undo.unshift({
+        label: `community:${communityRef.id}`,
+        run: async () => {
+          await communityRef.delete();
+        }
+      });
+      undo.unshift({
+        label: `slug:${creacion.slug}`,
+        run: async () => {
+          await creacion.slugRef.delete();
+        }
+      });
+    }
     if (outcome.demote) {
       const demote = outcome.demote;
       const previous = await applyClaimsPatch(auth, demote.uid, demote.claimsPatch);
@@ -400,6 +560,7 @@ export const grantCommunityLeadership = onCall(async (request) => {
     kind: outcome.kind,
     changed: true,
     communityId: outcome.communityId,
+    slug: creacion?.slug ?? "",
     previousLeaderUid: outcome.demote?.uid ?? "",
     reason: outcome.reason
   };

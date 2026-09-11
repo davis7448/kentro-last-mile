@@ -681,6 +681,70 @@ export async function createCommunityLeader(input: {
   return (await callable(input)).data as { communityId: string; slug: string; uid: string };
 }
 
+/**
+ * RF_17: conceder el liderazgo de una comunidad a una cuenta que YA existe.
+ *
+ * Es la otra mitad de RF_17 y hasta ahora no se podia invocar: la callable estaba desplegada y
+ * sin envoltorio, o sea inalcanzable desde el navegador. El caso que la hace falta: el correo al
+ * que se le quiere dar el mando ya tiene cuenta (una tienda, por ejemplo), asi que
+ * `createCommunityLeader` lo rechaza —y hace bien, porque su trabajo es abrir cuenta nueva—.
+ *
+ * Los dos caminos de RF_17 viajan por aqui: sobre una comunidad que ya existe (`communityId`) o
+ * creandola en el mismo acto (`name` + `slug`), que es el unico posible cuando no hay ninguna.
+ *
+ * Las claves vacias se OMITEN, no se mandan `undefined`: el serializador de las callables
+ * convierte `undefined` en `null`, y el esquema del servidor espera `string` o ausencia — un
+ * `null` lo rechaza con un `invalid-argument` que no dice cual de los cinco campos sobra. Es la
+ * misma trampa que ya documenta `reassignSellerCommunity`.
+ */
+export async function grantCommunityLeadership(input: {
+  communityId?: string;
+  name?: string;
+  slug?: string;
+  targetUid?: string;
+  targetEmail?: string;
+}) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const payload: Record<string, string> = {};
+  for (const key of ["communityId", "name", "slug", "targetUid", "targetEmail"] as const) {
+    const value = typeof input[key] === "string" ? (input[key] as string).trim() : "";
+    if (value) payload[key] = value;
+  }
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "grantCommunityLeadership");
+  return (await callable(payload)).data as {
+    ok: boolean;
+    kind: "grant" | "create_and_grant" | "transfer" | "noop";
+    changed: boolean;
+    communityId: string;
+    slug?: string;
+    previousLeaderUid?: string;
+    reason: string;
+  };
+}
+
+/**
+ * RF_05, RF_22: retirar el mando. Tampoco tenia envoltorio, por lo que el unico camino para
+ * deshacer una concesion era la consola de Firebase.
+ *
+ * `keptAsCreditor` es el dato que hay que ENSENAR: si al lider todavia se le debe cashback
+ * causado, conserva el vinculo de acreedor y la plataforma sigue sabiendo a quien pagarle. Quien
+ * apaga ese vinculo es el cierre que termina de pagarlo, no este retiro.
+ */
+export async function revokeCommunityLeadership(input: { communityId: string; targetUid: string }) {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "revokeCommunityLeadership");
+  return (await callable(input)).data as {
+    ok: boolean;
+    kind: string;
+    changed: boolean;
+    communityId: string;
+    keptAsCreditor?: boolean;
+    reason: string;
+  };
+}
+
 export async function setCommunityLinkStatus(input: { communityId: string; linkStatus: "active" | "revoked" }) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");

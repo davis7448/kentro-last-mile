@@ -225,6 +225,20 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T17": {
+      "requirements": [
+        "RF_17"
+      ],
+      "files": [
+        "functions/src/communities.ts",
+        "src/lib/firebase/auth.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

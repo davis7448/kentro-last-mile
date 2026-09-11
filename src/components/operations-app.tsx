@@ -70,8 +70,8 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { createCommunityLeader, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
@@ -4466,6 +4466,176 @@ function CreateCommunityLeaderForm({ communities }: { communities: Community[] }
   );
 }
 
+/** Los tres campos vacios. Ni contrasena ni telefono: la cuenta a la que se concede ya existe. */
+const COMMUNITY_GRANT_FORM_EMPTY: CommunityGrantFormInput = { name: "", slug: "", targetEmail: "" };
+
+/**
+ * RF_17: la OTRA mitad — darle el liderazgo a una cuenta que ya existe.
+ *
+ * El caso real que la hace falta: un administrador intento crear un lider con el correo de una
+ * cuenta que YA existe y es una tienda. El formulario de arriba lo rechazo limpiamente —hace
+ * bien: su trabajo es abrir una cuenta nueva, y RF_55 impide pisar una existente— y despues no
+ * habia ninguna via para darle el mando a esa cuenta. `grantCommunityLeadership` estaba
+ * desplegada, sin envoltorio, sin pantalla y exigiendo una comunidad previa; con cero
+ * comunidades el camino estaba cerrado por los dos lados.
+ *
+ * Por eso crea la comunidad EN EL MISMO ACTO: es el unico camino que funciona cuando todavia no
+ * hay ninguna, y el servidor reserva su nombre corto en la misma transaccion que la escribe, asi
+ * que no puede quedar una comunidad sin enlace.
+ *
+ * Vive fuera de `AdminCommunitiesPanel` y junto a su hermano por la misma razon que aquel: el
+ * `return` anticipado de aquel panel se dispara cuando no hay ni una comunidad, que es
+ * justamente cuando esta pantalla hace falta, y sus `useState` no pueden quedar detras de un
+ * `return` (`react-hooks/rules-of-hooks` es error en este repo).
+ *
+ * El veredicto lo da `validateCommunityGrantForm`, probado y con el mismo `validateSlug` del
+ * servidor; aqui solo se decide donde se pinta el motivo y se envia lo NORMALIZADO: el correo en
+ * minusculas es con el que Auth guarda la cuenta, y con lo tecleado una cuenta que si existe se
+ * contestaria como inexistente.
+ */
+function GrantCommunityLeadershipForm({ communities }: { communities: Community[] }) {
+  const [form, setForm] = useState<CommunityGrantFormInput>(COMMUNITY_GRANT_FORM_EMPTY);
+  const [invalid, setInvalid] = useState<{ field: keyof CommunityGrantFormInput; reason: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [granted, setGranted] = useState<{ communityId: string; slug: string; reason: string } | null>(null);
+
+  const takenSlugs = communities.flatMap((community) => (community.slug ? [community.slug] : []));
+
+  const escribir = (field: keyof CommunityGrantFormInput, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    // El motivo deja de ser cierto en cuanto se toca el campo que senalaba.
+    setInvalid((current) => (current && current.field === field ? null : current));
+  };
+
+  const conceder = async () => {
+    setError(null);
+    const veredicto = validateCommunityGrantForm(form, { takenSlugs });
+    if (!veredicto.ok) {
+      setInvalid({ field: veredicto.field, reason: veredicto.reason });
+      return;
+    }
+    setInvalid(null);
+    setBusy(true);
+    try {
+      const result = await grantCommunityLeadership(veredicto.value);
+      setGranted({
+        communityId: result.communityId,
+        // El servidor devuelve el nombre corto que quedo guardado; si no lo trajera, el de
+        // respaldo es el NORMALIZADO que se le mando, nunca lo tecleado.
+        slug: result.slug || veredicto.value.slug,
+        reason: result.reason
+      });
+      setForm(COMMUNITY_GRANT_FORM_EMPTY);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo conceder el liderazgo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const invitePath = granted ? communityInvitePath({ slug: granted.slug }) : null;
+  const inviteUrl =
+    invitePath && typeof window !== "undefined" ? `${window.location.origin}${invitePath}` : invitePath ?? "";
+
+  const campo = (
+    field: keyof CommunityGrantFormInput,
+    label: string,
+    options?: { type?: string; placeholder?: string; hint?: string }
+  ) => {
+    const fallado = invalid?.field === field;
+    return (
+      <label className="grid gap-1 text-xs font-semibold text-ink-60">
+        {label}
+        <input
+          type={options?.type ?? "text"}
+          value={form[field]}
+          placeholder={options?.placeholder}
+          aria-invalid={fallado}
+          onChange={(event) => escribir(field, event.target.value)}
+          className={`focus-ring rounded-full border bg-panel px-3 py-2 text-sm font-normal text-fg ${
+            fallado ? "border-rust/40" : "border-white/10"
+          }`}
+        />
+        {fallado ? (
+          <span className="px-1 text-xs font-normal text-rust">{invalid?.reason}</span>
+        ) : options?.hint ? (
+          <span className="px-1 text-xs font-normal text-ink-60">{options.hint}</span>
+        ) : null}
+      </label>
+    );
+  };
+
+  return (
+    <Card>
+      <h2 className="font-bold">Dar el liderazgo a una cuenta que ya existe</h2>
+      <p className="mt-1 text-sm text-ink-60">
+        Para cuando el correo ya tiene cuenta en la plataforma (una tienda, por ejemplo) y el alta
+        de arriba lo rechaza. Crea la comunidad, reserva su enlace y le pasa el mando a esa cuenta
+        en una sola operacion. No le cambia la contrasena ni deja de hacer lo que hacia.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {campo("name", "Nombre de la comunidad", { placeholder: "Comunidad Andes" })}
+        {campo("slug", "Nombre corto del enlace", {
+          placeholder: "comunidad-andes",
+          hint: "Se guarda en minusculas y con guiones."
+        })}
+        {campo("targetEmail", "Correo de la cuenta", {
+          type: "email",
+          placeholder: "marta@andes.co",
+          hint: "La cuenta tiene que existir ya. Si no, creala con el formulario de arriba."
+        })}
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void conceder()}
+        className="focus-ring mt-4 rounded-full bg-acid px-4 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60"
+      >
+        {busy ? "Concediendo el liderazgo..." : "Crear comunidad y dar el liderazgo"}
+      </button>
+
+      {busy && (
+        <p className="mt-3 text-xs text-ink-60" aria-live="polite">
+          Se estan creando la comunidad, la reserva del enlace y el cambio de mando. No cierres la
+          pantalla.
+        </p>
+      )}
+
+      {error && !busy && (
+        <p className="mt-3 rounded-2xl border border-rust/20 bg-rust/10 p-3 text-xs text-rust">{error}</p>
+      )}
+
+      {granted && !busy && !error && (
+        <div className="mt-3 rounded-2xl border border-white/10 bg-field p-3">
+          <p className="text-sm font-semibold">Liderazgo concedido</p>
+          <p className="mt-1 text-xs text-ink-70">{granted.reason}</p>
+          {inviteUrl ? (
+            <>
+              <p className="mt-1 break-all text-xs text-ink-70">{inviteUrl}</p>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(inviteUrl)}
+                className="focus-ring mt-2 rounded-full bg-panel px-4 py-2 text-xs font-semibold hover:bg-white/10"
+              >
+                Copiar enlace de invitacion
+              </button>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-ink-60">La comunidad quedo creada pero todavia sin enlace.</p>
+          )}
+        </div>
+      )}
+
+      {!granted && !busy && !error && !invalid && (
+        <p className="mt-3 text-xs text-ink-60">Todavia no has concedido ningun liderazgo en esta sesion.</p>
+      )}
+    </Card>
+  );
+}
+
 /**
  * Comunidades, para el administrador.
  *
@@ -5167,6 +5337,12 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
               desapareceria justo en el momento en que hace falta crear la primera.
             */}
             <CreateCommunityLeaderForm communities={state.communities} />
+            {/*
+              RF_17 pide DOS caminos y solo se habia construido uno. Este es el otro: un correo
+              que YA tiene cuenta no puede pasar por el alta de arriba, y sin esto no existia
+              forma de darle el mando. Va al lado, y fuera del panel, por lo mismo que su hermano.
+            */}
+            <GrantCommunityLeadershipForm communities={state.communities} />
             <AdminCommunitiesPanel state={state} session={session} />
             {/*
               RF_11: mover una tienda de comunidad. El componente existia desde T46 y se quedo sin

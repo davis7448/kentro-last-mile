@@ -754,3 +754,74 @@ export function validateCommunityLeaderForm(
 export function shouldOpenCommunitiesPanel(communityCount: number): boolean {
   return !Number.isFinite(communityCount) || communityCount <= 0;
 }
+
+// --- La OTRA mitad de RF_17: darle el liderazgo a una cuenta que ya existe --------------------
+
+/** Los tres campos de la concesion. Ni contrasena ni telefono: la cuenta ya existe. */
+export type CommunityGrantFormInput = { name: string; slug: string; targetEmail: string };
+
+/** Igual que en el alta: en el rechazo viaja el CAMPO, no solo la prosa (RF_04). */
+export type CommunityGrantFormResult =
+  | { ok: true; value: CommunityGrantFormInput }
+  | { ok: false; field: keyof CommunityGrantFormInput; reason: string };
+
+/**
+ * RF_17: decide si lo tecleado en la concesion de liderazgo puede viajar a
+ * `grantCommunityLeadership`.
+ *
+ * Existe porque RF_17 pide DOS caminos y solo se construyo uno. El caso real: un administrador
+ * intento crear un lider con el correo de una cuenta que YA existe y es una tienda; la
+ * precomprobacion de RF_55 lo rechazo limpiamente —bien— pero no habia ninguna forma de darle el
+ * liderazgo a esa cuenta. `grantCommunityLeadership` estaba desplegada, sin envoltorio, sin
+ * pantalla y exigiendo que la comunidad ya existiera: con cero comunidades el camino estaba
+ * cerrado por los dos lados.
+ *
+ * Es hermano de `validateCommunityLeaderForm` y no una variante suya con campos opcionales:
+ * aquel exige los seis, y pasarle esto lo rechazaria por `leaderName` sin que nada este mal.
+ * Ablandar aquel para que sirviera a los dos usos convertiria seis campos obligatorios en seis
+ * campos "depende", que es como se cuela un alta sin contrasena.
+ *
+ * Lo que comparte es lo que NO puede divergir:
+ *
+ * - **La regla del nombre corto es `validateSlug`, letra a letra.** Vive en un solo sitio
+ *   (`functions/src/community-slug.ts`, ya probado) y aqui no se reimplementa ni se reescribe su
+ *   prosa: dos criterios con dos redacciones divergen en cuanto alguien toque uno.
+ * - **El choque con un slug tomado se compara NORMALIZADO** ("Comunidad Andes" y
+ *   "comunidad-andes" son el mismo enlace), con el mismo `CommunityLeaderFormOptions`.
+ * - **La forma del correo es la misma** (`LEADER_EMAIL_SHAPE`): un correo que el servidor acepta
+ *   y esta pantalla rechaza es una concesion bloqueada sin motivo.
+ * - **`value` sale NORMALIZADO**: recortado, el slug como lo devuelve `validateSlug` y el correo
+ *   en minusculas. La cuenta se busca en Auth por ese correo, y Auth guarda el correo en
+ *   minusculas: mandar lo tecleado haria fallar la busqueda de una cuenta que si existe.
+ * - **El orden de senalado es el del formulario** (nombre, nombre corto, correo) y con varios
+ *   campos mal se senala el primero. Sin un orden fijado, cual se senala cambia al reordenar el
+ *   codigo.
+ * - No inventa valores por defecto ni deduce el nombre corto del nombre de la comunidad.
+ */
+export function validateCommunityGrantForm(
+  input: CommunityGrantFormInput,
+  options?: CommunityLeaderFormOptions
+): CommunityGrantFormResult {
+  const reject = (
+    field: keyof CommunityGrantFormInput,
+    reason: string
+  ): CommunityGrantFormResult => ({ ok: false, field, reason });
+
+  const name = typeof input?.name === "string" ? input.name.trim() : "";
+  if (!name) return reject("name", "Escribe el nombre de la comunidad.");
+
+  const slug = validateSlug(typeof input?.slug === "string" ? input.slug : "");
+  if (!slug.ok) return reject("slug", slug.reason);
+  const taken = new Set((options?.takenSlugs ?? []).map((value) => normalizeSlug(value)));
+  if (taken.has(slug.slug)) {
+    return reject("slug", `El nombre corto "${slug.slug}" ya esta en uso por otra comunidad. Elige otro.`);
+  }
+
+  const targetEmail = typeof input?.targetEmail === "string" ? input.targetEmail.trim().toLowerCase() : "";
+  if (!targetEmail) return reject("targetEmail", "Escribe el correo de la cuenta que va a liderar.");
+  if (!LEADER_EMAIL_SHAPE.test(targetEmail)) {
+    return reject("targetEmail", "Ese correo no tiene forma de correo. Revisa la arroba y el dominio.");
+  }
+
+  return { ok: true, value: { name, slug: slug.slug, targetEmail } };
+}

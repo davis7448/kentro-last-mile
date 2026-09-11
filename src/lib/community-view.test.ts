@@ -2542,3 +2542,256 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
     expect(notice.effectiveAt).toBe(AHORA);
   });
 });
+
+/* ---------------------------------------------------------------------------------------------
+ * T17 · RF_17 — la MITAD que faltaba: dar el liderazgo a una cuenta que ya existe.
+ *
+ * RF_17 pide dos caminos: asignar el liderazgo de una comunidad QUE YA EXISTE, y crear la
+ * comunidad y asignarsela EN EL MISMO ACTO. Solo se construyo el primero, y ademas se quedo sin
+ * envoltorio y sin pantalla: `grantCommunityLeadership` estaba desplegada, exigia una comunidad
+ * previa y no la llamaba nadie. Con cero comunidades el camino estaba cerrado por los dos lados.
+ *
+ * El caso real que lo motiva: un administrador intento crear un lider con el correo de una cuenta
+ * que YA existe y es una tienda. La precomprobacion de RF_55 lo rechazo limpiamente —sin dejar
+ * comunidad fantasma— pero no habia ninguna forma de darle el liderazgo a esa cuenta.
+ *
+ * Lo que se ata aqui es la parte PURA (el validador previo del formulario) mas dos guardas de
+ * fuente, por la misma razon que en T46: en esta spec "existe el codigo" se ha confundido cuatro
+ * veces con "existe la pantalla", y ni `tsc` ni el lint cazan un callable sin envoltorio ni un
+ * componente sin montar.
+ * ------------------------------------------------------------------------------------------- */
+
+type CommunityGrantFormInput = { name: string; slug: string; targetEmail: string };
+
+type CommunityGrantFormResult =
+  | { ok: true; value: CommunityGrantFormInput }
+  | { ok: false; field: keyof CommunityGrantFormInput; reason: string };
+
+type ValidarConcesion = (
+  input: CommunityGrantFormInput,
+  options?: { takenSlugs?: readonly string[] }
+) => CommunityGrantFormResult;
+
+/** Carga diferida: la funcion todavia no existe y un import estatico tumbaria el fichero entero. */
+async function cargarValidadorDeConcesion(): Promise<ValidarConcesion> {
+  const mod: Record<string, unknown> = await import("./community-view");
+  const fn = mod.validateCommunityGrantForm;
+  expect(
+    typeof fn,
+    "src/lib/community-view.ts todavia no exporta validateCommunityGrantForm"
+  ).toBe("function");
+  return fn as ValidarConcesion;
+}
+
+/** Los tres campos bien. Cada caso estropea exactamente uno. */
+const CONCESION_VALIDA: CommunityGrantFormInput = {
+  name: "Comunidad Andes",
+  slug: "comunidad-andes",
+  targetEmail: "marta@andes.co"
+};
+
+const conCampoDeConcesion = (
+  campo: keyof CommunityGrantFormInput,
+  valor: string
+): CommunityGrantFormInput => ({ ...CONCESION_VALIDA, [campo]: valor });
+
+describe("T17 · RF_17: el formulario de concesion valida antes de llamar a la callable", () => {
+  it("RF_17: con los tres campos bien, acepta", async () => {
+    const validar = await cargarValidadorDeConcesion();
+    const res = validar(CONCESION_VALIDA);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value).toEqual(CONCESION_VALIDA);
+  });
+
+  it("RF_17: pide solo TRES campos; los del alta completa no son suyos", async () => {
+    // La razon de que exista un validador hermano y no se reuse `validateCommunityLeaderForm`:
+    // aquel exige seis campos, y aqui no hay ni contrasena ni telefono que pedir — la cuenta ya
+    // existe. Pasarle esto a aquel lo rechazaria por `leaderName` sin que nada este mal.
+    const validarAlta = await cargarValidador();
+    const alta = validarAlta({
+      ...CONCESION_VALIDA,
+      leaderName: "",
+      leaderPhone: "",
+      password: ""
+    } as unknown as CommunityLeaderFormInput);
+    expect(alta.ok).toBe(false);
+
+    const validar = await cargarValidadorDeConcesion();
+    expect(validar(CONCESION_VALIDA).ok).toBe(true);
+  });
+
+  it("RF_17: devuelve lo NORMALIZADO, no lo tecleado", async () => {
+    // El enlace que se le ensena al administrador tiene que ser el que quedo guardado, y la
+    // cuenta que se busca en Auth, la del correo en minusculas: es con ese con el que se creo.
+    const validar = await cargarValidadorDeConcesion();
+    const res = validar({
+      name: "  Comunidad Andes  ",
+      slug: "  Comunidad Andes  ",
+      targetEmail: "  Marta@Andes.CO  "
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value).toEqual({
+      name: "Comunidad Andes",
+      slug: "comunidad-andes",
+      targetEmail: "marta@andes.co"
+    });
+  });
+
+  it("RF_17: sin nombre de comunidad se senala el campo `name`", async () => {
+    const validar = await cargarValidadorDeConcesion();
+    for (const vacio of ["", "   "]) {
+      const res = validar(conCampoDeConcesion("name", vacio));
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.field).toBe("name");
+      expect(res.reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("RF_17: sin correo se senala `targetEmail` y no otro campo", async () => {
+    const validar = await cargarValidadorDeConcesion();
+    const res = validar(conCampoDeConcesion("targetEmail", "   "));
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("targetEmail");
+  });
+
+  it("RF_17: un correo sin forma de correo se rechaza en el campo, no en el servidor", async () => {
+    const validar = await cargarValidadorDeConcesion();
+    for (const malo of ["marta", "marta@", "@andes.co", "marta andes@x.co"]) {
+      const res = validar(conCampoDeConcesion("targetEmail", malo));
+      expect(res.ok, `deberia rechazar "${malo}"`).toBe(false);
+      if (res.ok) return;
+      expect(res.field).toBe("targetEmail");
+    }
+  });
+
+  it("RF_17: el motivo del nombre corto es el de `validateSlug`, letra a letra", async () => {
+    // La regla del slug vive en UN solo sitio (functions/src/community-slug.ts). Reimplementarla
+    // aqui con otra prosa produce dos criterios que divergen en cuanto alguien toque uno.
+    //
+    // Los valores de abajo son los que `validateSlug` rechaza DE VERDAD, y el propio caso lo
+    // comprueba antes de exigirle nada al formulario. Ojo con lo que NO va en la lista: el guion
+    // es un caracter permitido, tambien al borde ("-andes" y "andes-" normalizan a "andes" y
+    // pasan). Estuvieron aqui y el caso fallaba, porque afirmaban una propiedad que la funcion no
+    // tiene. Prohibir el guion al borde seria cambiar el comportamiento desplegado de la spec 001
+    // —con enlaces repartidos que podrian usarlo— y eso es una decision de negocio: va en una
+    // spec, no en este bucle.
+    const validar = await cargarValidadorDeConcesion();
+    for (const malo of ["", "ad", "admin", "a".repeat(40)]) {
+      const esperado = validateSlug(malo);
+      expect(esperado.ok, `validateSlug deberia rechazar "${malo}"`).toBe(false);
+      if (esperado.ok) return;
+
+      const res = validar(conCampoDeConcesion("slug", malo));
+      expect(res.ok, `deberia rechazar el slug "${malo}"`).toBe(false);
+      if (res.ok) return;
+      expect(res.field).toBe("slug");
+      expect(res.reason).toBe(esperado.reason);
+    }
+  });
+
+  it("RF_17: el choque con un nombre corto ya tomado se compara NORMALIZADO", async () => {
+    // "Comunidad Andes" y "comunidad-andes" son el mismo enlace. Comparar lo tecleado deja pasar
+    // el duplicado hasta la transaccion del servidor, que es justo lo que esto adelanta.
+    const validar = await cargarValidadorDeConcesion();
+    const res = validar(conCampoDeConcesion("slug", "Comunidad Andes"), {
+      takenSlugs: ["comunidad-andes"]
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("slug");
+    expect(res.reason).toContain("comunidad-andes");
+
+    // Y un nombre corto libre sigue pasando con la misma lista: la comparacion no rechaza todo.
+    expect(validar(conCampoDeConcesion("slug", "andes-sur"), { takenSlugs: ["comunidad-andes"] }).ok).toBe(true);
+  });
+
+  it("RF_17: con varios campos mal se senala el primero del formulario", async () => {
+    // Sin un orden fijado, "que campo se senala" queda al azar del implementador y cambia al
+    // reordenar el codigo. El orden es el que se ve en pantalla: nombre, nombre corto, correo.
+    const validar = await cargarValidadorDeConcesion();
+    const todoMal = validar({ name: "", slug: "", targetEmail: "" });
+    expect(todoMal.ok).toBe(false);
+    if (todoMal.ok) return;
+    expect(todoMal.field).toBe("name");
+
+    const sinSlugNiCorreo = validar({ name: "Comunidad Andes", slug: "", targetEmail: "" });
+    expect(sinSlugNiCorreo.ok).toBe(false);
+    if (sinSlugNiCorreo.ok) return;
+    expect(sinSlugNiCorreo.field).toBe("slug");
+  });
+
+  it("RF_17: no inventa valores por defecto ni deduce el nombre corto del nombre", async () => {
+    const validar = await cargarValidadorDeConcesion();
+    const res = validar({ name: "Comunidad Andes", slug: "", targetEmail: "marta@andes.co" });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.field).toBe("slug");
+  });
+});
+
+/** El envoltorio de las callables, leido como texto: ver la cabecera de la guarda de T46. */
+const AUTH_SOURCE = readFileSync(
+  fileURLToPath(new URL("./firebase/auth.ts", import.meta.url)),
+  "utf8"
+);
+
+/** La callable del servidor, tambien como texto. Importarla arrastraria firebase-admin. */
+const COMMUNITIES_FUNCTIONS_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../functions/src/communities.ts", import.meta.url)),
+  "utf8"
+);
+
+describe("T17 · RF_17: los dos caminos llegan hasta la pantalla", () => {
+  it("RF_17: `grantCommunityLeadership` y `revokeCommunityLeadership` tienen envoltorio", () => {
+    // Las dos estaban desplegadas y ninguna tenia envoltorio: desde el navegador no habia forma
+    // de invocarlas. Control positivo con una que SI lo tiene desde el principio.
+    expect(AUTH_SOURCE).toContain("export async function createCommunityLeader");
+    expect(
+      AUTH_SOURCE,
+      "src/lib/firebase/auth.ts no envuelve grantCommunityLeadership: la callable no se puede invocar desde el navegador"
+    ).toContain("export async function grantCommunityLeadership");
+    expect(
+      AUTH_SOURCE,
+      "src/lib/firebase/auth.ts no envuelve revokeCommunityLeadership"
+    ).toContain("export async function revokeCommunityLeadership");
+    // Y que cada envoltorio apunte a SU callable, no dos veces a la misma.
+    expect(AUTH_SOURCE).toContain('"grantCommunityLeadership"');
+    expect(AUTH_SOURCE).toContain('"revokeCommunityLeadership"');
+  });
+
+  it("RF_17: la pantalla del segundo camino existe Y esta montada", () => {
+    // El fallo de T46, otra vez: definir el componente no es tener la pantalla.
+    expect(
+      componentesDefinidos().has("GrantCommunityLeadershipForm"),
+      "operations-app.tsx no define GrantCommunityLeadershipForm"
+    ).toBe(true);
+    expect(
+      OPERATIONS_APP_SOURCE.includes("<GrantCommunityLeadershipForm"),
+      "GrantCommunityLeadershipForm esta definido pero no se renderiza: es una pantalla que el administrador no puede abrir"
+    ).toBe(true);
+    // Y que valide con el hermano probado, no con una regla escrita a mano en el JSX.
+    expect(lineaDeImportDe("@/lib/community-view")).toContain("validateCommunityGrantForm");
+  });
+
+  it("RF_17: la callable admite crear la comunidad y reserva su nombre corto", () => {
+    // Control positivo: el camino viejo sigue ahi.
+    expect(COMMUNITIES_FUNCTIONS_SOURCE).toContain("export const grantCommunityLeadership");
+
+    const callable = COMMUNITIES_FUNCTIONS_SOURCE.slice(
+      COMMUNITIES_FUNCTIONS_SOURCE.indexOf("const grantLeadershipSchema"),
+      COMMUNITIES_FUNCTIONS_SOURCE.indexOf("async function pendingCommunityCashbackCop")
+    );
+    expect(callable.length).toBeGreaterThan(500);
+
+    // El destino se puede indicar por correo: quien administra conoce el correo, no el uid.
+    expect(callable, "grantCommunityLeadership no acepta targetEmail").toContain("targetEmail");
+    // Y la comunidad se puede crear en el mismo acto, reservando el enlace como hace el alta.
+    expect(callable, "grantCommunityLeadership no acepta crear la comunidad").toMatch(/\bname\b/);
+    expect(callable, "el nombre corto de la comunidad nueva no se reserva").toContain("communitySlugs");
+    expect(callable, "el nombre corto no pasa por validateSlug").toContain("validateSlug");
+  });
+});
