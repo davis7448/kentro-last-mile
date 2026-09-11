@@ -36,6 +36,7 @@ import {
   scheduleEffectiveAt,
   type LogoWrite
 } from "./community-pricing";
+import { leaderEmailPrecheck, leaderRollbackPlan } from "./community-leader-create";
 import { resolveTariffs } from "./wallet-entries";
 import { isRetiredSlugStillValid, normalizeSlug, planSlugChange, validateSlug, type SlugWrite } from "./community-slug";
 import {
@@ -81,40 +82,104 @@ export const createCommunityLeader = onCall(async (request) => {
   if (!slug.ok) throw new HttpsError("invalid-argument", slug.reason);
 
   const db = getFirestore();
+  const auth = getAuth();
+  const email = input.leaderEmail.toLowerCase();
+
+  // RF_55, comprobacion previa: el fallo mas probable de esta callable es que el correo ya
+  // tenga cuenta. Mirarlo ANTES de escribir nada evita el caso comun de comunidad fantasma.
+  // `getUserByEmail` lanza `auth/user-not-found` cuando NO hay cuenta —ese es el caso bueno—;
+  // cualquier otro codigo se propaga, porque tragarselo convertiria un fallo de Auth en un
+  // "adelante" y volveriamos a escribir a ciegas.
+  let existingUser: { uid: string } | undefined;
+  try {
+    existingUser = await auth.getUserByEmail(email);
+  } catch (error) {
+    if ((error as { code?: string }).code !== "auth/user-not-found") throw error;
+  }
+  const precheck = leaderEmailPrecheck(existingUser);
+  if (!precheck.ok) throw new HttpsError(precheck.code, precheck.reason);
+
   const now = new Date().toISOString();
   const communityRef = db.collection("communities").doc(`com-${Date.now()}`);
   const slugRef = db.collection("communitySlugs").doc(slug.slug);
 
-  // El slug se reserva en la transaccion: dos administradores creando a la vez no pueden
-  // quedarse con el mismo enlace.
-  await db.runTransaction(async (transaction) => {
-    const existing = await transaction.get(slugRef);
-    if (existing.exists) throw new HttpsError("already-exists", "Ese nombre corto ya esta en uso.");
-    transaction.set(communityRef, {
-      id: communityRef.id,
-      name: input.name,
-      slug: slug.slug,
-      leaderName: input.leaderName,
-      leaderEmail: input.leaderEmail.toLowerCase(),
-      leaderPhone: input.leaderPhone,
-      linkStatus: "active",
-      status: "active",
-      pricing: {},
-      createdAt: now,
-      updatedAt: now
+  // RF_55: o queda todo o no queda nada. Cada bandera se marca DESPUES de que su escritura
+  // confirme; marcarla antes haria que el plan intentara borrar lo que no existe y —peor— que
+  // no borrara lo que si.
+  const state = { communityWritten: false, authUserCreated: false, roleAssigned: false };
+  let uid = "";
+  try {
+    // El slug se reserva en la transaccion: dos administradores creando a la vez no pueden
+    // quedarse con el mismo enlace.
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(slugRef);
+      if (existing.exists) throw new HttpsError("already-exists", "Ese nombre corto ya esta en uso.");
+      transaction.set(communityRef, {
+        id: communityRef.id,
+        name: input.name,
+        slug: slug.slug,
+        leaderName: input.leaderName,
+        leaderEmail: email,
+        leaderPhone: input.leaderPhone,
+        linkStatus: "active",
+        status: "active",
+        pricing: {},
+        createdAt: now,
+        updatedAt: now
+      });
+      transaction.set(slugRef, { communityId: communityRef.id });
     });
-    transaction.set(slugRef, { communityId: communityRef.id });
-  });
+    state.communityWritten = true;
 
-  const auth = getAuth();
-  const user = await auth.createUser({
-    email: input.leaderEmail.toLowerCase(),
-    password: input.password,
-    displayName: input.leaderName
-  });
-  await auth.setCustomUserClaims(user.uid, { role: "community_leader", communityId: communityRef.id });
+    const user = await auth.createUser({
+      email,
+      password: input.password,
+      displayName: input.leaderName
+    });
+    uid = user.uid;
+    state.authUserCreated = true;
 
-  return { communityId: communityRef.id, slug: slug.slug, uid: user.uid };
+    await auth.setCustomUserClaims(uid, { role: "community_leader", communityId: communityRef.id });
+    state.roleAssigned = true;
+  } catch (error) {
+    const plan = leaderRollbackPlan(state);
+    // Orden inverso al de creacion, y el ENLACE antes que la comunidad: es la reserva la que
+    // bloquea el reintento con el mismo nombre corto. Cada borrado va en su propio try: que
+    // falle uno no puede impedir los demas, o la limpieza se queda a medias otra vez.
+    if (plan.deleteAuthUser) {
+      try {
+        await auth.deleteUser(uid);
+      } catch (cleanupError) {
+        console.error("community_leader_rollback_auth_failed", { reason: plan.reason, uid, error: cleanupError });
+      }
+    }
+    if (plan.deleteSlug) {
+      try {
+        await slugRef.delete();
+      } catch (cleanupError) {
+        console.error("community_leader_rollback_slug_failed", {
+          reason: plan.reason,
+          slug: slug.slug,
+          error: cleanupError
+        });
+      }
+    }
+    if (plan.deleteCommunity) {
+      try {
+        await communityRef.delete();
+      } catch (cleanupError) {
+        console.error("community_leader_rollback_community_failed", {
+          reason: plan.reason,
+          communityId: communityRef.id,
+          error: cleanupError
+        });
+      }
+    }
+    // El error ORIGINAL sale intacto: traducir el fallo aqui borraria el rastro del real.
+    throw error;
+  }
+
+  return { communityId: communityRef.id, slug: slug.slug, uid };
 });
 
 /** RF_51: desactivar corta el acceso y NO toca comunidad, historial ni cashback pendiente. */

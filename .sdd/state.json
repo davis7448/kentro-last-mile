@@ -671,6 +671,18 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T49": {
+      "requirements": [
+        "RF_55"
+      ],
+      "files": [
+        "functions/src/community-leader-create.ts",
+        "functions/src/communities.ts",
+        "src/lib/community-signup.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

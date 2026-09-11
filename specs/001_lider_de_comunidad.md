@@ -57,6 +57,11 @@ quien trae volumen tenga un motivo economico medible para sostenerlo.
 - **RF_50 (ubicua):** El sistema MUST permitir que solo un administrador cree, desactive y reactive
   cuentas de lider de comunidad, y MUST exigir para crearla nombre, correo y telefono de contacto.
   Ningun lider MAY crear otro lider ni darse de alta por si mismo.
+- **RF_55 (error):** **Si** la creacion de un lider de comunidad se interrumpe despues de reservar
+  el enlace y antes de dejar su cuenta utilizable, el sistema MUST NOT dejar una comunidad a medias:
+  o queda todo, o no queda nada y el nombre corto MUST quedar libre para reintentar. Ademas, el
+  sistema SHOULD comprobar antes de escribir nada si el correo ya tiene cuenta, para rechazarlo
+  limpiamente en el caso que mas veces va a ocurrir.
 - **RF_51 (estado):** **Mientras** una cuenta de lider este desactivada, el sistema MUST impedirle
   entrar y MUST conservar intactos su comunidad, su historial de precios y su cashback pendiente:
   desactivar a un lider MUST NOT borrar una deuda que la plataforma tiene con el.
@@ -315,6 +320,7 @@ quien trae volumen tenga un motivo economico medible para sostenerlo.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-09-08 | Borrador inicial | Necesidad de crecer sin que el administrador cree cada tienda |
+| 2026-09-11 | RF_55: atomicidad del alta por administrador | Al construir la pantalla de RF_50 se vio que la transaccion escribe comunidad y enlace ANTES de crear la cuenta, sin reversion. Un correo repetido —el caso mas probable— deja una comunidad fantasma con su enlace reservado, y el reintento con el mismo nombre corto falla diciendo "ya esta en uso", apuntando a la que se acaba de crear sin querer. Es el fallo que RF_45 prohibe en el registro publico, en un camino que no tenia el requisito |
 | 2026-09-08 | Escrutinio adversarial: RF_35 a RF_49 | Seis huecos detectados en contexto limpio: subida de base, instante del precio, aviso de subida, tope de altas, datos de registro y ejes de fecha |
 | 2026-09-08 | Aprobada por el humano | Escrutinio cerrado sin preguntas pendientes |
 | 2026-09-08 | Cierre de completitud: RF_50 a RF_54 | Faltaba quien crea al lider, el aislamiento entre comunidades y tres MUST sueltos en casos limite sin requisito al que atarse |

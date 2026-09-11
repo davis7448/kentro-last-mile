@@ -516,3 +516,226 @@ describe("T30 · el correo que ya tiene cuenta", () => {
     expect(error).toEqual(copia);
   });
 });
+
+/**
+ * T49 · RF_55 — crear un lider de comunidad es TODO o NADA.
+ *
+ * `createCommunityLeader` (functions/src/communities.ts) hace hoy tres escrituras seguidas y
+ * ningun `try`/`catch`:
+ *
+ *   1. `db.runTransaction(...)` escribe la comunidad Y reserva el nombre corto en
+ *      `communitySlugs`. COMMITEA.
+ *   2. `auth.createUser(...)` — puede lanzar. Lo mas probable: `auth/email-already-exists`.
+ *   3. `auth.setCustomUserClaims(uid, { role: "community_leader", communityId })` — puede
+ *      lanzar tambien.
+ *
+ * Si revienta el 2 queda una COMUNIDAD FANTASMA con el enlace reservado, y el reintento con el
+ * mismo nombre corto responde "ese nombre corto ya esta en uso" apuntando a la basura que acaba
+ * de dejar el intento anterior. Si revienta el 3 es peor: queda una cuenta que ENTRA y no tiene
+ * rol.
+ *
+ * Este bloque fija el equivalente de `signupRollbackPlan` (RF_45) para este camino, que va al
+ * reves: alli Auth iba primero, aqui va Firestore primero, asi que el plan tiene que poder
+ * ordenar borrar comunidad, enlace y cuenta.
+ *
+ * El plan es PURO y solo DESCRIBE lo que hay que deshacer. Quien borra es la callable: aqui no
+ * entra `firebase-admin` ni `firebase-functions`.
+ *
+ * Import diferido por lo mismo que en T29 y T30: un `import` estatico de un modulo que todavia
+ * no existe tumba la recoleccion del archivo entero y se lleva por delante los 32 casos que ya
+ * estan en verde. Asi el rojo queda acotado a T49.
+ */
+type LeaderCreationState = {
+  /** La transaccion del paso 1 commiteo: hay comunidad Y hay enlace reservado. */
+  communityWritten: boolean;
+  /** El paso 2 devolvio un uid. */
+  authUserCreated: boolean;
+  /** El paso 3 termino: la cuenta ya tiene `role` y `communityId`. */
+  roleAssigned: boolean;
+};
+
+type LeaderRollbackPlan = {
+  deleteCommunity: boolean;
+  deleteSlug: boolean;
+  deleteAuthUser: boolean;
+  reason: string;
+};
+
+type LeaderEmailPrecheck = { ok: true } | { ok: false; code: "already-exists"; reason: string };
+
+type LeaderRollbackPlanFn = (state: LeaderCreationState) => LeaderRollbackPlan;
+/** Recibe lo que responde la consulta de existencia: el registro hallado, o `undefined`. */
+type LeaderEmailPrecheckFn = (existing: { uid: string } | undefined) => LeaderEmailPrecheck;
+
+let leaderRollbackPlan: LeaderRollbackPlanFn;
+let leaderEmailPrecheck: LeaderEmailPrecheckFn;
+
+const estado = (state: Partial<LeaderCreationState> = {}): LeaderCreationState => ({
+  communityWritten: false,
+  authUserCreated: false,
+  roleAssigned: false,
+  ...state
+});
+
+/** Las ocho combinaciones posibles de los tres interruptores. Ninguna se queda sin respuesta. */
+const TODOS_LOS_ESTADOS: LeaderCreationState[] = [false, true].flatMap((communityWritten) =>
+  [false, true].flatMap((authUserCreated) =>
+    [false, true].map((roleAssigned) => ({ communityWritten, authUserCreated, roleAssigned }))
+  )
+);
+
+describe("T49 · crear un lider a medias", () => {
+  beforeEach(async () => {
+    const modulo = (await import("../../functions/src/community-leader-create")) as unknown as {
+      leaderRollbackPlan?: LeaderRollbackPlanFn;
+      leaderEmailPrecheck?: LeaderEmailPrecheckFn;
+    };
+    if (typeof modulo.leaderRollbackPlan !== "function" || typeof modulo.leaderEmailPrecheck !== "function") {
+      throw new Error(
+        "Faltan `leaderRollbackPlan` y `leaderEmailPrecheck` en functions/src/community-leader-create.ts (T49, RF_55)."
+      );
+    }
+    leaderRollbackPlan = modulo.leaderRollbackPlan;
+    leaderEmailPrecheck = modulo.leaderEmailPrecheck;
+  });
+
+  it("RF_55: comunidad escrita y cuenta no creada: se borra la comunidad y el enlace, y nada mas", () => {
+    // El fallo que motivo la tarea: `auth.createUser` lanza `auth/email-already-exists` justo
+    // despues de que la transaccion commiteara. No hay cuenta que borrar, pero si comunidad.
+    const plan = leaderRollbackPlan(estado({ communityWritten: true }));
+    expect(plan.deleteCommunity).toBe(true);
+    expect(plan.deleteSlug).toBe(true);
+    expect(plan.deleteAuthUser).toBe(false);
+  });
+
+  it("RF_55: el nombre corto queda libre para reintentar, no solo la comunidad", () => {
+    // Borrar `communities` y dejar el documento de `communitySlugs` es la MITAD del fallo:
+    // el reintento con el mismo nombre corto vuelve a chocar con "ya esta en uso", ahora
+    // contra una reserva que no apunta a ninguna comunidad. El enlace se borra siempre que se
+    // borre la comunidad, en las ocho combinaciones.
+    expect(leaderRollbackPlan(estado({ communityWritten: true })).deleteSlug).toBe(true);
+    for (const state of TODOS_LOS_ESTADOS) {
+      const plan = leaderRollbackPlan(state);
+      expect({ ...state, deleteCommunity: plan.deleteCommunity, deleteSlug: plan.deleteSlug }).toEqual({
+        ...state,
+        deleteCommunity: plan.deleteCommunity,
+        deleteSlug: plan.deleteCommunity
+      });
+    }
+  });
+
+  it("RF_55: cuenta creada sin rol: se borra tambien la cuenta", () => {
+    // Una cuenta que ENTRA y no tiene rol es peor que ninguna: la persona inicia sesion y la
+    // app no sabe que es. Y el correo queda ocupado, asi que el reintento tampoco funciona.
+    const plan = leaderRollbackPlan(estado({ communityWritten: true, authUserCreated: true }));
+    expect(plan.deleteAuthUser).toBe(true);
+    expect(plan.deleteCommunity).toBe(true);
+    expect(plan.deleteSlug).toBe(true);
+  });
+
+  it("RF_55: si todo salio bien no se revierte nada", () => {
+    // El caso que rompe una reversion mal escrita: barrer lo que acaba de crearse bien.
+    const plan = leaderRollbackPlan(estado({ communityWritten: true, authUserCreated: true, roleAssigned: true }));
+    expect(plan).toEqual({ deleteCommunity: false, deleteSlug: false, deleteAuthUser: false, reason: "" });
+  });
+
+  it("RF_55: si no se escribio nada todavia no hay nada que revertir", () => {
+    // Fallo ANTES de la transaccion (validacion, permisos, la propia transaccion abortada).
+    const plan = leaderRollbackPlan(estado());
+    expect(plan).toEqual({ deleteCommunity: false, deleteSlug: false, deleteAuthUser: false, reason: "" });
+  });
+
+  it("RF_55: una cuenta creada nunca sobrevive sin comunidad utilizable", () => {
+    // Invariante sobre las ocho combinaciones: si hay cuenta y el alta no llego al final
+    // (rol sin fijar, o comunidad sin escribir), la cuenta se borra. Lo contrario deja un
+    // correo ocupado por alguien que no puede operar y que tampoco puede reintentar.
+    for (const state of TODOS_LOS_ESTADOS) {
+      const plan = leaderRollbackPlan(state);
+      const altaCompleta = state.communityWritten && state.authUserCreated && state.roleAssigned;
+      expect({ ...state, deleteAuthUser: plan.deleteAuthUser }).toEqual({
+        ...state,
+        deleteAuthUser: state.authUserCreated && !altaCompleta
+      });
+    }
+  });
+
+  it("RF_55: una comunidad escrita nunca sobrevive a un alta incompleta", () => {
+    for (const state of TODOS_LOS_ESTADOS) {
+      const plan = leaderRollbackPlan(state);
+      const altaCompleta = state.communityWritten && state.authUserCreated && state.roleAssigned;
+      expect({ ...state, deleteCommunity: plan.deleteCommunity }).toEqual({
+        ...state,
+        deleteCommunity: state.communityWritten && !altaCompleta
+      });
+    }
+  });
+
+  it("RF_55: el estado incoherente (cuenta sin comunidad) tambien se limpia", () => {
+    // No deberia darse con el orden actual, pero si alguien invierte los pasos el plan no
+    // puede responder "no hay nada que hacer" ante una cuenta huerfana.
+    const plan = leaderRollbackPlan(estado({ authUserCreated: true, roleAssigned: true }));
+    expect(plan.deleteAuthUser).toBe(true);
+    expect(plan.deleteCommunity).toBe(false);
+    expect(plan.deleteSlug).toBe(false);
+  });
+
+  it("RF_55: la razon se explica cuando se borra algo y queda vacia cuando no", () => {
+    // La razon acaba en los registros: un borrado sin motivo escrito es indistinguible de un
+    // borrado por error cuando se investiga meses despues.
+    for (const state of TODOS_LOS_ESTADOS) {
+      const plan = leaderRollbackPlan(state);
+      const borraAlgo = plan.deleteCommunity || plan.deleteSlug || plan.deleteAuthUser;
+      expect({ ...state, tieneRazon: plan.reason.trim() !== "" }).toEqual({ ...state, tieneRazon: borraAlgo });
+    }
+  });
+
+  it("RF_55: es pura: no muta el estado recibido y responde igual llamada tras llamada", () => {
+    const state = estado({ communityWritten: true, authUserCreated: true });
+    const copia = { ...state };
+    const primera = leaderRollbackPlan(state);
+    const segunda = leaderRollbackPlan(state);
+    expect(primera).toEqual(segunda);
+    expect(state).toEqual(copia);
+    // El plan describe, no ejecuta: solo los cuatro campos, nada de referencias a Firestore.
+    expect(Object.keys(primera).sort()).toEqual(["deleteAuthUser", "deleteCommunity", "deleteSlug", "reason"]);
+  });
+
+  it("RF_55: la comprobacion previa deja pasar un correo sin cuenta", () => {
+    expect(leaderEmailPrecheck(undefined)).toEqual({ ok: true });
+  });
+
+  it("RF_55: la comprobacion previa rechaza limpiamente un correo que ya tiene cuenta", () => {
+    // Limpiamente = ANTES de escribir nada. El caso que motivo la tarea deja de producir
+    // comunidades fantasma porque ni siquiera se llega a la transaccion.
+    const rechazo = leaderEmailPrecheck({ uid: "uid-existente" });
+    expect(rechazo.ok).toBe(false);
+    if (rechazo.ok) return;
+    expect(rechazo.code).toBe("already-exists");
+    expect(rechazo.reason.trim()).not.toBe("");
+  });
+
+  it("RF_55: el rechazo no filtra el uid de la cuenta ajena", () => {
+    const rechazo = leaderEmailPrecheck({ uid: "uid-existente" });
+    if (rechazo.ok) throw new Error("El correo ocupado tenia que rechazarse.");
+    expect(barrerRechazo({ code: rechazo.code, message: rechazo.reason }, /uid-existente/i)).toEqual([]);
+  });
+
+  it("RF_55: la comprobacion previa no lanza ni construye un HttpsError", () => {
+    // `HttpsError` vive en `firebase-functions`, que este modulo no puede importar sin dejar
+    // de ser puro. La callable lo construye con `code` y `reason`.
+    expect(() => leaderEmailPrecheck({ uid: "uid-existente" })).not.toThrow();
+    const rechazo = leaderEmailPrecheck({ uid: "uid-existente" });
+    expect(rechazo).not.toBeInstanceOf(Error);
+    expect(Object.getPrototypeOf(rechazo)).toBe(Object.prototype);
+  });
+
+  it("RF_55: la comprobacion previa NO sustituye a la reversion", () => {
+    // Dos administradores a la vez pasan los dos la comprobacion con el mismo correo: uno
+    // crea la cuenta y al otro le revienta `createUser` con la transaccion ya commiteada.
+    // Que la comprobacion diga "libre" no exime de revertir.
+    expect(leaderEmailPrecheck(undefined)).toEqual({ ok: true });
+    const plan = leaderRollbackPlan(estado({ communityWritten: true }));
+    expect(plan.deleteCommunity).toBe(true);
+    expect(plan.deleteSlug).toBe(true);
+  });
+});
