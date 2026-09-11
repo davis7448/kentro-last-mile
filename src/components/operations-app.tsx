@@ -70,7 +70,7 @@ import {
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { createCommunityLeader, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
@@ -5114,7 +5114,12 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           <CollapsiblePanel flush title="Usuarios" summary="Altas, roles y accesos">
             <AdminUsersPanel state={state} setState={setState} />
           </CollapsiblePanel>
-          <CollapsiblePanel flush title="Comunidades" summary={`${state.communities.length} con enlace propio`}>
+          <CollapsiblePanel
+            flush
+            title="Comunidades"
+            summary={`${state.communities.length} con enlace propio`}
+            defaultOpen={shouldOpenCommunitiesPanel(state.communities.length)}
+          >
             {/*
               El alta va FUERA de `AdminCommunitiesPanel` a proposito: aquel panel se corta con un
               `return` anticipado cuando no hay ni una comunidad, y ahi dentro el formulario

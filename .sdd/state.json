@@ -683,6 +683,18 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T50": {
+      "requirements": [
+        "RF_50"
+      ],
+      "files": [
+        "src/lib/community-view.ts",
+        "src/lib/community-view.test.ts",
+        "src/components/operations-app.tsx"
+      ],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

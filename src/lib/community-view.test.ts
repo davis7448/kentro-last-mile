@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
-import { brandFor, roleLabel } from "./community-view";
+import { brandFor, roleLabel, shouldOpenCommunitiesPanel } from "./community-view";
 import { buildPriceHistoryEntry, LOGO_MAX_BYTES, validateLogo } from "../../functions/src/community-pricing";
 import { validateSlug } from "../../functions/src/community-slug";
 
@@ -2155,5 +2155,39 @@ describe("T46 · RF_11: los componentes definidos tienen que estar montados", ()
       muertos,
       `componentes definidos y nunca montados: ${muertos.join(", ")}. O se renderizan, o se borran, o se justifican en MONTADOS_FUERA_DE_ESTE_ARCHIVO diciendo desde donde se montan.`
     ).toEqual([]);
+  });
+});
+
+/**
+ * T50 · RF_50: el sitio donde se crea la primera comunidad no puede estar plegado.
+ *
+ * El formulario de alta se puso FUERA de `AdminCommunitiesPanel` para que no desapareciera
+ * cuando no hay ninguna comunidad — y el desplegable que lo contiene se tragaba esa misma
+ * intencion, porque `CollapsiblePanel` arranca cerrado. Con cero comunidades, un administrador
+ * veia una linea plegada que decia "Comunidades · 0 con enlace propio", indistinguible de una
+ * seccion vacia sin nada que hacer.
+ */
+describe("T50 · cuando no hay ninguna comunidad, el panel se abre solo", () => {
+  it("RF_50: sin ninguna comunidad el panel se abre, porque es donde se crea la primera", () => {
+    expect(shouldOpenCommunitiesPanel(0)).toBe(true);
+  });
+
+  it("RF_50: con comunidades ya creadas el panel arranca plegado, como sus hermanos", () => {
+    expect(shouldOpenCommunitiesPanel(1)).toBe(false);
+    expect(shouldOpenCommunitiesPanel(37)).toBe(false);
+  });
+
+  it("RF_50: una cuenta que no sabe cuantas hay se trata como que no hay: mejor abrir de mas", () => {
+    // Abrir de mas cuesta un clic; abrir de menos esconde la unica via de crear la primera.
+    expect(shouldOpenCommunitiesPanel(Number.NaN)).toBe(true);
+    expect(shouldOpenCommunitiesPanel(-1)).toBe(true);
+  });
+
+  it("RF_50: la pantalla usa esa decision y no una copia suya", () => {
+    // Control positivo: si el lector de fuente falla, esto lo delata antes que las aserciones.
+    expect(OPERATIONS_APP_SOURCE.length).toBeGreaterThan(100_000);
+    expect(OPERATIONS_APP_SOURCE).toContain("shouldOpenCommunitiesPanel");
+    // La leccion de `roleLabel`: probar la funcion correcta no dice nada sobre quien la llama.
+    expect(OPERATIONS_APP_SOURCE).toMatch(/defaultOpen=\{shouldOpenCommunitiesPanel\(/);
   });
 });

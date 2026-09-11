@@ -596,3 +596,22 @@ export function validateCommunityLeaderForm(
 
   return { ok: true, value: { name, slug: slug.slug, leaderName, leaderEmail, leaderPhone, password } };
 }
+
+/**
+ * RF_50: si no hay ninguna comunidad, el panel que las crea se abre solo.
+ *
+ * El formulario de alta vive FUERA de `AdminCommunitiesPanel` para que no desaparezca cuando no
+ * hay comunidades — pero el desplegable que lo contiene arranca cerrado, y se tragaba esa misma
+ * intencion: con cero comunidades, un administrador veia una linea plegada ("Comunidades · 0 con
+ * enlace propio") indistinguible de una seccion sin nada que hacer. El sitio donde se crea la
+ * primera comunidad no puede estar escondido justo cuando no hay ninguna.
+ *
+ * Mismo patron que ya usan "Incidencias de sincronizacion" y "Solicitudes de instalacion": el
+ * panel se abre cuando requiere accion. Aqui lo que la requiere es la ausencia.
+ *
+ * Una cuenta que no es un numero finito se trata como cero a proposito: abrir de mas cuesta un
+ * clic; abrir de menos esconde la unica via de crear la primera comunidad.
+ */
+export function shouldOpenCommunitiesPanel(communityCount: number): boolean {
+  return !Number.isFinite(communityCount) || communityCount <= 0;
+}
