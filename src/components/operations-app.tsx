@@ -71,7 +71,7 @@ import {
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, ZONE_BASE_NOTICE, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
@@ -3953,6 +3953,8 @@ function StoreTariffCard() {
           );
         })}
       </div>
+      {/* RF_12: la cifra de arriba es la base sin zona; el aviso dice lo que ella no puede decir. */}
+      <p className="mt-3 text-xs text-ink-60">{ZONE_BASE_NOTICE}</p>
     </Card>
   );
 }
@@ -4702,7 +4704,9 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
       communities: state.communities,
       sellers: state.sellers,
       entries: state.wallet,
-      settings: state.settings
+      settings: state.settings,
+      // El nucleo no inventa el reloj: con el instante decide que programadas ya vencieron.
+      nowIso: new Date().toISOString()
     });
     // `linkStatus` y `status` no viajan en la fila: son estado del documento, no cifras
     // derivadas, y la tarjeta los sigue leyendo de `community`. Por eso se emparejan aqui.
@@ -4813,11 +4817,46 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
                 {community.linkStatus === "active" ? "enlace activo" : "enlace revocado"} ·{" "}
                 {community.status === "active" ? "lider activo" : "lider desactivado"}
               </p>
-              <p className="mt-1 text-xs text-ink-60">
-                Entrega {formatCop(row.pricing.sellerDeliveredFeeCop)} ·
-                Fallido {formatCop(row.pricing.sellerFailedFeeCop)} ·
-                Manejo {formatCop(row.pricing.fulfillmentFeeCop)}
-              </p>
+              {/*
+                RF_07..RF_09, RF_15: se pinta lo que decidio `buildAdminCommunityList`, sin calcular
+                nada aqui. La subida programada va en linea aparte: no se cobra hoy y no suma al margen.
+              */}
+              <div className="mt-1 space-y-1">
+                {([
+                  ["sellerDeliveredFeeCop", "Entrega"],
+                  ["sellerFailedFeeCop", "Fallido"],
+                  ["fulfillmentFeeCop", "Manejo"]
+                ] as const).map(([field, label]) => {
+                  const concept = row.pricing[field];
+                  return (
+                    <div key={field} className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs text-ink-60">
+                      <span>
+                        {label} <span className="tabular font-semibold text-fg">{formatCop(concept.chargedCop)}</span>
+                      </span>
+                      {concept.source === "base" ? (
+                        <span>(base)</span>
+                      ) : (
+                        <span>
+                          (precio del lider · margen <span className="tabular">{formatCop(concept.marginCop)}</span>)
+                        </span>
+                      )}
+                      {concept.upcoming && (
+                        <span className="w-full">
+                          Sube a <span className="tabular">{formatCop(concept.upcoming.toCop)}</span> el{" "}
+                          {concept.upcoming.effectiveAt.slice(0, 10)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {row.baseOnlyReason === "disabled" && (
+                <p className="mt-1 text-xs text-ink-60">Comunidad desactivada: se cobra la base.</p>
+              )}
+              {row.baseOnlyReason === "no_leader" && (
+                <p className="mt-1 text-xs text-ink-60">Sin lider: se cobra la base.</p>
+              )}
+              <p className="mt-1 text-xs text-ink-60">{ZONE_BASE_NOTICE}</p>
               {/*
                 Dos cifras distintas y rotuladas, nunca una sola: lo CAUSADO es lo que la comunidad
                 ha generado desde que existe (este cortado o no) y lo PAGADO es lo que ya salio de

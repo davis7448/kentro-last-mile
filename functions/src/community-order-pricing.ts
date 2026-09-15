@@ -9,11 +9,10 @@
  */
 import { getFirestore } from "firebase-admin/firestore";
 import { freezeOrderPricing, type FrozenPricing } from "./community-pricing";
-import { resolveTariffs } from "./wallet-entries";
-
-/** Tiendas con tarifa especial fija en codigo. Su flete depende de la fecha de ENTREGA, que al
- *  crear el pedido no se conoce, asi que no se les congela nada: siguen por el camino de siempre. */
-const SELLERS_WITH_HARDCODED_TARIFFS = new Set(["seller-1779315416119"]);
+// Tiendas con tarifa especial fija en codigo: la decision ENTERA —el conjunto y el rechazo— vive en
+// `seller-charges.ts` y no se copia aqui (RF_02 y RF_03 de la 004). Su flete depende de la fecha de
+// ENTREGA, que al crear el pedido no se conoce, asi que no hay base que congelarles.
+import { assertSellerCanJoinCommunity, communityBase, resolveTariffs } from "./seller-charges";
 
 export type OrderPricingStamp = {
   communityId?: string;
@@ -36,13 +35,11 @@ export function createCommunityPricingResolver(db: ReturnType<typeof getFirestor
     const sellerId = String(seller?.id ?? "");
     const communityId = typeof seller?.communityId === "string" ? seller.communityId : "";
     if (!communityId) return {};
-    if (SELLERS_WITH_HARDCODED_TARIFFS.has(sellerId)) {
-      // No es un caso a ignorar en silencio: si una tienda con tarifa fija entra en una
-      // comunidad, alguien tiene que decidir que tarifa manda antes de cobrar nada.
-      throw new Error(
-        `La tienda ${sellerId} tiene tarifa especial en codigo y no puede pertenecer a una comunidad.`
-      );
-    }
+    // No es un caso a ignorar en silencio: si una tienda con tarifa fija entra en una comunidad,
+    // alguien tiene que decidir que tarifa manda antes de cobrar nada. Quien lanza es
+    // `seller-charges.ts`, donde vive el conjunto que decide el cobro: aqui solo se pregunta, para
+    // que las dos vistas de "tienda con tarifa especial" no puedan divergir.
+    assertSellerCanJoinCommunity(sellerId);
 
     if (!communities.has(communityId)) {
       const snap = await db.collection("communities").doc(communityId).get();
@@ -56,8 +53,10 @@ export function createCommunityPricingResolver(db: ReturnType<typeof getFirestor
       settings = (snap.data() as Record<string, unknown>) ?? {};
     }
 
-    // La base efectiva del pedido: zona si la hay, ajuste global si no. Es el piso real.
-    const base = resolveTariffs(settings, zone);
+    // La base efectiva del pedido (RF_03 de la 004): zona si la hay, ajuste global si no, y
+    // pasada por `communityBase` para que lleve el fallido fijo. Asi los `base*` de referencia
+    // que se congelan dicen lo que de verdad se cobra (fallido 12.000) y no el ajuste crudo.
+    const base = communityBase(resolveTariffs(settings, zone));
     const frozen = freezeOrderPricing(base, { id: communityId, ...(community as object) }, nowIso);
     return frozen ? { communityId, communityPricing: frozen } : { communityId };
   };

@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   applyScheduledChanges,
-  cashbackForFrozenPricing,
+  communityChargeAtClose,
   freezeOrderPricing,
   resolveCommunityPricing,
   scheduleEffectiveAt,
-  SCHEDULED_RAISE_NOTICE_DAYS
+  SCHEDULED_RAISE_NOTICE_DAYS,
+  type FrozenPricing,
+  type PricingValues
 } from "../../functions/src/community-pricing";
 import type { Community, CommunityPricingFields, ScheduledPriceChange } from "./types";
 import { buildStoreTariffView as vistaTarifaDeTienda } from "../../functions/src/community-pricing";
@@ -45,7 +49,7 @@ describe("T3 · precio vigente y piso", () => {
   it("RF_20: sin precio propio se cobra la base y el cashback es cero", () => {
     const p = resolveCommunityPricing(BASE, community(), T0);
     expect(p.sellerDeliveredFeeCop).toBe(12000);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, community(), T0)!).totalCop).toBe(0);
+    expect(communityChargeAtClose(freezeOrderPricing(BASE, community(), T0)!, BASE).cashback.totalCop).toBe(0);
   });
 
   it("RF_17, RF_18: con precio propio por encima, se cobra el del lider", () => {
@@ -59,11 +63,13 @@ describe("T3 · precio vigente y piso", () => {
   });
 
   it("RF_36: el cashback nunca es negativo, suba antes la base o el precio", () => {
-    const subeBase = freezeOrderPricing({ ...BASE, sellerDeliveredFeeCop: 20000 }, community({ sellerDeliveredFeeCop: 13000 }), T0)!;
+    const baseAlta = { ...BASE, sellerDeliveredFeeCop: 20000 };
+    const subeBase = freezeOrderPricing(baseAlta, community({ sellerDeliveredFeeCop: 13000 }), T0)!;
     const subePrecio = freezeOrderPricing(BASE, community({ sellerDeliveredFeeCop: 13000 }), T0)!;
-    expect(cashbackForFrozenPricing(subeBase).totalCop).toBe(0);
-    expect(cashbackForFrozenPricing(subePrecio).totalCop).toBe(1000);
-    expect(cashbackForFrozenPricing(subeBase).totalCop).toBeGreaterThanOrEqual(0);
+    // Cada pedido se cierra con la base con la que se congelo: la intencion de siempre.
+    expect(communityChargeAtClose(subeBase, baseAlta).cashback.totalCop).toBe(0);
+    expect(communityChargeAtClose(subePrecio, BASE).cashback.totalCop).toBe(1000);
+    expect(communityChargeAtClose(subeBase, baseAlta).cashback.totalCop).toBeGreaterThanOrEqual(0);
   });
 
   it("RF_19: el minimo que se le puede exigir a un lider es la base", () => {
@@ -120,7 +126,7 @@ describe("T5 · congelado del precio en el pedido", () => {
 
   it("RF_21: el cashback se reparte por concepto", () => {
     const frozen = freezeOrderPricing(BASE, community({ sellerDeliveredFeeCop: 15000, fulfillmentFeeCop: 2500 }), T0)!;
-    const cashback = cashbackForFrozenPricing(frozen);
+    const { cashback } = communityChargeAtClose(frozen, BASE);
     expect(cashback.deliveredCop).toBe(3000);
     expect(cashback.fulfillmentCop).toBe(500);
     expect(cashback.failedCop).toBe(0);
@@ -641,7 +647,7 @@ describe("T47 · elevacion automatica al piso", () => {
     const despues = aplicar(antes, cambio);
     const base = { ...BASE, sellerDeliveredFeeCop: 15000 };
     expect(resolveCommunityPricing(base, despues, at(3)).sellerDeliveredFeeCop).toBe(15000);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(base, despues, at(3))!).deliveredCop).toBe(0);
+    expect(communityChargeAtClose(freezeOrderPricing(base, despues, at(3))!, base).cashback.deliveredCop).toBe(0);
   });
 
   it("RF_35: una bajada de la base no eleva a nadie y no escribe nada", () => {
@@ -959,7 +965,7 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     expect(congelado!.sellerDeliveredFeeCop).toBe(congelado!.baseDeliveredFeeCop);
     expect(congelado!.sellerFailedFeeCop).toBe(congelado!.baseFailedFeeCop);
     expect(congelado!.fulfillmentFeeCop).toBe(congelado!.baseFulfillmentFeeCop);
-    expect(cashbackForFrozenPricing(congelado).totalCop).toBe(0);
+    expect(communityChargeAtClose(congelado!, BASE).cashback.totalCop).toBe(0);
   });
 
   it("RF_20: la comprobacion del lider va ANTES del piso y de las programadas", () => {
@@ -991,7 +997,7 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     const apagada = conLider({ sellerDeliveredFeeCop: 15000 }, { status: "disabled" });
 
     expect(resolveCommunityPricing(BASE, apagada, T0)).toEqual(BASE);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, apagada, T0)).totalCop).toBe(0);
+    expect(communityChargeAtClose(freezeOrderPricing(BASE, apagada, T0)!, BASE).cashback.totalCop).toBe(0);
   });
 
   it("RF_20: el enlace de registro revocado NO cambia el precio, porque sigue habiendo lider", () => {
@@ -1000,7 +1006,7 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     const enlaceCerrado = conLider({ sellerDeliveredFeeCop: 15000 }, { linkStatus: "revoked" });
 
     expect(resolveCommunityPricing(BASE, enlaceCerrado, T0).sellerDeliveredFeeCop).toBe(15000);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, enlaceCerrado, T0)).deliveredCop).toBe(3000);
+    expect(communityChargeAtClose(freezeOrderPricing(BASE, enlaceCerrado, T0)!, BASE).cashback.deliveredCop).toBe(3000);
   });
 
   it("RF_20: con leaderUid y comunidad activa no cambia nada de lo de hoy", () => {
@@ -1014,14 +1020,14 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     expect(precio.sellerDeliveredFeeCop).toBe(15000);
     expect(precio.sellerFailedFeeCop).toBe(12000);
     expect(precio.fulfillmentFeeCop).toBe(3000);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, viva, at(3))).totalCop).toBe(4000);
+    expect(communityChargeAtClose(freezeOrderPricing(BASE, viva, at(3))!, BASE).cashback.totalCop).toBe(4000);
   });
 
   it("RF_20: un leaderUid en cadena vacia cuenta como sin lider", () => {
     const huerfana: ComunidadConLider = { ...community({ sellerDeliveredFeeCop: 15000 }), leaderUid: "" };
 
     expect(resolveCommunityPricing(BASE, huerfana, T0)).toEqual(BASE);
-    expect(cashbackForFrozenPricing(freezeOrderPricing(BASE, huerfana, T0)).totalCop).toBe(0);
+    expect(communityChargeAtClose(freezeOrderPricing(BASE, huerfana, T0)!, BASE).cashback.totalCop).toBe(0);
   });
 
   it("RF_20: un leaderUid en blanco cuenta como sin lider", () => {
@@ -1059,12 +1065,33 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     // ...y el que entro antes conserva su precio y su cashback, un mes despues.
     expect(congelado!.sellerDeliveredFeeCop).toBe(15000);
     expect(congelado!.baseDeliveredFeeCop).toBe(12000);
-    expect(cashbackForFrozenPricing(congelado).deliveredCop).toBe(3000);
+    expect(communityChargeAtClose(congelado!, BASE).cashback.deliveredCop).toBe(3000);
+  });
 
-    // La garantia estructural, no solo el resultado: el cashback de un pedido se calcula con UN
-    // argumento, el congelado. No hay parametro por el que pueda enterarse de que la comunidad
-    // cambio, asi que no existe forma de que un cierre posterior lo recalcule a la baja.
-    expect(cashbackForFrozenPricing.length).toBe(1);
+  it("RF_11 · cambio de intencion deliberado: el precio del lider no se recalcula al cerrar, la base si", () => {
+    // Antes aqui se afirmaba `cashbackForFrozenPricing.length === 1`: el cierre no recibia NADA
+    // mas que lo congelado, asi que no podia recalcular ni el precio ni la base (RF_22 de la 001).
+    // RF_11 de la 004 reemplaza esa garantia EN LA BASE, a proposito: la zona se puede editar
+    // despues de crear el pedido y la tienda sin comunidad paga la tarifa del cierre, asi que
+    // congelar la base dejaba cobrar de menos. Lo que sigue garantizado es la mitad del lider.
+    //
+    // Estructura: dos parametros, lo congelado y la base del cierre. Ninguno es la comunidad, asi
+    // que revocar al lider despues de crear el pedido sigue sin poder tocar su precio.
+    expect(communityChargeAtClose.length).toBe(2);
+
+    const congelado = freezeOrderPricing(BASE, conLider({ sellerDeliveredFeeCop: 15000 }), T0)!;
+    const copia = structuredClone(congelado);
+
+    // Misma `frozen`, bases distintas al cierre: el cobro y el cashback cambian con la base...
+    const baseSube = communityChargeAtClose(congelado, { ...BASE, sellerDeliveredFeeCop: 14000 });
+    const baseBaja = communityChargeAtClose(congelado, { ...BASE, sellerDeliveredFeeCop: 11000 });
+    expect(baseSube.cashback.deliveredCop).toBe(1000);
+    expect(baseBaja.cashback.deliveredCop).toBe(4000);
+    // ...pero el precio del lider es el mismo en los dos: sale de lo congelado, no de la base.
+    expect(baseSube.charged.sellerDeliveredFeeCop).toBe(15000);
+    expect(baseBaja.charged.sellerDeliveredFeeCop).toBe(15000);
+    // Y cerrar no reescribe lo congelado: un segundo cierre (una correccion) lee el mismo precio.
+    expect(congelado).toEqual(copia);
   });
 
   it("RF_12: la tienda del propio lider causa cashback igual que cualquier otra", () => {
@@ -1074,8 +1101,8 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     const deLaTiendaDelLider = freezeOrderPricing(BASE, viva, T0);
     const deOtraTienda = freezeOrderPricing(BASE, viva, T0);
     expect(deLaTiendaDelLider).toEqual(deOtraTienda);
-    expect(cashbackForFrozenPricing(deLaTiendaDelLider)).toEqual(cashbackForFrozenPricing(deOtraTienda));
-    expect(cashbackForFrozenPricing(deLaTiendaDelLider).totalCop).toBe(3000);
+    expect(communityChargeAtClose(deLaTiendaDelLider!, BASE)).toEqual(communityChargeAtClose(deOtraTienda!, BASE));
+    expect(communityChargeAtClose(deLaTiendaDelLider!, BASE).cashback.totalCop).toBe(3000);
 
     // La ausencia de rama especial, afirmada de la unica forma que no depende del resultado: ni
     // el precio ni el congelado ni el cashback reciben la tienda, su id o su dueño. Sin ese dato
@@ -1083,6 +1110,959 @@ describe("T8 · una comunidad sin lider cobra la base", () => {
     // quisiera distinguirla tendria que anadir un parametro, y esto lo caza al instante.
     expect(resolveCommunityPricing.length).toBe(3);
     expect(freezeOrderPricing.length).toBe(3);
-    expect(cashbackForFrozenPricing.length).toBe(1);
+    // RF_11 · cambio de intencion deliberado: el cierre pasa de UN parametro (lo congelado) a DOS
+    // (lo congelado y la base del cierre). La afirmacion que importa aqui no cambia: ninguno de
+    // los dos es la tienda, su id ni su dueño.
+    expect(communityChargeAtClose.length).toBe(2);
+  });
+});
+
+/**
+ * T4 (spec 004) · El precio del lider se congela al crear; la base se decide al cerrar.
+ *
+ * Hasta la 004 se congelaban las DOS cosas al crear: el precio final y la base. Eso cobraba de
+ * menos en cuanto la base del cierre no coincidia con la de crear —la zona se edita despues, y
+ * una tienda sin comunidad paga la tarifa del cierre— y, peor, convertia en cashback una bajada
+ * de la base aunque el lider no hubiera fijado nada (RF_04). Ahora:
+ *
+ *  - `freezeOrderPricing` guarda el precio PROPIO del lider (`leader<X>FeeCop`) y marca
+ *    `pricingVersion: 2`. Ausente = el lider no fijo precio para ese concepto.
+ *  - `communityChargeAtClose(frozen, base)` recibe la base DEL CIERRE y cobra el mayor entre esa
+ *    base y el precio del lider; el cashback es la diferencia, nunca negativa.
+ *  - Un pedido legado (sin `pricingVersion`) trata su `seller<X>` como precio del lider e ignora
+ *    su base guardada: la de $9.000 pierde contra la base real sin intervencion manual.
+ *
+ * RNF_03: todo sin red ni mocks. Si alguna de estas funciones necesitara Firestore, este bloque
+ * no podria ni escribirse asi.
+ */
+
+/** Base del cierre sin zona, tal como la da `communityBase` hoy (fallido fijo de 12.000). */
+const BASE_SIN_ZONA: PricingValues = { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000 };
+/** La misma base en un pedido con zona: la zona sube el manejo a 2.500. */
+const BASE_CON_ZONA: PricingValues = { ...BASE_SIN_ZONA, fulfillmentFeeCop: 2500 };
+
+const SIN_CASHBACK = { deliveredCop: 0, failedCop: 0, fulfillmentCop: 0, totalCop: 0 };
+
+const CAMPOS_LIDER = ["leaderDeliveredFeeCop", "leaderFailedFeeCop", "leaderFulfillmentFeeCop"] as const;
+
+type PreciosDelLider = Partial<Pick<FrozenPricing, (typeof CAMPOS_LIDER)[number]>>;
+
+/**
+ * Pedido v2 escrito a mano. Sirve para fijar la ENTRADA del cierre sin depender de que el
+ * congelado este bien: si `freezeOrderPricing` fallara, estas pruebas del cierre no deben
+ * arrastrarse con el. Los campos de referencia se rellenan como lo haria el congelado.
+ */
+function congeladoV2(lider: PreciosDelLider, creadoCon: PricingValues = BASE_SIN_ZONA): FrozenPricing {
+  const referencia = (precio: number | undefined, base: number): number =>
+    precio !== undefined && precio > base ? precio : base;
+  return {
+    communityId: "com-1",
+    frozenAt: T0,
+    pricingVersion: 2,
+    ...lider,
+    sellerDeliveredFeeCop: referencia(lider.leaderDeliveredFeeCop, creadoCon.sellerDeliveredFeeCop),
+    baseDeliveredFeeCop: creadoCon.sellerDeliveredFeeCop,
+    sellerFailedFeeCop: referencia(lider.leaderFailedFeeCop, creadoCon.sellerFailedFeeCop),
+    baseFailedFeeCop: creadoCon.sellerFailedFeeCop,
+    fulfillmentFeeCop: referencia(lider.leaderFulfillmentFeeCop, creadoCon.fulfillmentFeeCop),
+    baseFulfillmentFeeCop: creadoCon.fulfillmentFeeCop
+  };
+}
+
+/**
+ * Pedido anterior a la 004: sin `pricingVersion` ni `leader<X>`. Por defecto es EXACTAMENTE el
+ * congelado de `community-corrections.test.ts` y `community-cashback-entries.test.ts`, para que
+ * lo que esos archivos dan hoy quede atado tambien aqui.
+ */
+function congeladoLegado(over: Partial<FrozenPricing> = {}): FrozenPricing {
+  return {
+    communityId: "com-1",
+    frozenAt: T0,
+    sellerDeliveredFeeCop: 15000,
+    baseDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 14000,
+    baseFailedFeeCop: 12000,
+    fulfillmentFeeCop: 2500,
+    baseFulfillmentFeeCop: 2000,
+    ...over
+  };
+}
+
+describe("T4 · RF_03, RF_11: el precio del lider se congela, la base se decide al cierre", () => {
+  // ── Al crear (RF_03) ──────────────────────────────────────────────────────────────────────
+
+  it("RF_03 · congela el precio PROPIO vigente del lider, con las programadas vencidas, y marca pricingVersion 2", () => {
+    const viva = conLider(
+      { sellerDeliveredFeeCop: 13000, sellerFailedFeeCop: 12500, fulfillmentFeeCop: 2300 },
+      { scheduled: programada("sellerDeliveredFeeCop", 13000, 16000, at(1)) }
+    );
+    const congelado = freezeOrderPricing(BASE, viva, at(3))!;
+
+    expect(congelado).toMatchObject({
+      pricingVersion: 2,
+      // La programada vencio en at(1): a at(3) el lider ya cobra 16.000, no los 13.000 de `pricing`.
+      leaderDeliveredFeeCop: 16000,
+      leaderFailedFeeCop: 12500,
+      leaderFulfillmentFeeCop: 2300,
+      // Los seis de referencia (RF_03 MAY) se siguen escribiendo como hoy: pantallas y scripts
+      // existentes los leen y no pueden perderlos.
+      communityId: "com-1",
+      frozenAt: at(3),
+      sellerDeliveredFeeCop: 16000,
+      baseDeliveredFeeCop: 12000,
+      sellerFailedFeeCop: 12500,
+      baseFailedFeeCop: 12000,
+      fulfillmentFeeCop: 2300,
+      baseFulfillmentFeeCop: 2000
+    });
+  });
+
+  it("RF_03 · una subida programada que aun no vence NO se congela: el pedido lleva el precio de hoy", () => {
+    const conFutura = conLider(
+      { sellerDeliveredFeeCop: 13000 },
+      { scheduled: programada("sellerDeliveredFeeCop", 13000, 16000, at(8)) }
+    );
+    expect(freezeOrderPricing(BASE, conFutura, at(3))).toMatchObject({
+      pricingVersion: 2,
+      leaderDeliveredFeeCop: 13000
+    });
+  });
+
+  it("RF_03 · se guarda lo que fijo el lider, sin llevarlo al piso de la base de crear (el piso lo pone el cierre)", () => {
+    // Un fallido de 11.000 por debajo de la base de 12.000. Si se guardara ya elevado a 12.000 y la
+    // base del cierre bajara a 10.000, se cobraria 12.000 en vez de los 11.000 que fijo el lider.
+    const congelado = freezeOrderPricing(BASE, conLider({ sellerFailedFeeCop: 11000 }), T0)!;
+    expect(congelado).toMatchObject({ pricingVersion: 2, leaderFailedFeeCop: 11000 });
+
+    const conBaseReal = communityChargeAtClose(congelado, BASE_SIN_ZONA);
+    expect(conBaseReal.charged.sellerFailedFeeCop).toBe(12000);
+    expect(conBaseReal.cashback.failedCop).toBe(0);
+
+    const conBaseBaja = communityChargeAtClose(congelado, { ...BASE_SIN_ZONA, sellerFailedFeeCop: 10000 });
+    expect(conBaseBaja.charged.sellerFailedFeeCop).toBe(11000);
+    expect(conBaseBaja.cashback.failedCop).toBe(1000);
+  });
+
+  it("RF_03 · un concepto sin precio propio (o sin numero valido) deja su campo AUSENTE, no en cero", () => {
+    const congelado = freezeOrderPricing(
+      BASE,
+      conLider({ sellerDeliveredFeeCop: 15000, fulfillmentFeeCop: Number.NaN }),
+      T0
+    )!;
+    expect(congelado).toMatchObject({ pricingVersion: 2, leaderDeliveredFeeCop: 15000 });
+    // Ausente = "el lider no fijo nada" => el cierre cobra la base. Un cero escrito se leeria
+    // como precio del lider y, por ejemplo, un legado lo tomaria como tal.
+    expect(congelado).not.toHaveProperty("leaderFailedFeeCop");
+    expect(congelado).not.toHaveProperty("leaderFulfillmentFeeCop");
+  });
+
+  it("RF_03, RF_20 · sin lider, con lider en blanco o desactivada: pricingVersion 2 y NINGUN precio del lider", () => {
+    const precios = { sellerDeliveredFeeCop: 15000, sellerFailedFeeCop: 14000, fulfillmentFeeCop: 3000 };
+    const casos: Array<[string, ComunidadConLider]> = [
+      ["sin leaderUid", sinLider(precios)],
+      ["leaderUid vacio", { ...community(precios), leaderUid: "" }],
+      ["leaderUid en blanco", { ...community(precios), leaderUid: "   " }],
+      ["desactivada con lider", conLider(precios, { status: "disabled" })]
+    ];
+    for (const [nombre, comunidad] of casos) {
+      const congelado = freezeOrderPricing(BASE, comunidad, T0);
+      expect(congelado, nombre).toMatchObject({ pricingVersion: 2 });
+      for (const campo of CAMPOS_LIDER) {
+        expect(congelado, `${nombre}: ${campo}`).not.toHaveProperty(campo);
+      }
+    }
+  });
+
+  // ── Al cerrar (RF_11, RF_04, RF_06) ───────────────────────────────────────────────────────
+
+  it("RF_04 · sin precio propio se cobra EXACTAMENTE la base del cierre y el cashback es cero", () => {
+    const congelado = freezeOrderPricing(BASE, conLider(), T0)!;
+    const bases: PricingValues[] = [
+      BASE_SIN_ZONA,
+      BASE_CON_ZONA,
+      { sellerDeliveredFeeCop: 14000, sellerFailedFeeCop: 13000, fulfillmentFeeCop: 3000 }
+    ];
+    for (const base of bases) {
+      const cierre = communityChargeAtClose(congelado, base);
+      expect(cierre.charged).toEqual(base);
+      expect(cierre.base).toEqual(base);
+      expect(cierre.cashback).toEqual(SIN_CASHBACK);
+    }
+  });
+
+  it("RF_11 · manejo del lider 2.300: sin zona cobra 2.300 y causa 300; con zona cobra la base de 2.500 y causa 0", () => {
+    const congelado = freezeOrderPricing(BASE, conLider({ fulfillmentFeeCop: 2300 }), T0)!;
+
+    const sinZona = communityChargeAtClose(congelado, BASE_SIN_ZONA);
+    expect(sinZona.charged.fulfillmentFeeCop).toBe(2300);
+    expect(sinZona.cashback.fulfillmentCop).toBe(300);
+
+    const conZona = communityChargeAtClose(congelado, BASE_CON_ZONA);
+    expect(conZona.charged.fulfillmentFeeCop).toBe(2500);
+    expect(conZona.cashback.fulfillmentCop).toBe(0);
+  });
+
+  it("RF_11 · la base SUBE entre crear y cerrar: se cobra la base nueva y el cashback queda en cero", () => {
+    const congelado = congeladoV2({ leaderDeliveredFeeCop: 13000 });
+    const cierre = communityChargeAtClose(congelado, { ...BASE_SIN_ZONA, sellerDeliveredFeeCop: 14000 });
+    expect(cierre.charged.sellerDeliveredFeeCop).toBe(14000);
+    expect(cierre.cashback.deliveredCop).toBe(0);
+  });
+
+  it("RF_11 · la base BAJA entre crear y cerrar: se cobra el precio del lider, que no baja, y el cashback crece", () => {
+    const congelado = congeladoV2({ leaderDeliveredFeeCop: 13000 });
+    const cierre = communityChargeAtClose(congelado, { ...BASE_SIN_ZONA, sellerDeliveredFeeCop: 11000 });
+    expect(cierre.charged.sellerDeliveredFeeCop).toBe(13000);
+    expect(cierre.cashback.deliveredCop).toBe(2000);
+  });
+
+  it("RF_04 · la base baja y el lider NO fijo precio: se cobra la base nueva sin cashback (el congelado viejo lo convertia en cashback)", () => {
+    // El fallo concreto que corrige la 004: congelado con base 12.000/12.000/2.000 y cerrado con
+    // una base mas baja. Leyendo `seller<X> - base<X>` del congelado, la tienda pagaba lo viejo y
+    // la diferencia salia como cashback de un lider que nunca fijo nada.
+    const baseBaja: PricingValues = { sellerDeliveredFeeCop: 11000, sellerFailedFeeCop: 10000, fulfillmentFeeCop: 1800 };
+    const sinPrecioPropio: Array<[string, FrozenPricing]> = [
+      ["con lider, sin pricing", freezeOrderPricing(BASE, conLider(), T0)!],
+      ["sin lider, con pricing", freezeOrderPricing(BASE, sinLider({ sellerDeliveredFeeCop: 15000 }), T0)!],
+      ["desactivada, con pricing", freezeOrderPricing(BASE, conLider({ sellerDeliveredFeeCop: 15000 }, { status: "disabled" }), T0)!]
+    ];
+    for (const [nombre, congelado] of sinPrecioPropio) {
+      const cierre = communityChargeAtClose(congelado, baseBaja);
+      expect(cierre.charged, nombre).toEqual(baseBaja);
+      expect(cierre.cashback, nombre).toEqual(SIN_CASHBACK);
+    }
+  });
+
+  it("RF_11 · pedido LEGADO con fallido de 9.000 guardado: pierde contra la base real, cobra 12.000 y causa 0", () => {
+    // Caso limite de la spec: lo guardado se trata como precio del lider y la base guardada
+    // (9.000) se ignora. Sin intervencion manual, al cerrar se cobran los 12.000 de la base real.
+    const legado = congeladoLegado({ sellerFailedFeeCop: 9000, baseFailedFeeCop: 9000 });
+    expect(legado).not.toHaveProperty("pricingVersion");
+
+    const cierre = communityChargeAtClose(legado, BASE_SIN_ZONA);
+    expect(cierre.charged.sellerFailedFeeCop).toBe(12000);
+    expect(cierre.cashback.failedCop).toBe(0);
+  });
+
+  it("RF_11 · pedido LEGADO 15.000/12.000 contra base 12.000 da el mismo cashback que hoy (3.000 / 2.000 / 500)", () => {
+    // Lo que hoy afirman `community-corrections.test.ts` y `community-cashback-entries.test.ts`
+    // sobre este mismo congelado. Cerrar un legado con la base de siempre no puede mover un peso.
+    const cierre = communityChargeAtClose(congeladoLegado(), BASE_SIN_ZONA);
+    expect(cierre.charged).toEqual({ sellerDeliveredFeeCop: 15000, sellerFailedFeeCop: 14000, fulfillmentFeeCop: 2500 });
+    expect(cierre.cashback).toEqual({ deliveredCop: 3000, failedCop: 2000, fulfillmentCop: 500, totalCop: 5500 });
+  });
+
+  it("RF_11 · en un LEGADO la base guardada se ignora: el cashback se mide contra la base del cierre", () => {
+    // 15.000 guardado con una base vieja de 9.000. Contra la base real de 12.000 el lider gana
+    // 3.000, no los 6.000 que diria la base guardada.
+    const legado = congeladoLegado({ baseDeliveredFeeCop: 9000 });
+    expect(communityChargeAtClose(legado, BASE_SIN_ZONA).cashback.deliveredCop).toBe(3000);
+  });
+
+  it("RF_06, RF_04 · nunca cashback negativo ni cobro bajo la base, en ningun orden de base y precio", () => {
+    const precios: Array<number | undefined> = [undefined, 0, 5000, 11000, 12000, 13000, 20000];
+    const bases = [0, 9000, 11000, 12000, 14000, 25000];
+    const conceptos = [
+      ["sellerDeliveredFeeCop", "deliveredCop"],
+      ["sellerFailedFeeCop", "failedCop"],
+      ["fulfillmentFeeCop", "fulfillmentCop"]
+    ] as const;
+
+    for (const precio of precios) {
+      // v2: ausente = sin precio propio. Legado: no existe "ausente"; lo guardado era la base de crear.
+      const v2 = congeladoV2(
+        precio === undefined
+          ? {}
+          : { leaderDeliveredFeeCop: precio, leaderFailedFeeCop: precio, leaderFulfillmentFeeCop: precio }
+      );
+      const guardadoLegado = precio ?? 12000;
+      const legado = congeladoLegado({
+        sellerDeliveredFeeCop: guardadoLegado,
+        sellerFailedFeeCop: guardadoLegado,
+        fulfillmentFeeCop: guardadoLegado,
+        baseDeliveredFeeCop: 12000,
+        baseFailedFeeCop: 12000,
+        baseFulfillmentFeeCop: 12000
+      });
+
+      for (const valorBase of bases) {
+        const base: PricingValues = {
+          sellerDeliveredFeeCop: valorBase,
+          sellerFailedFeeCop: valorBase,
+          fulfillmentFeeCop: valorBase
+        };
+        const casos: Array<[string, FrozenPricing, number | undefined]> = [
+          ["v2", v2, precio],
+          ["legado", legado, guardadoLegado]
+        ];
+        for (const [version, congelado, precioLider] of casos) {
+          const cierre = communityChargeAtClose(congelado, base);
+          for (const [campo, concepto] of conceptos) {
+            const etiqueta = `${version} precio=${String(precioLider)} base=${valorBase} ${campo}`;
+            const esperado = precioLider !== undefined && precioLider > valorBase ? precioLider : valorBase;
+            expect(cierre.cashback[concepto], etiqueta).toBeGreaterThanOrEqual(0);
+            expect(cierre.charged[campo], etiqueta).toBeGreaterThanOrEqual(valorBase);
+            expect(cierre.charged[campo], etiqueta).toBe(esperado);
+            expect(cierre.cashback[concepto], etiqueta).toBe(esperado - valorBase);
+          }
+        }
+      }
+    }
+  });
+
+  it("RF_06 · un precio del lider que no supera la base del cierre da cashback cero en ese concepto", () => {
+    const congelado = congeladoV2({ leaderDeliveredFeeCop: 12000, leaderFulfillmentFeeCop: 1500 });
+    const cierre = communityChargeAtClose(congelado, BASE_SIN_ZONA);
+    expect(cierre.charged).toEqual(BASE_SIN_ZONA);
+    expect(cierre.cashback).toEqual(SIN_CASHBACK);
+  });
+
+  it("RF_11 · cashback.totalCop es la suma de los tres conceptos", () => {
+    const congelado = congeladoV2({
+      leaderDeliveredFeeCop: 15000,
+      leaderFailedFeeCop: 13000,
+      leaderFulfillmentFeeCop: 2300
+    });
+    const { cashback } = communityChargeAtClose(congelado, { ...BASE_SIN_ZONA, sellerDeliveredFeeCop: 14000 });
+    expect(cashback).toEqual({ deliveredCop: 1000, failedCop: 1000, fulfillmentCop: 300, totalCop: 2300 });
+    expect(cashback.totalCop).toBe(cashback.deliveredCop + cashback.failedCop + cashback.fulfillmentCop);
+  });
+
+  it("RNF_03 · el cierre es puro: no muta sus entradas y repetido da exactamente lo mismo", () => {
+    // Entradas congeladas con `Object.freeze`: en un modulo ESM (modo estricto) cualquier escritura
+    // sobre ellas lanza. Sin red, sin mocks, sin reloj: lo que se prueba es la regla sola.
+    const congelado = Object.freeze(congeladoV2({ leaderDeliveredFeeCop: 15000 }));
+    const base = Object.freeze({ ...BASE_CON_ZONA });
+    const primero = communityChargeAtClose(congelado, base);
+    const segundo = communityChargeAtClose(congelado, base);
+    expect(segundo).toEqual(primero);
+    expect(primero.charged.sellerDeliveredFeeCop).toBe(15000);
+    expect(primero.charged.fulfillmentFeeCop).toBe(2500);
+  });
+});
+
+/**
+ * T6 · RF_05, RF_12 — El minimo que el lider puede fijar es la base REAL sin zona.
+ *
+ * Hoy `scheduleCommunityPrice` (functions/src/communities.ts) valida contra el ajuste CRUDO:
+ * `Number(settingsSnap.data()?.[field])`. En produccion el fallido del ajuste es 9.000, pero se
+ * cobra 12.000 (fijo de `resolveSellerCharges`): la callable deja fijar 9.000 y el mensaje dice
+ * "El minimo para este concepto es 9000." — un minimo que no es lo que Kentro cobra.
+ *
+ * La decision sale a una funcion pura, `validateCommunityPriceFloor(field, amountCop, base)`, para
+ * probar el minimo y su mensaje sin Firestore (plan §3.5). La `base` que recibe es la de
+ * `communityBase(resolveTariffs(settings/global))`, SIN zona: RF_05 no exige superar la base de
+ * ninguna zona; en un pedido con zona, RF_11 cobra la base de la zona si es mayor, y el mensaje lo
+ * avisa (RF_12).
+ *
+ * Carga diferida en `beforeEach`, como T39: mientras el modulo no exporte la funcion, cada caso sale
+ * FALLIDO por separado y el resto del archivo sigue en verde (y `tsc` no se rompe).
+ */
+type ValidateCommunityPriceFloor = (
+  field: "sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop",
+  amountCop: number,
+  base: PricingValues
+) => { ok: true } | { ok: false; floorCop: number; reason: string };
+
+describe("T6 · RF_05, RF_12: el minimo es la base real sin zona", () => {
+  // `settings/global` de PRODUCCION (plan 004 §0): el fallido del ajuste es 9.000 y NO es lo que se cobra.
+  const SETTINGS_PROD = {
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 9000,
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000
+  };
+  // Zona de produccion: manejo 2.500.
+  const ZONA_PROD = { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2500 };
+  const CONCEPTOS = ["sellerDeliveredFeeCop", "sellerFailedFeeCop", "fulfillmentFeeCop"] as const;
+
+  let validateCommunityPriceFloor: ValidateCommunityPriceFloor;
+  let baseSinZona: PricingValues;
+  let baseConZona: PricingValues;
+
+  beforeEach(async () => {
+    const cargos = await import("../../functions/src/seller-charges");
+    baseSinZona = cargos.communityBase(cargos.resolveTariffs(SETTINGS_PROD));
+    baseConZona = cargos.communityBase(cargos.resolveTariffs(SETTINGS_PROD, ZONA_PROD));
+    const modulo = (await import("../../functions/src/community-pricing")) as unknown as {
+      validateCommunityPriceFloor?: ValidateCommunityPriceFloor;
+    };
+    if (typeof modulo.validateCommunityPriceFloor !== "function") {
+      throw new Error("functions/src/community-pricing.ts todavia no exporta validateCommunityPriceFloor (T6).");
+    }
+    validateCommunityPriceFloor = modulo.validateCommunityPriceFloor;
+  });
+
+  it("RF_05 · la base de produccion sin zona es 12.000 / 12.000 / 2.000 (precondicion de los casos)", () => {
+    expect(baseSinZona).toEqual({ sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000 });
+  });
+
+  it("RF_05 · fallido de 12.000 (igual a la base real) es valido", () => {
+    expect(validateCommunityPriceFloor("sellerFailedFeeCop", 12000, baseSinZona)).toEqual({ ok: true });
+  });
+
+  it("RF_05 · fallido de 11.999 se rechaza con floorCop 12.000", () => {
+    expect(validateCommunityPriceFloor("sellerFailedFeeCop", 11999, baseSinZona)).toMatchObject({ ok: false, floorCop: 12000 });
+  });
+
+  it("RF_05 · el rechazo nombra el minimo como $12.000 (es-CO, punto de miles), no el numero crudo", () => {
+    const resultado = validateCommunityPriceFloor("sellerFailedFeeCop", 11999, baseSinZona);
+    expect(resultado.ok).toBe(false);
+    const reason = (resultado as { reason: string }).reason;
+    expect(reason).toContain("$12.000");
+    expect(reason).not.toMatch(/\b12000\b/);
+  });
+
+  it("RF_05 · el rechazo menciona la zona (el minimo es el de un pedido sin zona)", () => {
+    const resultado = validateCommunityPriceFloor("sellerFailedFeeCop", 11999, baseSinZona);
+    expect(resultado.ok).toBe(false);
+    expect((resultado as { reason: string }).reason).toMatch(/zona/i);
+  });
+
+  it("RF_05 · fallido de 9.000 (el ajuste crudo que hoy la callable aceptaria) se rechaza con floorCop 12.000", () => {
+    expect(validateCommunityPriceFloor("sellerFailedFeeCop", 9000, baseSinZona)).toMatchObject({ ok: false, floorCop: 12000 });
+  });
+
+  it("RF_05, RF_18 de la 001 · un precio IGUAL a la base es valido en los tres conceptos", () => {
+    for (const campo of CONCEPTOS) {
+      expect(validateCommunityPriceFloor(campo, baseSinZona[campo], baseSinZona), campo).toEqual({ ok: true });
+    }
+  });
+
+  it("RF_05 · un peso por debajo de la base se rechaza en los tres conceptos, con SU base como floorCop", () => {
+    for (const campo of CONCEPTOS) {
+      expect(validateCommunityPriceFloor(campo, baseSinZona[campo] - 1, baseSinZona), campo).toMatchObject({
+        ok: false,
+        floorCop: baseSinZona[campo]
+      });
+    }
+  });
+
+  it("RF_05 · el minimo sale de la base recibida, concepto a concepto (no de una constante)", () => {
+    const baseAlta: PricingValues = { sellerDeliveredFeeCop: 14000, sellerFailedFeeCop: 13000, fulfillmentFeeCop: 3000 };
+    expect(validateCommunityPriceFloor("sellerDeliveredFeeCop", 13999, baseAlta)).toMatchObject({ ok: false, floorCop: 14000 });
+    expect(validateCommunityPriceFloor("sellerDeliveredFeeCop", 14000, baseAlta)).toEqual({ ok: true });
+    const manejo = validateCommunityPriceFloor("fulfillmentFeeCop", 2999, baseAlta);
+    expect(manejo).toMatchObject({ ok: false, floorCop: 3000 });
+    expect((manejo as { reason: string }).reason).toContain("$3.000");
+  });
+
+  it("RF_05 · manejo de 2.300 es valido contra la base sin zona (2.000) aunque la zona de produccion sea 2.500", () => {
+    // La zona existe y es mas cara: si la validacion exigiera superarla, 2.300 se rechazaria.
+    expect(baseConZona.fulfillmentFeeCop).toBe(2500);
+    expect(validateCommunityPriceFloor("fulfillmentFeeCop", 2300, baseSinZona)).toEqual({ ok: true });
+  });
+
+  it("RF_12 · el mensaje avisa que en pedidos con zona la base puede ser mayor y que ahi se cobra la base", () => {
+    const resultado = validateCommunityPriceFloor("sellerFailedFeeCop", 11999, baseSinZona);
+    expect(resultado.ok).toBe(false);
+    const reason = (resultado as { reason: string }).reason;
+    expect(reason).toMatch(/pedidos? con zona/i);
+    expect(reason).toMatch(/base puede ser mayor/i);
+    expect(reason).toMatch(/se cobra la base/i);
+    expect(reason).toMatch(/cashback/i);
+  });
+
+  it("RNF_03 · es pura: no muta la base que recibe", () => {
+    const base = Object.freeze({ ...baseSinZona });
+    validateCommunityPriceFloor("sellerFailedFeeCop", 11999, base);
+    validateCommunityPriceFloor("sellerFailedFeeCop", 12000, base);
+    expect(base).toEqual(baseSinZona);
+  });
+});
+
+/**
+ * T7 · RF_13 — Elevar al piso REAL, escuchando los ajustes que existen.
+ *
+ * Dos fallos de hoy, los dos silenciosos:
+ *
+ *  1. `planFloorRaise` compara el ajuste CRUDO (`tariffFromSettings`). En produccion el fallido del
+ *     ajuste es 9.000 y se cobra 12.000 (fijo de `resolveSellerCharges`): subir el ajuste de 9.000 a
+ *     11.000 "sube la base" para el plan y eleva a los lideres a 11.000, un piso que no es el de
+ *     nadie — y escribe un aviso y un historial de una subida que no ocurrio. La base de RF_13 es
+ *     la de RF_01: `communityBase(resolveTariffs(ajustes))`, la misma que cobra el cierre.
+ *  2. El trigger escucha `settings/app`, que no existe en produccion (solo `settings/global`):
+ *     RF_35 de la 001 no se ha ejecutado nunca.
+ *
+ * El plan se parte en dos para que la pasada unica de T8 (RF_14) reuse la mitad por comunidad sin
+ * tener un "antes": `raisedCommunityFloors(before, after)` decide que conceptos subieron y hasta
+ * donde; `planRaiseToFloors({floors, communities, nowIso})` decide que comunidades elevar.
+ * `planFloorRaise` queda como su composicion, con el mismo tipo de retorno (el bloque T47 sigue
+ * atandolo).
+ *
+ * Firma elegida: `raisedCommunityFloors` recibe los AJUSTES CRUDOS (no `Tariffs`). Es lo que el
+ * trigger tiene en la mano (`before.data()` / `after.data()`), y si recibiera tarifas ya resueltas
+ * cada llamador tendria que acordarse de pasar por `resolveTariffs` + `communityBase` — que es
+ * justo el olvido que causo el fallo 1. La resolucion vive dentro, una vez.
+ *
+ * "Avisar al lider" (spec 004 §6) = la marca `floorRaisedAt.<campo>` + la entrada de historial. Se
+ * afirman las dos en el plan, y una guarda de fuente comprueba que el writer las copia a Firestore.
+ *
+ * Carga diferida en `beforeEach`, como T6 y T39: sin las funciones, estos casos salen en ROJO uno a
+ * uno y el resto del archivo sigue en verde.
+ */
+type RaisedCommunityFloors = (
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+) => Partial<PricingValues>;
+
+type PlanRaiseToFloors = (input: {
+  floors: Partial<PricingValues>;
+  communities: Community[];
+  nowIso: string;
+}) => CommunityFloorRaise[];
+
+/** Codigo sin comentarios: una guarda de fuente no puede darse por buena con un comentario. */
+function fuenteSinComentarios(relativeToFunctionsSrc: string): string {
+  const raw = readFileSync(
+    fileURLToPath(new URL(`../../functions/src/${relativeToFunctionsSrc}`, import.meta.url)),
+    "utf8"
+  );
+  return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+describe("T7 · RF_13: elevar al piso real, escuchando los ajustes que existen", () => {
+  /** `settings/global` de PRODUCCION (plan 004 §0): el fallido del ajuste dice 9.000 y se cobra 12.000. */
+  const GLOBAL_PROD: Record<string, unknown> = {
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 9000,
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000,
+    payoutDays: 7,
+    supportText: "Escribenos por WhatsApp"
+  };
+  const globalCon = (cambios: Record<string, unknown>): Record<string, unknown> => ({ ...GLOBAL_PROD, ...cambios });
+  const AHORA = at(3);
+
+  let raisedCommunityFloors: RaisedCommunityFloors;
+  let planRaiseToFloors: PlanRaiseToFloors;
+  let planFloorRaiseNuevo: PlanFloorRaise;
+
+  beforeEach(async () => {
+    const modulo = (await import("../../functions/src/community-pricing")) as unknown as {
+      raisedCommunityFloors?: RaisedCommunityFloors;
+      planRaiseToFloors?: PlanRaiseToFloors;
+      planFloorRaise?: PlanFloorRaise;
+    };
+    if (typeof modulo.raisedCommunityFloors !== "function") {
+      throw new Error("functions/src/community-pricing.ts todavia no exporta raisedCommunityFloors (T7).");
+    }
+    if (typeof modulo.planRaiseToFloors !== "function") {
+      throw new Error("functions/src/community-pricing.ts todavia no exporta planRaiseToFloors (T7).");
+    }
+    if (typeof modulo.planFloorRaise !== "function") {
+      throw new Error("functions/src/community-pricing.ts dejo de exportar planFloorRaise (T7 la conserva).");
+    }
+    raisedCommunityFloors = modulo.raisedCommunityFloors;
+    planRaiseToFloors = modulo.planRaiseToFloors;
+    planFloorRaiseNuevo = modulo.planFloorRaise;
+  });
+
+  it("RF_13 · subir el fallido del ajuste de 9.000 a 11.000 no sube la base: el fijo de 12.000 manda en los dos lados", () => {
+    expect(raisedCommunityFloors(GLOBAL_PROD, globalCon({ sellerFailedFeeCop: 11000 }))).toEqual({});
+  });
+
+  it("RF_13 · subir el fallido del ajuste no eleva a ninguna comunidad (ni aviso ni historial)", () => {
+    // 10.000 esta por debajo de los 11.000 del ajuste nuevo: el plan de hoy, que compara el ajuste
+    // crudo, lo eleva a 11.000 y le escribe al lider un aviso de una subida que no ocurrio.
+    const plan = planFloorRaiseNuevo({
+      before: GLOBAL_PROD,
+      after: globalCon({ sellerFailedFeeCop: 11000 }),
+      communities: [community({ sellerFailedFeeCop: 10000 })],
+      nowIso: AHORA
+    });
+    expect(plan).toEqual({ raisedFields: [], communities: [] });
+  });
+
+  it("RF_13 · el ajuste del fallido tampoco sube nada cuando supera el fijo (9.000 -> 15.000)", () => {
+    // Cambiar `sellerFailedFeeCop` en la pantalla de ajustes NO tiene efecto en el cobro
+    // (seller-charges.ts, SELLER_FAILED_FEE_FIXED_COP). Un piso que el cierre no cobra no es piso.
+    expect(raisedCommunityFloors(GLOBAL_PROD, globalCon({ sellerFailedFeeCop: 15000 }))).toEqual({});
+  });
+
+  it("RF_13 · subir la entrega de 12.000 a 13.000 sube ese concepto, y solo ese, hasta 13.000", () => {
+    expect(raisedCommunityFloors(GLOBAL_PROD, globalCon({ sellerDeliveredFeeCop: 13000 }))).toEqual({
+      sellerDeliveredFeeCop: 13000
+    });
+  });
+
+  it("RF_13 · subir la entrega eleva a 13.000 la comunidad que cobraba 12.500, con el aviso al lider", () => {
+    const plan = planFloorRaiseNuevo({
+      before: GLOBAL_PROD,
+      after: globalCon({ sellerDeliveredFeeCop: 13000 }),
+      communities: [community({ sellerDeliveredFeeCop: 12500 })],
+      nowIso: AHORA
+    });
+    expect(plan.raisedFields).toEqual(["sellerDeliveredFeeCop"]);
+    expect(plan.communities).toHaveLength(1);
+    const cambio = plan.communities[0];
+    expect(cambio.communityUpdate["pricing.sellerDeliveredFeeCop"]).toBe(13000);
+    // El AVISO de RF_13 (spec 004 §6): la marca por concepto con el instante de la elevacion.
+    expect(cambio.communityUpdate["floorRaisedAt.sellerDeliveredFeeCop"]).toBe(AHORA);
+  });
+
+  it("RF_13 · la elevacion de la entrega deja su entrada de historial (de 12.500 a 13.000, desde ya, firmada por el sistema)", () => {
+    const plan = planFloorRaiseNuevo({
+      before: GLOBAL_PROD,
+      after: globalCon({ sellerDeliveredFeeCop: 13000 }),
+      communities: [community({ sellerDeliveredFeeCop: 12500 })],
+      nowIso: AHORA
+    });
+    expect(plan.communities[0].historyEntries).toEqual([
+      expect.objectContaining({
+        field: "sellerDeliveredFeeCop",
+        fromCop: 12500,
+        toCop: 13000,
+        effectiveAt: AHORA,
+        actorUid: AUTOR_PISO
+      })
+    ]);
+  });
+
+  it("RF_13 · guardar los ajustes sin cambiar ninguna tarifa (plazo de pago, un texto) no sube nada", () => {
+    expect(
+      raisedCommunityFloors(GLOBAL_PROD, globalCon({ payoutDays: 15, supportText: "Nuevo horario de soporte" }))
+    ).toEqual({});
+  });
+
+  it("RF_13 · guardar los ajustes sin cambiar ninguna tarifa no eleva ni avisa a nadie, aunque haya precios bajo la base", () => {
+    // La comunidad tiene un fallido propio de 10.000 bajo la base real de 12.000: esta por debajo,
+    // pero ningun guardado la puso ahi. Arreglarla es trabajo de la pasada unica (RF_14, T8), no de
+    // un guardado de textos.
+    const plan = planFloorRaiseNuevo({
+      before: GLOBAL_PROD,
+      after: globalCon({ payoutDays: 15, supportText: "Nuevo horario de soporte" }),
+      communities: [community({ sellerFailedFeeCop: 10000 })],
+      nowIso: AHORA
+    });
+    expect(plan).toEqual({ raisedFields: [], communities: [] });
+  });
+
+  it("RF_13 · escribir en el ajuste un valor que ya era el que se cobraba (manejo ausente -> 2.000) no sube nada", () => {
+    // Sin el campo, `resolveTariffs` ya cobraba el defecto de 2.000. Guardarlo explicito no mueve la
+    // base de RF_01, asi que no hay nada que elevar (el plan crudo de hoy lo lee como 0 -> 2.000).
+    const sinManejo: Record<string, unknown> = { ...GLOBAL_PROD };
+    delete sinManejo.fulfillmentFeeCop;
+    expect(raisedCommunityFloors(sinManejo, globalCon({ fulfillmentFeeCop: 2000 }))).toEqual({});
+  });
+
+  it("RF_13 · planFloorRaise es la composicion: los conceptos de raisedCommunityFloors y las comunidades de planRaiseToFloors", () => {
+    const before = GLOBAL_PROD;
+    const after = globalCon({ sellerDeliveredFeeCop: 14000, fulfillmentFeeCop: 2500, sellerFailedFeeCop: 11000 });
+    const comunidades = [
+      community({ sellerDeliveredFeeCop: 12500, fulfillmentFeeCop: 2100, sellerFailedFeeCop: 10000 }),
+      community({ sellerDeliveredFeeCop: 16000 }, { id: "com-2" })
+    ];
+    const floors = raisedCommunityFloors(before, after);
+    expect(planFloorRaiseNuevo({ before, after, communities: comunidades, nowIso: AHORA })).toEqual({
+      raisedFields: Object.keys(floors),
+      communities: planRaiseToFloors({ floors, communities: comunidades, nowIso: AHORA })
+    });
+  });
+
+  it("RF_13, RF_14 · planRaiseToFloors eleva un fallido propio de 10.000 al piso de 12.000 con aviso e historial", () => {
+    const cambios = planRaiseToFloors({
+      floors: { sellerFailedFeeCop: 12000 },
+      communities: [community({ sellerFailedFeeCop: 10000 })],
+      nowIso: AHORA
+    });
+    expect(cambios).toEqual([
+      {
+        communityId: "com-1",
+        fields: ["sellerFailedFeeCop"],
+        communityUpdate: {
+          "pricing.sellerFailedFeeCop": 12000,
+          "floorRaisedAt.sellerFailedFeeCop": AHORA,
+          updatedAt: AHORA
+        },
+        deleteFields: [],
+        historyEntries: [
+          {
+            field: "sellerFailedFeeCop",
+            fromCop: 10000,
+            toCop: 12000,
+            effectiveAt: AHORA,
+            actorUid: AUTOR_PISO,
+            actorRole: "system",
+            createdAt: AHORA
+          }
+        ]
+      }
+    ]);
+  });
+
+  it("RF_13, RF_14 · planRaiseToFloors aplicado dos veces seguidas: la segunda no eleva ni vuelve a avisar", () => {
+    const original = community({ sellerFailedFeeCop: 10000 });
+    const entrada = { floors: { sellerFailedFeeCop: 12000 }, nowIso: AHORA };
+    const primero = planRaiseToFloors({ ...entrada, communities: [original] });
+    expect(primero).toHaveLength(1);
+    const yaElevada = aplicar(original, primero[0]);
+    expect(planRaiseToFloors({ ...entrada, communities: [yaElevada] })).toEqual([]);
+  });
+
+  it("RF_13 · planRaiseToFloors solo mira los conceptos que recibe: un piso de fallido no toca la entrega", () => {
+    const cambios = planRaiseToFloors({
+      floors: { sellerFailedFeeCop: 12000 },
+      communities: [community({ sellerFailedFeeCop: 10000, sellerDeliveredFeeCop: 11000 })],
+      nowIso: AHORA
+    });
+    expect(cambios[0].fields).toEqual(["sellerFailedFeeCop"]);
+  });
+
+  it("RF_13 · planRaiseToFloors borra la programada que el piso rebasa (criterio de T47 intacto)", () => {
+    const cambios = planRaiseToFloors({
+      floors: { sellerFailedFeeCop: 12000 },
+      communities: [
+        community(
+          { sellerFailedFeeCop: 10000 },
+          { scheduled: programada("sellerFailedFeeCop", 10000, 11500, at(8)) }
+        )
+      ],
+      nowIso: AHORA
+    });
+    expect(cambios[0].deleteFields).toEqual(["scheduled.sellerFailedFeeCop"]);
+  });
+});
+
+/**
+ * T7 · Guardas de fuente del trigger y del writer. Aparte, SIN el `beforeEach` de arriba: cada una
+ * tiene que fallar por su propio motivo (la ruta `settings/app`, el import que falta, el writer que
+ * no existe), no porque al modulo puro le falte un export.
+ *
+ * El writer importa `firebase-admin` y no se puede probar en unidad (plan 004 §4): la guarda es la
+ * unica red que impide que el aviso (`floorRaisedAt`) o el historial se pierdan entre el plan y
+ * Firestore.
+ */
+describe("T7 · RF_13: guardas de fuente del trigger y del writer", () => {
+  it("RF_13 · el trigger escucha settings/global, los ajustes que de verdad se usan para cobrar", () => {
+    expect(fuenteSinComentarios("community-floor-trigger.ts")).toContain('onDocumentUpdated("settings/global"');
+  });
+
+  it("RF_13 · el trigger ya no escucha settings/app, que no existe en produccion", () => {
+    expect(fuenteSinComentarios("community-floor-trigger.ts")).not.toContain('"settings/app"');
+  });
+
+  it("RF_13 · el trigger escribe via community-floor-writer (el mismo writer que usara la pasada de RF_14)", () => {
+    expect(fuenteSinComentarios("community-floor-trigger.ts")).toMatch(/from\s+["']\.\/community-floor-writer["']/);
+  });
+
+  it("RF_13 · el trigger no conserva su batch propio: una sola copia de la escritura", () => {
+    expect(fuenteSinComentarios("community-floor-trigger.ts")).not.toMatch(/\.batch\s*\(/);
+  });
+
+  it("RF_13 · el writer copia communityUpdate ENTERO, floorRaisedAt (el aviso) incluido", () => {
+    // Copiar clave a clave (`pricing.X`) perderia la marca de aviso entre el plan y Firestore.
+    expect(fuenteSinComentarios("community-floor-writer.ts")).toMatch(
+      /\.\.\.\s*[\w.?]*communityUpdate\b|Object\.assign\([^)]*communityUpdate/
+    );
+  });
+
+  it("RF_13 · el writer traduce deleteFields a FieldValue.delete()", () => {
+    const writer = fuenteSinComentarios("community-floor-writer.ts");
+    expect(writer).toMatch(/deleteFields/);
+    expect(writer).toMatch(/FieldValue\.delete\(\)/);
+  });
+
+  it("RF_13 · el writer recorre historyEntries y escribe cada una en priceHistory", () => {
+    const writer = fuenteSinComentarios("community-floor-writer.ts");
+    expect(writer).toMatch(/for\s*\([^)]*\bof\s+[\w.?]*historyEntries\s*\)|historyEntries\s*\.\s*(forEach|map)\s*\(/);
+    expect(writer).toMatch(/["']priceHistory["']/);
+  });
+});
+
+/**
+ * T8 · RF_14: la pasada unica. Al desplegar se aplica UNA vez la elevacion de RF_13 a todo precio
+ * guardado por debajo de la base real, con el mismo aviso e historial, en seco por defecto.
+ *
+ * Dos mitades, cada una roja por su propio motivo:
+ * - Casos puros: lo que la pasada calcula. Usan `planRaiseToFloors` (T7) con los TRES pisos de
+ *   `communityBase(resolveTariffs(settings/global))`. T7 ya fija la idempotencia con UN solo piso
+ *   (el fallido, "planRaiseToFloors aplicado dos veces seguidas"); aqui solo se anade la entrada
+ *   real de la pasada, que son los tres conceptos a la vez.
+ * - Guardas de fuente sobre `scripts/raise-community-floors.js`: el script importa firebase-admin
+ *   y lee produccion, asi que no se ejecuta en unidad. La guarda es la red que impide que la pasada
+ *   escriba sin `--apply`, o que calcule o escriba con una copia propia de la regla.
+ */
+describe("T8 · RF_14: la pasada unica eleva al piso real con el mismo aviso e historial", () => {
+  /** `settings/global` de PRODUCCION (plan 004 §0): el ajuste del fallido dice 9.000 y se cobra 12.000. */
+  const SETTINGS_PROD: Record<string, unknown> = {
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 9000,
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000
+  };
+  const AHORA = at(5);
+
+  let planRaiseToFloors: PlanRaiseToFloors;
+  let pisosDeLaPasada: () => Partial<PricingValues>;
+
+  beforeEach(async () => {
+    const precios = (await import("../../functions/src/community-pricing")) as unknown as {
+      planRaiseToFloors?: PlanRaiseToFloors;
+    };
+    const cargos = (await import("../../functions/src/seller-charges")) as unknown as {
+      communityBase?: (tariffs: unknown) => Partial<PricingValues>;
+      resolveTariffs?: (settings: Record<string, unknown>) => unknown;
+    };
+    if (typeof precios.planRaiseToFloors !== "function") {
+      throw new Error("functions/src/community-pricing.ts no exporta planRaiseToFloors (T7).");
+    }
+    if (typeof cargos.communityBase !== "function" || typeof cargos.resolveTariffs !== "function") {
+      throw new Error("functions/src/seller-charges.ts no exporta communityBase/resolveTariffs (T2).");
+    }
+    planRaiseToFloors = precios.planRaiseToFloors;
+    const { communityBase, resolveTariffs } = cargos;
+    // La formula de la pasada, tal como la fija el plan 004 §3.6. Nunca un literal.
+    pisosDeLaPasada = () => communityBase(resolveTariffs(SETTINGS_PROD));
+  });
+
+  it("RF_14 · los pisos de la pasada son la base real de los TRES conceptos: 12.000 / 12.000 / 2.000 (el fallido del ajuste, 9.000, no manda)", () => {
+    expect(pisosDeLaPasada()).toEqual({
+      sellerDeliveredFeeCop: 12000,
+      sellerFailedFeeCop: 12000,
+      fulfillmentFeeCop: 2000
+    });
+  });
+
+  it("RF_14 · con fallido propio 10.000 y entrega propia 12.500, la pasada eleva SOLO el fallido a 12.000 con su aviso", () => {
+    const cambios = planRaiseToFloors({
+      floors: pisosDeLaPasada(),
+      communities: [community({ sellerFailedFeeCop: 10000, sellerDeliveredFeeCop: 12500 })],
+      nowIso: AHORA
+    });
+    expect(cambios).toHaveLength(1);
+    expect(cambios[0].fields).toEqual(["sellerFailedFeeCop"]);
+    expect(cambios[0].communityUpdate).toEqual({
+      "pricing.sellerFailedFeeCop": 12000,
+      "floorRaisedAt.sellerFailedFeeCop": AHORA,
+      updatedAt: AHORA
+    });
+  });
+
+  it("RF_14 · el historial de la pasada es IDENTICO al que produce el trigger para ese concepto (system:floor, desde ya)", () => {
+    const comunidad = community({ sellerFailedFeeCop: 10000, sellerDeliveredFeeCop: 12500 });
+    const pasada = planRaiseToFloors({ floors: pisosDeLaPasada(), communities: [comunidad], nowIso: AHORA });
+    // Lo que el trigger compone para el fallido: planRaiseToFloors con el piso de ESE concepto solo.
+    const trigger = planRaiseToFloors({
+      floors: { sellerFailedFeeCop: 12000 },
+      communities: [comunidad],
+      nowIso: AHORA
+    });
+    expect(pasada[0].historyEntries).toEqual([
+      {
+        field: "sellerFailedFeeCop",
+        fromCop: 10000,
+        toCop: 12000,
+        effectiveAt: AHORA,
+        actorUid: AUTOR_PISO,
+        actorRole: "system",
+        createdAt: AHORA
+      }
+    ]);
+    expect(pasada).toEqual(trigger);
+  });
+
+  it("RF_14 · E-master de hoy (sin precios propios, activa y con lider) => la pasada no cambia nada", () => {
+    // Lo que se espera ver en produccion al correrla en seco (plan 004 §7 paso 4): 0 cambios.
+    // `community()` ya la deja activa y con `leaderUid`: el unico estado en que el precio propio cuenta.
+    const eMaster = community({}, { id: "e-master", name: "E-master", slug: "e-master", status: "active" });
+    expect(eMaster.leaderUid).toBe(UID_LIDER);
+    expect(planRaiseToFloors({ floors: pisosDeLaPasada(), communities: [eMaster], nowIso: AHORA })).toEqual([]);
+  });
+
+  it("RF_14 · caso limite: dos pasadas con los tres pisos => la segunda no cambia nada ni vuelve a avisar", () => {
+    // T7 lo fija con un solo piso; aqui con la entrada real de la pasada (los tres conceptos a la vez).
+    const original = community({ sellerFailedFeeCop: 10000, sellerDeliveredFeeCop: 11000, fulfillmentFeeCop: 1500 });
+    const primera = planRaiseToFloors({ floors: pisosDeLaPasada(), communities: [original], nowIso: AHORA });
+    expect([...primera[0].fields].sort()).toEqual(["fulfillmentFeeCop", "sellerDeliveredFeeCop", "sellerFailedFeeCop"]);
+    const yaElevada = aplicar(original, primera[0]);
+    expect(planRaiseToFloors({ floors: pisosDeLaPasada(), communities: [yaElevada], nowIso: at(6) })).toEqual([]);
+  });
+});
+
+/**
+ * T8 · Guardas de fuente de `scripts/raise-community-floors.js`. Aparte y sin `beforeEach`: cada
+ * una falla por su motivo (hoy, porque el script no existe).
+ */
+describe("T8 · RF_14: guardas de fuente de la pasada (scripts/raise-community-floors.js)", () => {
+  const RUTA_PASADA = "../../scripts/raise-community-floors.js";
+
+  /** Codigo del script sin comentarios: una guarda no se da por buena con un comentario. */
+  function fuentePasada(): string {
+    const raw = readFileSync(fileURLToPath(new URL(RUTA_PASADA, import.meta.url)), "utf8");
+    return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  }
+
+  /** El nombre de la bandera que lee `--apply` (p.ej. `APPLY`), o null si no la hay. */
+  function banderaApply(src: string): string | null {
+    const m = src.match(/(?:const|let|var)\s+(\w+)\s*=\s*process\.argv\.includes\(\s*["']--apply["']\s*\)/);
+    return m ? m[1] : null;
+  }
+
+  it("RF_14 · en seco por defecto: solo escribe si se pasa --apply (process.argv.includes(\"--apply\"))", () => {
+    expect(banderaApply(fuentePasada())).not.toBeNull();
+  });
+
+  it("RF_14 · la escritura (writeFloorRaise) va detras de la comprobacion de --apply", () => {
+    const src = fuentePasada();
+    const bandera = banderaApply(src);
+    expect(bandera).not.toBeNull();
+    const guarda = src.search(new RegExp(`if\\s*\\(\\s*!?\\s*${bandera}\\b`));
+    const llamadas = [...src.matchAll(/\bwriteFloorRaise\s*\(/g)].map((m) => m.index ?? -1);
+    expect(guarda).toBeGreaterThanOrEqual(0);
+    expect(llamadas.length).toBeGreaterThan(0);
+    for (const i of llamadas) expect(i).toBeGreaterThan(guarda);
+  });
+
+  it("RF_14 · usa el plan puro compilado: require de ../functions/lib/community-pricing y llama a planRaiseToFloors", () => {
+    const src = fuentePasada();
+    expect(src).toMatch(/require\(\s*["']\.\.\/functions\/lib\/community-pricing(?:\.js)?["']\s*\)/);
+    expect(src).toMatch(/\bplanRaiseToFloors\s*\(/);
+  });
+
+  it("RF_14 · los pisos salen de communityBase(resolveTariffs(...)) de ../functions/lib/seller-charges", () => {
+    const src = fuentePasada();
+    expect(src).toMatch(/require\(\s*["']\.\.\/functions\/lib\/seller-charges(?:\.js)?["']\s*\)/);
+    expect(src).toMatch(/\bcommunityBase\s*\(\s*resolveTariffs\s*\(/);
+  });
+
+  it("RF_14 · escribe con el MISMO writer que el trigger: require de ../functions/lib/community-floor-writer", () => {
+    expect(fuentePasada()).toMatch(/require\(\s*["']\.\.\/functions\/lib\/community-floor-writer(?:\.js)?["']\s*\)/);
+  });
+
+  it("RF_14 · lee settings/global (los ajustes que se cobran), no settings/app", () => {
+    const src = fuentePasada();
+    expect(src).toMatch(/["']settings\/global["']|collection\(\s*["']settings["']\s*\)\s*\.doc\(\s*["']global["']\s*\)/);
+    expect(src).not.toMatch(/["']settings\/app["']|\.doc\(\s*["']app["']\s*\)/);
+  });
+
+  it("RF_14 · recorre la coleccion communities", () => {
+    expect(fuentePasada()).toMatch(/collection\(\s*["']communities["']\s*\)/);
+  });
+
+  it("RF_14 · no redefine la aritmetica ni la escritura: sin pricing.* propios, sin FieldValue.delete, sin batch/update propios", () => {
+    const src = fuentePasada();
+    expect(src).not.toMatch(/["']pricing\.\w+["']/);
+    expect(src).not.toMatch(/\bpricing\.\w+\s*=[^=]/);
+    expect(src).not.toMatch(/FieldValue\.delete/);
+    expect(src).not.toMatch(/\.batch\s*\(/);
+    expect(src).not.toMatch(/\.update\s*\(/);
+    expect(src).not.toMatch(/["']priceHistory["']/);
+  });
+
+  it("RF_14 · imprime el plan (console.log) antes de escribir", () => {
+    const src = fuentePasada();
+    const imprime = src.search(/console\.(log|table)\s*\(/);
+    const escribe = src.search(/\bwriteFloorRaise\s*\(/);
+    expect(imprime).toBeGreaterThanOrEqual(0);
+    expect(escribe).toBeGreaterThanOrEqual(0);
+    expect(imprime).toBeLessThan(escribe);
+  });
+
+  it("RF_14 · si falta functions/lib falla con un mensaje claro que pide npm run build", () => {
+    expect(fuentePasada()).toMatch(/npm run build/);
   });
 });

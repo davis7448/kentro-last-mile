@@ -30,6 +30,7 @@ import {
 import {
   buildPriceHistoryEntry,
   buildStoreTariffView,
+  validateCommunityPriceFloor,
   COMMUNITY_PRICING_FIELDS,
   planLogoChange,
   planScheduledRaiseCancellation,
@@ -38,7 +39,7 @@ import {
 } from "./community-pricing";
 import { leaderEmailPrecheck, leaderRollbackPlan } from "./community-leader-create";
 import { planLeadershipGrant, planLeadershipRevoke } from "./community-grant";
-import { resolveTariffs } from "./wallet-entries";
+import { communityBase, resolveTariffs } from "./seller-charges";
 import { isRetiredSlugStillValid, normalizeSlug, planSlugChange, validateSlug, type SlugWrite } from "./community-slug";
 import {
   planBulkSignupDisable,
@@ -826,10 +827,12 @@ const priceSchema = z.object({
 /**
  * RF_18, RF_19, RF_28, RF_38, RF_39, RF_54.
  *
- * El piso que se valida aqui es la base GLOBAL, que es la unica cifra estable en el momento de
- * programar. El piso real de cada pedido es la base efectiva de su zona y actua al congelar:
- * si la zona es mas cara, ese pedido no genera cashback y el panel lo cuenta aparte, para que
- * el lider vea por que no cobro en vez de ver menos dinero sin explicacion.
+ * El piso que se valida aqui es la base REAL sin zona (RF_05 de la 004):
+ * `communityBase(resolveTariffs(settings/global))`, con el fallido fijo dentro. No el ajuste
+ * crudo, que en produccion dice 9.000 mientras se cobra 12.000. La decision y su mensaje viven en
+ * `validateCommunityPriceFloor`, que es donde estan probados. El piso de cada pedido lo pone el
+ * cierre con la base de su zona (RF_11): si la zona es mas cara, se cobra esa base y el pedido deja
+ * menos o cero cashback, y el mensaje de rechazo ya lo avisa (RF_12).
  */
 export const scheduleCommunityPrice = onCall(async (request) => {
   const actor = actorFrom(request);
@@ -843,10 +846,10 @@ export const scheduleCommunityPrice = onCall(async (request) => {
   const db = getFirestore();
   const now = new Date().toISOString();
   const settingsSnap = await db.collection("settings").doc("global").get();
-  const floor = Number(settingsSnap.data()?.[field]) || 0;
-  if (amountCop < floor) {
-    throw new HttpsError("invalid-argument", `El minimo para este concepto es ${floor}.`);
-  }
+  const base = communityBase(resolveTariffs(settingsSnap.data() ?? {}));
+  const verdict = validateCommunityPriceFloor(field, amountCop, base);
+  if (!verdict.ok) throw new HttpsError("invalid-argument", verdict.reason);
+  const floor = base[field];
 
   const communityRef = db.collection("communities").doc(communityId);
   await db.runTransaction(async (transaction) => {
@@ -1102,7 +1105,9 @@ export const getMyStoreTariff = onCall(async (request) => {
     db.collection("sellers").doc(actor.sellerId).get(),
     db.collection("settings").doc("global").get()
   ]);
-  const base = resolveTariffs(settingsSnap.data() ?? {}, undefined);
+  // RF_10 de la 004: "Tu tarifa" parte de la base REAL (con el fallido fijo), la misma que cobra
+  // el cierre; no del ajuste crudo, que le mostraba a la tienda un fallido que no se le cobra.
+  const base = communityBase(resolveTariffs(settingsSnap.data() ?? {}, undefined));
   const communityId = typeof sellerSnap.data()?.communityId === "string" ? String(sellerSnap.data()?.communityId) : "";
   // Sin comunidad tambien pasa por la funcion pura: la respuesta tiene que tener la MISMA forma
   // con comunidad y sin ella. Devolver `base` tal cual le filtraba a la tienda lo que se le paga

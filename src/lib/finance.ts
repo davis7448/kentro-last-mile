@@ -1,17 +1,8 @@
 import type { AppState, CashReceipt, Order, Settlement, WalletEntry } from "./types";
-
-const dandaSellerIds = new Set(["seller-1779315416119"]);
-const dandaPreferredDriverId = "driver-1778271901513";
-const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
-const dandaSellerFeeCutoff = Date.parse("2026-07-17T05:00:00.000Z");
-
-type Tariffs = {
-  sellerDeliveredFeeCop: number;
-  sellerFailedFeeCop: number;
-  fulfillmentFeeCop: number;
-  driverDeliveredPayCop: number;
-  driverFailedPayCop: number;
-};
+import type { Tariffs } from "../../functions/src/seller-charges";
+// Import de VALOR a proposito: seller-charges.ts no importa nada, asi que entra al bundle del
+// cliente sin arrastrar el servidor. Es la unica copia de la regla de cobro (ver su cabecera).
+import { resolveSellerCharges, resolveTariffs } from "../../functions/src/seller-charges";
 
 export function isChargeableFailedOrder(order: Pick<Order, "status" | "failedCategory">) {
   return order.status === "failed" && (order.failedCategory ?? "failed_visit") === "failed_visit";
@@ -35,30 +26,19 @@ export function isOrderEligibleForSellerSettlement(
   return !orderHasPendingDriverCod(order) || codReceivedOrderIds.has(order.id);
 }
 
-function applySellerTariffOverrides(order: Order, tariffs: Tariffs): Tariffs {
-  if (!dandaSellerIds.has(order.sellerId)) {
-    return {
-      ...tariffs,
-      sellerFailedFeeCop: 12000
-    };
-  }
-  const pickedUpAt = order.pickedUpAt ? Date.parse(order.pickedUpAt) : Number.NaN;
-  const usesNewDriverPay =
-    order.driverId === dandaPreferredDriverId &&
-    Number.isFinite(pickedUpAt) &&
-    pickedUpAt >= dandaDriverPayCutoff;
-  // La tarifa de $13.500 aplica por fecha de ENTREGA (no de creacion): se toma de
-  // la evidencia de entrega y, si aun no existe, del cierre/actualizacion del pedido.
+/**
+ * Lo que se cobra (y se paga) por este pedido, con la MISMA regla que el cierre del servidor:
+ * `resolveTariffs` (zona > ajuste > defecto) y `resolveSellerCharges` (fallido fijo, DANDA).
+ *
+ * La fecha de entrega sale de la ultima evidencia de entrega y, si aun no existe, del
+ * cierre/actualizacion del pedido: es la que decide el flete de DANDA por fecha de ENTREGA.
+ */
+function chargesForOrder(order: Order, state: AppState): Tariffs {
+  const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
+  const tariffs = resolveTariffs(state.settings, zone);
   const deliveryEvidence = [...(order.evidence ?? [])].reverse().find((item) => item.type === "delivery");
-  const deliveredAt = Date.parse(deliveryEvidence?.createdAt ?? order.updatedAt ?? order.createdAt);
-  const sellerDeliveredFeeCop = Number.isFinite(deliveredAt) && deliveredAt >= dandaSellerFeeCutoff ? 13500 : 12000;
-  return {
-    ...tariffs,
-    sellerDeliveredFeeCop,
-    sellerFailedFeeCop: 0,
-    driverDeliveredPayCop: usesNewDriverPay ? 11000 : 10000,
-    driverFailedPayCop: 0
-  };
+  const deliveredAtIso = deliveryEvidence?.createdAt ?? order.updatedAt ?? order.createdAt;
+  return resolveSellerCharges(order, tariffs, deliveredAtIso);
 }
 
 export function formatCop(value: number): string {
@@ -163,28 +143,13 @@ export function mergeWalletEntries(current: WalletEntry[], incoming: WalletEntry
 }
 
 export function sellerDeliveredFeeForOrder(order: Order, state: AppState): number {
-  const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
-  const tariffs = applySellerTariffOverrides(order, {
-    sellerDeliveredFeeCop: zone?.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop,
-    sellerFailedFeeCop: zone?.sellerFailedFeeCop || state.settings.sellerFailedFeeCop,
-    fulfillmentFeeCop: zone?.fulfillmentFeeCop || state.settings.fulfillmentFeeCop,
-    driverDeliveredPayCop: zone?.driverDeliveredPayCop || state.settings.driverDeliveredPayCop,
-    driverFailedPayCop: zone?.driverFailedPayCop || state.settings.driverFailedPayCop
-  });
-  return tariffs.sellerDeliveredFeeCop;
+  return chargesForOrder(order, state).sellerDeliveredFeeCop;
 }
 
 export function entriesForClosedOrder(order: Order, state: AppState): WalletEntry[] {
   const now = new Date().toISOString();
   const entries: WalletEntry[] = [];
-  const zone = order.zoneId ? state.zones.find((item) => item.id === order.zoneId) : undefined;
-  const tariffs = applySellerTariffOverrides(order, {
-    sellerDeliveredFeeCop: zone?.sellerDeliveredFeeCop || state.settings.sellerDeliveredFeeCop,
-    sellerFailedFeeCop: zone?.sellerFailedFeeCop || state.settings.sellerFailedFeeCop,
-    fulfillmentFeeCop: zone?.fulfillmentFeeCop || state.settings.fulfillmentFeeCop,
-    driverDeliveredPayCop: zone?.driverDeliveredPayCop || state.settings.driverDeliveredPayCop,
-    driverFailedPayCop: zone?.driverFailedPayCop || state.settings.driverFailedPayCop
-  });
+  const tariffs = chargesForOrder(order, state);
 
   if (order.status === "delivered" && order.paymentMethod === "cod") {
     entries.push({

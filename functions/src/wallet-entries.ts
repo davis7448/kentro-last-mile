@@ -11,48 +11,13 @@
  * Eso hace que cerrar dos veces el mismo pedido sea idempotente, y permite al planificador de
  * correcciones comparar por id lo que un pedido TIENE contra lo que DEBERIA tener.
  */
-import { cashbackForFrozenPricing, type FrozenPricing } from "./community-pricing";
+import { communityChargeAtClose, type CashbackBreakdown, type FrozenPricing } from "./community-pricing";
+import { defaultSettings, resolveSellerCharges } from "./seller-charges";
 import type { WalletEntryDoc } from "./settlement-math";
 
-export const defaultSettings = {
-  sellerDeliveredFeeCop: 12000,
-  sellerFailedFeeCop: 12000,
-  fulfillmentFeeCop: 2000,
-  driverDeliveredPayCop: 9000,
-  driverFailedPayCop: 9000
-};
-
-export const tariffFields = [
-  "sellerDeliveredFeeCop",
-  "sellerFailedFeeCop",
-  "fulfillmentFeeCop",
-  "driverDeliveredPayCop",
-  "driverFailedPayCop"
-] as const;
-
-const dandaSellerIds = new Set(["seller-1779315416119"]);
-const dandaPreferredDriverId = "driver-1778271901513";
-const dandaDriverPayCutoff = Date.parse("2026-06-09T05:00:00.000Z");
-const dandaSellerFeeCutoff = Date.parse("2026-07-17T05:00:00.000Z");
-
-// La tarifa de flete de DANDA subio a $13.500 para pedidos ENTREGADOS desde el
-// 17-jul-2026 (sin importar la fecha de creacion). En closeOrder, deliveredAtIso
-// es el momento del cierre (= fecha de entrega).
-export function dandaDeliveredFeeCop(deliveredAtIso: string): number {
-  const deliveredAt = typeof deliveredAtIso === "string" ? Date.parse(deliveredAtIso) : Number.NaN;
-  return Number.isFinite(deliveredAt) && deliveredAt >= dandaSellerFeeCutoff ? 13500 : 12000;
-}
-
-export function resolveTariffs(settings: Record<string, any>, zone?: Record<string, any>): Record<string, number> {
-  const values: Record<string, number> = {};
-  for (const field of tariffFields) {
-    const zoneValue = Number(zone?.[field]);
-    const settingValue = Number(settings[field]);
-    const fallbackValue = Number(defaultSettings[field]);
-    values[field] = Number.isFinite(zoneValue) && zoneValue > 0 ? zoneValue : Number.isFinite(settingValue) && settingValue > 0 ? settingValue : fallbackValue;
-  }
-  return values;
-}
+// Las tarifas y la regla de cobro a la tienda viven en seller-charges.ts (la unica copia). Se
+// reexportan aqui, el mismo objeto y no una copia, para no romper a los importadores de siempre.
+export { defaultSettings, dandaDeliveredFeeCop, resolveTariffs, tariffFields } from "./seller-charges";
 
 // Entregado consume stock; fallido definitivo solo libera la reserva; reagendado no toca nada
 // (la reserva sigue viva porque el pedido sigue abierto). Solo actua si el pedido reservo.
@@ -131,49 +96,37 @@ export function resolveProductCostLinesForOrder(order: Record<string, any>, cata
 }
 
 export function buildWalletEntries(order: Record<string, any>, settings: Record<string, any>, now: string, productCostLines?: ProductCostLine[] | null): WalletEntryDoc[] {
-  const pickedUpAt = typeof order.pickedUpAt === "string" ? Date.parse(order.pickedUpAt) : Number.NaN;
-  const usesNewDandaDriverPay =
-    String(order.driverId ?? "") === dandaPreferredDriverId &&
-    Number.isFinite(pickedUpAt) &&
-    pickedUpAt >= dandaDriverPayCutoff;
-  const values = dandaSellerIds.has(String(order.sellerId ?? ""))
-    ? {
-        ...defaultSettings,
-        ...settings,
-        sellerDeliveredFeeCop: dandaDeliveredFeeCop(now),
-        sellerFailedFeeCop: 0,
-        driverDeliveredPayCop: usesNewDandaDriverPay ? 11000 : 10000,
-        driverFailedPayCop: 0
-      }
-    : {
-        ...defaultSettings,
-        ...settings,
-        // DELIBERADO y va DESPUES del spread: el cobro por fallido es 12.000 para toda
-        // tienda que no sea DANDA, pase lo que pase. Gana sobre `settings/global` Y sobre la
-        // tarifa de zona que resolvio resolveTariffs. Es decir: cambiar sellerFailedFeeCop en
-        // la pantalla de ajustes NO tiene efecto. Ya paso una vez (ago-2026, se puso en 9.000
-        // y se siguio cobrando 12.000 sin que nada avisara). Si algun dia debe mandar el
-        // ajuste, hay que quitar esta linea Y limpiar sellerFailedFeeCop de las zonas.
-        sellerFailedFeeCop: 12000
-      };
+  // `settings` ya llega resuelto (resolveTariffs), pero se rellena con los valores por defecto
+  // igual que siempre: si un llamador pasa un objeto incompleto, el importe no cambia.
+  // DANDA y el fallido fijo (SELLER_FAILED_FEE_FIXED_COP) se deciden en seller-charges.ts.
+  const values = resolveSellerCharges(order, { ...defaultSettings, ...settings }, now);
 
   /**
-   * Precio de comunidad congelado al CREAR el pedido. Va aqui a proposito, despues del bloque
-   * anterior: la linea `sellerFailedFeeCop: 12000` gana sobre los ajustes y sobre la zona, y si
-   * este bloque fuera antes, el flete de fallido de una comunidad se anularia en silencio —
-   * exactamente lo que ya paso en ago-2026 con la pantalla de ajustes.
+   * Pedido de comunidad (RF_11, RF_04, RF_06). Al crear solo se congela el precio PROPIO del
+   * lider; la base se decide AQUI, al cerrar, y es `values`: la misma que pagaria una tienda sin
+   * comunidad con esta zona, esta fecha y estos ajustes. Se cobra la mayor entre esa base y el
+   * precio del lider, y el cashback es la diferencia. Congelar tambien la base cobraba de menos
+   * cuando la zona se editaba despues de crear, y convertia una bajada de la base en cashback de
+   * un lider que no habia fijado nada.
    *
-   * Una tienda con tarifa especial en codigo (DANDA) nunca deberia llegar aqui con precio
-   * congelado: su flete depende de la fecha de ENTREGA y el congelado es de la fecha de
-   * CREACION. `freezeOrderPricing` se encarga de no congelarlas.
+   * Va despues de `resolveSellerCharges` a proposito: el fijo SELLER_FAILED_FEE_FIXED_COP y el
+   * flete de DANDA entran en la base y hacen de piso. Si este bloque fuera antes, el flete de
+   * fallido de una comunidad se anularia en silencio — lo que ya paso en ago-2026 con la
+   * pantalla de ajustes.
    */
   const frozen = (order.communityPricing ?? undefined) as FrozenPricing | undefined;
+  let cashback: CashbackBreakdown = { deliveredCop: 0, failedCop: 0, fulfillmentCop: 0, totalCop: 0 };
   if (frozen) {
-    values.sellerDeliveredFeeCop = Number(frozen.sellerDeliveredFeeCop);
-    values.sellerFailedFeeCop = Number(frozen.sellerFailedFeeCop);
-    values.fulfillmentFeeCop = Number(frozen.fulfillmentFeeCop);
+    const atClose = communityChargeAtClose(frozen, {
+      sellerDeliveredFeeCop: values.sellerDeliveredFeeCop,
+      sellerFailedFeeCop: values.sellerFailedFeeCop,
+      fulfillmentFeeCop: values.fulfillmentFeeCop
+    });
+    values.sellerDeliveredFeeCop = atClose.charged.sellerDeliveredFeeCop;
+    values.sellerFailedFeeCop = atClose.charged.sellerFailedFeeCop;
+    values.fulfillmentFeeCop = atClose.charged.fulfillmentFeeCop;
+    cashback = atClose.cashback;
   }
-  const cashback = cashbackForFrozenPricing(frozen);
 
   const entries: WalletEntryDoc[] = [];
 

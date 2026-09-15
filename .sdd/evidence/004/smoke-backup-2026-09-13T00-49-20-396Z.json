@@ -1,0 +1,109 @@
+{
+  "backedUpAt": "2026-09-13T00:49:20.396Z",
+  "orderId": "smoke004-order-1789260529130",
+  "driverId": "smoke004-1789260529130",
+  "order": {
+    "id": "smoke004-order-1789260529130",
+    "trackingCode": "SMOKE004-1789260529130",
+    "shopifyOrderId": "smoke004-1789260529130",
+    "sellerId": "seller-1789149795537",
+    "cityId": "city-cali",
+    "driverId": "smoke004-1789260529130",
+    "customerName": "Smoke 004 (prueba, no despachar)",
+    "customerPhone": "",
+    "addressRaw": "Prueba del smoke 004 - no despachar",
+    "addressRisk": "accepted",
+    "paymentMethod": "prepaid",
+    "fulfillmentMode": "seller_pickup",
+    "totalCop": 1000,
+    "pickupPointName": "Prueba",
+    "pickupAddress": "",
+    "communityId": "com-1789149566989",
+    "communityPricing": {
+      "communityId": "com-1789149566989",
+      "frozenAt": "2026-09-13T00:48:48.823Z",
+      "pricingVersion": 2,
+      "sellerDeliveredFeeCop": 12000,
+      "baseDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "baseFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "baseFulfillmentFeeCop": 2000
+    },
+    "createdAt": "2026-09-13T00:48:48.823Z",
+    "evidence": [
+      {
+        "id": "ev-1789260541027",
+        "type": "failed",
+        "photoLabel": "smoke-004-sin-foto",
+        "note": "Smoke 004: fallido cobrable de prueba (se borra en cleanup).",
+        "reason": "Cliente no recibe",
+        "failedCategory": "failed_visit",
+        "actorId": "smoke004-1789260529130",
+        "createdAt": "2026-09-13T00:48:59.947Z"
+      }
+    ],
+    "failedCategory": "failed_visit",
+    "failedCategorySource": "driver",
+    "retryDecision": "pending",
+    "closedAt": "2026-09-13T00:48:59.947Z",
+    "updatedAt": "2026-09-13T00:48:59.947Z",
+    "failedReason": "Cliente no recibe",
+    "status": "failed"
+  },
+  "walletEntries": [
+    {
+      "id": "we-smoke004-order-1789260529130-driver-failed-pay",
+      "amountCop": 8000,
+      "ownerType": "driver",
+      "createdAt": "2026-09-13T00:48:59.947Z",
+      "orderId": "smoke004-order-1789260529130",
+      "description": "Pago transportista fallido smoke004-1789260529130",
+      "ownerId": "smoke004-1789260529130",
+      "settlementId": "",
+      "type": "driver_earning"
+    },
+    {
+      "id": "we-smoke004-order-1789260529130-seller-failed-fee",
+      "amountCop": -12000,
+      "ownerType": "seller",
+      "createdAt": "2026-09-13T00:48:59.947Z",
+      "orderId": "smoke004-order-1789260529130",
+      "description": "Cobro fallido smoke004-1789260529130",
+      "ownerId": "seller-1789149795537",
+      "settlementId": "",
+      "type": "failed_fee"
+    }
+  ],
+  "auditEvents": [
+    {
+      "id": "ZrSl3dctJO47ShX6MtAI",
+      "actorId": "smoke004-1789260529130",
+      "actorRole": "driver",
+      "action": "order.failed",
+      "entity": "order",
+      "entityId": "smoke004-order-1789260529130",
+      "fromStatus": "in_route",
+      "toStatus": "failed",
+      "summary": "Pedido fallido y wallet actualizada",
+      "createdAt": "2026-09-13T00:48:59.947Z"
+    }
+  ],
+  "driver": {
+    "id": "smoke004-1789260529130",
+    "name": "Smoke 004 (desechable)",
+    "phone": "",
+    "active": true,
+    "email": "smoke004-1789260529130@kentro.invalid",
+    "createdAt": "2026-09-13T00:48:48.823Z",
+    "updatedAt": "2026-09-13T00:48:48.823Z"
+  },
+  "authUser": {
+    "uid": "smoke004-1789260529130",
+    "email": "smoke004-1789260529130@kentro.invalid",
+    "customClaims": {
+      "role": "driver",
+      "driverId": "smoke004-1789260529130"
+    }
+  }
+}

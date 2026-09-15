@@ -5,7 +5,9 @@ import {
   buildCommunityStats,
   type RawCommunityAggregates
 } from "../../functions/src/community-stats-math";
-import { buildWalletEntries } from "../../functions/src/wallet-entries";
+import { freezeOrderPricing, type CommunityLike } from "../../functions/src/community-pricing";
+import { communityBase } from "../../functions/src/seller-charges";
+import { buildWalletEntries, resolveTariffs } from "../../functions/src/wallet-entries";
 import { communityCashbackPaidCop } from "./community-view";
 import type { OrderCommunityPricing } from "./types";
 
@@ -370,5 +372,180 @@ describe("T42 · RNF_01: las cifras del panel no salen de la wallet del navegado
       LEADER_ID
     );
     expect(pagado).toBe(7000);
+  });
+});
+
+/**
+ * T5 · RF_11 — el cierre cobra la base DE ESE MOMENTO, no la congelada al crear.
+ *
+ * Hasta T4 `buildWalletEntries` pisaba el cobro con `frozen.seller<X>` y media el cashback contra
+ * `frozen.base<X>`: las dos cifras eran las del instante de CREAR. RF_11 cambia la mitad de la base:
+ * el precio del lider sigue congelado, pero la base sale de `resolveSellerCharges` con las tarifas
+ * del cierre, la misma funcion que cobra a una tienda sin comunidad. Estas pruebas se escriben con
+ * los ajustes de PRODUCCION, donde el fallido del ajuste es 9.000 y lo que se cobra es el fijo de
+ * 12.000: es exactamente la distancia que dejaba cobrar de menos.
+ */
+
+// Ajustes de produccion tal cual (settings/global): el fallido crudo es 9.000.
+const SETTINGS_PROD = {
+  sellerDeliveredFeeCop: 12000,
+  sellerFailedFeeCop: 9000,
+  fulfillmentFeeCop: 2000,
+  driverDeliveredPayCop: 9000,
+  driverFailedPayCop: 9000
+};
+// La base cruda que congelaba el sistema viejo: lee el ajuste, no lo que se cobra.
+const RAW_SETTINGS_BASE = { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 9000, fulfillmentFeeCop: 2000 };
+// La base real (con el fijo del fallido), la que congelaria hoy el sello del pedido.
+const REAL_BASE = communityBase(resolveTariffs(SETTINGS_PROD));
+const ZONE_WITH_HANDLING = { fulfillmentFeeCop: 2500 };
+const CREATED_AT = "2026-09-01T00:00:00.000Z";
+
+/** Comunidad sana (activa y con lider): la unica que cobra precio propio (RF_20 de la 001). */
+const leaderCommunity = (pricing: CommunityLike["pricing"] = {}): CommunityLike => ({
+  id: "com-1",
+  status: "active",
+  leaderUid: "uid-lider",
+  pricing
+});
+
+/** Congela como lo haria el sello del pedido. Falla en voz alta si no congela nada. */
+function frozenV2(base: typeof RAW_SETTINGS_BASE, pricing: CommunityLike["pricing"] = {}) {
+  const result = freezeOrderPricing(base, leaderCommunity(pricing), CREATED_AT);
+  if (!result) throw new Error("freezeOrderPricing no congelo nada para una comunidad con lider");
+  expect(result.pricingVersion).toBe(2);
+  return result;
+}
+
+const failedOrder = (over: Record<string, unknown> = {}) =>
+  order({ status: "failed", failedCategory: "failed_visit", ...over });
+
+describe("T5 · RF_11: el cierre cobra la base de ese momento", () => {
+  it("RF_11/RF_04: v2 sin precio propio congelado con el fallido crudo de 9.000 cobra 12.000 y no causa cashback", () => {
+    // El smoke del DoD 5: un pedido de comunidad fallido en produccion. Congelado con la base cruda
+    // (9.000), hoy se cobraba 9.000 — 3.000 menos que a una tienda sin comunidad (RF_04).
+    const communityPricing = frozenV2(RAW_SETTINGS_BASE);
+    expect(communityPricing.sellerFailedFeeCop).toBe(9000);
+
+    const entries = buildWalletEntries(failedOrder({ communityPricing }), resolveTariffs(SETTINGS_PROD), NOW);
+
+    expect(find(entries, "we-ord-1-seller-failed-fee")?.amountCop).toBe(-12000);
+    expect(cashbacks(entries)).toHaveLength(0);
+  });
+
+  it("RF_04: ese mismo fallido cobra lo mismo que el de una tienda sin comunidad", () => {
+    // RF_04 literal: nunca menos que sin comunidad. La referencia no es un literal, es el pedido
+    // gemelo sin `communityPricing` cerrado con las mismas tarifas.
+    const tariffs = resolveTariffs(SETTINGS_PROD);
+    const withCommunity = buildWalletEntries(failedOrder({ communityPricing: frozenV2(RAW_SETTINGS_BASE) }), tariffs, NOW);
+    const without = buildWalletEntries(failedOrder(), tariffs, NOW);
+    expect(withCommunity).toEqual(without);
+  });
+
+  it("RF_11: manejo del lider 2.300 desde bodega sin zona cobra 2.300 y causa 300", () => {
+    const communityPricing = frozenV2(REAL_BASE, { fulfillmentFeeCop: 2300 });
+    const entries = buildWalletEntries(
+      order({ fulfillmentMode: "warehouse", communityPricing }),
+      resolveTariffs(SETTINGS_PROD),
+      NOW
+    );
+    expect(find(entries, "we-ord-1-fulfillment-fee")?.amountCop).toBe(-2300);
+    expect(find(entries, "we-ord-1-community-cashback-fulfillment")?.amountCop).toBe(300);
+  });
+
+  it("RF_11: manejo del lider 2.300 desde bodega CON zona de 2.500 cobra la base de la zona y no causa cashback", () => {
+    // Caso limite de la spec: la zona se decide al cierre y su base (2.500) supera el precio del
+    // lider (2.300). Hoy se cobraba 2.300 congelado y se causaban 300 que nadie habia ganado.
+    const communityPricing = frozenV2(REAL_BASE, { fulfillmentFeeCop: 2300 });
+    const entries = buildWalletEntries(
+      order({ fulfillmentMode: "warehouse", communityPricing }),
+      resolveTariffs(SETTINGS_PROD, ZONE_WITH_HANDLING),
+      NOW
+    );
+    expect(find(entries, "we-ord-1-fulfillment-fee")?.amountCop).toBe(-2500);
+    expect(find(entries, "we-ord-1-community-cashback-fulfillment")).toBeUndefined();
+  });
+
+  it("RF_11: si la base sube entre crear y cerrar (13.000 del lider, 14.000 al cierre) se cobra 14.000 sin cashback", () => {
+    const communityPricing = frozenV2(REAL_BASE, { sellerDeliveredFeeCop: 13000 });
+    const entries = buildWalletEntries(
+      order({ communityPricing }),
+      resolveTariffs({ ...SETTINGS_PROD, sellerDeliveredFeeCop: 14000 }),
+      NOW
+    );
+    expect(find(entries, "we-ord-1-seller-delivery-fee")?.amountCop).toBe(-14000);
+    expect(find(entries, "we-ord-1-community-cashback-delivered")).toBeUndefined();
+  });
+
+  it("caso limite: pedido legado (sin pricingVersion) con fallido 9.000/9.000 cobra la base real de 12.000 sin cashback", () => {
+    // Anterior a la 004: su `seller<X>` se toma como precio del lider y su base guardada se ignora.
+    const legacy = frozen({ sellerFailedFeeCop: 9000, baseFailedFeeCop: 9000 });
+    expect("pricingVersion" in legacy).toBe(false);
+    const entries = buildWalletEntries(failedOrder({ communityPricing: legacy }), resolveTariffs(SETTINGS_PROD), NOW);
+    expect(find(entries, "we-ord-1-seller-failed-fee")?.amountCop).toBe(-12000);
+    expect(find(entries, "we-ord-1-community-cashback-failed")).toBeUndefined();
+  });
+
+  it("RNF_01: los ids de cashback y de cobro siguen siendo los deterministas de siempre", () => {
+    const communityPricing = frozenV2(REAL_BASE, {
+      sellerDeliveredFeeCop: 15000,
+      sellerFailedFeeCop: 14000,
+      fulfillmentFeeCop: 2500
+    });
+    const tariffs = resolveTariffs(SETTINGS_PROD);
+    const delivered = buildWalletEntries(order({ fulfillmentMode: "warehouse", communityPricing }), tariffs, NOW);
+    const failed = buildWalletEntries(failedOrder({ fulfillmentMode: "warehouse", communityPricing }), tariffs, NOW);
+
+    expect(new Map(cashbacks(delivered).map((e) => [e.id, e.amountCop]))).toEqual(
+      new Map([
+        ["we-ord-1-community-cashback-delivered", 3000],
+        ["we-ord-1-community-cashback-fulfillment", 500]
+      ])
+    );
+    expect(new Map(cashbacks(failed).map((e) => [e.id, e.amountCop]))).toEqual(
+      new Map([
+        ["we-ord-1-community-cashback-failed", 2000],
+        ["we-ord-1-community-cashback-fulfillment", 500]
+      ])
+    );
+    expect(find(failed, "we-ord-1-seller-failed-fee")?.amountCop).toBe(-14000);
+  });
+
+  it("RNF_01: un cashback de cero no emite asiento, tampoco en v2", () => {
+    const communityPricing = frozenV2(REAL_BASE);
+    const entries = buildWalletEntries(
+      order({ fulfillmentMode: "warehouse", communityPricing }),
+      resolveTariffs(SETTINGS_PROD),
+      NOW
+    );
+    expect(cashbacks(entries)).toHaveLength(0);
+    expect(entries.every((e) => e.amountCop !== 0)).toBe(true);
+  });
+
+  it("RNF_01: un pedido SIN communityPricing genera exactamente los asientos de siempre", () => {
+    // Literal, no comparado contra el propio codigo: si el cambio de T5 tocara la rama sin
+    // comunidad, esta lista lo delata centavo a centavo.
+    const entries = buildWalletEntries(failedOrder({ fulfillmentMode: "warehouse" }), resolveTariffs(SETTINGS_PROD), NOW);
+    expect(entries.map((e) => [e.id, e.ownerType, e.type, e.amountCop, e.settlementId])).toEqual([
+      ["we-ord-1-seller-failed-fee", "seller", "failed_fee", -12000, ""],
+      ["we-ord-1-driver-failed-pay", "driver", "driver_earning", 9000, ""],
+      ["we-ord-1-fulfillment-fee", "seller", "fulfillment_fee", -2000, ""]
+    ]);
+  });
+
+  it("RF_11: el cierre ya no mide contra la base congelada (cashbackForFrozenPricing retirada)", () => {
+    // Guarda de fuente: la funcion que media contra `frozen.base<X>` queda sin llamadores y se
+    // retira, para que nadie la vuelva a enchufar al cierre. Positivo de control: el cierre usa
+    // el nucleo de T4.
+    const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+    const walletSource = read("../../functions/src/wallet-entries.ts");
+    const pricingSource = read("../../functions/src/community-pricing.ts");
+    // Booleanos con mensaje: comparar el archivo entero volcaria 280 lineas en el diff del fallo.
+    expect(walletSource.includes("communityChargeAtClose"), "wallet-entries.ts no usa communityChargeAtClose").toBe(true);
+    expect(walletSource.includes("cashbackForFrozenPricing"), "wallet-entries.ts sigue llamando a cashbackForFrozenPricing").toBe(false);
+    expect(
+      /export function cashbackForFrozenPricing/.test(pricingSource),
+      "community-pricing.ts sigue exportando cashbackForFrozenPricing"
+    ).toBe(false);
   });
 });

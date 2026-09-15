@@ -11,6 +11,7 @@ import {
   type PlanInput
 } from "../../functions/src/order-corrections-plan";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
+import { freezeOrderPricing } from "../../functions/src/community-pricing";
 
 const NOW = "2026-08-23T15:00:00.000Z";
 const DANDA_SELLER = "seller-1779315416119";
@@ -158,6 +159,41 @@ describe("planOrderCorrection - fallido a entregado", () => {
     expect(result.settlementsToRecalculate).toEqual([]);
     expect(result.frozenSettlements.map((item) => item.id)).toEqual(["stl-conciliado"]);
     expect(result.warnings.map((item) => item.code)).toContain("frozen_settlement");
+  });
+});
+
+describe("planOrderCorrection - pedido de comunidad (spec 004)", () => {
+  // Congelado al crear con la base de entonces (12.000 de entrega) y SIN precio propio del lider:
+  // pricingVersion 2, sin `leader<X>FeeCop`. Lo congelado solo es referencia, no dinero.
+  const communityPricing = freezeOrderPricing(
+    { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000 },
+    { id: "com-1", status: "active", leaderUid: "uid-lider", pricing: {} },
+    "2026-08-01T00:00:00.000Z"
+  );
+  const order = {
+    id: "oc1",
+    trackingCode: "KNT-004001",
+    status: "failed",
+    sellerId: "seller-com",
+    driverId: "driver-1",
+    paymentMethod: "cod",
+    totalCop: 100000,
+    failedCategory: "failed_visit",
+    communityPricing,
+    evidence: [{ id: "ev-1", type: "failed", photoLabel: "Fachada", note: "nadie abrio", reason: "Cliente no recibe", failedCategory: "failed_visit", createdAt: "2026-08-02T10:00:00.000Z", actorId: "driver-1" }]
+  };
+  const request: CorrectionRequest = { kind: "failed_to_delivered", reason: "El cliente confirmo que si recibio el pedido." };
+
+  it("T5 · RF_11: una correccion recalcula la base del momento", () => {
+    // Caso limite de la spec: la entrega vale 13.000 el dia de la correccion. Se cobra la base de
+    // ESE momento (la de una tienda sin comunidad), no los 12.000 congelados, y sin cashback.
+    expect(communityPricing?.pricingVersion).toBe(2);
+    const result = plan({ order, request, tariffs: { ...TARIFFS, sellerDeliveredFeeCop: 13000 } });
+
+    expect(result.blockers).toEqual([]);
+    const created = byId(result.entriesToCreate);
+    expect(created.get("we-oc1-seller-delivery-fee")).toBe(-13000);
+    expect(result.entriesToCreate.filter((item) => item.type === "community_cashback")).toEqual([]);
   });
 });
 

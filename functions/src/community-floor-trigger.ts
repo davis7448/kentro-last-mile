@@ -1,31 +1,37 @@
 /**
- * RF_35 de punta a punta: cuando sube una tarifa base, los precios de comunidad que quedan por
- * debajo suben solos hasta el nuevo piso.
+ * RF_13 de la 004 (antes RF_35 de la 001) de punta a punta: cuando sube la base real de un
+ * concepto, los precios de comunidad que quedan por debajo suben solos hasta el nuevo piso.
+ *
+ * Escucha `settings/global` porque es el documento del que salen las tarifas que se cobran
+ * (`resolveTariffs` en el cierre). La version anterior escuchaba `settings/app`, que no existe en
+ * produccion: el trigger estaba desplegado y no se habia disparado nunca, y nada lo delataba.
  *
  * Es un TRIGGER y no una callable a proposito. La tarifa base la escribe el navegador del
- * administrador directamente en `settings/app`, asi que una llamada desde el cliente quedaria a
+ * administrador directamente en los ajustes, asi que una llamada desde el cliente quedaria a
  * merced de que esa pestaña siga viva y de que nadie escriba los ajustes por otra via: la
  * elevacion se perderia en silencio y Kentro cobraria por debajo de su costo sin fecha de
  * caducidad. `onDocumentUpdated` se dispara escriba quien escriba y no se puede saltar.
  *
- * Este archivo es un traductor: lee, llama al plan y escribe lo que el plan dice. Toda la
- * aritmetica —que concepto subio, contra que precio se compara, que programada muere— vive en
- * `planFloorRaise` (`community-pricing.ts`), que es puro y esta probado sin Firestore.
+ * Este archivo es un traductor: lee, llama al plan y le pasa cada cambio al writer. La aritmetica
+ * —que concepto subio con la base REAL, contra que precio se compara, que programada muere— vive
+ * en `planFloorRaise` (`community-pricing.ts`), pura y probada sin Firestore. La escritura vive en
+ * `community-floor-writer.ts`, la misma que usa la pasada unica de RF_14: una sola copia.
  *
- * No hay recursion posible: escribe en `communities`, nunca en `settings/app`.
+ * No hay recursion posible: escribe en `communities`, nunca en `settings`.
  */
 
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { planFloorRaise, type CommunityLike } from "./community-pricing";
+import { writeFloorRaise } from "./community-floor-writer";
 
-export const onSettingsFloorRaise = onDocumentUpdated("settings/app", async (event) => {
+export const onSettingsFloorRaise = onDocumentUpdated("settings/global", async (event) => {
   const before = (event.data?.before.data() ?? {}) as Record<string, unknown>;
   const after = (event.data?.after.data() ?? {}) as Record<string, unknown>;
   const nowIso = new Date().toISOString();
 
   // Corte barato ANTES de leer `communities`: el trigger salta con CUALQUIER campo de los
-  // ajustes (tokens, textos, puntos de recogida). Si ninguna base sube, no se toca Firestore.
+  // ajustes (textos, plazos de pago). Si ninguna base real sube, no se toca Firestore.
   if (planFloorRaise({ before, after, communities: [], nowIso }).raisedFields.length === 0) return;
 
   const db = getFirestore();
@@ -38,17 +44,6 @@ export const onSettingsFloorRaise = onDocumentUpdated("settings/app", async (eve
   });
 
   for (const change of plan.communities) {
-    const ref = db.collection("communities").doc(change.communityId);
-    const update: Record<string, unknown> = { ...change.communityUpdate };
-    for (const path of change.deleteFields) update[path] = FieldValue.delete();
-
-    const batch = db.batch();
-    batch.update(ref, update);
-    for (const entry of change.historyEntries) {
-      // Id determinista: un reintento del mismo evento reescribe la misma entrada en vez de
-      // duplicar el historial con elevaciones fantasma.
-      batch.set(ref.collection("priceHistory").doc(`floor-${entry.field}-${nowIso}`), entry);
-    }
-    await batch.commit();
+    await writeFloorRaise(db, change, nowIso);
   }
 });

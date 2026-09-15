@@ -95,6 +95,11 @@ export type Community = {
   logoPath?: string;
   linkStatus: "active" | "revoked";
   status: "active" | "disabled";
+  /**
+   * Uid de quien lidera HOY. Opcional de verdad: hay comunidades anteriores a la concesion de rol
+   * y `planLeaderRevocation` lo BORRA. Sin el (o en blanco) la comunidad cobra solo la base.
+   */
+  leaderUid?: string;
   pricing: CommunityPricingFields;
   /** Una programada como mucho por concepto: la segunda reemplaza a la primera. */
   scheduled?: Partial<Record<keyof CommunityPricingFields, ScheduledPriceChange>>;
@@ -118,6 +123,14 @@ export type CommunitySlugDoc = {
 export type OrderCommunityPricing = {
   communityId: string;
   frozenAt: string;
+  /** `2` desde la spec 004: la base se decide al cerrar. Ausente = pedido legado. */
+  pricingVersion?: 2;
+  // Precio PROPIO del lider congelado al crear, tal cual (puede quedar bajo la base; el piso lo
+  // pone el cierre). Ausente = el lider no fijo precio para ese concepto.
+  leaderDeliveredFeeCop?: number;
+  leaderFailedFeeCop?: number;
+  leaderFulfillmentFeeCop?: number;
+  // Referencia AL CREAR (precio final y base). El cierre de un pedido v2 no los usa para cobrar.
   sellerDeliveredFeeCop: number;
   baseDeliveredFeeCop: number;
   sellerFailedFeeCop: number;

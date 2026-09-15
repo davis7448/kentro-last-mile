@@ -1332,16 +1332,24 @@ describe("T43 · filas de liquidacion del lider de comunidad", () => {
   });
 });
 
+/**
+ * Instante fijo con el que se pinta el panel del admin en T34, T15 y T9. Desde la spec 004 (T9)
+ * `buildAdminCommunityList` recibe el instante como parametro obligatorio: el nucleo aplica las
+ * programadas vencidas y no inventa el reloj. Con un `Date.now()` las pruebas dependerian del dia.
+ */
+const AHORA_PANEL = "2026-09-11T15:00:00.000Z";
+
 describe("T34 · lista de comunidades del admin", () => {
+  type AdminPricingField = "sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop";
   type AdminCommunityLike = {
     id: string;
     name: string;
     leaderName?: string;
-    pricing?: {
-      sellerDeliveredFeeCop?: number;
-      sellerFailedFeeCop?: number;
-      fulfillmentFeeCop?: number;
-    };
+    // Desde T9 de la 004: sin `status: "active"` y un `leaderUid` no vacio la comunidad cobra
+    // solo la base, asi que los casos que miran precio propio los declaran.
+    status?: "active" | "disabled";
+    leaderUid?: string;
+    pricing?: Partial<Record<AdminPricingField, number>>;
   };
   type AdminSellerLike = { id: string; communityId?: string };
   type AdminEntryLike = {
@@ -1351,21 +1359,28 @@ describe("T34 · lista de comunidades del admin", () => {
     amountCop: number;
     settlementId?: string;
   };
+  /** La tarifa global ENTERA (T9 de la 004): la base sale de `communityBase(resolveTariffs(...))`. */
   type AdminSettingsLike = {
     sellerDeliveredFeeCop: number;
     sellerFailedFeeCop: number;
     fulfillmentFeeCop: number;
+    driverDeliveredPayCop: number;
+    driverFailedPayCop: number;
+  };
+  type AdminConceptPrice = {
+    chargedCop: number;
+    baseCop: number;
+    marginCop: number;
+    source: "base" | "leader";
+    upcoming: { toCop: number; effectiveAt: string } | null;
   };
   type AdminCommunityRow = {
     communityId: string;
     name: string;
     leaderName: string;
     stores: number;
-    pricing: {
-      sellerDeliveredFeeCop: number;
-      sellerFailedFeeCop: number;
-      fulfillmentFeeCop: number;
-    };
+    pricing: Record<AdminPricingField, AdminConceptPrice>;
+    baseOnlyReason: "no_leader" | "disabled" | null;
     cashbackAccruedCop: number;
   };
   type BuildAdminList = (input: {
@@ -1373,7 +1388,18 @@ describe("T34 · lista de comunidades del admin", () => {
     sellers: AdminSellerLike[];
     entries: AdminEntryLike[];
     settings: AdminSettingsLike;
+    nowIso: string;
   }) => AdminCommunityRow[];
+
+  /**
+   * Lo que se COBRA por concepto. `?.` a proposito: contra el contrato viejo (`pricing.X` era un
+   * numero) devuelve `undefined` y la prueba falla por su aserción, no por un TypeError.
+   */
+  const cobrado = (row: AdminCommunityRow | undefined): Record<AdminPricingField, number | undefined> => ({
+    sellerDeliveredFeeCop: row?.pricing.sellerDeliveredFeeCop?.chargedCop,
+    sellerFailedFeeCop: row?.pricing.sellerFailedFeeCop?.chargedCop,
+    fulfillmentFeeCop: row?.pricing.fulfillmentFeeCop?.chargedCop
+  });
 
   let buildAdminCommunityList: BuildAdminList;
 
@@ -1391,10 +1417,14 @@ describe("T34 · lista de comunidades del admin", () => {
     buildAdminCommunityList = vista.buildAdminCommunityList;
   });
 
+  // El fallido de los ajustes (6.000) NO es lo que se cobra: manda el fijo de 12.000 de
+  // `resolveSellerCharges`. Se deja distinto a proposito para que ese error de lectura se note.
   const AJUSTES: AdminSettingsLike = {
     sellerDeliveredFeeCop: 12000,
     sellerFailedFeeCop: 6000,
-    fulfillmentFeeCop: 2000
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000
   };
 
   const cashback = (over: Partial<AdminEntryLike> = {}): AdminEntryLike => ({
@@ -1412,13 +1442,18 @@ describe("T34 · lista de comunidades del admin", () => {
   ): AdminCommunityRow | undefined => rows.find((row) => row.communityId === communityId);
 
   it("RF_34: cada comunidad sale con su lider, sus tres precios vigentes y su cashback causado", () => {
+    // Adaptada en T9 de la 004: los tres precios van POR ENCIMA de la base (el fallido de 7.000
+    // de antes quedaba bajo el fijo de 12.000 y hoy se cobraria la base) y la comunidad declara
+    // estado y lider, sin los cuales cobra solo la base. La intencion no cambia.
     const rows = buildAdminCommunityList({
       communities: [
         {
           id: "com-1",
           name: "Comunidad Andes",
           leaderName: "Marta Ruiz",
-          pricing: { sellerDeliveredFeeCop: 15000, sellerFailedFeeCop: 7000, fulfillmentFeeCop: 2500 }
+          status: "active",
+          leaderUid: "uid-marta",
+          pricing: { sellerDeliveredFeeCop: 15000, sellerFailedFeeCop: 13000, fulfillmentFeeCop: 2500 }
         }
       ],
       sellers: [
@@ -1426,7 +1461,8 @@ describe("T34 · lista de comunidades del admin", () => {
         { id: "sel-2", communityId: "com-1" }
       ],
       entries: [cashback({ amountCop: 3000 }), cashback({ amountCop: 4500 })],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -1434,8 +1470,12 @@ describe("T34 · lista de comunidades del admin", () => {
       name: "Comunidad Andes",
       leaderName: "Marta Ruiz",
       stores: 2,
-      pricing: { sellerDeliveredFeeCop: 15000, sellerFailedFeeCop: 7000, fulfillmentFeeCop: 2500 },
       cashbackAccruedCop: 7500
+    });
+    expect(cobrado(rows[0])).toEqual({
+      sellerDeliveredFeeCop: 15000,
+      sellerFailedFeeCop: 13000,
+      fulfillmentFeeCop: 2500
     });
   });
 
@@ -1452,7 +1492,8 @@ describe("T34 · lista de comunidades del admin", () => {
         cashback({ amountCop: 2500, settlementId: "" }),
         cashback({ amountCop: 1000, settlementId: undefined })
       ],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(fila(rows, "com-1")?.cashbackAccruedCop).toBe(11000);
   });
@@ -1469,7 +1510,8 @@ describe("T34 · lista de comunidades del admin", () => {
         cashback({ ownerId: "com-2", amountCop: 80000 }),
         cashback({ ownerId: "com-2", amountCop: 20000 })
       ],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(fila(rows, "com-1")?.cashbackAccruedCop).toBe(3000);
     expect(fila(rows, "com-2")?.cashbackAccruedCop).toBe(100000);
@@ -1485,62 +1527,80 @@ describe("T34 · lista de comunidades del admin", () => {
       ],
       sellers: [{ id: "sel-1", communityId: "com-1" }],
       entries: [cashback({ ownerId: "com-1", amountCop: 3000 })],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(rows).toHaveLength(2);
     const nueva = fila(rows, "com-nueva");
     expect(nueva).toBeDefined();
     expect(nueva?.stores).toBe(0);
     expect(nueva?.cashbackAccruedCop).toBe(0);
-    expect(nueva?.pricing).toEqual({
+    // Adaptada en T9 de la 004: la comunidad nueva ensena la BASE que se cobra, con el fallido
+    // fijo de 12.000, no el 6.000 del ajuste (que no cobra nadie).
+    expect(cobrado(nueva)).toEqual({
       sellerDeliveredFeeCop: 12000,
-      sellerFailedFeeCop: 6000,
+      sellerFailedFeeCop: 12000,
       fulfillmentFeeCop: 2000
     });
   });
 
-  it("RF_34: un concepto sin precio propio hereda el de los ajustes; con precio propio manda el suyo", () => {
+  it("RF_34: un concepto sin precio propio cobra la base; con precio propio por encima manda el suyo", () => {
+    // Adaptada en T9 de la 004: "hereda el de los ajustes" pasa a "cobra la base" (el fallido de
+    // la base es el fijo de 12.000), y el precio propio va por encima de ella: los 9.000 de antes
+    // quedaban bajo el piso y hoy se cobraria la base. La intencion —concepto a concepto, lo
+    // propio donde lo hay y lo comun donde no— no cambia.
     const rows = buildAdminCommunityList({
       communities: [
         {
           id: "com-1",
           name: "Comunidad Andes",
           leaderName: "Marta Ruiz",
-          pricing: { sellerFailedFeeCop: 9000 }
+          status: "active",
+          leaderUid: "uid-marta",
+          pricing: { sellerFailedFeeCop: 13000 }
         }
       ],
       sellers: [],
       entries: [],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
-    expect(fila(rows, "com-1")?.pricing).toEqual({
+    expect(cobrado(fila(rows, "com-1"))).toEqual({
       sellerDeliveredFeeCop: 12000,
-      sellerFailedFeeCop: 9000,
+      sellerFailedFeeCop: 13000,
       fulfillmentFeeCop: 2000
     });
   });
 
-  it("RF_34: un precio propio de cero manda sobre el ajuste, no se toma por ausente", () => {
-    // `?? ` distingue 0 de undefined; un `||` no. Una comunidad con envio gratis en fallidos
-    // veria el precio global y el admin le cobraria de mas.
+  it("RF_08 (reemplaza a RF_34 de la 001): un precio propio de cero no baja del piso: se cobra la base", () => {
+    // CAMBIO DE INTENCION A PROPOSITO. Antes: "un precio propio de 0 manda sobre el ajuste". Eso
+    // pintaba 0 donde el cierre cobra la base (el piso de `resolveCommunityPricing`), que es
+    // justo el error de lectura que origino la spec 004. Lo que se conserva: un 0 tampoco se
+    // confunde con "sin precio" de otra forma que no sea la base, y no deja margen negativo.
     const rows = buildAdminCommunityList({
       communities: [
         {
           id: "com-1",
           name: "Comunidad Andes",
           leaderName: "Marta Ruiz",
+          status: "active",
+          leaderUid: "uid-marta",
           pricing: { sellerDeliveredFeeCop: 0, sellerFailedFeeCop: 0, fulfillmentFeeCop: 0 }
         }
       ],
       sellers: [],
       entries: [],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
-    expect(fila(rows, "com-1")?.pricing).toEqual({
-      sellerDeliveredFeeCop: 0,
-      sellerFailedFeeCop: 0,
-      fulfillmentFeeCop: 0
+    const row = fila(rows, "com-1");
+    expect(cobrado(row)).toEqual({
+      sellerDeliveredFeeCop: 12000,
+      sellerFailedFeeCop: 12000,
+      fulfillmentFeeCop: 2000
     });
+    expect(row?.pricing.sellerFailedFeeCop?.marginCop).toBe(0);
+    expect(row?.pricing.sellerFailedFeeCop?.source).toBe("base");
   });
 
   it("RF_34: las reversas de correccion netean en el causado", () => {
@@ -1554,7 +1614,8 @@ describe("T34 · lista de comunidades del admin", () => {
         cashback({ amountCop: -3000, settlementId: "" }),
         cashback({ amountCop: 4500 })
       ],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(fila(rows, "com-1")?.cashbackAccruedCop).toBe(4500);
   });
@@ -1570,7 +1631,8 @@ describe("T34 · lista de comunidades del admin", () => {
         { ownerType: "community_leader", ownerId: "com-1", type: "community_cashback", amountCop: Number.NaN } as unknown as AdminEntryLike,
         { ownerType: "community_leader", ownerId: "com-1", type: "community_cashback", amountCop: "no-es-plata" } as unknown as AdminEntryLike
       ],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     const row = fila(rows, "com-1");
     expect(Number.isFinite(row?.cashbackAccruedCop ?? Number.NaN)).toBe(true);
@@ -1592,7 +1654,8 @@ describe("T34 · lista de comunidades del admin", () => {
         { id: "sel-6", communityId: "com-borrada" }
       ],
       entries: [],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(fila(rows, "com-1")?.stores).toBe(1);
     expect(fila(rows, "com-2")?.stores).toBe(2);
@@ -1610,7 +1673,8 @@ describe("T34 · lista de comunidades del admin", () => {
         cashback({ ownerType: "seller", amountCop: 99000 }),
         cashback({ ownerType: "driver", type: "delivery_fee", amountCop: 50000 })
       ],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(fila(rows, "com-1")?.cashbackAccruedCop).toBe(3000);
   });
@@ -1620,7 +1684,8 @@ describe("T34 · lista de comunidades del admin", () => {
       communities: [{ id: "com-1", name: "Comunidad Andes" }],
       sellers: [],
       entries: [],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(rows[0].name).toBe("Comunidad Andes");
     expect(rows[0].leaderName.trim().length).toBeGreaterThan(0);
@@ -1639,12 +1704,13 @@ describe("T34 · lista de comunidades del admin", () => {
       cashback({ ownerId: "com-1", amountCop: 3000 }),
       cashback({ ownerId: "com-2", amountCop: 8000 })
     ];
-    const directo = buildAdminCommunityList({ communities, sellers, entries, settings: AJUSTES });
+    const directo = buildAdminCommunityList({ communities, sellers, entries, settings: AJUSTES, nowIso: AHORA_PANEL });
     const alReves = buildAdminCommunityList({
       communities,
       sellers: [...sellers].reverse(),
       entries: [...entries].reverse(),
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
     expect(alReves.map((row) => row.communityId)).toEqual(directo.map((row) => row.communityId));
     expect(alReves).toEqual(directo);
@@ -1652,7 +1718,7 @@ describe("T34 · lista de comunidades del admin", () => {
 
   it("RF_34: sin comunidades devuelve lista vacia, no revienta", () => {
     expect(
-      buildAdminCommunityList({ communities: [], sellers: [], entries: [], settings: AJUSTES })
+      buildAdminCommunityList({ communities: [], sellers: [], entries: [], settings: AJUSTES, nowIso: AHORA_PANEL })
     ).toEqual([]);
   });
 
@@ -1665,7 +1731,7 @@ describe("T34 · lista de comunidades del admin", () => {
     const copiaComunidades = JSON.parse(JSON.stringify(communities)) as AdminCommunityLike[];
     const copiaSellers = JSON.parse(JSON.stringify(sellers)) as AdminSellerLike[];
     const copiaEntries = JSON.parse(JSON.stringify(entries)) as AdminEntryLike[];
-    buildAdminCommunityList({ communities, sellers, entries, settings: AJUSTES });
+    buildAdminCommunityList({ communities, sellers, entries, settings: AJUSTES, nowIso: AHORA_PANEL });
     expect(communities).toEqual(copiaComunidades);
     expect(sellers).toEqual(copiaSellers);
     expect(entries).toEqual(copiaEntries);
@@ -2237,17 +2303,20 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
     /** Que tienda genero el cashback. Sin esto no hay forma de desglosar el de la tienda del lider. */
     sellerId?: string;
   };
+  /** Tarifa global entera desde T9 de la 004. Estos casos no leen precios, solo cashback. */
   type T15SettingsLike = {
     sellerDeliveredFeeCop: number;
     sellerFailedFeeCop: number;
     fulfillmentFeeCop: number;
+    driverDeliveredPayCop: number;
+    driverFailedPayCop: number;
   };
   type T15Row = {
     communityId: string;
     name: string;
     leaderName: string;
     stores: number;
-    pricing: T15SettingsLike;
+    pricing: Record<"sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop", { chargedCop: number }>;
     cashbackAccruedCop: number;
     /**
      * Cuanto del `cashbackAccruedCop` procede de la tienda del propio lider. Es una cifra APARTE,
@@ -2260,6 +2329,7 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
     sellers: T15SellerLike[];
     entries: T15EntryLike[];
     settings: T15SettingsLike;
+    nowIso: string;
   }) => T15Row[];
 
   type T15PricingField = "sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop";
@@ -2315,7 +2385,9 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
   const AJUSTES: T15SettingsLike = {
     sellerDeliveredFeeCop: 12000,
     sellerFailedFeeCop: 6000,
-    fulfillmentFeeCop: 2000
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000
   };
 
   // Andes: la lidera Marta, y la tienda `sel-marta` es SUYA y esta dentro de la comunidad.
@@ -2353,7 +2425,8 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
       communities: COMUNIDADES,
       sellers: TIENDAS,
       entries,
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
 
   it("RF_13: la fila separa cuanto del cashback procede de la tienda del propio lider", () => {
@@ -2450,7 +2523,8 @@ describe("T15 · la tienda del propio lider: visible, contada y sin privilegios"
       communities: [{ id: "com-huerfana", name: "Comunidad Huerfana" }],
       sellers: [{ id: "sel-x", communityId: "com-huerfana" }],
       entries: [cashback({ ownerId: "com-huerfana", sellerId: "sel-x", amountCop: 4000 })],
-      settings: AJUSTES
+      settings: AJUSTES,
+      nowIso: AHORA_PANEL
     });
 
     expect(rows).toHaveLength(1);
@@ -2884,5 +2958,409 @@ describe("T19 · la tienda ve la marca de su comunidad", () => {
     const fuente = readFileSync(join(process.cwd(), "src/components/operations-app.tsx"), "utf8");
     expect(fuente.length).toBeGreaterThan(100_000);
     expect(fuente).toContain("communityBadgeFor");
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * T9 (spec 004) · RF_07, RF_08, RF_09, RF_12, RF_15, RF_02, RNF_02 — el panel del admin pinta lo
+ * que se COBRA, no lo que esta guardado.
+ *
+ * El caso que motiva la spec: E-master, en produccion, sin precio propio (`pricing: {}`). El panel
+ * le pintaba "Fallido $9.000" —el ajuste crudo— mientras el cierre cobraba 12.000 (el fijo de
+ * `resolveSellerCharges`). Nadie cobraba 9.000 y el admin decidia precios mirando ese numero.
+ *
+ * Los ajustes son los de PRODUCCION tal cual (fallido 9.000 incluido), para que el caso real sea
+ * el que se prueba y no uno parecido.
+ * ------------------------------------------------------------------------------------------- */
+
+const COMMUNITY_VIEW_SOURCE = readFileSync(
+  fileURLToPath(new URL("./community-view.ts", import.meta.url)),
+  "utf8"
+);
+
+/** El mismo recorte de comentarios que las guardas de `seller-charges.test.ts`. */
+function sinComentariosT9(raw: string): string {
+  return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+describe("T9 · RF_07..RF_15: el panel pinta lo que se cobra", () => {
+  type T9Field = "sellerDeliveredFeeCop" | "sellerFailedFeeCop" | "fulfillmentFeeCop";
+  type T9Scheduled = {
+    field: T9Field;
+    fromCop: number;
+    toCop: number;
+    effectiveAt: string;
+    scheduledBy: string;
+    scheduledAt: string;
+  };
+  type T9Community = {
+    id: string;
+    name: string;
+    leaderName?: string;
+    leaderSellerId?: string;
+    status?: "active" | "disabled";
+    leaderUid?: string;
+    pricing?: Partial<Record<T9Field, number>>;
+    scheduled?: Partial<Record<T9Field, T9Scheduled>>;
+  };
+  type T9Settings = {
+    sellerDeliveredFeeCop: number;
+    sellerFailedFeeCop: number;
+    fulfillmentFeeCop: number;
+    driverDeliveredPayCop: number;
+    driverFailedPayCop: number;
+  };
+  type T9ConceptPrice = {
+    chargedCop: number;
+    baseCop: number;
+    marginCop: number;
+    source: "base" | "leader";
+    upcoming: { toCop: number; effectiveAt: string } | null;
+  };
+  type T9Row = {
+    communityId: string;
+    name: string;
+    leaderName: string;
+    stores: number;
+    pricing: Record<T9Field, T9ConceptPrice>;
+    baseOnlyReason: "no_leader" | "disabled" | null;
+    cashbackAccruedCop: number;
+    leaderStoreCashbackAccruedCop: number;
+  };
+  type T9Input = {
+    communities: T9Community[];
+    sellers: { id: string; communityId?: string }[];
+    entries: { ownerType: string; ownerId: string; type: string; amountCop: number; sellerId?: string }[];
+    settings: T9Settings;
+    nowIso: string;
+  };
+  type T9Build = (input: T9Input) => T9Row[];
+
+  let buildAdminCommunityList: T9Build;
+  let zoneBaseNotice: unknown;
+
+  // Carga diferida, como en T34 y T15: `ZONE_BASE_NOTICE` todavia no existe.
+  beforeEach(async () => {
+    const vista = (await import("./community-view")) as unknown as {
+      buildAdminCommunityList: T9Build;
+      ZONE_BASE_NOTICE?: unknown;
+    };
+    buildAdminCommunityList = vista.buildAdminCommunityList;
+    zoneBaseNotice = vista.ZONE_BASE_NOTICE;
+  });
+
+  /** `settings/global` de produccion. El fallido de 9.000 no lo cobra nadie. */
+  const AJUSTES_PRODUCCION: T9Settings = {
+    sellerDeliveredFeeCop: 12000,
+    sellerFailedFeeCop: 9000,
+    fulfillmentFeeCop: 2000,
+    driverDeliveredPayCop: 8000,
+    driverFailedPayCop: 8000
+  };
+
+  const AHORA = AHORA_PANEL; // 2026-09-11T15:00Z
+  const AYER = "2026-09-10T15:00:00.000Z";
+  const MANANA = "2026-09-12T15:00:00.000Z";
+  const UID_LIDER = "A5pEmasterLider0001";
+
+  /** E-master tal cual esta hoy: activa, con lider, sin un solo precio propio. */
+  const eMaster = (over: Partial<T9Community> = {}): T9Community => ({
+    id: "com-emaster",
+    name: "E-master",
+    leaderName: "Lider E-master",
+    status: "active",
+    leaderUid: UID_LIDER,
+    pricing: {},
+    ...over
+  });
+
+  const programada = (field: T9Field, fromCop: number, toCop: number, effectiveAt: string): T9Scheduled => ({
+    field,
+    fromCop,
+    toCop,
+    effectiveAt,
+    scheduledBy: UID_LIDER,
+    scheduledAt: "2026-09-03T15:00:00.000Z"
+  });
+
+  const entrada = (community: T9Community): T9Input => ({
+    communities: [community],
+    sellers: [],
+    entries: [],
+    settings: AJUSTES_PRODUCCION,
+    nowIso: AHORA
+  });
+
+  const filaDe = (community: T9Community): T9Row => {
+    const rows = buildAdminCommunityList(entrada(community));
+    expect(rows).toHaveLength(1);
+    return rows[0];
+  };
+
+  /** Lo que se ve de un concepto cobrado a la base, sin subida pendiente. */
+  const aLaBase = (baseCop: number): T9ConceptPrice => ({
+    chargedCop: baseCop,
+    baseCop,
+    marginCop: 0,
+    source: "base",
+    upcoming: null
+  });
+
+  it("RF_07, RF_08: E-master de hoy (sin precio propio) => los tres a la base, fallido 12.000 y no 9.000", () => {
+    const row = filaDe(eMaster());
+
+    expect(
+      row.pricing.sellerFailedFeeCop,
+      "el fallido se pinta con lo que cobra el cierre (12.000 fijo), no con el 9.000 del ajuste"
+    ).toEqual(aLaBase(12000));
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.pricing.fulfillmentFeeCop).toEqual(aLaBase(2000));
+    expect(row.pricing.sellerFailedFeeCop?.baseCop, "la base tampoco puede ser el ajuste crudo").not.toBe(9000);
+    // Activa y con lider: cobra la base porque no fijo precio, no por su estado.
+    expect(row.baseOnlyReason).toBeNull();
+  });
+
+  it("RF_09: manejo propio de 2.300 => precio del lider con margen de 300", () => {
+    const row = filaDe(eMaster({ pricing: { fulfillmentFeeCop: 2300 } }));
+
+    expect(row.pricing.fulfillmentFeeCop).toEqual({
+      chargedCop: 2300,
+      baseCop: 2000,
+      marginCop: 300,
+      source: "leader",
+      upcoming: null
+    });
+    // Los conceptos que no fijo siguen a la base: el precio propio es por concepto.
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.pricing.sellerFailedFeeCop).toEqual(aLaBase(12000));
+    expect(row.baseOnlyReason).toBeNull();
+  });
+
+  it("RF_08: un precio guardado por debajo de la base (fallido 10.000) se pinta como base, margen 0", () => {
+    // RF_07: MUST NOT mostrar el precio guardado cuando no coincide con lo que se cobra.
+    const row = filaDe(eMaster({ pricing: { sellerFailedFeeCop: 10000 } }));
+
+    expect(row.pricing.sellerFailedFeeCop).toEqual(aLaBase(12000));
+    expect(row.pricing.sellerFailedFeeCop?.chargedCop, "10.000 es lo guardado, no lo cobrado").not.toBe(10000);
+    // El motivo es el piso, no el estado de la comunidad: no se inventa un motivo.
+    expect(row.baseOnlyReason).toBeNull();
+  });
+
+  it("RF_07: una subida programada ya VENCIDA se aplica (entrega 12.000 -> 14.000)", () => {
+    const row = filaDe(
+      eMaster({
+        pricing: { sellerDeliveredFeeCop: 12000 },
+        scheduled: { sellerDeliveredFeeCop: programada("sellerDeliveredFeeCop", 12000, 14000, AYER) }
+      })
+    );
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual({
+      chargedCop: 14000,
+      baseCop: 12000,
+      marginCop: 2000,
+      source: "leader",
+      upcoming: null
+    });
+  });
+
+  it("RF_15: una subida programada FUTURA sale aparte y no se suma al precio ni al margen de hoy", () => {
+    const row = filaDe(
+      eMaster({
+        pricing: { sellerDeliveredFeeCop: 13000 },
+        scheduled: { sellerDeliveredFeeCop: programada("sellerDeliveredFeeCop", 13000, 15000, MANANA) }
+      })
+    );
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual({
+      chargedCop: 13000,
+      baseCop: 12000,
+      marginCop: 1000,
+      source: "leader",
+      upcoming: { toCop: 15000, effectiveAt: MANANA }
+    });
+    expect(row.pricing.sellerDeliveredFeeCop?.chargedCop, "la subida de manana no se cobra hoy").not.toBe(15000);
+    expect(row.pricing.sellerDeliveredFeeCop?.marginCop, "ni cuenta en el margen de hoy").not.toBe(3000);
+    // Los conceptos sin programada no heredan la subida de otro.
+    expect(row.pricing.sellerFailedFeeCop?.upcoming).toBeNull();
+    expect(row.pricing.fulfillmentFeeCop?.upcoming).toBeNull();
+  });
+
+  it("RF_08: desactivada con precio guardado de 15.000 => la base, y el motivo \"disabled\"", () => {
+    const row = filaDe(eMaster({ status: "disabled", pricing: { sellerDeliveredFeeCop: 15000 } }));
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.pricing.sellerFailedFeeCop).toEqual(aLaBase(12000));
+    expect(row.pricing.fulfillmentFeeCop).toEqual(aLaBase(2000));
+    expect(row.baseOnlyReason).toBe("disabled");
+  });
+
+  it("RF_08: sin lider (leaderUid ausente) con precio guardado => la base, y el motivo \"no_leader\"", () => {
+    const huerfana: T9Community = {
+      id: "com-huerfana",
+      name: "Comunidad Huerfana",
+      status: "active",
+      pricing: { sellerDeliveredFeeCop: 15000 }
+    };
+    expect("leaderUid" in huerfana).toBe(false);
+
+    const row = filaDe(huerfana);
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.baseOnlyReason).toBe("no_leader");
+  });
+
+  it("RF_08: un uid de lider en blanco (\"   \") es SIN lider: la base y el motivo \"no_leader\"", () => {
+    // Mismo criterio que `chargesOwnPricing` (uid recortado vacio). Si el panel no recortara,
+    // cobraria la base —porque el nucleo si recorta— sin decir por que.
+    const row = filaDe(eMaster({ leaderUid: "   ", pricing: { sellerDeliveredFeeCop: 15000 } }));
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.baseOnlyReason).toBe("no_leader");
+  });
+
+  it("RF_08: un estado ausente cuenta como desactivada, igual que en el cobro", () => {
+    // Plan §3.7: `status !== "active"` => "disabled". `chargesOwnPricing` trata el estado ausente
+    // como no activo (el lado seguro); el panel no puede contar otra historia.
+    const row = filaDe(eMaster({ status: undefined, pricing: { sellerDeliveredFeeCop: 15000 } }));
+
+    expect(row.pricing.sellerDeliveredFeeCop).toEqual(aLaBase(12000));
+    expect(row.baseOnlyReason).toBe("disabled");
+  });
+
+  it("RF_12: ZONE_BASE_NOTICE avisa que con zona la base puede ser mayor y ahi se cobra la base", () => {
+    expect(typeof zoneBaseNotice, "src/lib/community-view.ts todavia no exporta ZONE_BASE_NOTICE").toBe("string");
+    const aviso = String(zoneBaseNotice ?? "");
+    expect(aviso.trim().length).toBeGreaterThan(0);
+    expect(aviso).toMatch(/zona/i);
+    expect(aviso).toMatch(/base/i);
+  });
+
+  it("RNF_02: la fila no depende de zonas ni de pedidos aunque le lleguen", () => {
+    // Si el panel leyera una zona, la base de entrega saldria 99.000 y el fallido de la zona.
+    const zonaCara = { id: "zona-norte", sellerDeliveredFeeCop: 99000, sellerFailedFeeCop: 50000, fulfillmentFeeCop: 9000 };
+    const pedido = { id: "ord-1", communityId: "com-emaster", zoneId: "zona-norte", status: "delivered" };
+    const limpia = buildAdminCommunityList(entrada(eMaster()));
+    const conExtras = buildAdminCommunityList({
+      ...entrada(eMaster()),
+      zones: [zonaCara],
+      zone: zonaCara,
+      orders: [pedido]
+    } as unknown as T9Input);
+
+    expect(conExtras).toEqual(limpia);
+    expect(conExtras[0]?.pricing.sellerDeliveredFeeCop?.baseCop, "la base es la de los ajustes, sin zona").toBe(12000);
+  });
+
+  it("RNF_02: la firma de buildAdminCommunityList recibe el instante y no recibe zonas ni pedidos", () => {
+    const codigo = sinComentariosT9(COMMUNITY_VIEW_SOURCE);
+    const firma = codigo.match(/export function buildAdminCommunityList\(([\s\S]*?)\)\s*:\s*AdminCommunityRow\[\]/);
+    expect(firma, "no se encuentra la firma de buildAdminCommunityList en community-view.ts").toBeTruthy();
+    const parametros = firma?.[1] ?? "";
+    // Positivos primero: un extractor roto que devuelva "" no puede aprobar el negativo en vacio.
+    expect(parametros).toMatch(/\bcommunities\b/);
+    expect(parametros).toMatch(/\bsettings\b/);
+    expect(parametros).toMatch(/\bnowIso\s*:\s*string\b/);
+    expect(parametros).not.toMatch(/\bzones?\b/i);
+    expect(parametros).not.toMatch(/\borders?\b/i);
+  });
+
+  it("RF_02 (DoD 3): community-view.ts toma la base de seller-charges y el precio de community-pricing, sin copia propia", () => {
+    // La prueba de "fallido 12.000" sola pasaria con un literal escrito a mano en el panel. Esto
+    // ata DE DONDE sale el numero.
+    const codigo = sinComentariosT9(COMMUNITY_VIEW_SOURCE);
+
+    expect(codigo).toMatch(
+      /import\s*\{[^}]*\bcommunityBase\b[^}]*\}\s*from\s*"\.\.\/\.\.\/functions\/src\/seller-charges"/
+    );
+    expect(codigo).toMatch(
+      /import\s*\{[^}]*\bresolveCommunityPricing\b[^}]*\}\s*from\s*"\.\.\/\.\.\/functions\/src\/community-pricing"/
+    );
+    expect(codigo).toMatch(/\bcommunityBase\(/);
+    expect(codigo).toMatch(/\bresolveCommunityPricing\(/);
+
+    expect(codigo).not.toMatch(/sellerFailedFeeCop\s*:\s*12_?000\b/);
+    expect(codigo, "el fijo del fallido vive en seller-charges.ts, no aqui").not.toMatch(/\b12_?000\b/);
+    expect(codigo, "la base propia del panel (precio guardado o ajuste crudo) desaparece").not.toMatch(/\bcommunityPriceOr\b/);
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * T10 · la pantalla. T9 dejo en `buildAdminCommunityList` todo lo que el panel tiene que decir
+ * (cobrado, base, margen, rotulo, subida pendiente, motivo de solo-base). Estas guardas atan que
+ * el JSX lo PINTE y que no vuelva a leer el precio guardado ni a calcular cifras por su cuenta.
+ * Son guardas de fuente sobre `operations-app.tsx`, sin comentarios, acotadas al componente.
+ * ------------------------------------------------------------------------------------------- */
+
+/** Codigo de `function <nombre>(` hasta la siguiente funcion de primer nivel, sin comentarios. */
+function cuerpoDeFuncionT10(nombre: string): string {
+  const codigo = sinComentariosT9(OPERATIONS_APP_SOURCE);
+  const inicio = codigo.indexOf(`\nfunction ${nombre}(`);
+  expect(inicio, `no se encuentra function ${nombre} en operations-app.tsx`).toBeGreaterThanOrEqual(0);
+  const fin = codigo.indexOf("\nfunction ", inicio + 1);
+  return codigo.slice(inicio, fin === -1 ? undefined : fin);
+}
+
+describe("T10 · RF_07..RF_15: la pantalla pinta lo que devuelve community-view", () => {
+  it("RF_12: ZONE_BASE_NOTICE se importa de @/lib/community-view", () => {
+    expect(lineaDeImportDe("@/lib/community-view")).toMatch(/\bZONE_BASE_NOTICE\b/);
+  });
+
+  it("RF_12, RF_10: la tarjeta 'Tu tarifa' (StoreTariffCard) pinta ZONE_BASE_NOTICE", () => {
+    const tarjeta = cuerpoDeFuncionT10("StoreTariffCard");
+    expect(tarjeta).toMatch(/Tu tarifa/);
+    expect(tarjeta).toMatch(/\bZONE_BASE_NOTICE\b/);
+  });
+
+  it("RF_12: la tarjeta de comunidades del admin pinta ZONE_BASE_NOTICE", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/row\.pricing/);
+    expect(panel).toMatch(/\bZONE_BASE_NOTICE\b/);
+  });
+
+  it("RF_08, RF_09: el admin lee cobrado, rotulo (source) y margen de row.pricing", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/row\.pricing/);
+    expect(panel).toMatch(/\.chargedCop\b/);
+    expect(panel, "sin .source no se puede rotular base frente a precio del lider").toMatch(/\.source\b/);
+    expect(panel, "RF_09: el margen por pedido tiene que pintarse").toMatch(/\.marginCop\b/);
+  });
+
+  it("RF_08, RF_09: el rotulo distingue 'base' de 'leader'", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/\.source\b[\s\S]{0,200}["'](base|leader)["']|["'](base|leader)["']\s*:/);
+  });
+
+  it("RF_15: el admin pinta la subida programada aparte (upcoming.toCop y upcoming.effectiveAt)", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/\.upcoming\b/);
+    expect(panel).toMatch(/\.toCop\b/);
+    expect(panel).toMatch(/\.effectiveAt\b/);
+  });
+
+  it("RF_08: el admin lee row.baseOnlyReason y tiene un texto para 'disabled' y otro para 'no_leader'", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/row\.baseOnlyReason\b/);
+    // "disabled" ya aparece en el panel por el boton de desactivar al lider: se exige atado a
+    // baseOnlyReason (comparacion, clave de un mapa de textos o case), no el literal suelto.
+    const atado = (valor: string): RegExp =>
+      new RegExp(
+        `baseOnlyReason\\s*===?\\s*["']${valor}["']|["']${valor}["']\\s*===?\\s*[\\w.]*baseOnlyReason|` +
+          `\\b${valor}\\s*:\\s*["'\`]|["']${valor}["']\\s*:\\s*["'\`]|case\\s+["']${valor}["']`
+      );
+    expect(panel, "falta el texto para la comunidad desactivada").toMatch(atado("disabled"));
+    expect(panel, "falta el texto para la comunidad sin lider").toMatch(atado("no_leader"));
+  });
+
+  it("RF_07: el admin no pinta el precio guardado (community.pricing)", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/row\.pricing/);
+    expect(panel).not.toMatch(/\bcommunity\??\.pricing\b/);
+  });
+
+  it("DoD: ninguna cifra se calcula en el JSX del admin (eso es de community-view)", () => {
+    const panel = cuerpoDeFuncionT10("AdminCommunitiesPanel");
+    expect(panel).toMatch(/\bbuildAdminCommunityList\(/);
+    expect(panel).not.toMatch(/\bresolveCommunityPricing\(/);
+    expect(panel).not.toMatch(/\bcommunityBase\(/);
   });
 });

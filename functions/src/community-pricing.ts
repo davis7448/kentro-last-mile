@@ -5,13 +5,22 @@
  * `communities.ts` por la misma razon que `wallet-entries.ts` vive aparte de `orders.ts`: la
  * regla de dinero tiene que poder probarse sin red, y tiene que haber UNA sola copia de ella.
  *
- * Dos instantes distintos conviven en un pedido y conviene no confundirlos:
- *  - El precio se CONGELA al crear el pedido (`freezeOrderPricing`).
- *  - El cashback se CAUSA al cerrarlo, leyendo lo que se congelo, nunca la tarifa viva.
+ * Dos instantes distintos conviven en un pedido y cada uno decide una mitad del precio:
+ *  - Al CREAR se congela el precio PROPIO del lider (`freezeOrderPricing`, `leader<X>FeeCop`).
+ *    Revocar al lider o cambiar su tarifa despues no toca lo que ya entro.
+ *  - Al CERRAR se decide la base, con la base DEL CIERRE (`communityChargeAtClose`): se cobra la
+ *    mayor entre esa base y el precio congelado del lider, y el cashback es la diferencia.
+ *
+ * Esto reemplaza, en la base, la garantia de la 001 (RF_22: "el cierre solo lee lo congelado").
+ * RF_11 de la 004 lo cambio a proposito: la zona se edita despues de crear y una tienda sin
+ * comunidad paga la tarifa del cierre, asi que congelar tambien la base cobraba de menos y
+ * convertia una bajada de la base en cashback de un lider que no habia fijado nada (RF_04).
  *
  * Todas las funciones que dependen del tiempo reciben el instante por parametro. Es el mismo
  * patron de `dandaDeliveredFeeCop`, y es lo que permite probar los plazos sin simular relojes.
  */
+
+import { communityBase, resolveTariffs } from "./seller-charges";
 
 /** Una subida de precio avisa con ocho dias. Una bajada no espera: no perjudica a la tienda. */
 export const SCHEDULED_RAISE_NOTICE_DAYS = 8;
@@ -73,12 +82,36 @@ function chargesOwnPricing(community: CommunityLike | undefined): community is C
 export type FrozenPricing = {
   communityId: string;
   frozenAt: string;
+  /**
+   * `2` desde la spec 004: el pedido lleva el precio propio del lider en `leader<X>FeeCop` y la
+   * base se decide al cerrar. Ausente = pedido legado (ver `communityChargeAtClose`).
+   */
+  pricingVersion?: 2;
+  /**
+   * RF_03: lo que fijo el lider para cada concepto, TAL CUAL, aunque este por debajo de la base
+   * (el piso lo pone el cierre). Ausente = el lider no fijo precio, o la comunidad no cobra el
+   * suyo (RF_20). Nunca un cero de relleno: un cero se leeria como precio.
+   */
+  leaderDeliveredFeeCop?: number;
+  leaderFailedFeeCop?: number;
+  leaderFulfillmentFeeCop?: number;
+  // Los seis de referencia (RF_03 MAY): precio final y base AL CREAR. Pantallas y scripts los
+  // leen; el cierre de un pedido v2 NO los usa para decidir dinero.
   sellerDeliveredFeeCop: number;
   baseDeliveredFeeCop: number;
   sellerFailedFeeCop: number;
   baseFailedFeeCop: number;
   fulfillmentFeeCop: number;
   baseFulfillmentFeeCop: number;
+};
+
+type LeaderPricingField = "leaderDeliveredFeeCop" | "leaderFailedFeeCop" | "leaderFulfillmentFeeCop";
+
+/** Concepto de la tienda -> campo congelado del precio del lider. */
+const LEADER_FIELD: Record<CommunityPricingField, LeaderPricingField> = {
+  sellerDeliveredFeeCop: "leaderDeliveredFeeCop",
+  sellerFailedFeeCop: "leaderFailedFeeCop",
+  fulfillmentFeeCop: "leaderFulfillmentFeeCop"
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -145,9 +178,14 @@ export function resolveCommunityPricing(
 }
 
 /**
- * Congela precio y base en el pedido, al crearlo. Devuelve `undefined` si la tienda no
+ * Congela en el pedido, al crearlo, el precio PROPIO vigente del lider (RF_03) y, como
+ * referencia, el precio final y la base de ese instante. Devuelve `undefined` si la tienda no
  * pertenece a ninguna comunidad: ese pedido se rige por la tarifa viva de siempre y no genera
  * cashback, que es exactamente lo que debe pasar para no mover el dinero ya existente.
+ *
+ * El precio del lider se guarda sin elevarlo al piso: un fallido de 11.000 bajo una base de
+ * 12.000 queda en 11.000, porque si la base del cierre baja a 10.000 lo justo es cobrar 11.000 y
+ * no los 12.000 que habria dejado un piso aplicado aqui.
  */
 export function freezeOrderPricing(
   base: Partial<Record<CommunityPricingField, number>>,
@@ -156,15 +194,60 @@ export function freezeOrderPricing(
 ): FrozenPricing | undefined {
   if (!community) return undefined;
   const final = resolveCommunityPricing(base, community, nowIso);
+  // RF_20: sin lider o desactivada no hay precio propio que congelar. Mismo criterio que el
+  // resolutor, para que referencia y precio del lider no puedan contarse historias distintas.
+  const own = chargesOwnPricing(community) ? applyScheduledChanges(community, nowIso) : {};
+  const leaderPrices: Partial<Record<LeaderPricingField, number>> = {};
+  for (const field of COMMUNITY_PRICING_FIELDS) {
+    const wanted = own[field];
+    // Construccion condicional: un concepto sin precio queda AUSENTE, no `undefined` explicito.
+    if (typeof wanted === "number" && Number.isFinite(wanted)) leaderPrices[LEADER_FIELD[field]] = wanted;
+  }
   return {
     communityId: community.id,
     frozenAt: nowIso,
+    pricingVersion: 2,
+    ...leaderPrices,
     sellerDeliveredFeeCop: final.sellerDeliveredFeeCop,
     baseDeliveredFeeCop: Number(base.sellerDeliveredFeeCop) || 0,
     sellerFailedFeeCop: final.sellerFailedFeeCop,
     baseFailedFeeCop: Number(base.sellerFailedFeeCop) || 0,
     fulfillmentFeeCop: final.fulfillmentFeeCop,
     baseFulfillmentFeeCop: Number(base.fulfillmentFeeCop) || 0
+  };
+}
+
+/** Pesos en formato es-CO (`$12.000`), el mismo patron que `copText` de community-view. */
+function copText(value: number): string {
+  const amount = Number.isFinite(value) ? Math.round(value) : 0;
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}$${Math.abs(amount).toLocaleString("es-CO")}`;
+}
+
+/**
+ * RF_05, RF_12 de la 004: el minimo que un lider puede fijar para un concepto.
+ *
+ * `base` es la base REAL sin zona (`communityBase(resolveTariffs(settings/global))`), con el
+ * fallido fijo dentro: no el ajuste crudo, que en produccion dice 9.000 mientras se cobra 12.000.
+ * Sin zona porque RF_05 no exige superar la base de ninguna zona: en un pedido con zona mas cara
+ * el cierre cobra esa base (RF_11) y el mensaje lo avisa, para que el lider no descubra el menor
+ * cashback al ver el corte.
+ *
+ * Igual a la base es valido. Pura: no muta `base`.
+ */
+export function validateCommunityPriceFloor(
+  field: CommunityPricingField,
+  amountCop: number,
+  base: Partial<Record<CommunityPricingField, number>>
+): { ok: true } | { ok: false; floorCop: number; reason: string } {
+  const floorCop = Number(base[field]) || 0;
+  if (amountCop >= floorCop) return { ok: true };
+  return {
+    ok: false,
+    floorCop,
+    reason:
+      `El minimo para este concepto es ${copText(floorCop)} (lo que Kentro cobra en un pedido sin zona). ` +
+      "En pedidos con zona la base puede ser mayor: ahi se cobra la base y ese pedido deja menos o cero cashback."
   };
 }
 
@@ -175,18 +258,52 @@ export type CashbackBreakdown = {
   totalCop: number;
 };
 
-/** Cashback por concepto a partir de lo congelado. Nunca negativo: el piso ya actuo al congelar. */
-export function cashbackForFrozenPricing(frozen: FrozenPricing | undefined): CashbackBreakdown {
-  if (!frozen) return { deliveredCop: 0, failedCop: 0, fulfillmentCop: 0, totalCop: 0 };
-  const delivered = Math.max(0, frozen.sellerDeliveredFeeCop - frozen.baseDeliveredFeeCop);
-  const failed = Math.max(0, frozen.sellerFailedFeeCop - frozen.baseFailedFeeCop);
-  const fulfillment = Math.max(0, frozen.fulfillmentFeeCop - frozen.baseFulfillmentFeeCop);
-  return {
-    deliveredCop: delivered,
-    failedCop: failed,
-    fulfillmentCop: fulfillment,
-    totalCop: delivered + failed + fulfillment
-  };
+export type CommunityChargeAtClose = {
+  /** Lo que paga la tienda por concepto: nunca menos que `base`. */
+  charged: PricingValues;
+  /** La base DEL CIERRE con la que se decidio. */
+  base: PricingValues;
+  /** `charged - base` por concepto. Lo que se abona al lider. */
+  cashback: CashbackBreakdown;
+};
+
+/** Concepto de la tienda -> campo del desglose de cashback. */
+const CASHBACK_FIELD: Record<CommunityPricingField, "deliveredCop" | "failedCop" | "fulfillmentCop"> = {
+  sellerDeliveredFeeCop: "deliveredCop",
+  sellerFailedFeeCop: "failedCop",
+  fulfillmentFeeCop: "fulfillmentCop"
+};
+
+/**
+ * RF_11, RF_04, RF_06: cuanto paga la tienda y cuanto gana el lider al CERRAR un pedido de
+ * comunidad. Recibe lo congelado y la base del cierre, y nada mas: ni la comunidad ni la tienda
+ * (RF_12), asi que revocar al lider despues de crear no puede tocar su precio.
+ *
+ * Por concepto: se cobra el precio del lider si supera la base del cierre, y si no la base. El
+ * cashback es la diferencia, >= 0 por construccion.
+ *
+ * Pedido LEGADO (sin `pricingVersion`): su `seller<X>` se toma como precio del lider y su base
+ * guardada se ignora. Asi un legado cerrado con la base de siempre da el mismo cashback que
+ * antes, y uno que guardo una base vieja mas baja (el fallido de 9.000) cobra la base real sin
+ * intervencion manual.
+ *
+ * Pura: no muta `frozen` ni `base`; una correccion que vuelva a cerrar lee lo mismo.
+ */
+export function communityChargeAtClose(frozen: FrozenPricing, base: PricingValues): CommunityChargeAtClose {
+  const isV2 = frozen.pricingVersion === 2;
+  const charged = {} as PricingValues;
+  const closeBase = {} as PricingValues;
+  const cashback: CashbackBreakdown = { deliveredCop: 0, failedCop: 0, fulfillmentCop: 0, totalCop: 0 };
+  for (const field of COMMUNITY_PRICING_FIELDS) {
+    const floor = Number(base[field]) || 0;
+    const leader = isV2 ? frozen[LEADER_FIELD[field]] : frozen[field];
+    const price = typeof leader === "number" && Number.isFinite(leader) && leader > floor ? leader : floor;
+    closeBase[field] = floor;
+    charged[field] = price;
+    cashback[CASHBACK_FIELD[field]] = price - floor;
+  }
+  cashback.totalCop = cashback.deliveredCop + cashback.failedCop + cashback.fulfillmentCop;
+  return { charged, base: closeBase, cashback };
 }
 
 /**
@@ -488,23 +605,43 @@ export type FloorRaisePlan = {
   communities: CommunityFloorRaise[];
 };
 
-/** Una tarifa ausente en los ajustes es un piso de cero, no un cambio inexistente. */
-function tariffFromSettings(settings: Record<string, unknown>, field: CommunityPricingField): number {
-  const value = Number(settings[field]);
-  return Number.isFinite(value) ? value : 0;
+/**
+ * RF_13 de la 004: que conceptos subieron de base al guardar los ajustes, y hasta donde.
+ *
+ * Recibe los ajustes CRUDOS (`settings/global` antes y despues), no tarifas ya resueltas, a
+ * proposito: la base que se compara es la de RF_01, `communityBase(resolveTariffs(ajustes))`, la
+ * misma que cobra el cierre. Antes se comparaba el ajuste crudo, y en produccion el fallido del
+ * ajuste dice 9.000 mientras se cobra el fijo de 12.000: subir el ajuste a 11.000 elevaba a los
+ * lideres a un piso que no era el de nadie, con aviso e historial de una subida que no ocurrio.
+ * Resolviendo aqui dentro, ningun llamador puede olvidarse de hacerlo.
+ *
+ * Lo mismo cubre dos casos mas sin reglas propias: un campo que no es tarifa (textos, plazos)
+ * no mueve la base, y un concepto ausente que se guarda con su valor por defecto tampoco.
+ *
+ * Solo sube lo que sube estrictamente: una base que baja no toca a nadie.
+ */
+export function raisedCommunityFloors(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+): Partial<PricingValues> {
+  const baseBefore = communityBase(resolveTariffs(before));
+  const baseAfter = communityBase(resolveTariffs(after));
+  const floors: Partial<PricingValues> = {};
+  for (const field of COMMUNITY_PRICING_FIELDS) {
+    if (baseAfter[field] > baseBefore[field]) floors[field] = baseAfter[field];
+  }
+  return floors;
 }
 
 /**
- * RF_35: que comunidades hay que elevar cuando el administrador sube una tarifa base, que
- * conceptos y con que historial. PURO: recibe el documento de ajustes entero —antes y despues—,
- * las comunidades y el instante, y devuelve exactamente lo que se va a escribir. El trigger que
- * lo llama traduce; no decide ni calcula.
+ * RF_13, RF_14 de la 004 (y RF_35 de la 001): que comunidades elevar a unos pisos dados, que
+ * conceptos y con que historial. PURO. No sabe de donde salen los pisos: el trigger se los pide a
+ * `raisedCommunityFloors`, y la pasada unica de RF_14 le pasa la base real entera, sin "antes".
  *
- * Tres cosas se deciden aqui, y ninguna es cableado:
+ * Solo mira los conceptos presentes en `floors`, en el orden de `COMMUNITY_PRICING_FIELDS`.
  *
- *  - **Que es una tarifa.** `settings/app` guarda decenas de campos que no lo son y el trigger
- *    salta con todos ellos. Sin este filtro, cada guardado de ajustes reescribiria todas las
- *    comunidades y llenaria el historial de cambios de precio que nunca ocurrieron.
+ * Dos criterios, heredados de T47 sin cambios:
+ *
  *  - **Contra que se compara.** Contra el precio VIGENTE (`applyScheduledChanges`), no contra el
  *    literal de `pricing`: una programada vencida en 14.000 se quedaria intacta bajo un piso de
  *    15.000 y el `fromCop` del historial mentiria. Mismo criterio que T39 para el aviso.
@@ -516,23 +653,13 @@ function tariffFromSettings(settings: Record<string, unknown>, field: CommunityP
  * sentido. Una subida que la tienda nunca vio (T39 decidio no anunciarla) puede revivir sola si
  * la base vuelve a bajar, y entonces se aplicaria sin los ocho dias de aviso de RF_28.
  */
-export function planFloorRaise(input: {
-  before: Record<string, unknown>;
-  after: Record<string, unknown>;
+export function planRaiseToFloors(input: {
+  floors: Partial<PricingValues>;
   communities: CommunityLike[];
   nowIso: string;
-}): FloorRaisePlan {
-  const { before, after, communities, nowIso } = input;
-
-  const raisedFields: CommunityPricingField[] = [];
-  const floors = {} as Record<CommunityPricingField, number>;
-  for (const field of COMMUNITY_PRICING_FIELDS) {
-    const floor = tariffFromSettings(after, field);
-    if (floor <= tariffFromSettings(before, field)) continue;
-    raisedFields.push(field);
-    floors[field] = floor;
-  }
-  if (raisedFields.length === 0) return { raisedFields: [], communities: [] };
+}): CommunityFloorRaise[] {
+  const { floors, communities, nowIso } = input;
+  const targetFields = COMMUNITY_PRICING_FIELDS.filter((field) => typeof floors[field] === "number");
 
   const changes: CommunityFloorRaise[] = [];
   for (const community of communities) {
@@ -542,15 +669,15 @@ export function planFloorRaise(input: {
     const deleteFields: string[] = [];
     const historyEntries: FloorPriceHistoryEntry[] = [];
 
-    for (const field of raisedFields) {
-      const floor = floors[field];
+    for (const field of targetFields) {
+      const floor = Number(floors[field]);
       const currentCop = Number(current[field]);
       // Sin precio propio no hay nada que elevar: esa comunidad ya cobra la base (RF_20).
       if (!Number.isFinite(currentCop) || currentCop >= floor) continue;
 
       fields.push(field);
       communityUpdate[`pricing.${field}`] = floor;
-      // El aviso al lider de RF_35. Lo escribe el trigger de `settings/app` y nadie mas.
+      // El aviso al lider (spec 004 §6): esta marca mas la entrada de historial de abajo.
       communityUpdate[`floorRaisedAt.${field}`] = nowIso;
       historyEntries.push(
         buildPriceHistoryEntry({
@@ -575,5 +702,27 @@ export function planFloorRaise(input: {
     changes.push({ communityId: community.id, fields, communityUpdate, deleteFields, historyEntries });
   }
 
-  return { raisedFields, communities: changes };
+  return changes;
+}
+
+/**
+ * RF_13: el plan entero de un guardado de ajustes. Es la composicion de las dos mitades:
+ * `raisedCommunityFloors` decide que conceptos subieron de base REAL —no de ajuste crudo— y
+ * `planRaiseToFloors` que comunidades hay que elevar. El trigger de `settings/global` lo llama
+ * tal cual, y lo llama tambien con `communities: []` como corte barato antes de leer Firestore.
+ *
+ * Si ninguna base sube (un guardado de textos, el fallido del ajuste que el fijo de 12.000
+ * ignora), el plan sale vacio y no se escribe absolutamente nada.
+ */
+export function planFloorRaise(input: {
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  communities: CommunityLike[];
+  nowIso: string;
+}): FloorRaisePlan {
+  const { before, after, communities, nowIso } = input;
+  const floors = raisedCommunityFloors(before, after);
+  const raisedFields = COMMUNITY_PRICING_FIELDS.filter((field) => typeof floors[field] === "number");
+  if (raisedFields.length === 0) return { raisedFields: [], communities: [] };
+  return { raisedFields, communities: planRaiseToFloors({ floors, communities, nowIso }) };
 }

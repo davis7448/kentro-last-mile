@@ -4,8 +4,13 @@ import type {
   BulkSignupDisableSkipReason
 } from "../../functions/src/community-containment";
 import type { CommunityStats } from "../../functions/src/community-stats-math";
-import type { CommunityPricingField } from "../../functions/src/community-pricing";
-import { scheduleEffectiveAt } from "../../functions/src/community-pricing";
+import type { CommunityLike, CommunityPricingField } from "../../functions/src/community-pricing";
+import {
+  buildStoreTariffView,
+  resolveCommunityPricing,
+  scheduleEffectiveAt
+} from "../../functions/src/community-pricing";
+import { communityBase, resolveTariffs, type SellerFeeValues, type Tariffs } from "../../functions/src/seller-charges";
 import { normalizeSlug, validateSlug } from "../../functions/src/community-slug";
 import type { Role } from "./types";
 
@@ -354,26 +359,58 @@ export function buildCommunityLeaderLiquidationRows(
 
 // --- La lista de comunidades del administrador (RF_34) ----------------------------------------
 
-/** Los tres conceptos que una comunidad puede tener a precio propio. */
-type AdminCommunityPricing = {
-  sellerDeliveredFeeCop: number;
-  sellerFailedFeeCop: number;
-  fulfillmentFeeCop: number;
+/**
+ * RF_12: lo que la fila NO puede decir con una cifra. La base del panel es la de los ajustes, sin
+ * zona; en un pedido con zona el cierre cobra la base de la zona si es mayor, y ese pedido deja
+ * menos cashback o ninguno. Se muestra junto a los precios en vez de calcular una base por zona:
+ * casi ningun pedido lleva zona, y el panel no descarga pedidos ni zonas (RNF_02).
+ */
+export const ZONE_BASE_NOTICE =
+  "En pedidos con zona la base puede ser mayor que la mostrada: en ese caso se cobra la base y el cashback de ese pedido es menor o cero.";
+
+/** De donde sale lo que se cobra en un concepto: la base de Kentro o el precio propio del lider. */
+export type AdminPriceSource = "base" | "leader";
+
+/**
+ * Un concepto tal y como se le cobraria HOY a un pedido sin zona de la comunidad (RF_07).
+ *
+ * `upcoming` va aparte y nunca dentro de `chargedCop` ni de `marginCop` (RF_15): la subida de
+ * manana no se cobra hoy, y sumarla le haria creer al admin que la comunidad ya deja ese margen.
+ */
+export type AdminConceptPrice = {
+  /** Lo que cobra el cierre: el precio del lider con las programadas vencidas, llevado al piso. */
+  chargedCop: number;
+  /** La base de RF_01: `communityBase(resolveTariffs(settings))`, sin zona. */
+  baseCop: number;
+  /** `chargedCop - baseCop`. No sale negativo: el piso de `resolveCommunityPricing` lo impide. */
+  marginCop: number;
+  source: AdminPriceSource;
+  /** La subida programada que aun no entra en vigor, o `null` si no queda ninguna. */
+  upcoming: { toCop: number; effectiveAt: string } | null;
 };
+
+/**
+ * RF_08: por que la comunidad cobra SOLO la base aunque tenga precios guardados. Es `null` cuando
+ * cobra su precio propio, aunque algun concepto salga a la base por el piso o por no tenerlo: ese
+ * caso ya lo cuenta el rotulo "base" y no tiene otro motivo que inventar.
+ */
+export type AdminBaseOnlyReason = "no_leader" | "disabled";
 
 /**
  * Una fila de la tarjeta de comunidades del admin.
  *
- * Deliberadamente NO lleva `linkStatus` ni `status`: son estado del documento, no cifras
- * derivadas, y la pantalla los lee de `community` directamente. Meterlos aqui obligaria a esta
- * funcion a conocer el ciclo de vida del enlace para no ganar nada.
+ * NO lleva `linkStatus` ni `status` crudos: son estado del documento y la pantalla los lee de
+ * `community`. Lo que si lleva es `baseOnlyReason`, que se DERIVA del estado para explicar por que
+ * no se cobra el precio guardado: decidirlo en el JSX abriria un segundo criterio de "sin lider"
+ * que divergiria del que usa el cobro.
  */
 export type AdminCommunityRow = {
   communityId: string;
   name: string;
   leaderName: string;
   stores: number;
-  pricing: AdminCommunityPricing;
+  pricing: Record<CommunityPricingField, AdminConceptPrice>;
+  baseOnlyReason: AdminBaseOnlyReason | null;
   /**
    * Cashback CAUSADO: todo lo que la comunidad ha generado, este cortado o no.
    * No confundir con lo pagado (`communityCashbackPaidCop`), que es lo que ya salio de caja.
@@ -387,8 +424,12 @@ export type AdminCommunityRow = {
   leaderStoreCashbackAccruedCop: number;
 };
 
-type AdminCommunityLike = {
-  id: string;
+/**
+ * Se apoya en `CommunityLike` —`pricing`, `scheduled`, `leaderUid`, `status`— para que la fila
+ * reciba EXACTAMENTE lo que lee `resolveCommunityPricing`: con una forma propia, un campo que el
+ * cobro mira y el panel no seria justo el hueco por el que ambos divergen.
+ */
+type AdminCommunityLike = CommunityLike & {
   name: string;
   leaderName?: string;
   /**
@@ -396,7 +437,6 @@ type AdminCommunityLike = {
    * reclamos de autenticacion. Quien arma el input lo saca del documento de la comunidad.
    */
   leaderSellerId?: string;
-  pricing?: { sellerDeliveredFeeCop?: number; sellerFailedFeeCop?: number; fulfillmentFeeCop?: number };
 };
 
 type AdminSellerLike = { id: string; communityId?: string };
@@ -422,22 +462,77 @@ function numericCopOrZero(value: unknown): number {
 }
 
 /**
- * Precio vigente de un concepto: el propio de la comunidad si lo tiene, y si no el global.
- *
- * `??` y no `||`, y no es un detalle de estilo: una comunidad con un concepto a 0 —envio gratis
- * en fallidos, por ejemplo— es un precio decidido, no un hueco. Con `||` se pintaria el precio
- * global y el admin cobraria de mas creyendo que ve el precio real.
+ * RF_08: el MISMO criterio que `chargesOwnPricing` (community-pricing.ts), dicho con su motivo.
+ * Un estado ausente no es activo —el lado seguro, igual que en el cobro— y un uid que al
+ * recortarlo no deja nada no es un lider. Si el panel recortara distinto que el cobro, la
+ * comunidad cobraria la base sin que la fila dijera por que.
  */
-function communityPriceOr(own: number | undefined, fallback: number): number {
-  return typeof own === "number" && Number.isFinite(own) ? own : fallback;
+function baseOnlyReasonOf(community: CommunityLike): AdminBaseOnlyReason | null {
+  if (community.status !== "active") return "disabled";
+  if (nonEmptyText(community.leaderUid, "") === "") return "no_leader";
+  return null;
 }
 
 /**
- * RF_34: lo que el administrador ve de cada comunidad — quien la lidera, cuantas tiendas tiene,
- * a que precios cobra hoy y cuanto cashback ha causado.
+ * Los tres conceptos de una comunidad como se cobran hoy (RF_07, RF_08, RF_09, RF_15).
+ *
+ * `chargedCop` sale de `resolveCommunityPricing`, la funcion con la que se congela el pedido, y la
+ * subida pendiente de `buildStoreTariffView`, la que ya se la anuncia a la tienda: futura, de una
+ * comunidad que cobra su precio propio y por encima de lo que se cobra hoy. Recalcular aqui
+ * cualquiera de las dos seria una segunda copia de la regla, y el admin veria una subida que la
+ * tienda no ve (o al reves).
+ */
+function conceptPrices(
+  base: SellerFeeValues,
+  community: AdminCommunityLike,
+  nowIso: string
+): Record<CommunityPricingField, AdminConceptPrice> {
+  const charged = resolveCommunityPricing(base, community, nowIso);
+  const pending = buildStoreTariffView(base, community, nowIso).scheduled;
+
+  const priceOf = (field: CommunityPricingField): AdminConceptPrice => {
+    const baseCop = base[field];
+    const chargedCop = charged[field];
+    const marginCop = chargedCop - baseCop;
+    const raise = pending?.[field];
+    return {
+      chargedCop,
+      baseCop,
+      marginCop,
+      source: marginCop > 0 ? "leader" : "base",
+      upcoming: raise ? { toCop: raise.toCop, effectiveAt: raise.effectiveAt } : null
+    };
+  };
+
+  return {
+    sellerDeliveredFeeCop: priceOf("sellerDeliveredFeeCop"),
+    sellerFailedFeeCop: priceOf("sellerFailedFeeCop"),
+    fulfillmentFeeCop: priceOf("fulfillmentFeeCop")
+  };
+}
+
+/**
+ * RF_34, y desde la spec 004 RF_07/RF_08/RF_09/RF_15: lo que el administrador ve de cada
+ * comunidad — quien la lidera, cuantas tiendas tiene, que cobra HOY por cada concepto y cuanto
+ * cashback ha causado.
  *
  * Reglas que no son evidentes y que estan atadas en `community-view.test.ts`:
  *
+ * - **Se pinta lo que se COBRA, no lo que esta guardado (RF_07).** Antes cada concepto era "el
+ *   precio propio si lo hay, y si no el ajuste global". Asi E-master, sin precio propio, ensenaba
+ *   "Fallido $9.000" —el ajuste crudo— mientras el cierre cobraba el fijo: nadie cobraba 9.000 y
+ *   con ese numero se decidian precios. Ahora la base es `communityBase(resolveTariffs(settings))`
+ *   y el precio `resolveCommunityPricing(...)`, las MISMAS funciones del cobro. Ni copia del fijo
+ *   del fallido ni piso propio aqui: panel y cobro no pueden divergir porque son la misma cuenta.
+ * - **La base es la de los ajustes, SIN zona (RNF_02).** La firma no recibe zonas ni pedidos: el
+ *   admin no descarga nada nuevo para pintar la fila. Lo que cambia con zona lo cuenta
+ *   `ZONE_BASE_NOTICE` (RF_12), no una cifra.
+ * - **El margen es `cobrado - base`, y el rotulo sale de el (RF_08, RF_09).** Un precio guardado
+ *   por debajo de la base, igual a ella, a cero o ausente se cobra a la base: rotulo "base" y
+ *   margen 0. `baseOnlyReason` solo dice algo cuando el motivo es el estado de la comunidad.
+ * - **Una subida pendiente va aparte (RF_15)**, nunca sumada al precio ni al margen de hoy. Una ya
+ *   vencida, en cambio, esta dentro de `chargedCop`: es lo que se cobra.
+ * - `nowIso` entra por parametro: el nucleo no inventa el reloj, y las programadas dependen de el.
  * - **Sale una fila por comunidad del catalogo, siempre.** Una recien creada, sin tiendas y sin un
  *   solo asiento, se pinta con ceros. Si desapareciera de la lista por no tener movimiento, el
  *   admin no podria ni ver su enlace ni corregirle los precios: justo la comunidad que mas lo
@@ -473,9 +568,14 @@ export function buildAdminCommunityList(input: {
   communities: AdminCommunityLike[];
   sellers: AdminSellerLike[];
   entries: AdminCashbackEntryLike[];
-  settings: AdminCommunityPricing;
+  /** La tarifa global ENTERA (`state.settings`): de ella sale la base, sin zona. */
+  settings: Partial<Tariffs>;
+  nowIso: string;
 }): AdminCommunityRow[] {
-  const { communities, sellers, entries, settings } = input;
+  const { communities, sellers, entries, settings, nowIso } = input;
+
+  // Una sola base para todas las filas: no depende de la comunidad, solo de los ajustes.
+  const base = communityBase(resolveTariffs(settings));
 
   // Un recorrido por coleccion en vez de un filtro por comunidad: con el catalogo entero y la
   // wallet completa del admin, lo segundo es cuadratico.
@@ -529,20 +629,8 @@ export function buildAdminCommunityList(input: {
     name: nonEmptyText(community.name, `Comunidad ${community.id}`),
     leaderName: nonEmptyText(community.leaderName, "Lider sin registrar"),
     stores: storesByCommunity.get(community.id) ?? 0,
-    pricing: {
-      sellerDeliveredFeeCop: communityPriceOr(
-        community.pricing?.sellerDeliveredFeeCop,
-        settings.sellerDeliveredFeeCop
-      ),
-      sellerFailedFeeCop: communityPriceOr(
-        community.pricing?.sellerFailedFeeCop,
-        settings.sellerFailedFeeCop
-      ),
-      fulfillmentFeeCop: communityPriceOr(
-        community.pricing?.fulfillmentFeeCop,
-        settings.fulfillmentFeeCop
-      )
-    },
+    pricing: conceptPrices(base, community, nowIso),
+    baseOnlyReason: baseOnlyReasonOf(community),
     cashbackAccruedCop: accruedByCommunity.get(community.id) ?? 0,
     leaderStoreCashbackAccruedCop: leaderStoreAccruedByCommunity.get(community.id) ?? 0
   }));
