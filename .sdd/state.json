@@ -328,6 +328,11 @@
       "status": "borrador",
       "origen": "incidente webhook Shopify 2026-09-10..15; primer tramo de la 002",
       "prioridad": 3
+    },
+    "013": {
+      "file": "specs/013_pedido_manual_entero_y_direccion_en_la_guia.md",
+      "status": "borrador",
+      "origen": "reporte del responsable 2026-09-15: formulario de pedido manual cortado en 3 columnas (peor en movil) y guia sin direccion cuando la tienda usa 'normalizada' como observacion"
     }
   },
   "archivedTasks": {
