@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "deploy",
+  "phase": "release",
   "activeSpec": {
     "file": "specs/013_pedido_manual_entero_y_direccion_en_la_guia.md",
     "status": "approved"
@@ -200,7 +200,26 @@
       "plan": "specs/013_plan.md",
       "tasks": "specs/013_tasks.md",
       "verificada": "2026-09-15: verify-013 capture PASA (movil 390 y escritorio 1280 sin desbordamiento, 16 controles de al menos 44 px con los dos paneles desplegados; guias del pedido viejo y del nuevo con las lineas rotuladas). Cleanup hecho, sin contrasenas en la evidencia.",
-      "pendiente": "functions (createManualOrder/updateImportedOrder con deliveryNotes) y hosting; DoD 6 y 7 humanos."
+      "deployed": "2026-09-15",
+      "functionsDeployed": "2026-09-15",
+      "hostingDeployed": "2026-09-15",
+      "pendiente": "DoD 6 y 7: la tienda que reporto el fallo confirma en produccion.",
+      "report": "2026-09-15: informe de cierre en .sdd/evidence/013/informe-cierre-013.html (publicado como Artifact). 17 requisitos: 12 cumplidos con evidencia, 5 probados sin evidencia funcional (RF_08, RF_09, RF_12, RF_13, RNF_01). DoD 5/7. Suite 1326/33, lint 0/3, tsc limpio; prod sirve el bundle de la spec, functions 20:08Z y hosting 20:21Z. Produccion: 4.891 pedidos, 4 con nota vieja en normalizada (todos entregados), 0 con deliveryNotes. Specs borrador 014-016 creadas."
+    },
+    "014": {
+      "file": "specs/014_indicaciones_desde_la_tienda_conectada.md",
+      "status": "borrador",
+      "origen": "informe de cierre 013; fuera de alcance consciente de la 013"
+    },
+    "015": {
+      "file": "specs/015_un_solo_guion_de_verificacion.md",
+      "status": "borrador",
+      "origen": "informe de cierre 013 (H4); tramo entregable de la 002, como la 012"
+    },
+    "016": {
+      "file": "specs/016_editar_un_pedido_con_la_misma_comodidad.md",
+      "status": "borrador",
+      "origen": "informe de cierre 013 (H6)"
     }
   },
   "archivedTasks": {
