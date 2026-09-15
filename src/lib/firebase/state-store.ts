@@ -19,6 +19,7 @@ import {
   type Query
 } from "firebase/firestore";
 import { selectUnsettledWalletEntries } from "@/lib/finance";
+import { mergeCommunitySellers, type LoadReport } from "../load-status";
 import { emptyState } from "@/lib/seed";
 import type { AppState, AuditEvent, CashSnapshot, City, Community, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
@@ -117,7 +118,12 @@ type WatchedKey =
   | "settlements"
   | "payouts";
 
-type LoadOptions = { skip?: ReadonlySet<WatchedKey> };
+// `onReport` es ADITIVO a proposito: la firma publica de `loadFirestoreState` no se toca (tiene
+// otros llamadores) y el valor devuelto tampoco, porque `AppState | null` no puede cargar con "y
+// ademas falto la mitad de comunidad" sin obligar a cada llamador a desenvolver un par. Un parte
+// que se entrega por callback ademas describe bien lo que es: una carga que SI resolvio, pero
+// degradada. Quien no lo pase se comporta exactamente como antes.
+type LoadOptions = { skip?: ReadonlySet<WatchedKey>; onReport?: (report: LoadReport) => void };
 
 /** Una consulta observada por la suscripcion. Varias entradas pueden compartir `key` (el rol
  *  driver observa "orders" con dos consultas distintas) y el estado se rearma uniendolas. */
@@ -185,12 +191,38 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
       // tienda (y con ella su saldo); sin las de la comunidad, el desglose por tienda sale vacio. Y
       // si su tienda no pertenece a su propia comunidad, elegir una rama pierde una de las dos
       // seguro. Cada mitad se pide solo si aplica, asi que ningun rol pide de mas.
+      //
+      // Y las dos mitades NO se piden igual, que es el nucleo de esta entrada:
+      //
+      // - la tienda propia va DESNUDA: si falla, tiene que fallar la carga entera. Tragarse su
+      //   fallo dejaria la pantalla de una tienda sin tienda y sin error, y eso se leeria como un
+      //   problema de configuracion de la cuenta ("Perfil de vendedor pendiente");
+      // - las de la comunidad van ENVUELTAS: medido contra produccion (plan §0) esa consulta
+      //   devuelve 403 para una tienda-lider, y dentro de un `Promise.all` el rechazo sube hasta
+      //   el `Promise.all` general de 21 consultas y deja la pantalla sin tienda, sin ciudades y
+      //   sin ajustes. Degradada, lo unico que falta es la mitad que fallo.
+      //
+      // `mergeCommunitySellers` devuelve ademas un parte que dice si falto la mitad de comunidad
+      // —lo que distingue "no hay tiendas" de "no se pudo saber", y explica que el lider se quede
+      // sin enlace de invitacion—. Ese parte SALE del modulo por `options.onReport`: calcularlo y
+      // tirarlo (que es lo que hacia el `.sellers` de aqui) degradaba en silencio, y un silencio
+      // asi no se puede distinguir de una comunidad que de verdad no tiene tiendas.
+      //
+      // De la mitad de comunidad se piden solo las tiendas de SU comunidad: pedir la coleccion
+      // entera seria un 403 seguro. Toda esta explicacion vive aqui arriba y no junto a cada mitad
+      // a proposito: una guarda de fuente (`state-store-targets.test.ts`) exige que la union sea
+      // visible en una ventana de 260 caracteres alrededor de la consulta, y los comentarios
+      // intercalados empujaban el `Promise.all(` fuera de esa ventana.
       : Promise.all([
           storeRole && context ? getOwnDocument<Seller>("sellers", context.profileId) : Promise.resolve<Seller[]>([]),
-          // Solo las tiendas de SU comunidad. Las reglas ya lo exigen; esto evita ademas pedir
-          // la coleccion entera y comerse un 403 con la pantalla en blanco.
-          communityId ? getCollection<Seller>("sellers", where("communityId", "==", communityId)) : Promise.resolve<Seller[]>([])
-        ]).then(([propias, deLaComunidad]) => mergeById(propias, deLaComunidad)),
+          communityId
+            ? getCollection<Seller>("sellers", where("communityId", "==", communityId)).catch(() => ({ failed: true as const }))
+            : Promise.resolve<Seller[]>([])
+        ]).then(([propias, deLaComunidad]) => {
+          const union = mergeCommunitySellers({ own: propias, community: deLaComunidad });
+          options?.onReport?.(union.report);
+          return union.sellers;
+        }),
     skipped("shopifyStores", () => storeRole && context ? getCollection<ShopifyStore>("shopifyStores", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyStore>("shopifyStores") : Promise.resolve([])),
     skipped("storeWebhookConfigs", () => storeRole && context ? getCollection<StoreWebhookConfig>("storeWebhookConfigs", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<StoreWebhookConfig>("storeWebhookConfigs") : Promise.resolve([])),
     skipped("shopifyInstallRequests", () => storeRole && context ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests", where("sellerId", "==", context.profileId)) : role === "admin" ? getCollection<ShopifyInstallRequest>("shopifyInstallRequests") : Promise.resolve([])),
@@ -428,10 +460,20 @@ export async function saveFirestoreShopifyInstallRequest(request: ShopifyInstall
   await setDoc(doc(client.db, "shopifyInstallRequests", request.id), request, { merge: true });
 }
 
+/**
+ * `onState` entrega el estado Y el parte de como fue la carga base: quien pinta necesita saber si
+ * lo que no ve es que no hay nada o que no se pudo leer. `onError` es el canal del fallo DURO — la
+ * carga base que ni siquiera resolvio—; sin el, la pantalla se queda esperando para siempre un
+ * estado que no va a llegar y acaba culpando a la configuracion de la cuenta.
+ *
+ * Los dos ultimos son opcionales para que los llamadores que solo quieran el estado sigan
+ * compilando sin tocarlos.
+ */
 export function subscribeFirestoreState(
   context: FirestoreStateContext | undefined,
-  onState: (state: AppState) => void,
-  onEmpty?: () => void
+  onState: (state: AppState, report: LoadReport) => void,
+  onEmpty?: () => void,
+  onError?: (error: unknown) => void
 ) {
   const client = getFirebaseClient();
   if (!client) return () => undefined;
@@ -593,6 +635,10 @@ export function subscribeFirestoreState(
   const watchedKeys = new Set<WatchedKey>(targets.map((entry) => entry.key));
   const caches: Array<Map<string, Record<string, unknown>>> = targets.map(() => new Map());
   let baseState: AppState | null = null;
+  // El parte de la ULTIMA carga base. Arranca sin incidencias porque hasta que la carga conteste no
+  // consta que falte nada: dar por rota la mitad de comunidad antes de pedirla seria inventarse un
+  // fallo. Cada emision lo reenvia tal cual, asi que el aviso no depende de cuando se pinte.
+  let baseReport: LoadReport = { issues: [] };
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -705,7 +751,7 @@ export function subscribeFirestoreState(
     rememberRemoteCollections(next);
 
     const paintedAt = Date.now();
-    onState(next);
+    onState(next, baseReport);
     // React renderiza de forma sincrona dentro de setState, asi que este delta
     // aproxima el coste de render del arbol completo.
     perfLog(`emit #${++emitCount} render ${Date.now() - paintedAt} ms`);
@@ -761,7 +807,14 @@ export function subscribeFirestoreState(
   // del listener, y bajarlas tambien con getDocs duplicaba los bytes (medido: ~9,4 MB
   // y 75 s en la red del usuario). El estado se pinta en cuanto llega esta base ligera
   // y cada coleccion pesada aparece cuando su listener entrega (ver keyIsLive).
-  void loadFirestoreState(context, { skip: watchedKeys })
+  void loadFirestoreState(context, {
+    skip: watchedKeys,
+    // El parte llega ANTES de que la carga resuelva (se emite al unir las dos mitades), asi que se
+    // guarda para que la primera emision ya lo lleve.
+    onReport: (report) => {
+      baseReport = report;
+    }
+  })
     .then((state) => {
       if (stopped) return;
       if (!state) {
@@ -772,7 +825,14 @@ export function subscribeFirestoreState(
       perfLog(`base ligera lista en ${Date.now() - startedAt} ms`);
       emit();
     })
-    .catch((error) => console.warn("No se pudo cargar el estado base.", error));
+    .catch((error) => {
+      // La consola NO es un canal: nadie la mira y la pantalla no se entera. Se sigue registrando
+      // para el diagnostico, pero el fallo tiene que SALIR de aqui o la tienda se queda mirando un
+      // esqueleto eterno mientras se le dice que su cuenta esta mal configurada.
+      console.warn("No se pudo cargar el estado base.", error);
+      if (stopped) return;
+      onError?.(error);
+    });
 
   return () => {
     stopped = true;

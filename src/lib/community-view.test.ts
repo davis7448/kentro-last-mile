@@ -3364,3 +3364,129 @@ describe("T10 · RF_07..RF_15: la pantalla pinta lo que devuelve community-view"
     expect(panel).not.toMatch(/\bcommunityBase\(/);
   });
 });
+
+/**
+ * T9 (spec 005) · RF_12, §5 "quien dejo de liderar y sigue siendo acreedor".
+ *
+ * `communityCashbackOwedCop` es la hermana exacta de `communityCashbackPaidCop`: la misma familia
+ * de cortes (`kind === "community_leader"` de ESA comunidad), pero el complemento del estado — lo
+ * que NO esta `paid` ni `reconciled`. Existe porque al acreedor el servidor le niega
+ * `getCommunityStats` por diseno (plan §3.6), asi que `stats.totals.cashbackPendingCop` nunca le
+ * llega; su deuda tiene que salir de `state.settlements`, que si descarga por vinculo.
+ */
+describe("T9 · RF_12: lo que se le debe al acreedor sale de los cortes, no de la callable", () => {
+  type SettlementLike = { kind: string; ownerId: string; status: string; netCop: number };
+  type CommunityCashbackCop = (settlements: SettlementLike[], communityId: string) => number;
+
+  let communityCashbackOwedCop: CommunityCashbackCop;
+  let communityCashbackPaidCop: CommunityCashbackCop;
+
+  // Carga diferida: `communityCashbackOwedCop` todavia no existe, y un import estatico roto
+  // tumbaria la recoleccion del resto del archivo. `tsc` tampoco lo ve, por el mismo motivo.
+  beforeEach(async () => {
+    const vista = (await import("./community-view")) as unknown as {
+      communityCashbackOwedCop?: CommunityCashbackCop;
+      communityCashbackPaidCop: CommunityCashbackCop;
+    };
+    communityCashbackOwedCop = vista.communityCashbackOwedCop as CommunityCashbackCop;
+    communityCashbackPaidCop = vista.communityCashbackPaidCop;
+  });
+
+  const corte = (over: Partial<SettlementLike> = {}): SettlementLike => ({
+    kind: "community_leader",
+    ownerId: "com-1",
+    status: "pending",
+    netCop: 10000,
+    ...over
+  });
+
+  it("la funcion existe y se exporta desde community-view", () => {
+    expect(typeof communityCashbackOwedCop, "`communityCashbackOwedCop` no esta exportada").toBe("function");
+  });
+
+  it("suma los cortes pendientes de la comunidad", () => {
+    expect(communityCashbackOwedCop([corte({ netCop: 42000 })], "com-1")).toBe(42000);
+    expect(communityCashbackOwedCop([corte({ netCop: 42000 }), corte({ netCop: 8000 })], "com-1")).toBe(50000);
+  });
+
+  it("ignora los cortes pagados y los conciliados: eso ya salio de caja", () => {
+    expect(communityCashbackOwedCop([corte({ status: "paid", netCop: 42000 })], "com-1")).toBe(0);
+    expect(communityCashbackOwedCop([corte({ status: "reconciled", netCop: 30000 })], "com-1")).toBe(0);
+    expect(
+      communityCashbackOwedCop(
+        [corte({ status: "paid", netCop: 42000 }), corte({ status: "reconciled", netCop: 30000 }), corte({ netCop: 5000 })],
+        "com-1"
+      )
+    ).toBe(5000);
+  });
+
+  it("ignora otras comunidades y otros `kind`", () => {
+    const cortes = [
+      corte({ netCop: 12000 }),
+      corte({ ownerId: "com-2", netCop: 500000 }),
+      corte({ kind: "driver", netCop: 999999 }),
+      corte({ kind: "seller", netCop: 777777 })
+    ];
+    expect(communityCashbackOwedCop(cortes, "com-1")).toBe(12000);
+    expect(communityCashbackOwedCop(cortes, "com-2")).toBe(500000);
+    expect(communityCashbackOwedCop(cortes, "com-3")).toBe(0);
+  });
+
+  it("sin cortes da 0, no `undefined`: un cero mudo se pinta; un undefined pinta 'NaN' o revienta", () => {
+    const resultado = communityCashbackOwedCop([], "com-1");
+    expect(resultado).toBe(0);
+    expect(resultado).not.toBeUndefined();
+    expect(Number.isNaN(resultado)).toBe(false);
+  });
+
+  it("`netCop` no numerico cuenta 0 y no contamina el total con NaN (mismo criterio que la hermana)", () => {
+    const sucios = [
+      corte({ netCop: undefined as unknown as number }),
+      corte({ netCop: null as unknown as number }),
+      corte({ netCop: "abc" as unknown as number }),
+      corte({ netCop: Number.NaN }),
+      corte({ netCop: 7000 })
+    ];
+    const total = communityCashbackOwedCop(sucios, "com-1");
+    expect(Number.isNaN(total)).toBe(false);
+    expect(total).toBe(7000);
+    // Un string numerico si cuenta, via `Number(...)`, igual que en `communityCashbackPaidCop`.
+    expect(communityCashbackOwedCop([corte({ netCop: "3000" as unknown as number })], "com-1")).toBe(3000);
+  });
+
+  it("es pura: no muta la entrada y dos llamadas iguales dan lo mismo", () => {
+    const cortes = Object.freeze([
+      Object.freeze(corte({ netCop: 1000 })),
+      Object.freeze(corte({ status: "paid", netCop: 2000 }))
+    ]) as unknown as SettlementLike[];
+    const copia = JSON.stringify(cortes);
+    const primera = communityCashbackOwedCop(cortes, "com-1");
+    const segunda = communityCashbackOwedCop(cortes, "com-1");
+    expect(primera).toBe(1000);
+    expect(segunda).toBe(primera);
+    expect(JSON.stringify(cortes)).toBe(copia);
+  });
+
+  it("coherencia con la hermana: debido + pagado == todo lo de esa comunidad", () => {
+    // Las dos funciones parten los mismos cortes en dos mitades complementarias. Si alguna vez
+    // una de ellas tratara un estado (`draft`, `cancelled`...) de forma distinta a la otra, dinero
+    // de la comunidad caeria en ninguna de las dos y la pantalla sumaria menos de lo real.
+    const cortes = [
+      corte({ status: "pending", netCop: 1000 }),
+      corte({ status: "paid", netCop: 2000 }),
+      corte({ status: "reconciled", netCop: 4000 }),
+      corte({ status: "draft", netCop: 8000 }),
+      corte({ status: "cancelled", netCop: 16000 }),
+      corte({ ownerId: "com-2", status: "pending", netCop: 32000 }),
+      corte({ kind: "driver", status: "pending", netCop: 64000 })
+    ];
+    const todoDeLaComunidad = cortes
+      .filter((item) => item.kind === "community_leader" && item.ownerId === "com-1")
+      .reduce((total, item) => total + item.netCop, 0);
+    const owed = communityCashbackOwedCop(cortes, "com-1");
+    const paid = communityCashbackPaidCop(cortes, "com-1");
+    expect(todoDeLaComunidad).toBe(31000);
+    expect(paid).toBe(6000);
+    expect(owed + paid).toBe(todoDeLaComunidad);
+  });
+});

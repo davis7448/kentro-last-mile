@@ -1,0 +1,143 @@
+{
+  "checkedAt": "2026-09-15T15:37:53.632Z",
+  "allPassed": true,
+  "accounts": {
+    "storeLeader": {
+      "uid": "smoke005-1789263910474",
+      "claims": {
+        "role": "seller",
+        "sellerId": "smoke005-seller-own-1789263910474",
+        "communityId": "smoke005-com-1789263910474",
+        "communityStanding": "leader"
+      }
+    },
+    "pureLeader": {
+      "uid": "smoke005-leader-1789263910474",
+      "claims": {
+        "role": "community_leader",
+        "communityId": "smoke005-com-1789263910474",
+        "communityStanding": "leader"
+      }
+    },
+    "emptyLeader": {
+      "uid": "smoke005-leader-empty-1789263910474",
+      "claims": {
+        "role": "community_leader",
+        "communityId": "smoke005-com-empty-1789263910474",
+        "communityStanding": "leader"
+      }
+    },
+    "soloSeller": {
+      "uid": "smoke005-solo-1789263910474",
+      "claims": {
+        "role": "seller",
+        "sellerId": "smoke005-seller-solo-1789263910474"
+      }
+    }
+  },
+  "ids": {
+    "communityId": "smoke005-com-1789263910474",
+    "ownSellerId": "smoke005-seller-own-1789263910474",
+    "otherSellerId": "smoke005-seller-b-1789263910474",
+    "emptyCommunityId": "smoke005-com-empty-1789263910474",
+    "soloSellerId": "smoke005-seller-solo-1789263910474"
+  },
+  "results": [
+    {
+      "name": "tienda_lider",
+      "passed": true,
+      "expectation": "lee su tienda por id y la consulta de su comunidad devuelve al menos una tienda",
+      "reads": {
+        "ownStore": {
+          "label": "tienda_lider: tienda propia por id",
+          "passed": true,
+          "httpStatus": 200,
+          "code": null,
+          "status": null,
+          "message": null,
+          "documentCount": 1,
+          "raw": "{\n  \"name\": \"projects/kentro-last-mile/databases/(default)/documents/sellers/smoke005-seller-own-1789263910474\",\n  \"fields\": {\n    \"id\": {\n      \"stringValue\": \"smoke005-seller-own-1789263910474\"\n    },\n    \"cityId\": {\n      \"stringValue\": \"\"\n    },\n    \"onboardingComplete\": {\n      \"booleanValue\": false\n    },\n    \"bankAccount\": {\n      \"stringValue\": \"\"\n    },\n    \"updatedAt\": {\n      \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n    },\n    \"shopDomain\": {\n      \"stringValue\": \"\"\n    },\n    \"name\": {\n      \"stringValue\": \"Verify 005 - tienda del lider, FUERA de toda comunidad (desechable)\"\n    },\n    \"createdAt\": {\n      \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n    }\n  },\n  \"createTime\": \"2026-09-15T15:37:42.916010Z\",\n  \"updateTime\": \"2026-09-15T15:37:42.916010Z\"\n}\n"
+        },
+        "communityStores": {
+          "label": "tienda_lider: sellers where communityId == A",
+          "passed": true,
+          "httpStatus": 200,
+          "code": null,
+          "status": null,
+          "message": null,
+          "documentCount": 1,
+          "raw": "[{\n  \"document\": {\n    \"name\": \"projects/kentro-last-mile/databases/(default)/documents/sellers/smoke005-seller-in-1789263910474\",\n    \"fields\": {\n      \"id\": {\n        \"stringValue\": \"smoke005-seller-in-1789263910474\"\n      },\n      \"name\": {\n        \"stringValue\": \"Verify 005 - tienda DENTRO de la comunidad A (desechable)\"\n      },\n      \"shopDomain\": {\n        \"stringValue\": \"\"\n      },\n      \"cityId\": {\n        \"stringValue\": \"\"\n      },\n      \"bankAccount\": {\n        \"stringValue\": \"\"\n      },\n      \"onboardingComplete\": {\n        \"booleanValue\": false\n      },\n      \"createdAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      },\n      \"updatedAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      },\n      \"communityId\": {\n        \"stringValue\": \"smoke005-com-1789263910474\"\n      },\n      \"communityJoinedAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      }\n    },\n    \"createTime\": \"2026-09-15T15:37:42.682071Z\",\n    \"updateTime\": \"2026-09-15T15:37:42.682071Z\"\n  },\n  \"readTime\": \"2026-09-15T15:37:52.862228Z\"\n}\n]"
+        }
+      }
+    },
+    {
+      "name": "tienda_ajena",
+      "passed": true,
+      "expectation": "la tienda de la comunidad B se le DENIEGA (403 / PERMISSION_DENIED)",
+      "reads": {
+        "foreignStore": {
+          "label": "tienda_ajena: tienda de B por id",
+          "passed": false,
+          "httpStatus": 403,
+          "code": 403,
+          "status": "PERMISSION_DENIED",
+          "message": "Missing or insufficient permissions.",
+          "documentCount": null,
+          "raw": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Missing or insufficient permissions.\",\n    \"status\": \"PERMISSION_DENIED\"\n  }\n}\n"
+        }
+      }
+    },
+    {
+      "name": "lider_puro",
+      "passed": true,
+      "expectation": "la consulta de su comunidad pasa y devuelve al menos una tienda",
+      "reads": {
+        "communityStores": {
+          "label": "lider_puro: sellers where communityId == A",
+          "passed": true,
+          "httpStatus": 200,
+          "code": null,
+          "status": null,
+          "message": null,
+          "documentCount": 1,
+          "raw": "[{\n  \"document\": {\n    \"name\": \"projects/kentro-last-mile/databases/(default)/documents/sellers/smoke005-seller-in-1789263910474\",\n    \"fields\": {\n      \"id\": {\n        \"stringValue\": \"smoke005-seller-in-1789263910474\"\n      },\n      \"name\": {\n        \"stringValue\": \"Verify 005 - tienda DENTRO de la comunidad A (desechable)\"\n      },\n      \"shopDomain\": {\n        \"stringValue\": \"\"\n      },\n      \"cityId\": {\n        \"stringValue\": \"\"\n      },\n      \"bankAccount\": {\n        \"stringValue\": \"\"\n      },\n      \"onboardingComplete\": {\n        \"booleanValue\": false\n      },\n      \"createdAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      },\n      \"updatedAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      },\n      \"communityId\": {\n        \"stringValue\": \"smoke005-com-1789263910474\"\n      },\n      \"communityJoinedAt\": {\n        \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n      }\n    },\n    \"createTime\": \"2026-09-15T15:37:42.682071Z\",\n    \"updateTime\": \"2026-09-15T15:37:42.682071Z\"\n  },\n  \"readTime\": \"2026-09-15T15:37:53.204597Z\"\n}\n]"
+        }
+      }
+    },
+    {
+      "name": "comunidad_vacia",
+      "passed": true,
+      "expectation": "la consulta de su comunidad pasa con 0 documentos y sin error",
+      "reads": {
+        "communityStores": {
+          "label": "comunidad_vacia: sellers where communityId == C",
+          "passed": true,
+          "httpStatus": 200,
+          "code": null,
+          "status": null,
+          "message": null,
+          "documentCount": 0,
+          "raw": "[{\n  \"readTime\": \"2026-09-15T15:37:53.402398Z\"\n}\n]"
+        }
+      }
+    },
+    {
+      "name": "tienda_sin_comunidad",
+      "passed": true,
+      "expectation": "lee su tienda por id; la consulta de comunidad no se ejecuta porque no tiene communityId",
+      "reads": {
+        "ownStore": {
+          "label": "tienda_sin_comunidad: tienda propia por id",
+          "passed": true,
+          "httpStatus": 200,
+          "code": null,
+          "status": null,
+          "message": null,
+          "documentCount": 1,
+          "raw": "{\n  \"name\": \"projects/kentro-last-mile/databases/(default)/documents/sellers/smoke005-seller-solo-1789263910474\",\n  \"fields\": {\n    \"cityId\": {\n      \"stringValue\": \"\"\n    },\n    \"id\": {\n      \"stringValue\": \"smoke005-seller-solo-1789263910474\"\n    },\n    \"createdAt\": {\n      \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n    },\n    \"name\": {\n      \"stringValue\": \"Verify 005 - tienda sin comunidad (desechable)\"\n    },\n    \"bankAccount\": {\n      \"stringValue\": \"\"\n    },\n    \"shopDomain\": {\n      \"stringValue\": \"\"\n    },\n    \"updatedAt\": {\n      \"stringValue\": \"2026-09-15T15:37:38.231Z\"\n    },\n    \"onboardingComplete\": {\n      \"booleanValue\": false\n    }\n  },\n  \"createTime\": \"2026-09-15T15:37:43.534729Z\",\n  \"updateTime\": \"2026-09-15T15:37:43.534729Z\"\n}\n"
+        },
+        "communityStores": "no ejecutada: la cuenta no tiene communityId"
+      }
+    }
+  ]
+}

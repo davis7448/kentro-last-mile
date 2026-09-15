@@ -1,289 +1,256 @@
 {
   "version": 1,
-  "phase": "deploy",
+  "phase": "report",
   "activeSpec": {
-    "file": "specs/001_lider_de_comunidad.md",
+    "file": "specs/005_tienda_lider_ve_su_pantalla.md",
     "status": "approved"
   },
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RNF_01"
+        "RF_05",
+        "RNF_02"
       ],
       "files": [
-        "functions/src/community-access.ts",
-        "src/lib/community-access.test.ts"
+        "scripts/verify-005.js",
+        "src/lib/spec-005-guards.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "Medicion 2026-09-13 contra produccion con cuenta desechable (tienda-lider cuya tienda esta fuera de su comunidad): tienda propia por id PASA; 'sellers where communityId ==' FALLA 403 PERMISSION_DENIED; control (cities) PASA. Sintoma reproducido. La causa EXACTA no queda demostrada: la comunidad tenia 1 tienda, con lo que el limite de accesos no deberia alcanzarse (apunta a la forma de la regla, no lo prueba). T2 sirve para las dos causas. Evidencia: .sdd/evidence/005/verify-reproduce.json. setup/reproduce/cleanup ejecutados; cleanup sin restos."
     },
     "T2": {
       "requirements": [
-        "RF_23",
-        "RF_22"
-      ],
-      "files": [
-        "functions/src/community-access.ts",
-        "functions/src/communities.ts",
-        "functions/src/community-stats.ts",
-        "src/lib/community-access.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T3": {
-      "requirements": [
-        "RF_04",
-        "RF_06",
-        "RF_17",
-        "RF_18",
-        "RF_19"
-      ],
-      "files": [
-        "functions/src/community-grant.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T4": {
-      "requirements": [
         "RF_05",
-        "RF_22"
-      ],
-      "files": [
-        "functions/src/community-grant.ts",
-        "functions/src/orders.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T5": {
-      "requirements": [
-        "RF_23",
-        "RF_11"
-      ],
-      "files": [
-        "functions/src/community-grant.ts",
-        "functions/src/orders.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T6": {
-      "requirements": [
-        "RF_17",
-        "RF_05",
-        "RF_23"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "functions/src/community-grant.ts",
-        "functions/src/roles.ts",
-        "functions/src/orders.ts",
-        "functions/src/index.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": true,
-      "done": true,
-      "note": "Cableado sobre planes puros ya probados (58 casos en community-grant.test.ts). Las callables importan firebase-admin y la raiz no puede cargarlo: su canal de verificacion es script con usuario desechable, declarado."
-    },
-    "T7": {
-      "requirements": [
-        "RF_20"
-      ],
-      "files": [
-        "scripts/backfill-leader-uid.js",
-        "docs/migraciones.md"
-      ],
-      "testWritten": true,
-      "done": true,
-      "note": "Guion de migracion de un solo uso contra produccion: su verificacion es la pasada EN SECO, que reporta que escribiria antes de escribir. No es probable en unidad y no se despliega."
-    },
-    "T8": {
-      "requirements": [
-        "RF_20",
-        "RF_21",
-        "RF_12"
-      ],
-      "files": [
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T9": {
-      "requirements": [
-        "RF_17",
-        "RF_05"
-      ],
-      "files": [
-        "functions/src/communities.ts",
-        "functions/src/roles.ts",
-        "src/lib/community-grant.test.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T10": {
-      "requirements": [
+        "RF_02",
         "RNF_02"
       ],
       "files": [
         "firestore.rules",
-        "storage.rules",
-        "src/lib/community-access.test.ts"
+        "src/lib/spec-005-guards.test.ts"
       ],
       "testWritten": true,
       "done": true,
-      "note": "Las reglas no son probables en Vitest (no hay @firebase/rules-unit-testing). Su canal es sesion real con usuario desechable, declarado. El predicado equivalente si esta probado en community-access.test.ts."
+      "note": "Regla reescrita: sellerInMyCommunity() decide con resource.data.get(\"communityId\",\"\") y ya no accede a otro documento. 22 guardas verdes, suite 1032, tsc limpio; diff revisado. PENDIENTE: la validacion de SINTAXIS de las reglas no se ejecuto (exige escribir un firebase.json fuera del alcance y el hook lo bloquea, al coder y al orquestador). La cubre T13: 'firebase deploy --only firestore:rules' compila antes de publicar y falla en duro. Produccion sigue con la regla vieja hasta esa firma, asi que el 403 del lider-tienda sigue vivo."
     },
-    "T11": {
+    "T3": {
       "requirements": [
         "RF_07",
+        "RF_08"
+      ],
+      "files": [
+        "src/lib/load-status.ts",
+        "src/lib/load-status.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "storeProfileState con el orden de decision que importa: 'failed' y 'loading' ganan ANTES de mirar sellerId, asi que el 'perfil pendiente' ya no puede salir tras una carga caida. Mutacion comprobada por el coder: mover el chequeo de 'failed' detras del de sellerId vacio pone 2 pruebas en rojo. El kind 'ok' devuelve el sellerId RECORTADO (no el crudo) para que la pantalla pueda reusarlo en su find. 21 pruebas, suite 1053, tsc y lint limpios. LoadIssue/LoadReport, communityStoresState y mergeCommunitySellers quedan fuera a proposito: son T4 y T5."
+    },
+    "T4": {
+      "requirements": [
         "RF_10",
-        "RF_11"
+        "RF_11",
+        "RF_12"
       ],
       "files": [
-        "src/lib/session-hats.ts",
-        "src/lib/session-hats.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T12": {
-      "requirements": [
-        "RF_07",
-        "RF_08",
-        "RF_09",
-        "RF_10"
-      ],
-      "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/session-hats.test.ts",
-        "src/lib/community-access.test.ts"
+        "src/lib/load-status.ts",
+        "src/lib/load-status.test.ts"
       ],
       "testWritten": true,
       "done": true,
-      "note": "El nucleo del selector (session-hats) tiene 21 pruebas en verde; la pantalla se ata con guarda de fuente sobre operations-app.tsx, mismo patron que roleLabel en la spec 001."
+      "note": "communityStoresState con el acreedor resuelto ANTES de mirar statsOutcome: al acreedor el servidor le niega por diseno, no por averia, asi que no se le ofrece reintentar. La comparacion va contra 'creditor' en positivo, de modo que standing undefined —el estado de HOY, hasta T6— cae del lado del lider y a un lider de verdad nunca se le dice 'ya no gobiernas'. 55 pruebas en el archivo, suite 1087, tsc y lint limpios."
     },
-    "T13": {
+    "T5": {
       "requirements": [
-        "RF_07",
-        "RF_08",
-        "RF_09"
+        "RF_01",
+        "RF_06",
+        "RF_02"
       ],
       "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/session-hats.test.ts",
-        "src/lib/community-access.test.ts"
-      ],
-      "testWritten": false,
-      "done": true
-    },
-    "T14": {
-      "requirements": [
-        "RF_15",
-        "RF_16",
-        "RNF_03"
-      ],
-      "files": [
+        "src/lib/load-status.ts",
+        "src/lib/load-status.test.ts",
         "src/lib/firebase/state-store.ts",
         "src/lib/state-store-targets.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "Asimetria verificada en el diff: la tienda propia va desnuda (si falla, falla la carga) y solo la mitad de comunidad se envuelve con .catch -> {failed:true}. Union en mergeCommunitySellers (pura, orden estable, sin duplicar la tienda del lider que pertenece a su comunidad). mergeById SE QUEDA: tiene cinco usos vivos (pedidos y cortes). DEUDA CONOCIDA hasta T8: el parte se produce y se DESCARTA en el sitio de llamada (.sellers), para no cambiar la firma de loadFirestoreState, que tiene otros llamadores. Mientras tanto una mitad de comunidad rechazada degrada en silencio (principio 8). T8 debe dejar de descartarlo. 86 pruebas en los dos archivos, suite 1099, tsc y lint limpios."
     },
-    "T15": {
+    "T6": {
       "requirements": [
-        "RF_13",
-        "RF_14",
-        "RF_24"
+        "RF_12"
       ],
       "files": [
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts",
-        "functions/src/community-pricing.ts",
-        "src/lib/community-pricing.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T16": {
-      "requirements": [
-        "RF_08",
-        "RF_09"
-      ],
-      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/components/operations-app.tsx",
         "src/lib/session-hats.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "FirebaseSessionClaims declara communityStanding?: 'leader'|'creditor' y subscribeFirebaseUser lo emite con la misma forma que sus hermanos (typeof string, sin coaccion). La validacion NO se perdio al quitar el cast de la pantalla: se MUDO al envoltorio, asi que un valor irreconocible ya no entra en la sesion. Documentado en el propio codigo. 29 pruebas de sombreros, suite 1103, tsc y lint limpios (3 avisos previos, siguen 3). ATRIBUCION ACLARADA: los cambios ajenos en operations-app.tsx (ZONE_BASE_NOTICE, chargedCop, baseOnlyReason...) son de la spec 004 —terminada y sin commitear—, no de una tarea de la 005 a medias. Al commitear, la 004 va primero."
     },
-    "T17": {
+    "T7": {
       "requirements": [
-        "RF_17"
+        "RF_03",
+        "RF_04",
+        "RF_09",
+        "RNF_04"
       ],
       "files": [
-        "functions/src/communities.ts",
-        "src/lib/firebase/auth.ts",
         "src/components/operations-app.tsx",
-        "src/lib/community-view.ts",
-        "src/lib/community-view.test.ts"
+        "src/lib/session-hats.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "El selector se pinta por fin: dos pildoras 'Tienda'/'Comunidad' inline en el JSX de Header, con aria-pressed en las dos y onHatChange como unica accion (sin recargas ni volver a entrar). Variante sobria a proposito: el acido se reserva para el indicador 'En vivo' que esta al lado, y el estado activo no se confia al color sino a aria-pressed. La fila derecha pasa a flex-wrap para no desbordar a 390 px; la MEDIDA real es T11. Guarda vieja ENDURECIDA: antes pasaba con el selector invisible porque solo exigia que shouldShowHatSelector apareciera en el archivo. 34 pruebas de sombreros, suite 1108, tsc limpio, lint 0 errores y 3 avisos (los previos)."
     },
-    "T18": {
+    "T8": {
       "requirements": [
-        "RNF_05",
-        "RNF_03",
-        "RF_43"
+        "RF_01",
+        "RF_07",
+        "RF_08"
       ],
       "files": [
-        "src/app/registro/[slug]/signup-form.tsx",
-        "src/app/privacy/page.tsx",
-        "src/app/api-tiendas/page.tsx",
-        "src/app/shopify-app-store-review/page.tsx",
-        "docs/design-system.md",
-        "src/lib/community-view.test.ts"
+        "src/lib/firebase/state-store.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-005-guards.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "El canal onError + LoadReport vive aqui (RF_07), no en T5, que quedo enfocada en el modulo puro. | HECHO: el parte deja de descartarse (LoadOptions.onReport, aditivo, sin romper la firma de loadFirestoreState); subscribeFirestoreState(context, onState(state, report), onEmpty?, onError?) y el .catch final llama a onError ademas de registrar. SellerView decide con storeProfileState: load_failed -> SellerLoadFailedNotice con Reintentar que re-monta la suscripcion (reloadToken en las deps), no_store_assigned y store_missing con textos distintos. HALLAZGO del coder: con la carga caida hydrated nunca pasaba a true y la app mostraba el esqueleto para siempre; el manejador de error hidrata para poder CONTAR que no hay datos. 55 guardas, suite 1119, tsc limpio, lint 0 errores y 3 avisos."
     },
-    "T19": {
+    "T9": {
       "requirements": [
-        "RF_14",
-        "RF_15"
+        "RF_05",
+        "RF_10",
+        "RF_11",
+        "RF_12"
       ],
       "files": [
-        "functions/src/community-pricing.ts",
-        "functions/src/communities.ts",
-        "src/lib/community-pricing.test.ts",
-        "src/lib/community-view.ts",
         "src/lib/community-view.test.ts",
+        "src/lib/community-view.ts",
         "src/components/operations-app.tsx",
-        "src/lib/firebase/auth.ts"
+        "src/lib/spec-005-guards.test.ts"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "La deuda del acreedor sale de state.settlements (reglas: isCommunityCreditor), no de getCommunityStats. | Hallazgo de T4 para esta tarea: operations-app.tsx:5069 usa 'if (!stats || stats.emptiness === \"no_stores\")', asi que una respuesta que NO llego se pinta como comunidad vacia. Es la conflacion espejo de la tarjeta de error generica. No basta con enchufar communityStoresState: hay que retirar ese '!stats ||' o el fallo sobrevive. | HECHO: communityCashbackOwedCop (hermana de PaidCop) en community-view.ts; CommunityLeaderView recibe standing y loadReport por prop, decide con communityStoresState y pinta cinco ramas con return separado (not_governing sin reintentar y con la deuda desde los cortes; load_failed con Reintentar que relanza la callable via retryCount; no_stores ya SIN el '!stats ||'). Aviso del enlace perdido cuando issues trae community_sellers. 216 pruebas en los dos archivos, suite 1139, tsc limpio, lint 0 errores y 3 avisos."
+    },
+    "T10": {
+      "requirements": [
+        "RNF_01",
+        "RNF_03"
+      ],
+      "files": [
+        "src/lib/state-store-targets.test.ts",
+        "src/lib/session-hats.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "Solo pruebas, nacidas en verde por diseno (caracterizacion): 23 casos. Los cinco papeles sin vinculo siguen con un solo sombrero y sin selector, incluso con una posicion huerfana; las ramas de roleTargets no mencionan la comunidad; la mitad de comunidad solo se pide con communityId; onReport/onError son opcionales y la firma de loadFirestoreState no cambio; el sombrero no entra en la suscripcion. Ninguna regresion de T5-T9."
+    },
+    "T11": {
+      "requirements": [
+        "RF_01",
+        "RF_03",
+        "RF_04",
+        "RF_05",
+        "RNF_02",
+        "RNF_04"
+      ],
+      "files": [
+        "scripts/verify-005.js",
+        "src/lib/spec-005-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "Guion ampliado: setup crea 3 comunidades (A con tienda, B con tienda, C vacia) y 4 cuentas; check recorre los cinco casos del DoD 4 por REST (tienda_lider, tienda_ajena, lider_puro, comunidad_vacia, tienda_sin_comunidad) y vuelca verify-check.json; capture usa Playwright GLOBAL (require.resolve con paths, sin dependencia nueva) contra --base-url (por defecto localhost:3000) en 1280 y 390 px; cleanup borra las 11 cosas y verifica LIMPIO/QUEDAN. 71 guardas, suite 1188. PENDIENTE DE EJECUCION: check y capture exigen T13 (reglas desplegadas por el humano) y un servidor local; el acreedor no se prueba en produccion (DoD 4)."
+    },
+    "T12": {
+      "requirements": [
+        "RF_01",
+        "RF_02",
+        "RF_03",
+        "RF_04",
+        "RF_05",
+        "RF_06",
+        "RF_07",
+        "RF_08",
+        "RF_09",
+        "RF_10",
+        "RF_11",
+        "RF_12",
+        "RNF_01",
+        "RNF_02",
+        "RNF_03",
+        "RNF_04"
+      ],
+      "files": [
+        "src/lib/spec-005-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "2026-09-15: vitest 1188/1188, tsc raiz y functions OK, build functions OK, next build OK con 0 'static{' en chunks, lint 0 errores (3 avisos previos)."
+    },
+    "T13": {
+      "requirements": [
+        "RF_05",
+        "RNF_02"
+      ],
+      "files": [
+        "scripts/verify-005.js",
+        "src/lib/spec-005-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "El despliegue de reglas lo firma el humano (principio 7): la fase deploy del arnes va a staging y el unico entorno de esta spec es produccion. | 2026-09-15: reglas desplegadas por el humano. Verificacion ejecutada: 'node scripts/verify-005.js check' = PASA 5/5 (tienda_lider lee su tienda y su comunidad; tienda_ajena DENEGADA; lider_puro; comunidad_vacia 0 docs sin error; tienda_sin_comunidad intacta). Evidencia: .sdd/evidence/005/verify-check.json. Pendiente: capture (fallo: el selector 'Papel activo' no aparecio en 60 s tras el login; en diagnostico) y cleanup. | CERRADA 2026-09-15: check repetido tras el indice = PASA 5/5; capture OK en 1280 y 390 px; cleanup LIMPIO."
+    },
+    "T14": {
+      "requirements": [
+        "RF_05",
+        "RF_10"
+      ],
+      "files": [
+        "firestore.indexes.json",
+        "src/lib/spec-005-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "Abierta en T11/T13 (2026-09-15): getCommunityStats revienta con FAILED_PRECONDITION porque sum(amountCop) sobre walletEntries con rango de createdAt exige el indice compuesto (ownerId, ownerType, createdAt, amountCop), ausente en el repo y en produccion. Defecto latente de la spec 001: nadie habia llegado a esta pantalla. Le pasaria igual a Brayan. El plan 005 decia 'sin indices nuevos' y se equivocaba. | CODIGO LISTO 2026-09-15: indice anadido (walletEntries: ownerType, ownerId, createdAt, amountCop ASC), diff puramente aditivo (39 -> 40), local == prod antes del cambio (39/39). PENDIENTE HUMANO: 'firebase deploy --only firestore:indexes' y esperar READY; despues repetir setup -> capture -> cleanup para la evidencia de la pantalla de comunidad. | CERRADA 2026-09-15: indice desplegado y READY (prod: 40 indices). La pantalla de comunidad se pinta entera (movil-pantalla-comunidad.png: metricas, cashback, entrega, desglose por tienda). LIMITACION del guion: la captura de escritorio se toma 1,5 s tras el clic y pillo el 'Cargando...'; la evidencia valida es la movil, tomada despues."
     }
   },
   "testCommand": "npm test",
   "deployUrl": "https://kentro-last-mile.web.app",
-  "activePlan": "specs/003_plan.md",
-  "activeTasks": "specs/003_tasks.md",
   "specs": {
     "001": {
       "file": "specs/001_lider_de_comunidad.md",
       "status": "implementada",
       "deployed": "2026-09-11"
+    },
+    "003": {
+      "file": "specs/003_doble_rol.md",
+      "status": "implementada",
+      "deployed": "2026-09-11"
+    },
+    "004": {
+      "file": "specs/004_base_de_comunidad_real.md",
+      "status": "implementada",
+      "approved": "2026-09-11",
+      "functionsDeployed": "2026-09-13",
+      "hostingDeployed": "2026-09-15",
+      "smoke": "2026-09-13 OK: create/close/check/cleanup/compare. Cierre real cobro -12.000 de fallido a seller-1789149795537 y 0 cashback; limpieza sin restos; posicion de plataforma y saldo identicos a la linea base.",
+      "deployed": "2026-09-15"
+    },
+    "005": {
+      "file": "specs/005_tienda_lider_ve_su_pantalla.md",
+      "status": "implementada",
+      "approved": "2026-09-11",
+      "deployed": "2026-09-15",
+      "functionsDeployed": null,
+      "rulesDeployed": "2026-09-15",
+      "indexesDeployed": "2026-09-15",
+      "hostingDeployed": "2026-09-15",
+      "verificacionHumana": "2026-09-15: el responsable confirma que Brayan E-master entra y ve su panel (DoD 6)."
     }
   },
   "archivedTasks": {
@@ -1170,6 +1137,486 @@
         "testWritten": true,
         "done": true
       }
+    },
+    "003": {
+      "T1": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03",
+          "RNF_01"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_23",
+          "RF_22"
+        ],
+        "files": [
+          "functions/src/community-access.ts",
+          "functions/src/communities.ts",
+          "functions/src/community-stats.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_04",
+          "RF_06",
+          "RF_17",
+          "RF_18",
+          "RF_19"
+        ],
+        "files": [
+          "functions/src/community-grant.ts",
+          "src/lib/community-grant.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_05",
+          "RF_22"
+        ],
+        "files": [
+          "functions/src/community-grant.ts",
+          "functions/src/orders.ts",
+          "src/lib/community-grant.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RF_23",
+          "RF_11"
+        ],
+        "files": [
+          "functions/src/community-grant.ts",
+          "functions/src/orders.ts",
+          "src/lib/community-grant.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T6": {
+        "requirements": [
+          "RF_17",
+          "RF_05",
+          "RF_23"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "functions/src/community-grant.ts",
+          "functions/src/roles.ts",
+          "functions/src/orders.ts",
+          "functions/src/index.ts",
+          "src/lib/community-grant.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Cableado sobre planes puros ya probados (58 casos en community-grant.test.ts). Las callables importan firebase-admin y la raiz no puede cargarlo: su canal de verificacion es script con usuario desechable, declarado."
+      },
+      "T7": {
+        "requirements": [
+          "RF_20"
+        ],
+        "files": [
+          "scripts/backfill-leader-uid.js",
+          "docs/migraciones.md"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Guion de migracion de un solo uso contra produccion: su verificacion es la pasada EN SECO, que reporta que escribiria antes de escribir. No es probable en unidad y no se despliega."
+      },
+      "T8": {
+        "requirements": [
+          "RF_20",
+          "RF_21",
+          "RF_12"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T9": {
+        "requirements": [
+          "RF_17",
+          "RF_05"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "functions/src/roles.ts",
+          "src/lib/community-grant.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T10": {
+        "requirements": [
+          "RNF_02"
+        ],
+        "files": [
+          "firestore.rules",
+          "storage.rules",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Las reglas no son probables en Vitest (no hay @firebase/rules-unit-testing). Su canal es sesion real con usuario desechable, declarado. El predicado equivalente si esta probado en community-access.test.ts."
+      },
+      "T11": {
+        "requirements": [
+          "RF_07",
+          "RF_10",
+          "RF_11"
+        ],
+        "files": [
+          "src/lib/session-hats.ts",
+          "src/lib/session-hats.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T12": {
+        "requirements": [
+          "RF_07",
+          "RF_08",
+          "RF_09",
+          "RF_10"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/session-hats.test.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "El nucleo del selector (session-hats) tiene 21 pruebas en verde; la pantalla se ata con guarda de fuente sobre operations-app.tsx, mismo patron que roleLabel en la spec 001."
+      },
+      "T13": {
+        "requirements": [
+          "RF_07",
+          "RF_08",
+          "RF_09"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/session-hats.test.ts",
+          "src/lib/community-access.test.ts"
+        ],
+        "testWritten": false,
+        "done": true
+      },
+      "T14": {
+        "requirements": [
+          "RF_15",
+          "RF_16",
+          "RNF_03"
+        ],
+        "files": [
+          "src/lib/firebase/state-store.ts",
+          "src/lib/state-store-targets.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T15": {
+        "requirements": [
+          "RF_13",
+          "RF_14",
+          "RF_24"
+        ],
+        "files": [
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T16": {
+        "requirements": [
+          "RF_08",
+          "RF_09"
+        ],
+        "files": [
+          "src/lib/session-hats.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T17": {
+        "requirements": [
+          "RF_17"
+        ],
+        "files": [
+          "functions/src/communities.ts",
+          "src/lib/firebase/auth.ts",
+          "src/components/operations-app.tsx",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T18": {
+        "requirements": [
+          "RNF_05",
+          "RNF_03",
+          "RF_43"
+        ],
+        "files": [
+          "src/app/registro/[slug]/signup-form.tsx",
+          "src/app/privacy/page.tsx",
+          "src/app/api-tiendas/page.tsx",
+          "src/app/shopify-app-store-review/page.tsx",
+          "docs/design-system.md",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T19": {
+        "requirements": [
+          "RF_14",
+          "RF_15"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-pricing.test.ts",
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "src/components/operations-app.tsx",
+          "src/lib/firebase/auth.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      }
+    },
+    "004": {
+      "T1": {
+        "requirements": [
+          "RNF_01"
+        ],
+        "files": [
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Caracterizacion: verde contra el codigo actual por diseno (RNF_01). Mutacion comprobada: cambiar el fijo del fallido o el 13.500 de DANDA pone 9 pruebas en rojo."
+      },
+      "T2": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RNF_03"
+        ],
+        "files": [
+          "functions/src/seller-charges.ts",
+          "functions/src/wallet-entries.ts",
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_02",
+          "RNF_01"
+        ],
+        "files": [
+          "src/lib/finance.ts",
+          "src/lib/finance.test.ts",
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_03",
+          "RF_04",
+          "RF_06",
+          "RF_11",
+          "RNF_03"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RF_04",
+          "RF_06",
+          "RF_11",
+          "RNF_01"
+        ],
+        "files": [
+          "functions/src/wallet-entries.ts",
+          "functions/src/community-pricing.ts",
+          "src/lib/types.ts",
+          "src/lib/community-cashback-entries.test.ts",
+          "src/lib/order-corrections-plan.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T6": {
+        "requirements": [
+          "RF_03",
+          "RF_05",
+          "RF_10",
+          "RF_12",
+          "RF_02"
+        ],
+        "files": [
+          "functions/src/seller-charges.ts",
+          "functions/src/community-pricing.ts",
+          "functions/src/community-order-pricing.ts",
+          "functions/src/communities.ts",
+          "src/lib/community-pricing.test.ts",
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T7": {
+        "requirements": [
+          "RF_13"
+        ],
+        "files": [
+          "functions/src/community-pricing.ts",
+          "functions/src/community-floor-writer.ts",
+          "functions/src/community-floor-trigger.ts",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Al desplegar functions el trigger pasa de settings/app a settings/global: empieza a dispararse en produccion por primera vez."
+      },
+      "T8": {
+        "requirements": [
+          "RF_14"
+        ],
+        "files": [
+          "scripts/raise-community-floors.js",
+          "src/lib/community-pricing.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Pasada en seco contra produccion 2026-09-11 (tras npm run build en functions): pisos 12000/12000/2000, 1 comunidad leida, 0 cambios."
+      },
+      "T9": {
+        "requirements": [
+          "RF_07",
+          "RF_08",
+          "RF_09",
+          "RF_15",
+          "RF_12",
+          "RNF_02",
+          "RF_02"
+        ],
+        "files": [
+          "src/lib/community-view.ts",
+          "src/lib/community-view.test.ts",
+          "src/components/operations-app.tsx",
+          "src/lib/types.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "upcoming sale de buildStoreTariffView: admin y tienda ven la misma subida pendiente; sin lider o desactivada no se anuncia."
+      },
+      "T10": {
+        "requirements": [
+          "RF_07",
+          "RF_08",
+          "RF_09",
+          "RF_10",
+          "RF_12",
+          "RF_15"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/community-view.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Deuda previa, fuera de alcance: la linea 'Sube a ...' de StoreTariffCard usa text-acid (regla 2 del design-system)."
+      },
+      "T11": {
+        "requirements": [
+          "RF_11",
+          "RNF_01"
+        ],
+        "files": [
+          "scripts/smoke-004.js",
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Sin ejecutar contra produccion: count justo antes de desplegar (fija la linea base de compare); create/close/check/cleanup/compare tras el despliegue firmado. Riesgos: compare exige igualdad exacta de la posicion (la operacion real puede moverla); la consulta de count usa where communityId > '' sin probar en prod. La contrasena del desechable vive en .sdd/evidence/004/smoke-state.json hasta cleanup: no commitear antes."
+      },
+      "T12": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03",
+          "RF_04",
+          "RF_05",
+          "RF_06",
+          "RF_07",
+          "RF_08",
+          "RF_09",
+          "RF_10",
+          "RF_11",
+          "RF_12",
+          "RF_13",
+          "RF_14",
+          "RF_15",
+          "RNF_01",
+          "RNF_02",
+          "RNF_03"
+        ],
+        "files": [
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "2026-09-11: vitest 1003/1003, tsc raiz y functions OK, lint 0 errores (3 avisos previos), build functions y next build OK."
+      },
+      "T13": {
+        "requirements": [
+          "RF_01",
+          "RF_03"
+        ],
+        "files": [
+          "functions/src/seller-charges.ts",
+          "functions/src/community-order-pricing.ts",
+          "src/lib/seller-charges.test.ts"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "La proteccion de DANDA atada a comportamiento: degradar el throw a 'return;' pone 2 pruebas en rojo y quitar la llamada del sello, 3 guardas. La guarda T6 de '<X>.has(sellerId)' quedo obsoleta y fue reemplazada por una equivalente que conserva su exigencia."
+      }
     }
-  }
+  },
+  "activeTask": null
 }

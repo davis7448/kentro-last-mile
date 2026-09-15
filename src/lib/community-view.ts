@@ -237,6 +237,29 @@ export function communityCashbackPaidCop(
     .reduce((total, item) => total + (Number(item.netCop) || 0), 0);
 }
 
+/**
+ * Lo que se le DEBE al lider (o al acreedor) de una comunidad: la hermana exacta de
+ * `communityCashbackPaidCop`, misma familia de cortes y el complemento del estado — todo lo que
+ * no esta `paid` ni `reconciled`.
+ *
+ * Sale de los cortes y no de `getCommunityStats` porque al acreedor (quien ya no gobierna la
+ * comunidad pero conserva la deuda) el servidor le niega esa callable POR DISENO (spec 005, RF_12).
+ * Lo causado que aun no tiene corte NO aparece aqui: la 003 elimino la suscripcion a los asientos
+ * de comunidad por volumen (constitucion, principio 11), asi que la cifra es "lo cortado y sin
+ * pagar", y la pantalla lo dice.
+ *
+ * Mismo criterio de saneado que la hermana: `netCop` ilegible cuenta 0, nunca `NaN`.
+ */
+export function communityCashbackOwedCop(
+  settlements: { kind: string; ownerId: string; status: string; netCop: number }[],
+  communityId: string
+): number {
+  return settlements
+    .filter((item) => item.kind === "community_leader" && item.ownerId === communityId)
+    .filter((item) => item.status !== "paid" && item.status !== "reconciled")
+    .reduce((total, item) => total + (Number(item.netCop) || 0), 0);
+}
+
 // --- El corte de cashback que hay que girarle al lider (RF_49) --------------------------------
 
 /** Lo que necesita una fila de liquidacion de lider para pintarse y para viajar al callable. */

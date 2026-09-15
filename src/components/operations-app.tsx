@@ -71,12 +71,13 @@ import {
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
 import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
-import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, ZONE_BASE_NOTICE, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
+import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, ZONE_BASE_NOTICE, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackOwedCop, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
+import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
 import { enqueueEvidence, markQueuedEvidenceError, pruneOrphanPhotos, queuedEvidenceToFile, readEvidenceQueue, readQueuedPhoto, removeQueuedEvidence, type QueuedEvidence } from "@/lib/evidence-queue";
@@ -412,6 +413,16 @@ function useAppState(session: Session | null, historyStart?: string) {
   const [state, setState] = useState<AppState>(() => emptyState());
   const [hydrated, setHydrated] = useState(false);
   const [remoteEnabled, setRemoteEnabled] = useState(false);
+  // Que la carga base fallo, y lo que el parte diga que falto. Son dos cosas distintas: el fallo es
+  // "no hay estado", el parte es "hay estado, pero incompleto". Sin esto la pantalla no puede
+  // distinguir ninguna de las dos de una operacion que de verdad esta vacia.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadReport, setLoadReport] = useState<LoadReport>({ issues: [] });
+  // Reintentar = volver a montar la suscripcion, y por eso el contador entra en las dependencias
+  // del efecto. Recargar la pagina tiraria la cache de IndexedDB y volveria a pagar la descarga
+  // entera, que es justo lo que esta app no se puede permitir.
+  const [reloadToken, setReloadToken] = useState(0);
+  const retryLoad = useCallback(() => setReloadToken((token) => token + 1), []);
   const applyingRemote = useRef(false);
 
   useEffect(() => {
@@ -432,18 +443,32 @@ function useAppState(session: Session | null, historyStart?: string) {
       : undefined;
     if (session && canUseFirestoreStore()) {
       setRemoteEnabled(true);
+      // Un reintento arranca limpio: si no se borrara el fallo anterior, el aviso seguiria en
+      // pantalla aunque esta vez la carga funcione.
+      setLoadFailed(false);
       // La suscripcion es ahora la unica fuente: hace la carga inicial (omitiendo las
       // colecciones que ella misma observa) y luego aplica cambios incrementales. Antes
       // se llamaba tambien a loadFirestoreState aqui, lo que descargaba todo dos veces.
       return subscribeFirestoreState(
         context,
-        (remoteState) => {
+        (remoteState, report) => {
           applyingRemote.current = true;
           setState(withoutLegacyDemo(remoteState));
+          setLoadReport(report);
+          setLoadFailed(false);
           setHydrated(true);
         },
         () => {
           void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
+          setHydrated(true);
+        },
+        (error) => {
+          console.error("No se pudo cargar el estado base.", error);
+          setLoadFailed(true);
+          // Hidratar TAMBIEN cuando falla, y no es un detalle: la app pinta `hydrated ? view :
+          // <AppSkeleton />`. Un fallo que no hidrata deja el esqueleto para siempre, y entonces el
+          // aviso de RF_07 no llega a pintarse nunca. Se marca como hidratada para poder CONTAR que
+          // no hay datos, no para fingir que los hay.
           setHydrated(true);
         }
       );
@@ -451,7 +476,7 @@ function useAppState(session: Session | null, historyStart?: string) {
 
     hydrateLocal();
     return undefined;
-  }, [session?.id, session?.profileId, session?.role, session?.ledCommunityId, historyStart]);
+  }, [session?.id, session?.profileId, session?.role, session?.ledCommunityId, historyStart, reloadToken]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -468,7 +493,12 @@ function useAppState(session: Session | null, historyStart?: string) {
     window.localStorage.setItem(storageKey, JSON.stringify(state));
   }, [hydrated, remoteEnabled, session, state]);
 
-  return { state, setState, remoteEnabled, hydrated };
+  // Como fue la carga, en el vocabulario de `@/lib/load-status`. El fallo manda sobre la hidratacion
+  // porque una carga fallida TAMBIEN hidrata (ver el manejador de error): sin esa precedencia, un
+  // fallo se leeria como "ok con cero tiendas", que es exactamente la confusion que se viene a matar.
+  const loadOutcome: LoadOutcome = loadFailed ? "failed" : hydrated ? "ok" : "loading";
+
+  return { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad };
 }
 
 /** Esqueleto de la primera carga. Antes la app pintaba el panel VACIO y se llenaba de golpe
@@ -1414,7 +1444,36 @@ function Header({
             <p className="hidden text-sm text-ink-60 sm:block">Centro operativo de ultima milla</p>
           </div>
         </div>
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {/* El selector de papel (RF_03, RF_04). Solo aparece cuando el nucleo de sombreros dice
+           *  que hay dos pantallas entre las que elegir: quien no elige no ve control (RF_11).
+           *  Cambiar de papel es `setState` y nada mas — ni recarga, ni navegacion, ni volver a
+           *  entrar (RF_04): el sombrero activo llega por prop y se devuelve por `onHatChange`.
+           *  Sin acido a proposito: convive con el indicador "En vivo", que ya lo usa, y el acento
+           *  esta reservado a UNA cosa por pantalla. El estado activo va en `aria-pressed`, no solo
+           *  en el fondo, porque son controles de estado y no enlaces. */}
+          {canPickHat && (
+            <div className="flex shrink-0 items-center gap-1 rounded-full bg-field/60 p-1" role="group" aria-label="Papel activo">
+              <button
+                type="button"
+                title="Pantalla de la tienda"
+                aria-pressed={hat === "operational"}
+                onClick={() => onHatChange("operational")}
+                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "operational" ? "bg-field text-fg" : "text-ink-60 hover:text-fg"}`}
+              >
+                Tienda
+              </button>
+              <button
+                type="button"
+                title="Pantalla de la comunidad"
+                aria-pressed={hat === "community"}
+                onClick={() => onHatChange("community")}
+                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "community" ? "bg-field text-fg" : "text-ink-60 hover:text-fg"}`}
+              >
+                Comunidad
+              </button>
+            </div>
+          )}
           <span className="glass hidden items-center rounded-full px-3 py-1.5 text-xs font-medium text-ink-60 sm:inline-flex">
             {session.name} · {roleLabel(session.role)}
           </span>
@@ -4998,6 +5057,8 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
 function CommunityLeaderView({
   state,
   communityId,
+  standing,
+  loadReport,
   startDate,
   endDate,
   onStartDate,
@@ -5005,6 +5066,10 @@ function CommunityLeaderView({
 }: {
   state: AppState;
   communityId: string;
+  /** Lo que la cuenta ES en la comunidad (claim), no el sombrero. `undefined` se decide como lider. */
+  standing: "leader" | "creditor" | undefined;
+  /** Parte de la carga base: si la mitad de comunidad de `sellers` no llego, el enlace no resuelve. */
+  loadReport: LoadReport;
   startDate: string;
   endDate: string;
   onStartDate: (value: string) => void;
@@ -5013,6 +5078,8 @@ function CommunityLeaderView({
   const [stats, setStats] = useState<CommunityStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Volver a pedir las cifras = volver a disparar el efecto, por eso el contador va en sus deps.
+  const [retryCount, setRetryCount] = useState(0);
 
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
 
@@ -5032,7 +5099,7 @@ function CommunityLeaderView({
         setStats(buildCommunityStats(raw));
       })
       .catch((cause) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "No se pudieron cargar las cifras.");
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Sin respuesta del servidor.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -5040,7 +5107,7 @@ function CommunityLeaderView({
     return () => {
       cancelled = true;
     };
-  }, [communityId, startDate, endDate, state.settlements]);
+  }, [communityId, startDate, endDate, state.settlements, retryCount]);
 
   // La ruta la decide el nucleo (RF_32) y el origen lo pone la pantalla, que es quien vive en el
   // navegador. Sin slug no hay ruta: antes esto interpolaba el slug dentro de la plantilla y una
@@ -5048,8 +5115,61 @@ function CommunityLeaderView({
   // abrible, que no resolvia ninguna comunidad.
   const invitePath = communityInvitePath({ slug: communitySlug(state, communityId) });
   const inviteUrl = invitePath && typeof window !== "undefined" ? `${window.location.origin}${invitePath}` : "";
+  // Si la mitad de comunidad de `sellers` no llego, `communitySlug` no encuentra nada y el enlace
+  // se apagaria en silencio: el parte lo dice, y aqui se ensena en vez de esconderlo (RF_05).
+  const inviteLost = loadReport.issues.includes("community_sellers");
+  const inviteLostNotice = inviteLost ? (
+    <p className="mt-3 rounded-2xl bg-field p-3 text-xs text-ink-60">
+      El enlace de invitacion no se pudo resolver: no se pudieron leer las tiendas de tu comunidad.
+    </p>
+  ) : null;
 
-  if (loading) {
+  // Quien decide que se pinta es el nucleo (spec 005, RF_10-12); esta pantalla solo pinta. La
+  // carga que entra es la de la CALLABLE, no la base de Firestore: son dos cargas distintas.
+  const statsOutcome: LoadOutcome = loading ? "loading" : stats && !error ? "ok" : "failed";
+  const view = communityStoresState({ statsOutcome, standing, emptiness: stats?.emptiness });
+
+  if (view.kind === "not_governing") {
+    // Acreedor: el servidor le niega `getCommunityStats` por diseno, asi que `stats` nunca llega.
+    // Su deuda sale de los cortes que si descarga por vinculo (RF_12). No es una averia.
+    const owedCop = communityCashbackOwedCop(state.settlements, communityId);
+    return (
+      <Card>
+        <p className="text-base font-semibold">Ya no gobiernas esta comunidad</p>
+        <p className="mt-1 text-sm text-ink-60">
+          Otra cuenta lidera ahora esta comunidad. Lo que se te debe de los cortes ya hechos sigue
+          siendo tuyo y se te paga igual.
+        </p>
+        <div className="mt-4">
+          <p className="text-xs text-ink-60">Pendiente de pago</p>
+          <p className="tabular text-2xl font-bold text-fg">{formatCop(owedCop)}</p>
+        </div>
+        <p className="mt-3 text-xs text-ink-60">
+          Aqui solo aparece lo ya cortado: el cashback causado que aun no tiene corte no se muestra.
+        </p>
+      </Card>
+    );
+  }
+
+  if (view.kind === "load_failed") {
+    return (
+      <Card>
+        <p className="text-sm font-semibold">No se pudieron cargar tus cifras</p>
+        <p className="mt-1 text-sm text-ink-60">
+          {error ?? "Sin respuesta del servidor."} Tu comunidad sigue siendo tuya: revisa tu conexion y vuelve a intentarlo.
+        </p>
+        <button
+          className="focus-ring mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-acid px-4 py-2 text-sm font-semibold text-deep"
+          type="button"
+          onClick={() => setRetryCount((count) => count + 1)}
+        >
+          Reintentar
+        </button>
+      </Card>
+    );
+  }
+
+  if (view.kind === "loading") {
     return (
       <div className="space-y-4">
         <Card><p className="text-sm text-ink-60">Cargando las cifras de tu comunidad...</p></Card>
@@ -5057,19 +5177,11 @@ function CommunityLeaderView({
     );
   }
 
-  if (error) {
-    return (
-      <Card>
-        <p className="text-sm font-semibold">No se pudieron cargar tus cifras</p>
-        <p className="mt-1 text-sm text-ink-60">{error}</p>
-      </Card>
-    );
-  }
-
-  if (!stats || stats.emptiness === "no_stores") {
-    // Comunidad vacia: en vez de una pantalla en blanco, las cifras en cero y el enlace para
-    // llenarla (RF_32). Las dos cosas salen juntas de la misma funcion pura para que no puedan
-    // separarse: sin slug se pintan los ceros igual, solo que sin enlace que repartir.
+  if (view.kind === "no_stores") {
+    // Comunidad vacia DE VERDAD (la respuesta llego y lo dice; una que no llego es `load_failed`,
+    // no esto): en vez de una pantalla en blanco, las cifras en cero y el enlace para llenarla
+    // (RF_32). Las dos cosas salen juntas de la misma funcion pura para que no puedan separarse:
+    // sin slug se pintan los ceros igual, solo que sin enlace que repartir.
     const empty = buildEmptyCommunityView(
       { slug: communitySlug(state, communityId) },
       stats ?? buildCommunityStats(EMPTY_COMMUNITY_AGGREGATES)
@@ -5088,9 +5200,13 @@ function CommunityLeaderView({
         </div>
         {/* Sin ruta no hay enlace: `inviteUrl` queda vacio y aqui no se pinta nada. */}
         {inviteUrl && <p className="mt-3 break-all rounded-2xl bg-field p-3 text-sm text-acid">{inviteUrl}</p>}
+        {inviteLostNotice}
       </Card>
     );
   }
+
+  // Solo queda `ok`, y por construccion de `statsOutcome` aqui la respuesta ya llego.
+  if (!stats) return null;
 
   const money = (value: number) => formatCop(value);
   const rate = stats.totals.deliveryRate;
@@ -5113,6 +5229,7 @@ function CommunityLeaderView({
             Tu enlace de invitacion: <span className="text-acid">{inviteUrl}</span>
           </p>
         )}
+        {inviteLostNotice}
       </Card>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -11173,7 +11290,33 @@ const SELLER_VIEW_TITLES: Partial<Record<AppView, { title: string; hint: string 
   inventory: { title: "Inventario", hint: "Existencias y reservas" }
 };
 
-function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, historyStart, searchingHistory, view, onStartDate, onEndDate, onStatusFilter, onSelectRange, periodStats = null, periodStatsError = null, hideFinance = false }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; historyStart?: string; searchingHistory?: boolean; view: AppView; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; hideFinance?: boolean }) {
+/**
+ * El aviso de que la carga base NO funciono (RF_07). Va aparte de `EmptyRoleState` porque no es un
+ * estado vacio: no dice "aqui no hay nada", dice "no se pudo saber", y por eso lleva accion.
+ *
+ * El reintento vuelve a montar la suscripcion (`retryLoad` en `useAppState`) en vez de recargar la
+ * pagina: una recarga tiraria la cache de IndexedDB y volveria a pagar la descarga entera.
+ */
+function SellerLoadFailedNotice({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card>
+      <h2 className="font-bold">No se pudo cargar tu tienda</h2>
+      <p className="mt-2 text-sm text-ink-60">
+        Tus datos no se pudieron cargar, asi que no podemos mostrarte tus pedidos ahora mismo. No es un problema de tu
+        cuenta: tu tienda sigue vinculada. Revisa tu conexion y vuelve a intentarlo.
+      </p>
+      <button
+        className="focus-ring mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-acid px-4 py-2 text-sm font-semibold text-deep"
+        type="button"
+        onClick={onRetry}
+      >
+        Reintentar
+      </button>
+    </Card>
+  );
+}
+
+function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, historyStart, searchingHistory, view, onStartDate, onEndDate, onStatusFilter, onSelectRange, periodStats = null, periodStatsError = null, hideFinance = false, loadOutcome = "ok", onRetryLoad }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; historyStart?: string; searchingHistory?: boolean; view: AppView; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; hideFinance?: boolean; loadOutcome?: LoadOutcome; onRetryLoad?: () => void }) {
   const seller = state.sellers.find((item) => item.id === session.profileId);
   const [sellerOrderTab, setSellerOrderTab] = useState<"operation" | "failed">("operation");
   const [sellerFailedCategoryFilter, setSellerFailedCategoryFilter] = useState<FailedCategoryFilter>("all");
@@ -11249,10 +11392,28 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
   // Mismas cuatro cifras, pero del periodo completo cuando el rango se sale de lo descargado.
   const sellerKpis = periodStats ?? localKpis;
 
-  if (!seller) {
+  // Quien decide que se puede AFIRMAR es `storeProfileState` (T3), no esta pantalla. El viejo
+  // `if (!seller)` no sabia si la carga funciono, asi que una lista de tiendas vacia por un fallo
+  // de red o de reglas se le contaba a la persona como "tu cuenta esta mal configurada". Es el
+  // mensaje exacto que vio la primera cuenta real con los dos papeles, con su tienda perfectamente
+  // vinculada. RF_07 gana a RF_08: sin datos no se afirma nada sobre la cuenta.
+  //
+  // `seller === undefined` va en la MISMA condicion solo para que TypeScript lo acote: con
+  // `kind === "ok"` la tienda esta en la lista por definicion, asi que esa rama no se alcanza.
+  const profileState = storeProfileState({ outcome: loadOutcome, sellerId: session.profileId, sellers: state.sellers });
+  if (profileState.kind !== "ok" || seller === undefined) {
+    const pendingTitle = hideFinance ? "Perfil de tienda pendiente" : "Perfil de vendedor pendiente";
     return (
       <main className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)] gap-4 px-4 py-5">
-        <EmptyRoleState title={hideFinance ? "Perfil de tienda pendiente" : "Perfil de vendedor pendiente"} message="Tu cuenta existe, pero falta vincularla a una tienda. Un administrador debe asignar tu usuario al sellerId correcto." />
+        {profileState.kind === "load_failed" ? (
+          <SellerLoadFailedNotice onRetry={onRetryLoad ?? (() => undefined)} />
+        ) : profileState.kind === "no_store_assigned" ? (
+          <EmptyRoleState title={pendingTitle} message="Tu cuenta existe, pero falta vincularla a una tienda. Un administrador debe asignar tu usuario al sellerId correcto." />
+        ) : profileState.kind === "store_missing" ? (
+          <EmptyRoleState title={pendingTitle} message={`La tienda asignada a tu cuenta (${session.profileId}) ya no existe en la plataforma. Un administrador debe asignar tu usuario a otra tienda.`} />
+        ) : (
+          <AppSkeleton />
+        )}
       </main>
     );
   }
@@ -12769,7 +12930,7 @@ export function OperationsApp() {
   // anterior se rehace la suscripcion, pero si vuelve a acortar el rango no se toca (lo ya
   // descargado no estorba y re-suscribir en cada cambio de fecha seria peor que el problema).
   const [historyStart, setHistoryStart] = useState(defaultOrderStartDate);
-  const { state, setState, remoteEnabled, hydrated } = useAppState(session, historyStart);
+  const { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad } = useAppState(session, historyStart);
 
   // Un cambio MANUAL de fecha si ensancha la ventana: ahi el usuario quiere ver los pedidos.
   // Los atajos de periodo no, porque sus cifras las calcula el servidor y bajar el historico
@@ -12914,11 +13075,11 @@ export function OperationsApp() {
                 : claims.role === "community_leader"
                   ? ledCommunityId
                   : account?.profileId ?? `admin-${user.uid}`;
-        // La posicion se valida antes de entrar en la sesion: el envoltorio de `auth.ts` aun no la
-        // expone, y un valor desconocido colandose en la sesion seria peor que no tenerla. Quien
-        // decide los sombreros es el VINCULO, no la posicion (un acreedor ya no gobierna pero
-        // sigue cobrando), asi que esto no cambia lo que se pinta.
-        const standing = (claims as { communityStanding?: string }).communityStanding;
+        // La posicion en la comunidad llega ya tipada desde el envoltorio de `auth.ts`, que es
+        // ademas quien filtra los valores admitidos (`leader` / `creditor`): la validacion no
+        // desaparecio, se mudo alli. Quien decide los sombreros sigue siendo el VINCULO, no la
+        // posicion (un acreedor ya no gobierna pero sigue cobrando), asi que esto no cambia lo
+        // que se pinta.
         setSession({
           id: user.uid,
           email: user.email ?? account?.email ?? "",
@@ -12926,7 +13087,7 @@ export function OperationsApp() {
           role: claims.role,
           profileId,
           ledCommunityId: ledCommunityId || undefined,
-          communityStanding: standing === "leader" || standing === "creditor" ? standing : undefined
+          communityStanding: claims.communityStanding
         });
         const activeRole = claims.role;
         setState((current) => ({ ...current, activeRole }));
@@ -13024,7 +13185,9 @@ export function OperationsApp() {
       // La comunidad sale de `ledCommunityId`. El `profileId` es el respaldo para el lider PURO,
       // cuya sesion guardada por la version anterior no traia el campo nuevo.
       const ledCommunityId = session.ledCommunityId ?? (session.role === "community_leader" ? session.profileId : "");
-      return <CommunityLeaderView state={viewState} communityId={ledCommunityId} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
+      // La posicion (`standing`) es lo que la cuenta ES en la comunidad, no el sombrero que lleva
+      // puesto: el acreedor conserva el sombrero para ver su deuda, pero ya no gobierna (RF_12).
+      return <CommunityLeaderView state={viewState} communityId={ledCommunityId} standing={session.communityStanding} loadReport={loadReport} startDate={orderStartDate} endDate={orderEndDate} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} />;
     }
     if (activeView === "wallet" && session.role !== "messenger" && session.role !== "seller_logistics") {
       // El admin ve ademas el saldo por tienda y las solicitudes de pago: complementa el historial
@@ -13045,11 +13208,11 @@ export function OperationsApp() {
     // DriverView mas abajo. Sin esta guarda, otro rol que llegara con esa vista veria su panel.
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={viewState} setState={setState} />;
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
-    if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} />;
+    if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} loadOutcome={loadOutcome} onRetryLoad={retryLoad} />;
     if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
     if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
     return <AdminView view={activeView} state={viewState} setState={setState} session={session} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
-  }, [activeHat, activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow]);
+  }, [activeHat, activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow, loadOutcome, loadReport, retryLoad]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;
 

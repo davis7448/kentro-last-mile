@@ -15,6 +15,14 @@ export type FirebaseSessionClaims = {
   messengerId?: string;
   /** Comunidad del lider de comunidad. Nada que ver con driverId (lider logistico). */
   communityId?: string;
+  /**
+   * Posicion de la cuenta DENTRO de esa comunidad (RF_22, RF_23 de la spec 003). Viaja en el
+   * reclamo, y no en un documento, porque decide que se le ensena a la cuenta antes de que el
+   * navegador baje nada: `leader` gobierna la comunidad y causa cashback; `creditor` ya no
+   * gobierna —se le retiro el mando— pero sigue viendo y cobrando lo ya causado, hasta que el
+   * corte que termina de pagarselo apague el vinculo.
+   */
+  communityStanding?: "leader" | "creditor";
 };
 
 export async function ensureFirebaseSession(): Promise<User | null> {
@@ -42,7 +50,17 @@ export function subscribeFirebaseUser(onUser: (user: User | null, claims: Fireba
       sellerId: typeof token.claims.sellerId === "string" ? token.claims.sellerId : undefined,
       driverId: typeof token.claims.driverId === "string" ? token.claims.driverId : undefined,
       messengerId: typeof token.claims.messengerId === "string" ? token.claims.messengerId : undefined,
-      communityId: typeof token.claims.communityId === "string" ? token.claims.communityId : undefined
+      communityId: typeof token.claims.communityId === "string" ? token.claims.communityId : undefined,
+      // Los valores admitidos se filtran AQUI, y no en la pantalla: la comprobacion vivia en
+      // `operations-app.tsx` y se mudo a este envoltorio al tipar el campo — no se ha perdido, es
+      // la condicion de abajo. Un reclamo con cualquier otra cosa (un "LEADER", un "leader " con
+      // espacio, la cadena "undefined") entraria en la sesion como posicion desconocida y decidiria
+      // que se le ensena a una cuenta; sin valor reconocible es mejor no tener posicion.
+      communityStanding:
+        typeof token.claims.communityStanding === "string"
+        && (token.claims.communityStanding === "leader" || token.claims.communityStanding === "creditor")
+          ? token.claims.communityStanding
+          : undefined
     });
   });
 }
