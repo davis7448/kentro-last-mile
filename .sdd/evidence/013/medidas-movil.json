@@ -1,0 +1,146 @@
+{
+  "medidoEn": "2026-09-15T19:50:49.841Z",
+  "ancho": 390,
+  "umbralAltoPx": 44,
+  "panelesDesplegados": {
+    "manual": true,
+    "liquidacion": true
+  },
+  "ok": true,
+  "controlesMal": [],
+  "formularioEncontrado": true,
+  "innerWidth": 390,
+  "scrollWidth": 390,
+  "clientWidth": 390,
+  "sinDesbordamiento": true,
+  "controles": [
+    {
+      "rotulo": "Ej: QA-P1-DUP-001",
+      "tag": "input",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Cliente",
+      "tag": "input",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Telefono",
+      "tag": "input",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Direccion original",
+      "tag": "textarea",
+      "height": 58,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Indicaciones para el mensajero (opcional)",
+      "tag": "textarea",
+      "height": 58,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Zona sin asignarCentro CaliNorte CaliSur",
+      "tag": "select",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Direccion aceptadaRevisar direccion",
+      "tag": "select",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "ContraentregaPagado",
+      "tag": "select",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Recogida vendedorBodega",
+      "tag": "select",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Valor COP",
+      "tag": "input",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Producto",
+      "tag": "input",
+      "height": 44,
+      "right": 331,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "SKU opcional",
+      "tag": "input",
+      "height": 44,
+      "right": 331,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Cant.",
+      "tag": "input",
+      "height": 44,
+      "right": 331,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Quitar",
+      "tag": "button",
+      "height": 44,
+      "right": 331,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Agregar producto",
+      "tag": "button",
+      "height": 44,
+      "right": 190,
+      "alto44": true,
+      "dentro": true
+    },
+    {
+      "rotulo": "Crear pedido",
+      "tag": "button",
+      "height": 44,
+      "right": 340,
+      "alto44": true,
+      "dentro": true
+    }
+  ]
+}

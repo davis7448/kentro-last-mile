@@ -1,0 +1,16 @@
+# DoD 4 — mutacion de RNF_02 (spec 013), 2026-09-15T19:04:48.213Z
+
+La guarda `violacionesDeLecturaDirecta` es una funcion pura; el `it` "DoD 4 · mutacion" toma el cuerpo real de
+`printOrderLabels`, sustituye en memoria `orderAddressLines(` por `order.normalizedAddress ?? order.addressRaw`
+y comprueba que la MISMA guarda devuelve al menos una violacion. Salida real:
+
+
+ RUN  v3.2.4 /root/kentro-last-mile
+
+ ✓ src/lib/spec-013-guards.test.ts (9 tests | 7 skipped) 11ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 7 skipped (9)
+   Start at  19:04:47
+   Duration  414ms (transform 71ms, setup 0ms, collect 115ms, tests 11ms, environment 1ms, prepare 79ms)
+
