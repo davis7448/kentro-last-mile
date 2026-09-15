@@ -68,7 +68,12 @@ y un checklist de cierre.
 - **Los índices se AÑADEN, nunca se reemplazan**: desplegar borra los que falten en el archivo.
   Comparar contra prod antes (`firebase firestore:indexes`).
 - Reglas: `firebase deploy --only firestore:rules --project kentro-last-mile`
-- Hosting: `firebase deploy --only hosting --project kentro-last-mile`
+- Hosting: `ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only hosting --project kentro-last-mile` (o
+  `npm run deploy:hosting`). **La variable es obligatoria aunque no se toque ninguna callable:**
+  `/registro/[slug]` es dinamica y Firebase la sirve con la funcion `ssrkentrolastmile`, asi que todo
+  despliegue de hosting incluye un objetivo de functions y dispara el guard. Sin la variable falla con
+  "Blocked Firebase Functions deploy" (comprobado el 2026-09-13). Es seguro: con `--only hosting` el
+  alcance es hosting mas esa funcion SSR; las demas no se tocan.
 - **Caché (no tocar sin pensar):** `firebase.json` fija `no-cache` para el HTML y `immutable` un año para `/_next/static/**`. Firebase por defecto pone `max-age=3600` a TODO, y eso rompía la app en móviles tras cada despliegue: el navegador conservaba el índice viejo pidiendo chunks con hash que el despliegue ya había borrado, y el JS no arrancaba (pantalla en blanco / "this page couldn't load"). El HTML debe revalidar siempre; los assets con hash en el nombre nunca.
 - **Functions (¡ojo!):** un guard (`scripts/guard-functions-deploy.js`) las bloquea. Compilar primero (`cd functions && npm run build`) y desplegar con `ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only functions`, tras confirmar con `firebase functions:list` que el set local == prod (no borra funciones). El set local == prod está verificado.
 

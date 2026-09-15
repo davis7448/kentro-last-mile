@@ -2,7 +2,7 @@
 
 ## Normal production deploy
 
-Use the safe deploy script for frontend and Firestore rules:
+Use the deploy script for frontend and Firestore rules:
 
 ```bash
 npm run deploy
@@ -11,8 +11,19 @@ npm run deploy
 This runs:
 
 ```bash
-firebase deploy --only hosting,firestore:rules
+ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only hosting,firestore:rules
 ```
+
+**Why the variable is there even though no callable is being deployed.** The app has a dynamic
+route (`/registro/[slug]`), so Firebase Hosting serves it through a pinned Cloud Function
+(`ssrkentrolastmile`). Every hosting deploy therefore includes a functions target, and the
+`functions.predeploy` guard fires before it, regardless of which function it is. Without the
+variable the deploy fails with "Blocked Firebase Functions deploy" (seen on 2026-09-13; the old
+documented command was wrong from the moment that route existed).
+
+It is safe: with `--only hosting` the scope is hosting plus that single SSR function. The other
+Functions are not touched, so nothing can be deleted. The guard still protects the case it was
+written for — a plain `firebase deploy` from an incomplete checkout.
 
 Do not run plain `firebase deploy` during routine UI or Firestore rules work.
 
