@@ -258,8 +258,9 @@
   * Verificacion: **incidente real**: desde el 2026-09-10 16:53Z el webhook de Shopify devolvia 500 en cada pedido
     (2.545 errores) porque la spec 003 le hizo grabar el sello de comunidad y, para una tienda sin comunidad, el
     sello es `{}` y los campos van `undefined`, que el Admin SDK rechaza. Cuatro dias sin pedidos de Shopify
-    (DANDA y Kovia). El arreglo del webhook lo escribio el agente del informe fuera del arnes; se verifico, se
-    desplego por el humano y esta tarea lo formaliza. La guarda encontro una SEGUNDA ruta sin envolver
+    (DANDA y Kovia). El arreglo del webhook lo hizo otra sesion de Claude en paralelo como hotfix (`e0f5c90`, sin spec
+    ni prueba; primero se atribuyo por error al agente del informe); se verifico, se desplego por el humano y esta
+    tarea lo formaliza. La guarda encontro una SEGUNDA ruta sin envolver
     (`contact-form.ts`, Mercadotienda), latente. Recuperacion: `syncShopifyHistoricalOrders` del 10 al 15 con admin
     desechable (borrado): 208 pedidos de Cali, mas 74 al resincronizar por dia la tienda que topo con el limite de
     8 paginas x 250 de `fetchShopifyOrdersByDateRange`. Ninguna prueba ni el smoke lo cazaron: el smoke crea pedidos
