@@ -310,6 +310,24 @@
       "file": "specs/009_recordar_el_sombrero.md",
       "status": "borrador",
       "origen": "informe de cierre 004/005"
+    },
+    "010": {
+      "file": "specs/010_alerta_de_entrada_de_pedidos.md",
+      "status": "borrador",
+      "origen": "incidente webhook Shopify 2026-09-10..15",
+      "prioridad": 1
+    },
+    "011": {
+      "file": "specs/011_valores_ausentes_al_guardar.md",
+      "status": "borrador",
+      "origen": "incidente webhook Shopify 2026-09-10..15",
+      "prioridad": 2
+    },
+    "012": {
+      "file": "specs/012_webhook_de_shopify_de_punta_a_punta.md",
+      "status": "borrador",
+      "origen": "incidente webhook Shopify 2026-09-10..15; primer tramo de la 002",
+      "prioridad": 3
     }
   },
   "archivedTasks": {
