@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase-admin/app";
 import { createCommunityPricingResolver } from "./community-order-pricing";
+import { stripUndefined } from "./wallet-entries";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -166,7 +167,11 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
     const seller = sellerSnap.data() ?? {};
     const trackingCode = typeof existingData.trackingCode === "string" ? existingData.trackingCode : await nextTrackingCode(transaction);
     const items = summarizeShopifyLineItems(order.line_items ?? [], shopDomain);
-    transaction.set(orderRef, {
+    // stripUndefined es obligatorio: el Admin SDK rechaza `undefined` como valor y para una
+    // tienda SIN comunidad el sello viene vacio. Sin esto el webhook devolvia 500 en cada
+    // pedido de Cali de DANDA y Kovia (del 2026-09-11 al 2026-09-15, ~2.000 reintentos de
+    // Shopify) y ningun pedido entraba. Las otras cinco rutas de creacion ya lo hacian.
+    transaction.set(orderRef, stripUndefined({
       id: docId,
       trackingCode,
       shopifyOrderId: order.name,
@@ -196,7 +201,7 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       source: "shopify_webhook",
       createdAt: existingData.createdAt ?? order.created_at ?? new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    }), { merge: true });
   });
 
   await storeSnap.docs[0].ref.set({ lastWebhookAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
