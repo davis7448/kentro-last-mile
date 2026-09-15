@@ -5281,9 +5281,13 @@ function CommunityLeaderView({
 
       <Card>
         <p className="text-sm font-semibold">Como va cada tienda</p>
-        {stats.emptiness === "no_orders_in_period" ? (
-          <p className="mt-2 text-sm text-ink-60">Tus tiendas no movieron pedidos en este periodo.</p>
-        ) : (
+        {/* RF_05 (005): la tabla se pinta SIEMPRE que haya tiendas, y a esta rama solo se llega
+            con tiendas (`view.kind === "no_stores"` ya salio antes). El lider tiene que ver quien
+            forma su comunidad aunque nadie haya vendido en el periodo: los ceros son informacion
+            (E-master: una tienda, cero pedidos, y el responsable no veia cual). El aviso de periodo
+            sin movimiento va debajo como nota, no como sustituto de la tabla. Sin datos de cliente
+            ni saldos (RF_09 de la 003). */}
+        {stats.byStore.length > 0 && (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead className="text-left text-xs text-ink-60">
@@ -5312,6 +5316,9 @@ function CommunityLeaderView({
               </tbody>
             </table>
           </div>
+        )}
+        {stats.emptiness === "no_orders_in_period" && (
+          <p className="mt-2 text-sm text-ink-60">Tus tiendas no movieron pedidos en este periodo.</p>
         )}
       </Card>
     </div>

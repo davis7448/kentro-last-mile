@@ -1513,3 +1513,101 @@ describe("T14 · RF_05, RF_10: el indice que exige `sum(amountCop)` con rango de
     expect(loadIndexes().length, "el archivo tiene menos indices que en produccion: desplegarlo borraria los que falten").toBeGreaterThanOrEqual(39);
   });
 });
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * T16 · RF_05: el lider ve sus tiendas aunque no hayan movido pedidos.
+ *
+ * Hoy la tarjeta "Como va cada tienda" pinta la tabla en la rama FALSA de un ternario sobre
+ * `stats.emptiness === "no_orders_in_period"`: con cero pedidos creados en el periodo el lider ve
+ * "1 sin pedidos en el periodo" y NINGUN nombre (Brayan, E-master). Los datos ya llegan: el
+ * servidor recorre todas las tiendas (`functions/src/community-stats.ts`) y `buildCommunityStats`
+ * produce `byStore` con ceros — lo afirma `community-stats.test.ts` en "RF_29, RF_30: agrega el
+ * total y el desglose por tienda" (`byStore` tiene 3 filas con `seller-3` a 0 creados e
+ * `inactiveStores` = 1). Lo que falta es que la pantalla pinte esas filas.
+ *
+ * Extractores: los seguros de T8/T9 (`alcanceDeLaVista`), nunca `localFunctions`.
+ * ---------------------------------------------------------------------------------------------
+ */
+
+const TEXTO_SIN_PEDIDOS = "Tus tiendas no movieron pedidos en este periodo";
+
+/** La tarjeta de tiendas: desde su titulo hasta el `stats.byStore.map` que pinta las filas. */
+function tarjetaDeTiendas(alcance: string): string {
+  const inicio = alcance.indexOf("Como va cada tienda");
+  const fin = alcance.indexOf("stats.byStore.map", inicio);
+  if (inicio < 0 || fin < 0) throw new Error("No se encuentra la tarjeta 'Como va cada tienda' con su `stats.byStore.map`.");
+  return alcance.slice(inicio, fin);
+}
+
+describe("T16 · RF_05: el lider ve sus tiendas aunque no hayan movido pedidos", () => {
+  it("el recorte trae la tarjeta de tiendas y la tabla (positiva de control)", () => {
+    const alcance = alcanceDeLaVista("CommunityLeaderView");
+    expect(alcance, "la tarjeta 'Como va cada tienda' sigue ahi").toContain("Como va cada tienda");
+    expect(alcance, "la tabla sigue recorriendo `stats.byStore`").toContain("stats.byStore.map");
+    expect(tarjetaDeTiendas(alcance), "la tarjeta tiene su cabecera de tabla").toContain("<table");
+  });
+
+  it("RF_05 · la tabla de tiendas NO cuelga de un ternario sobre `no_orders_in_period`", () => {
+    const alcance = alcanceDeLaVista("CommunityLeaderView");
+    const tarjeta = tarjetaDeTiendas(alcance);
+    // Positiva de control: el aviso de periodo sin movimiento sigue en la vista (RF_33 de la 004).
+    expect(alcance, "la vista ya no distingue el periodo sin pedidos").toContain(TEXTO_SIN_PEDIDOS);
+    expect(
+      /emptiness\s*===\s*["']no_orders_in_period["']\s*\?/.test(tarjeta),
+      "la tabla de tiendas esta en la rama falsa de `emptiness === \"no_orders_in_period\" ?`: con cero pedidos el lider no ve ningun nombre"
+    ).toBe(false);
+    expect(
+      /\bno_orders_in_period\b/.test(tarjeta),
+      "entre el titulo de la tarjeta y `stats.byStore.map` se decide por `no_orders_in_period`: la tabla depende de que haya pedidos"
+    ).toBe(false);
+  });
+
+  it("RF_05 · el aviso de 'no movieron pedidos' sigue existiendo, y la tabla depende de que haya tiendas, no de que haya pedidos", () => {
+    const alcance = alcanceDeLaVista("CommunityLeaderView");
+    // No regresion: el aviso de periodo sin movimiento no desaparece.
+    expect(alcance, "se perdio el aviso 'Tus tiendas no movieron pedidos en este periodo'").toContain(TEXTO_SIN_PEDIDOS);
+
+    const tarjeta = tarjetaDeTiendas(alcance);
+    expect(
+      /totals\.created\b|totals\.inactiveStores\b|totals\.activeStores\b/.test(tarjeta),
+      "la tabla se condiciona a contadores de pedidos (`totals.created`/`activeStores`): eso es 'hay pedidos', no 'hay tiendas'"
+    ).toBe(false);
+
+    // "Hay tiendas" se decide o en la tarjeta (`byStore.length`) o antes, porque la vista ya devuelve
+    // la tarjeta `no_stores` sin llegar aqui. Cualquiera de las dos vale.
+    const enLaTarjeta = /byStore\s*\.\s*length\b|byStore\s*\.\s*some\b|["']no_stores["']/.test(tarjeta);
+    const indiceNoStores = alcance.search(/view\s*\.\s*kind\s*===\s*["']no_stores["']/);
+    const antesDeLaTarjeta = indiceNoStores > -1 && indiceNoStores < alcance.indexOf("Como va cada tienda");
+    expect(
+      enLaTarjeta || antesDeLaTarjeta,
+      "ni la tarjeta mira `stats.byStore.length` ni la vista resuelve `no_stores` antes: no hay quien garantice que la tabla se pinte cuando hay tiendas"
+    ).toBe(true);
+    // Y la tabla no puede seguir siendo la rama falsa del aviso.
+    expect(
+      /\?\s*\(\s*<p[^>]*>\s*Tus tiendas no movieron/.test(tarjeta),
+      "la tabla sigue siendo la rama falsa del aviso 'no movieron pedidos': tiendas sin pedidos = tabla invisible"
+    ).toBe(false);
+  });
+
+  it("RF_05 · las filas siguen mostrando el nombre de la tienda (`sellerNames[row.sellerId]`), no solo el id", () => {
+    const alcance = alcanceDeLaVista("CommunityLeaderView");
+    const i = alcance.indexOf("stats.byStore.map");
+    expect(i).toBeGreaterThan(-1);
+    const filas = alcance.slice(i, i + 1200);
+    expect(/sellerNames\[\s*row\.sellerId\s*\]/.test(filas), "las filas dejaron de pintar `sellerNames[row.sellerId]`").toBe(true);
+    expect(/\brow\.created\b/.test(filas), "las filas dejaron de pintar `row.created` (una tienda sin pedidos debe verse con su 0)").toBe(true);
+  });
+
+  it("RF_09 de la 003 · el recorte sigue sin datos de cliente ni saldos (complementa la guarda de T9)", () => {
+    // `customerPhone`, `addressRaw` y `order.customer` ya los cubre "NO REGRESION: lo que T9 no
+    // puede llevarse por delante" sobre el CUERPO; aqui se anade `sellerBalance` y se mira el
+    // ALCANCE (cuerpo + funciones de aviso), que es donde una tabla nueva podria colarlos.
+    const alcance = alcanceDeLaVista("CommunityLeaderView");
+    expect(alcance, "positiva de control: el recorte es el de la pantalla de comunidad").toContain("Como va cada tienda");
+    expect(/\bsellerBalance\b/.test(alcance), "la vista de comunidad pinta `sellerBalance` (RF_09 de la 003)").toBe(false);
+    expect(/\bcustomerPhone\b/.test(alcance), "el alcance de la vista de comunidad pinta `customerPhone`").toBe(false);
+    expect(/\baddressRaw\b/.test(alcance), "el alcance de la vista de comunidad pinta `addressRaw`").toBe(false);
+    expect(/\border\.customer\b/.test(alcance), "el alcance de la vista de comunidad pinta `order.customer`").toBe(false);
+  });
+});
