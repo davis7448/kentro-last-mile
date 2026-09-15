@@ -308,6 +308,8 @@ export type Order = {
   customerPhone: string;
   addressRaw: string;
   normalizedAddress?: string;
+  /** Indicaciones de la tienda para el mensajero ("timbre azul", "preguntar por Marta"); nunca sustituye a la direccion (spec 013). */
+  deliveryNotes?: string;
   geoProvider?: "mapbox" | "google_address_validation";
   lat?: number;
   lng?: number;

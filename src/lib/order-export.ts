@@ -1,4 +1,5 @@
 import { isChargeableFailedOrder } from "./finance";
+import { orderAddressLines } from "./order-address-lines";
 import type { AppState, FailedCategory, Order, OrderStatus, WalletEntry } from "./types";
 
 export type OrderExportCell = string | number;
@@ -62,7 +63,8 @@ export const orderExportColumns = [
   "creado_en",
   "actualizado_en",
   "pedido_json",
-  "evidencias_json"
+  "evidencias_json",
+  "indicaciones"
 ] as const;
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -115,6 +117,17 @@ function fullOrderExportRow(values: Partial<OrderExportRow>): OrderExportRow {
   return rowFrom(values, orderExportColumns);
 }
 
+// Las tres celdas de direccion salen del mismo modulo que la guia y la tarjeta (spec 013, RNF_02).
+function addressCells(order: Order) {
+  const lines = orderAddressLines(order);
+  const textOf = (label: (typeof lines)[number]["label"]) => lines.find((line) => line.label === label)?.text ?? "";
+  return {
+    direccion_original: textOf("Direccion"),
+    direccion_normalizada: textOf("Correccion o nota"),
+    indicaciones: textOf("Indicaciones")
+  };
+}
+
 // Suma, por pedido, los movimientos de wallet del vendedor (lo realmente cobrado/recaudado),
 // para que el reporte muestre el desglose financiero y el vendedor pueda auditar.
 function sellerChargesByOrder(state: AppState) {
@@ -160,8 +173,7 @@ export function buildOrderExportRows(orders: Order[], state: AppState): OrderExp
       estado: statusLabel(order.status),
       cliente: order.customerName,
       telefono: order.customerPhone,
-      direccion_original: order.addressRaw,
-      direccion_normalizada: order.normalizedAddress,
+      ...addressCells(order),
       lat: order.lat,
       lng: order.lng,
       metodo_pago: order.paymentMethod,

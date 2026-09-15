@@ -98,6 +98,7 @@ import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
 import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
+import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
@@ -933,7 +934,8 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
     const seller = state.sellers.find((item) => item.id === order.sellerId);
     const zone = state.zones.find((item) => item.id === order.zoneId);
     const code = order.trackingCode ?? order.shopifyOrderId;
-    const address = order.normalizedAddress ?? order.addressRaw;
+    // Las lineas de direccion salen del modulo puro; la guia no decide que direccion imprime (spec 013, RNF_02).
+    const addressLines = orderAddressLines(order);
     const codText = order.paymentMethod === "cod" ? `COBRAR ${formatCop(order.totalCop)}` : "PAGADO";
     const lookupUrl = orderLookupUrl(order);
     // QRCode se carga aqui: solo hace falta al imprimir un rotulo, no al arrancar la app.
@@ -981,8 +983,10 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
           </div>
         </section>
         <section>
-          <p class="key">Direccion</p>
-          <p class="address">${escapeHtml(address)}</p>
+          ${addressLines.map((line, index) => index === 0
+            ? `<p class="key">${escapeHtml(line.label)}</p><p class="address">${escapeHtml(line.text)}</p>`
+            : `<p class="key">${escapeHtml(line.label)}</p><p class="address-extra">${escapeHtml(line.text)}</p>`
+          ).join("")}
         </section>
         <section class="product-grid">
           <div class="product-block">
@@ -1029,6 +1033,7 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
           .value { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
           .small { margin-top: 3px; font-size: 7.5px; line-height: 1.1; overflow-wrap: anywhere; color: #555; }
           .address { max-height: 28mm; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+          .address-extra { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 11px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
           .pay { border: 2px solid #111; border-radius: 6px; padding: 6px; font-size: 14px; font-weight: 900; text-align: center; }
           .product-grid { min-height: 0; grid-template-columns: minmax(0, 1fr) 22mm; }
           .product-block { min-width: 0; min-height: 0; overflow: hidden; }
@@ -1100,6 +1105,7 @@ function CollapsiblePanel({
   tone = "default",
   action,
   flush = false,
+  spanWhenOpen = false,
   children
 }: {
   title: string;
@@ -1112,6 +1118,8 @@ function CollapsiblePanel({
   action?: React.ReactNode;
   /** El hijo ya trae su propia tarjeta: se pinta suelto debajo, sin marco ni relleno extra. */
   flush?: boolean;
+  /** Desplegado ocupa la fila entera de la rejilla; plegado vuelve a su columna (spec 013, RF_02). */
+  spanWhenOpen?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1119,7 +1127,7 @@ function CollapsiblePanel({
   if (hideWhenEmpty && (count ?? 0) === 0) return null;
   const toneClass = tone === "acid" ? "text-acid" : tone === "rust" ? "text-rust" : "text-ink-60";
   return (
-    <section className={flush ? "grid min-w-0 gap-2" : "min-w-0 rounded-3xl border border-white/[0.06] bg-panel"}>
+    <section className={`${flush ? "grid min-w-0 gap-2" : "min-w-0 rounded-3xl border border-white/[0.06] bg-panel"} ${open && spanWhenOpen ? "lg:col-span-full" : ""}`}>
       <div className={`flex items-center gap-2 p-3 sm:p-4 ${flush ? "rounded-3xl border border-white/[0.06] bg-panel" : ""}`}>
         <button
           className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl text-left"
@@ -1652,6 +1660,8 @@ function OrderCard({
   const messenger = state.messengers.find((item) => item.id === order.messengerId);
   const defaultDriver = state.drivers.find((item) => item.active) ?? state.drivers[0];
   const nextStep = getNextOrderStep(order);
+  // Puro y barato: la tarjeta no decide que direccion muestra, la recibe del modulo (spec 013, RNF_02).
+  const addressLines = orderAddressLines(order);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -1848,7 +1858,14 @@ return (
 
       <div className="grid gap-1 text-xs text-ink-70">
         {/* PRIMARIO: lo que hace falta para decidir sobre este pedido de un vistazo. */}
-        <p className="flex min-w-0 gap-2"><MapPin className="shrink-0" size={14} /> <span className="truncate">{order.normalizedAddress ?? order.addressRaw}</span></p>
+        <p className="flex min-w-0 gap-2"><MapPin className="shrink-0" size={14} /> <span className="truncate">{addressLines[0].text}</span></p>
+        {/* Correccion/nota e indicaciones enteras, rotuladas: el mensajero no debe perder la nota (spec 013, RF_06/RF_07/RF_11). */}
+        {addressLines.slice(1).map((line) => (
+          <p key={line.label} className="flex min-w-0 gap-2 pl-6 text-xs text-ink-70">
+            <span className="shrink-0 font-semibold text-ink-60">{line.label}:</span>
+            <span className="min-w-0 break-words">{line.text}</span>
+          </p>
+        ))}
         <div className="flex flex-wrap gap-x-3 gap-y-1">
           <span className="inline-flex items-center gap-1"><Truck size={14} /> {messenger ? messenger.name : driver?.name ?? "Sin asignar"}</span>
           <a className="focus-ring inline-flex items-center gap-1 rounded-full text-acid" href={`tel:${order.customerPhone}`}><Phone size={14} /> {order.customerPhone}</a>
@@ -2254,7 +2271,7 @@ function ImportedOrderReviewForm({ order, state, setState, onConfirm }: { order:
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     addressRaw: order.addressRaw,
-    normalizedAddress: order.normalizedAddress ?? "",
+    deliveryNotes: order.deliveryNotes ?? "",
     zoneId: order.zoneId ?? "",
     paymentMethod: order.paymentMethod,
     fulfillmentMode: order.fulfillmentMode,
@@ -2282,7 +2299,7 @@ function ImportedOrderReviewForm({ order, state, setState, onConfirm }: { order:
         customerName: form.customerName,
         customerPhone: form.customerPhone,
         addressRaw: form.addressRaw,
-        normalizedAddress: form.normalizedAddress || undefined,
+        deliveryNotes: form.deliveryNotes.trim() || undefined,
         zoneId: form.zoneId || undefined,
         paymentMethod: form.paymentMethod as PaymentMethod,
         fulfillmentMode: form.fulfillmentMode as FulfillmentMode,
@@ -2313,7 +2330,7 @@ function ImportedOrderReviewForm({ order, state, setState, onConfirm }: { order:
         customerName: form.customerName,
         customerPhone: form.customerPhone,
         addressRaw: form.addressRaw,
-        normalizedAddress: form.normalizedAddress || undefined,
+        deliveryNotes: form.deliveryNotes.trim() || undefined,
         zoneId: form.zoneId || undefined,
         paymentMethod: form.paymentMethod as PaymentMethod,
         fulfillmentMode: form.fulfillmentMode as FulfillmentMode,
@@ -2348,7 +2365,7 @@ function ImportedOrderReviewForm({ order, state, setState, onConfirm }: { order:
             <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Telefono" value={form.customerPhone} onChange={(event) => update("customerPhone", event.target.value)} />
           </div>
           <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Direccion" value={form.addressRaw} onChange={(event) => update("addressRaw", event.target.value)} />
-          <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Direccion normalizada opcional" value={form.normalizedAddress} onChange={(event) => update("normalizedAddress", event.target.value)} />
+          <textarea className="focus-ring min-h-20 rounded-2xl border border-white/10 px-3 py-2 text-sm" placeholder="Indicaciones para el mensajero (opcional)" aria-label="Indicaciones para el mensajero (opcional)" value={form.deliveryNotes} onChange={(event) => update("deliveryNotes", event.target.value)} />
           <div className="grid gap-2 sm:grid-cols-2">
             <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={form.zoneId} onChange={(event) => update("zoneId", event.target.value)}>
               <option value="">Sin zona asignada</option>
@@ -5743,7 +5760,7 @@ function ManualOrderPanel({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [addressRaw, setAddressRaw] = useState("");
-  const [normalizedAddress, setNormalizedAddress] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
   const [zoneId, setZoneId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "prepaid">("cod");
   const [fulfillmentMode, setFulfillmentMode] = useState<"seller_pickup" | "warehouse">("seller_pickup");
@@ -5834,7 +5851,7 @@ function ManualOrderPanel({
     <Card>
       <h2 className="mb-3 font-bold">Crear pedido</h2>
       <form
-        className="grid gap-2"
+        className="grid min-w-0 gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
@@ -5871,7 +5888,7 @@ function ManualOrderPanel({
                 customerName,
                 customerPhone,
                 addressRaw,
-                normalizedAddress,
+                deliveryNotes,
                 zoneId,
                 paymentMethod,
                 fulfillmentMode,
@@ -5890,7 +5907,7 @@ function ManualOrderPanel({
               setCustomerName("");
               setCustomerPhone("");
               setAddressRaw("");
-              setNormalizedAddress("");
+              setDeliveryNotes("");
               setZoneId("");
               setTotalCop("");
               resetLines();
@@ -5915,7 +5932,7 @@ function ManualOrderPanel({
             {selectedSeller?.name ?? "Vendedor"}
           </div>
         ) : (
-          <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={sellerId} onChange={(event) => setSellerId(event.target.value)} required>
+          <select className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={sellerId} onChange={(event) => setSellerId(event.target.value)} required>
             <option value="">Vendedor</option>
             {state.sellers.map((seller) => (
               <option key={seller.id} value={seller.id}>{seller.name}</option>
@@ -5924,25 +5941,26 @@ function ManualOrderPanel({
         )}
         <label className="grid gap-1 text-xs font-semibold text-ink-60">
           Referencia vendedor opcional
-          <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg" placeholder="Ej: QA-P1-DUP-001" value={shopifyOrderId} onChange={(event) => setShopifyOrderId(event.target.value)} />
+          <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg" placeholder="Ej: QA-P1-DUP-001" value={shopifyOrderId} onChange={(event) => setShopifyOrderId(event.target.value)} />
         </label>
         {duplicateSellerReference && (
           <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">
             Ya existe la referencia {normalizedSellerReference}. No se puede crear otro pedido con la misma referencia.
           </p>
         )}
-        <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Cliente" value={customerName} onChange={(event) => setCustomerName(event.target.value)} required />
-        <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Telefono" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} required />
+        <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Cliente" value={customerName} onChange={(event) => setCustomerName(event.target.value)} required />
+        <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Telefono" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} required />
         <textarea className="focus-ring min-h-20 rounded-2xl border border-white/10 px-3 py-2 text-sm" placeholder="Direccion original" value={addressRaw} onChange={(event) => setAddressRaw(event.target.value)} required />
-        <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Direccion normalizada opcional" value={normalizedAddress} onChange={(event) => setNormalizedAddress(event.target.value)} />
+        {/* La direccion corregida la escribe quien reparte, no quien vende (spec 013, RF_10). */}
+        <textarea className="focus-ring min-h-20 rounded-2xl border border-white/10 px-3 py-2 text-sm" placeholder="Indicaciones para el mensajero (opcional)" aria-label="Indicaciones para el mensajero (opcional)" value={deliveryNotes} onChange={(event) => setDeliveryNotes(event.target.value)} />
         <div className="grid gap-2 sm:grid-cols-2">
-          <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={zoneId} onChange={(event) => setZoneId(event.target.value)}>
+          <select className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={zoneId} onChange={(event) => setZoneId(event.target.value)}>
             <option value="">Zona sin asignar</option>
             {sellerZones.map((zone) => (
               <option key={zone.id} value={zone.id}>{zone.name}</option>
             ))}
           </select>
-          <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={addressRisk} onChange={(event) => setAddressRisk(event.target.value as "accepted" | "review")}>
+          <select className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={addressRisk} onChange={(event) => setAddressRisk(event.target.value as "accepted" | "review")}>
             <option value="accepted">Direccion aceptada</option>
             <option value="review">Revisar direccion</option>
           </select>
@@ -5955,16 +5973,16 @@ function ManualOrderPanel({
           </p>
         )}
         <div className="grid gap-2 sm:grid-cols-2">
-          <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "cod" | "prepaid")}>
+          <select className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "cod" | "prepaid")}>
             <option value="cod">Contraentrega</option>
             <option value="prepaid">Pagado</option>
           </select>
-          <select className="focus-ring w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={fulfillmentMode} onChange={(event) => setFulfillmentMode(event.target.value as "seller_pickup" | "warehouse")}>
+          <select className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm" value={fulfillmentMode} onChange={(event) => setFulfillmentMode(event.target.value as "seller_pickup" | "warehouse")}>
             <option value="seller_pickup">Recogida vendedor</option>
             <option value="warehouse">Bodega</option>
           </select>
         </div>
-        <input className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
+        <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
         <div className="grid gap-2 rounded-2xl border border-white/10 p-2">
           <p className="text-xs font-semibold text-ink-60">Productos</p>
           <datalist id={productListId}>
@@ -5977,29 +5995,29 @@ function ManualOrderPanel({
             ))}
           </datalist>
           {lines.map((line) => (
-            <div key={line.key} className="grid gap-2 sm:grid-cols-[2fr_1fr_auto_auto]">
+            <div key={line.key} className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_5rem_auto]">
               <input
-                className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm"
+                className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm"
                 placeholder="Producto"
                 list={productListId}
                 value={line.productName}
                 onChange={(event) => updateLine(line.key, { productName: event.target.value })}
               />
               <input
-                className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm"
+                className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm"
                 placeholder="SKU opcional"
                 value={line.sku}
                 onChange={(event) => updateLine(line.key, { sku: event.target.value })}
               />
               <input
-                className="focus-ring w-20 rounded-full border border-white/10 px-3 py-2 text-sm"
+                className="focus-ring min-h-11 w-full min-w-0 rounded-full border border-white/10 px-3 py-2 text-sm"
                 placeholder="Cant."
                 inputMode="numeric"
                 value={line.quantity}
                 onChange={(event) => updateLine(line.key, { quantity: event.target.value.replace(/[^\d]/g, "") })}
               />
               <button
-                className="focus-ring min-h-10 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold disabled:opacity-40"
+                className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold disabled:opacity-40"
                 type="button"
                 onClick={() => removeLine(line.key)}
                 disabled={lines.length === 1}
@@ -6009,7 +6027,7 @@ function ManualOrderPanel({
             </div>
           ))}
           {lines.length < 20 && (
-            <button className="focus-ring justify-self-start rounded-full border border-white/10 px-3 py-2 text-xs font-semibold" type="button" onClick={addLine}>
+            <button className="focus-ring min-h-11 justify-self-start rounded-full border border-white/10 px-3 py-2 text-xs font-semibold" type="button" onClick={addLine}>
               Agregar producto
             </button>
           )}
@@ -6017,7 +6035,7 @@ function ManualOrderPanel({
         {stockWarnings.map((warning) => (
           <p key={warning} className="rounded-2xl bg-field px-3 py-2 text-xs text-ink-60">{warning}</p>
         ))}
-        <button className="focus-ring min-h-10 rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="submit" disabled={state.sellers.length === 0 || submittingOrder || Boolean(duplicateSellerReference)}>
+        <button className="focus-ring min-h-11 rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="submit" disabled={state.sellers.length === 0 || submittingOrder || Boolean(duplicateSellerReference)}>
           {submittingOrder ? "Creando pedido..." : "Crear pedido"}
         </button>
       </form>
@@ -11567,12 +11585,15 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
           </div>
         </section>
       {/* Los paneles secundarios bajan a una fila de tres: plegados son una linea cada uno,
-          asi que no necesitan una columna propia y la lista gana todo el ancho. */}
+          asi que no necesitan una columna propia y la lista gana todo el ancho. El formulario de
+          pedido manual, desplegado, toma la fila entera (spec 013, RF_02): en un tercio salia
+          recortado; plegado vuelve a su columna. */}
       <div className="grid gap-3 lg:grid-cols-3">
           <CollapsiblePanel
             title="Crear pedido manual"
             summary="Para ventas fuera de Shopify"
             help="Registra un pedido que no entro por la tienda conectada. Queda igual que uno importado: se le asigna lider, mensajero y entra en la liquidacion."
+            spanWhenOpen
           >
             <ManualOrderPanel state={state} setState={setState} lockedSellerId={seller.id} />
           </CollapsiblePanel>
