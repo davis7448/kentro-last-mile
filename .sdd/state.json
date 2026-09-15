@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "report",
+  "phase": "release",
   "activeSpec": {
     "file": "specs/005_tienda_lider_ve_su_pantalla.md",
     "status": "approved"
@@ -242,6 +242,19 @@
       "testWritten": true,
       "done": true,
       "note": "Abierta por el responsable (2026-09-15): el lider no ve la lista de tiendas de su comunidad si en el periodo no hubo pedidos; la tarjeta 'Como va cada tienda' solo pinta la tabla con pedidos creados. E-master (1 tienda, 0 pedidos): Brayan ve '1 sin pedidos' pero no cual. Los datos ya llegan (sellerNames y byStore con ceros). | HECHO 2026-09-15: la tabla se pinta con stats.byStore.length y no con los pedidos; el aviso 'no movieron pedidos' queda como nota bajo la tabla (una guarda prohibe el literal entre el titulo y la tabla). 79 guardas, suite 1201, tsc y lint limpios, build sin static{. Pendiente humano: volver a desplegar hosting."
+    },
+    "T17": {
+      "requirements": [
+        "RNF_01"
+      ],
+      "files": [
+        "functions/src/index.ts",
+        "functions/src/contact-form.ts",
+        "src/lib/spec-005-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "INCIDENTE (2026-09-15): el webhook de Shopify devolvia 500 desde el 2026-09-10 16:53Z (2.545 errores) porque grababa el sello de comunidad con undefined para tiendas sin comunidad (spec 003) y era la unica de las seis rutas de creacion sin stripUndefined. Ultimo pedido por Shopify: 2026-09-10 20:05 -05:00. El arreglo (stripUndefined en index.ts) lo escribio el agente del informe fuera del arnes; verificado por el orquestador y desplegado por el humano el 2026-09-15. Esta tarea lo formaliza: guarda que exija stripUndefined en las seis rutas de creacion de pedidos. | RECUPERACION 2026-09-15 ~17:00Z: syncShopifyHistoricalOrders del 2026-09-10 al 2026-09-15 con un admin desechable (uid VqmGj6YladOWo70qQ4htUKDpe502, borrado al terminar): n1v0sw-vz 1392 traidos / 83 importados / 13 existian; u0jxrm-tk 2000 traidos / 120 importados / 1 existia; p9g0sm-uv (Kovia) 100 / 5 / 1. Total 208 pedidos de Cali recuperados, 15 existentes, sin duplicados. Entran en estado 'imported': la confirmacion (uchat) y el despacho son de operacion. | La guarda encontro una SEGUNDA ruta sin stripUndefined: contact-form.ts (Mercadotienda), transaction.create con literal desnudo. Anadida al alcance. | HECHO: index.ts y contact-form.ts envueltos; guarda sobre las seis rutas mas conteo de rutas (=6). 95 guardas, suite 1217, tsc raiz y functions limpios, functions/lib compilado. Resincronizacion por dia de u0jxrm-tk (tope de 8 paginas x 250 = 2.000 en fetchShopifyOrdersByDateRange): +74 pedidos. PENDIENTE HUMANO: desplegar functions (contact-form) y mejora futura: quitar o avisar el tope de paginacion."
     }
   },
   "testCommand": "npm test",
@@ -274,9 +287,29 @@
       "functionsDeployed": null,
       "rulesDeployed": "2026-09-15",
       "indexesDeployed": "2026-09-15",
-      "hostingDeployed": "2026-09-15",
+      "hostingDeployed": "2026-09-15 (tres veces: tras T13/T14, tras T15 y tras T16)",
       "verificacionHumana": "2026-09-15: el responsable confirma que Brayan E-master entra y ve su panel (DoD 6).",
-      "pendiente": "Volver a desplegar hosting tras T16 (npm run deploy:hosting)."
+      "report": "2026-09-15: informe de cierre del ciclo 004/005 en .sdd/evidence/005/informe-cierre-004-005.html (publicado como Artifact). 34 requisitos: 18 cumplidos con evidencia, 15 probados sin evidencia funcional, 1 declarado (RF_12 acreedor). Suite 1201, lint 0/3, tsc limpio. Specs borrador 006-009 creadas; 002 reafirmada."
+    },
+    "006": {
+      "file": "specs/006_lider_fija_sus_precios.md",
+      "status": "borrador",
+      "origen": "informe de cierre 004/005"
+    },
+    "007": {
+      "file": "specs/007_lider_ve_quien_entro_por_su_enlace.md",
+      "status": "borrador",
+      "origen": "informe de cierre 004/005"
+    },
+    "008": {
+      "file": "specs/008_aviso_de_elevacion_al_piso.md",
+      "status": "borrador",
+      "origen": "informe de cierre 004/005; depende de la 006"
+    },
+    "009": {
+      "file": "specs/009_recordar_el_sombrero.md",
+      "status": "borrador",
+      "origen": "informe de cierre 004/005"
     }
   },
   "archivedTasks": {

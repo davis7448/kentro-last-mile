@@ -6,7 +6,7 @@
  * ejecutar — el guion contra produccion, las reglas de Firestore y el JSX de las pantallas.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -1609,5 +1609,106 @@ describe("T16 · RF_05: el lider ve sus tiendas aunque no hayan movido pedidos",
     expect(/\bcustomerPhone\b/.test(alcance), "el alcance de la vista de comunidad pinta `customerPhone`").toBe(false);
     expect(/\baddressRaw\b/.test(alcance), "el alcance de la vista de comunidad pinta `addressRaw`").toBe(false);
     expect(/\border\.customer\b/.test(alcance), "el alcance de la vista de comunidad pinta `order.customer`").toBe(false);
+  });
+});
+
+/**
+ * T17 · RNF_01 — ninguna ruta de creacion escribe `undefined` en `orders`.
+ *
+ * Incidente real (2026-09-10 → 2026-09-15): `shopifyWebhook` grababa `communityId: pricingStamp.communityId`
+ * y `communityPricing: pricingStamp.communityPricing` sin envolver el documento con `stripUndefined(...)`.
+ * Para una tienda SIN comunidad el sello es `{}` (ver la guarda del sello vacio), asi que esos dos
+ * campos son `undefined` y el Admin SDK rechaza la escritura ("Cannot use undefined as a Firestore
+ * value"): 2.545 errores 500 y cuatro dias sin pedidos de Shopify. El arreglo ya esta en el arbol; esta
+ * guarda nace verde y existe para morder si alguien quita la envoltura o anade una ruta sin ella.
+ */
+
+/** Sello literal que las seis rutas copian desde la spec 003: el hilo comun para localizar el `set`. */
+const MARCA_DEL_SELLO = "communityPricing: pricingStamp.communityPricing";
+
+/** Posicion de la `{` que abre el objeto literal que contiene `index` (recorre hacia atras). */
+function llaveQueAbreElObjeto(source: string, index: number): number {
+  let depth = 0;
+  for (let i = index; i >= 0; i -= 1) {
+    if (source[i] === "}") depth += 1;
+    if (source[i] === "{") {
+      if (depth === 0) return i;
+      depth -= 1;
+    }
+  }
+  return -1;
+}
+
+/** `true` si el objeto literal que contiene la marca del sello va envuelto en `stripUndefined(`. */
+function elSelloVaEnvueltoEnStripUndefined(source: string): boolean {
+  const marca = source.indexOf(MARCA_DEL_SELLO);
+  if (marca < 0) return false;
+  const llave = llaveQueAbreElObjeto(source, marca);
+  if (llave < 0) return false;
+  return /\bstripUndefined\s*\(\s*$/.test(source.slice(0, llave));
+}
+
+const RUTAS_DE_CREACION: Array<{ ruta: string; archivo: string }> = [
+  { ruta: "createManualOrder (pedido manual)", archivo: "functions/src/orders.ts" },
+  { ruta: "upsertShopifyOrder (import Shopify)", archivo: "functions/src/shopify.ts" },
+  { ruta: "shopifyWebhook (webhook Shopify)", archivo: "functions/src/index.ts" },
+  { ruta: "webhook de tienda", archivo: "functions/src/store-webhook.ts" },
+  { ruta: "webhook OnStock", archivo: "functions/src/onstock-webhook.ts" },
+  { ruta: "formulario de contacto (Mercadotienda)", archivo: "functions/src/contact-form.ts" }
+];
+
+describe("T17 · RNF_01: ninguna ruta de creacion escribe `undefined` en `orders`", () => {
+  it.each(RUTAS_DE_CREACION)("$ruta · el sello de comunidad esta en $archivo (positiva de control)", ({ archivo }) => {
+    const fuente = repoSourceWithoutComments(archivo);
+    expect(fuente.includes(MARCA_DEL_SELLO), `${archivo} ya no graba \`${MARCA_DEL_SELLO}\`: la tabla de rutas esta desactualizada`).toBe(true);
+  });
+
+  it.each(RUTAS_DE_CREACION)("$ruta · el documento que se escribe en `orders` va envuelto en `stripUndefined(`", ({ archivo }) => {
+    const fuente = repoSourceWithoutComments(archivo);
+    expect(
+      elSelloVaEnvueltoEnStripUndefined(fuente),
+      `${archivo}: el objeto que lleva \`${MARCA_DEL_SELLO}\` no esta dentro de \`stripUndefined(\`. Para una tienda sin comunidad el sello es {} y el Admin SDK rechaza el \`undefined\` (incidente 2026-09-10: 500 en cada pedido)`
+    ).toBe(true);
+  });
+
+  it("la envoltura se detecta de verdad: un literal desnudo da falso y uno envuelto da verdadero (control del detector)", () => {
+    const desnudo = `transaction.set(ref, {\n  id,\n  ${MARCA_DEL_SELLO},\n  nested: { a: "x" }\n}, { merge: true });`;
+    const envuelto = `transaction.set(ref, stripUndefined({\n  id,\n  ${MARCA_DEL_SELLO},\n  nested: { a: "x" }\n}), { merge: true });`;
+    expect(elSelloVaEnvueltoEnStripUndefined(desnudo)).toBe(false);
+    expect(elSelloVaEnvueltoEnStripUndefined(envuelto)).toBe(true);
+  });
+
+  it("RNF_01 · `functions/src/index.ts` importa o define `stripUndefined` (no basta con mencionarlo en un comentario)", () => {
+    const fuente = repoSourceWithoutComments("functions/src/index.ts");
+    const importado = /import\s*\{[^}]*\bstripUndefined\b[^}]*\}\s*from\s*["']\.\/[\w-]+["']/.test(fuente);
+    const definido = /\bfunction\s+stripUndefined\s*[<(]/.test(fuente);
+    expect(importado || definido, "index.ts no importa `stripUndefined` de un modulo local ni lo define: el webhook vuelve a escribir `undefined`").toBe(true);
+    // Positiva de control: el webhook sigue existiendo en ese archivo.
+    expect(/\bexport\s+const\s+shopifyWebhook\b/.test(fuente)).toBe(true);
+  });
+
+  it("RNF_01 · el sello vacio es legitimo: `community-order-pricing.ts` devuelve `{}` para una tienda sin comunidad", () => {
+    // ESTA es la razon por la que `stripUndefined` no es opcional en ninguna ruta: el resolutor no
+    // devuelve `{ communityId: null, communityPricing: null }` sino `{}`, asi que en las seis rutas
+    // `pricingStamp.communityId` y `pricingStamp.communityPricing` valen `undefined` para cualquier
+    // tienda sin comunidad (la mayoria), y el Admin SDK rechaza `undefined` como valor de campo.
+    const fuente = repoSourceWithoutComments("functions/src/community-order-pricing.ts");
+    expect(/if\s*\(\s*!communityId\s*\)\s*return\s*\{\s*\}\s*;/.test(fuente), "el resolutor ya no devuelve `{}` para una tienda sin comunidad: revisar si las rutas siguen necesitando `stripUndefined`").toBe(true);
+    // Negativa con su positiva: no se ha cambiado por un sello con nulos explicitos.
+    expect(/return\s*\{\s*communityId\s*:\s*null/.test(fuente)).toBe(false);
+  });
+
+  it("deteccion de rutas nuevas: `pricingStamp.communityPricing` aparece exactamente 6 veces en `functions/src/*.ts`", () => {
+    const carpeta = fileURLToPath(new URL("../../functions/src/", import.meta.url));
+    const apariciones = readdirSync(carpeta)
+      .filter((nombre) => nombre.endsWith(".ts"))
+      .map((nombre) => ({ nombre, veces: repoSourceWithoutComments(`functions/src/${nombre}`).split("pricingStamp.communityPricing").length - 1 }))
+      .filter((entrada) => entrada.veces > 0);
+    const total = apariciones.reduce((suma, entrada) => suma + entrada.veces, 0);
+    expect(
+      total,
+      `hay ${total} apariciones de \`pricingStamp.communityPricing\` (${apariciones.map((e) => `${e.nombre}:${e.veces}`).join(", ")}); se esperaban 6. Si anadiste una ruta de creacion, anadela a la tabla de esta guarda (RUTAS_DE_CREACION) para que se compruebe su \`stripUndefined(\``
+    ).toBe(6);
+    expect(apariciones.map((e) => e.nombre).sort()).toEqual(RUTAS_DE_CREACION.map((r) => r.archivo.replace("functions/src/", "")).sort());
   });
 });

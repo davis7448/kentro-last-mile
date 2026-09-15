@@ -3,6 +3,7 @@ import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onRequest, type Request } from "firebase-functions/v2/https";
+import { stripUndefined } from "./wallet-entries";
 
 const mercadotiendaWebhookKey = defineSecret("CF7_MERCADOTIENDA_WEBHOOK_KEY");
 const mercadotiendaSellerId = "seller-1780688354552";
@@ -236,7 +237,11 @@ export const mercadotiendaContactFormWebhook = onRequest(
       if (!sellerSnap.exists) throw new Error("Mercadotienda seller profile not found.");
       const seller = sellerSnap.data() ?? {};
       const trackingCode = await nextTrackingCode(transaction);
-      const orderDoc = {
+      // stripUndefined no es opcional: para una tienda sin comunidad el sello es `{}`, asi que
+      // `communityId` y `communityPricing` valen `undefined` y el Admin SDK rechaza el documento
+      // entero ("Cannot use undefined as a Firestore value"). El webhook de Shopify fallo por esto
+      // del 10 al 15 de septiembre de 2026 (spec 005, T17).
+      const orderDoc = stripUndefined({
         id: orderRef.id,
         trackingCode,
         // Precio de comunidad congelado al crear (RF_21).
@@ -264,7 +269,7 @@ export const mercadotiendaContactFormWebhook = onRequest(
         webhookSampleId: sampleRef.id,
         createdAt: now,
         updatedAt: now
-      };
+      });
       transaction.create(orderRef, orderDoc);
       transaction.set(db.collection("auditEvents").doc(`audit-${sampleRef.id}`), {
         id: `audit-${sampleRef.id}`,
