@@ -1,7 +1,7 @@
 # Tareas 005: La tienda que ademas lidera puede entrar y ver sus dos pantallas
 
 - **Spec:** `specs/005_tienda_lider_ve_su_pantalla.md` · **Plan:** `specs/005_plan.md`
-- **14 tareas**, numeracion propia (T14 se abrio durante la verificacion en produccion). Cada `it()` empieza por el identificador del requisito.
+- **15 tareas**, numeracion propia (T14 se abrio en la verificacion en produccion; T15 en la validacion humana). Cada `it()` empieza por el identificador del requisito.
 - **Segunda version**, tras `/sdd-analyze` (14 hallazgos): T1 gana su tercer desenlace, T4 el estado de
   carga y el `null` real de `emptiness`, T5 pasa a verificarse por comportamiento sobre un modulo puro,
   T9 se hace cargo del enlace de invitacion, T11 reclama RNF_04 y T13 se hace cargo del despliegue de
@@ -223,6 +223,18 @@
     se equivocaba. Guarda de fuente sobre el archivo de indices. El despliegue de indices lo firma el humano
     (`firebase deploy --only firestore:indexes`; comprobado que local == prod, 39 y 39: no borra ninguno) y hay que
     esperar a que este `READY` antes de repetir la captura.
+
+- [x] **T15: El selector de papel sigue el sistema de diseno** (abierta por la validacion humana, DoD 7, 2026-09-15)
+  * Requisitos: RNF_04, RF_03
+  * Archivos: `src/components/operations-app.tsx`, `src/lib/session-hats.test.ts`
+  * Accion: la pastilla activa del selector Tienda/Comunidad pasa a `bg-acid text-deep` y la inactiva a
+    `text-ink-60 hover:text-fg`, como el riel, la barra inferior y las pestanas de pedidos. `aria-pressed` y los 44 px
+    se conservan.
+  * Verificacion: el responsable lo vio en produccion y lo senalo. En T7 se eligio a proposito la variante sobria
+    (activo en `bg-field`) para no juntar dos acidos con el indicador "En vivo"; era la decision equivocada: el
+    sistema de diseno dice que *el riel separa trabajos*, Tienda/Comunidad separa dos trabajos y va como el riel, y
+    "En vivo" es una insignia tenue, no un control. Guarda de fuente: el JSX de `Header` marca el activo con
+    `bg-acid` y `text-deep` (nunca acido con texto claro: 1,7:1) y el inactivo sin acido.
 
 ---
 

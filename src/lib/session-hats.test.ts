@@ -759,3 +759,70 @@ describe("T10 · RNF_03: cambiar de sombrero no toca la suscripcion", () => {
     expect(contexto).not.toMatch(/hatChoice|activeHat/);
   });
 });
+
+describe("T15 · RNF_04: el selector de papel sigue el sistema de diseno", () => {
+  /** Solo el grupo "Papel activo": desde su `aria-label` hasta el cierre del `div` que lo envuelve. */
+  const GRUPO_PAPEL = (() => {
+    const inicio = JSX_HEADER.indexOf('aria-label="Papel activo"');
+    if (inicio === -1) return "";
+    const fin = JSX_HEADER.indexOf("</div>", inicio);
+    return fin === -1 ? "" : JSX_HEADER.slice(inicio, fin);
+  })();
+
+  /** Las dos ramas de cada pastilla: `hat === "x" ? "ACTIVA" : "INACTIVA"`. */
+  const PASTILLAS = Array.from(
+    GRUPO_PAPEL.matchAll(/hat === "(operational|community)"\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/g)
+  ).map((m) => ({ papel: m[1], activa: m[2], inactiva: m[3] }));
+
+  /** Cada `<button ...>` del grupo con sus atributos, cortado en su etiqueta (el `=>` del
+   *  `onClick` tiene un `>` dentro, asi que no vale cortar en el primer `>`). */
+  const BOTONES = GRUPO_PAPEL.match(/<button[\s\S]*?>\s*(?:Tienda|Comunidad)\b/g) ?? [];
+
+  it("control: el grupo existe y tiene exactamente dos pastillas con rama activa e inactiva", () => {
+    expect(GRUPO_PAPEL, "no se pudo recortar el grupo 'Papel activo'").not.toBe("");
+    expect(PASTILLAS.map((p) => p.papel).sort()).toEqual(["community", "operational"]);
+    // Control positivo del vocabulario: el riel ya marca lo activo asi (ViewTabs, pestanas de pedidos).
+    expect(FUENTE_PANTALLA, "el par `bg-acid text-deep` ya existe en la navegacion").toContain("bg-acid text-deep");
+  });
+
+  it("RNF_04: la pastilla ACTIVA va en acido con tinta oscura, como el riel (`bg-acid` + `text-deep`)", () => {
+    expect(PASTILLAS.length).toBe(2);
+    for (const { papel, activa } of PASTILLAS) {
+      const llevaAcido = /\bbg-acid\b/.test(activa);
+      expect(llevaAcido, `'${papel}' activa sin \`bg-acid\` (hoy: "${activa}")`).toBe(true);
+      const llevaTintaOscura = /\btext-deep\b/.test(activa);
+      expect(llevaTintaOscura, `'${papel}' activa sin \`text-deep\` (hoy: "${activa}")`).toBe(true);
+    }
+  });
+
+  it("RNF_04 (regla 1 de color): nunca `bg-acid` con texto claro en ninguna rama", () => {
+    expect(PASTILLAS.length).toBe(2);
+    for (const { papel, activa, inactiva } of PASTILLAS) {
+      for (const [nombre, rama] of [["activa", activa], ["inactiva", inactiva]] as const) {
+        const acidoConClaro = /\bbg-acid\b/.test(rama) && /\btext-(fg|white)\b/.test(rama);
+        expect(acidoConClaro, `'${papel}' ${nombre}: acido con texto claro da 1,7:1 ("${rama}")`).toBe(false);
+      }
+    }
+  });
+
+  it("RNF_04: la pastilla INACTIVA va en `text-ink-60` y sin acido", () => {
+    expect(PASTILLAS.length).toBe(2);
+    for (const { papel, inactiva } of PASTILLAS) {
+      const tintaApagada = /\btext-ink-60\b/.test(inactiva);
+      expect(tintaApagada, `'${papel}' inactiva sin \`text-ink-60\` ("${inactiva}")`).toBe(true);
+      const llevaAcido = /\bbg-acid\b/.test(inactiva);
+      expect(llevaAcido, `'${papel}' inactiva con acido: el acento marca UNA sola cosa ("${inactiva}")`).toBe(false);
+    }
+  });
+
+  it("RF_03 (no regresion): cada pastilla conserva `aria-pressed`, `min-h-11` y `rounded-full`", () => {
+    // `aria-pressed` en los dos controles ya lo exige T7 ("RF_03: el control es accesible..."); aqui
+    // se ata POR BOTON junto con la altura tactil (44 px) y la forma de pildora, que T15 podria pisar.
+    expect(BOTONES.length, "el grupo debe tener dos botones").toBe(2);
+    for (const boton of BOTONES) {
+      expect(/aria-pressed=/.test(boton), "pastilla sin `aria-pressed`").toBe(true);
+      expect(/\bmin-h-11\b/.test(boton), "pastilla sin `min-h-11` (44 px)").toBe(true);
+      expect(/\brounded-full\b/.test(boton), "pastilla sin `rounded-full`").toBe(true);
+    }
+  });
+});

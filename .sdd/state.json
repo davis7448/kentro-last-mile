@@ -217,6 +217,19 @@
       "testWritten": true,
       "done": true,
       "note": "Abierta en T11/T13 (2026-09-15): getCommunityStats revienta con FAILED_PRECONDITION porque sum(amountCop) sobre walletEntries con rango de createdAt exige el indice compuesto (ownerId, ownerType, createdAt, amountCop), ausente en el repo y en produccion. Defecto latente de la spec 001: nadie habia llegado a esta pantalla. Le pasaria igual a Brayan. El plan 005 decia 'sin indices nuevos' y se equivocaba. | CODIGO LISTO 2026-09-15: indice anadido (walletEntries: ownerType, ownerId, createdAt, amountCop ASC), diff puramente aditivo (39 -> 40), local == prod antes del cambio (39/39). PENDIENTE HUMANO: 'firebase deploy --only firestore:indexes' y esperar READY; despues repetir setup -> capture -> cleanup para la evidencia de la pantalla de comunidad. | CERRADA 2026-09-15: indice desplegado y READY (prod: 40 indices). La pantalla de comunidad se pinta entera (movil-pantalla-comunidad.png: metricas, cashback, entrega, desglose por tienda). LIMITACION del guion: la captura de escritorio se toma 1,5 s tras el clic y pillo el 'Cargando...'; la evidencia valida es la movil, tomada despues."
+    },
+    "T15": {
+      "requirements": [
+        "RNF_04",
+        "RF_03"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/session-hats.test.ts"
+      ],
+      "testWritten": true,
+      "done": true,
+      "note": "Abierta por la validacion humana (DoD 7, 2026-09-15): el selector Tienda/Comunidad no sigue el sistema de diseno. Lo activo de una navegacion va en bg-acid text-deep (riel, barra inferior, pestanas de pedidos); el selector marcaba el activo con bg-field. Decision equivocada del orquestador en T7 por no juntar dos acidos con 'En vivo', que es insignia y no control. | HECHO 2026-09-15: activa bg-acid text-deep, inactiva text-ink-60; aria-pressed/min-h-11/rounded-full intactos; comentario reescrito. 52 pruebas de sombreros, suite 1196, tsc y lint limpios. Pendiente humano: volver a desplegar hosting."
     }
   },
   "testCommand": "npm test",
@@ -250,7 +263,8 @@
       "rulesDeployed": "2026-09-15",
       "indexesDeployed": "2026-09-15",
       "hostingDeployed": "2026-09-15",
-      "verificacionHumana": "2026-09-15: el responsable confirma que Brayan E-master entra y ve su panel (DoD 6)."
+      "verificacionHumana": "2026-09-15: el responsable confirma que Brayan E-master entra y ve su panel (DoD 6).",
+      "pendiente": "Volver a desplegar hosting tras T15 (ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only hosting)."
     }
   },
   "archivedTasks": {

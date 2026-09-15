@@ -1449,9 +1449,14 @@ function Header({
            *  que hay dos pantallas entre las que elegir: quien no elige no ve control (RF_11).
            *  Cambiar de papel es `setState` y nada mas — ni recarga, ni navegacion, ni volver a
            *  entrar (RF_04): el sombrero activo llega por prop y se devuelve por `onHatChange`.
-           *  Sin acido a proposito: convive con el indicador "En vivo", que ya lo usa, y el acento
-           *  esta reservado a UNA cosa por pantalla. El estado activo va en `aria-pressed`, no solo
-           *  en el fondo, porque son controles de estado y no enlaces. */}
+           *  Lo activo de una navegacion va en acido con tinta oscura, igual que el riel, la barra
+           *  inferior y las pestanas de pedidos (sistema de diseno §5): el riel separa trabajos, y
+           *  Tienda/Comunidad separa dos trabajos, asi que sigue la misma regla. "En vivo" no
+           *  compite: es una insignia tenue (`bg-acid/10`), no un control. La version sobria
+           *  anterior (`bg-field text-fg`) la senalo el responsable en produccion (DoD 7,
+           *  2026-09-15). Regla de color 1: sobre acido el texto va en `text-deep`, porque el
+           *  blanco da 1,7:1. El estado activo va tambien en `aria-pressed`, no solo en el fondo,
+           *  porque son controles de estado y no enlaces. */}
           {canPickHat && (
             <div className="flex shrink-0 items-center gap-1 rounded-full bg-field/60 p-1" role="group" aria-label="Papel activo">
               <button
@@ -1459,7 +1464,7 @@ function Header({
                 title="Pantalla de la tienda"
                 aria-pressed={hat === "operational"}
                 onClick={() => onHatChange("operational")}
-                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "operational" ? "bg-field text-fg" : "text-ink-60 hover:text-fg"}`}
+                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "operational" ? "bg-acid text-deep" : "text-ink-60 hover:text-fg"}`}
               >
                 Tienda
               </button>
@@ -1468,7 +1473,7 @@ function Header({
                 title="Pantalla de la comunidad"
                 aria-pressed={hat === "community"}
                 onClick={() => onHatChange("community")}
-                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "community" ? "bg-field text-fg" : "text-ink-60 hover:text-fg"}`}
+                className={`focus-ring min-h-11 rounded-full px-3 text-xs font-semibold transition ${hat === "community" ? "bg-acid text-deep" : "text-ink-60 hover:text-fg"}`}
               >
                 Comunidad
               </button>
