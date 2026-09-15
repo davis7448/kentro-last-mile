@@ -1,0 +1,335 @@
+<title>Cierre del ciclo 004 · 005</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f5f7f1; --bg-2:#ecefe6; --ink:#171b15; --ink-2:#4d554a; --ink-3:#7a8276;
+  --line:#d6dbcf; --line-2:#c3c9bb;
+  --accent:#3d6a1e; --accent-ink:#f5f7f1; --accent-soft:#e3edd6;
+  --ok:#2c6e47; --ok-bg:#dcefe2; --warn:#8a5a10; --warn-bg:#f5e7c4; --bad:#9c2f2f; --bad-bg:#f4d9d6; --info:#2f5a86; --info-bg:#dbe7f3;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f120e; --bg-2:#161a14; --ink:#eaeee3; --ink-2:#aab3a3; --ink-3:#7d867a;
+    --line:#272d24; --line-2:#343b30;
+    --accent:#c6f24e; --accent-ink:#0f120e; --accent-soft:#1f2916;
+    --ok:#8bd6a4; --ok-bg:#15301f; --warn:#e6bd63; --warn-bg:#3a2c0d; --bad:#e6837d; --bad-bg:#3b1a18; --info:#8fb8e6; --info-bg:#132639;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f120e; --bg-2:#161a14; --ink:#eaeee3; --ink-2:#aab3a3; --ink-3:#7d867a;
+  --line:#272d24; --line-2:#343b30;
+  --accent:#c6f24e; --accent-ink:#0f120e; --accent-soft:#1f2916;
+  --ok:#8bd6a4; --ok-bg:#15301f; --warn:#e6bd63; --warn-bg:#3a2c0d; --bad:#e6837d; --bad-bg:#3b1a18; --info:#8fb8e6; --info-bg:#132639;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.page{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;max-width:1240px;margin:0 auto;padding:40px 32px 96px}
+@media (max-width:900px){.page{grid-template-columns:minmax(0,1fr);gap:24px;padding:24px 18px 72px}}
+nav.toc{position:sticky;top:24px;align-self:start;font-size:13px}
+@media (max-width:900px){nav.toc{position:static;border-bottom:1px solid var(--line);padding-bottom:16px}}
+nav.toc .eyebrow{margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+@media (max-width:900px){nav.toc ol{flex-direction:row;flex-wrap:wrap;gap:6px 14px}}
+nav.toc a{color:var(--ink-2);text-decoration:none}
+nav.toc a:hover{color:var(--ink)}
+main{min-width:0}
+.eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+header.head{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:36px}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(34px,5vw,54px);line-height:1.05;letter-spacing:-.01em;margin:10px 0 14px;text-wrap:balance}
+.lede{max-width:68ch;color:var(--ink-2);font-size:17px;margin:0 0 20px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 28px;font-size:13.5px;color:var(--ink-2)}
+.meta b{display:block;color:var(--ink);font-weight:600}
+.meta code{font-size:12.5px}
+h2{font-family:var(--display);font-weight:500;font-size:30px;line-height:1.15;letter-spacing:-.01em;margin:64px 0 8px;text-wrap:balance}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--ink-3);margin-right:10px;vertical-align:middle}
+h3{font-size:17px;font-weight:600;margin:32px 0 8px}
+p{max-width:68ch;margin:0 0 14px}
+ul,ol{max-width:68ch;padding-left:22px;margin:0 0 14px}
+li{margin:0 0 6px}
+li p{margin:0}
+code{font-family:var(--mono);font-size:.86em;background:var(--bg-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:26px 0 30px}
+.kpi{background:var(--bg-2);padding:16px 18px}
+.kpi .v{font-family:var(--display);font-size:34px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink)}
+.kpi .l{font-size:12.5px;color:var(--ink-2);margin-top:8px;line-height:1.35}
+.kpi.accent .v{color:var(--accent)}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.6}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-bad{background:var(--bad-bg);color:var(--bad)}
+.b-info{background:var(--info-bg);color:var(--info)}
+.b-neutral{background:var(--bg-2);color:var(--ink-2);border:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-size:13px;color:var(--ink-2);margin:8px 0 18px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;margin:0 0 22px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:10px 12px;background:var(--bg-2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.req{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--ink)}
+td.test{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);line-height:1.5;min-width:260px}
+td.test i{font-style:normal;color:var(--ink-3)}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+td .why{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 6px 6px 0;margin:18px 0 22px;max-width:70ch}
+.callout p:last-child{margin:0}
+.finding{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;padding:18px 0;border-top:1px solid var(--line);max-width:78ch}
+.finding:last-of-type{border-bottom:1px solid var(--line)}
+.finding .k{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-top:4px}
+.finding h4{margin:0 0 6px;font-size:15.5px;font-weight:600}
+.finding p{margin:0 0 6px;font-size:14.5px;color:var(--ink-2)}
+.finding .where{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.debt{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0 0 12px;max-width:78ch;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:start}
+.debt h4{margin:0;font-size:15px;font-weight:600}
+.debt .where{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);grid-column:1/-1}
+.debt p{margin:0;font-size:14px;color:var(--ink-2);grid-column:1/-1}
+.specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:18px 0 8px}
+.spec{border:1px solid var(--line);border-radius:8px;padding:16px 18px;background:var(--bg-2)}
+.spec .id{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:500}
+.spec h4{font-family:var(--display);font-weight:500;font-size:19px;margin:6px 0 8px;line-height:1.2}
+.spec p{font-size:13.5px;color:var(--ink-2);margin:0 0 8px}
+.spec .path{font-family:var(--mono);font-size:11px;color:var(--ink-3);word-break:break-all}
+.timeline{list-style:none;padding:0;margin:0 0 16px;max-width:70ch;font-size:14px}
+.timeline li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.timeline .t{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3);max-width:70ch}
+@media (prefers-reduced-motion: no-preference){a{transition:color .15s}}
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Indice">
+  <div class="eyebrow">Indice</div>
+  <ol>
+    <li><a href="#resumen">Resumen</a></li>
+    <li><a href="#veredicto">1 · Veredicto por requisito</a></li>
+    <li><a href="#smoke">2 · Metricas del smoke</a></li>
+    <li><a href="#degradado">3 · Que se degrado</a></li>
+    <li><a href="#hallazgos">4 · Lo que el ciclo enseno</a></li>
+    <li><a href="#deuda">5 · Deuda tecnica</a></li>
+    <li><a href="#propuestas">6 · Siguiente ciclo</a></li>
+    <li><a href="#cierre">Cierre y siguiente paso</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="head">
+  <div class="eyebrow">Kentro · Informe de fase <code>report</code> · SDD</div>
+  <h1>Cierre del ciclo 004 · 005</h1>
+  <p class="lede">La base de una comunidad es lo que Kentro cobra de verdad (004) y la tienda que ademas lidera puede entrar y ver sus dos pantallas (005). Las dos estan en produccion desde el 2026-09-15. Este informe dice, requisito por requisito, que esta demostrado, que solo esta probado, que se degrado y que entra al siguiente ciclo.</p>
+  <div class="meta">
+    <div><b>Rama</b><code>feat/pedido-manual-multilinea</code> · 33 commits sobre <code>main</code> · sin PR abierto</div>
+    <div><b>Commits del ciclo</b><code>5709c91</code> 004 · <code>b6198dc</code> 005 · <code>745eac4</code> T15 · <code>d6b12f3</code> docs · <code>fb5a6e4</code> T16</div>
+    <div><b>Produccion</b>functions 004 el 13-09; reglas, indice y hosting (x3) de la 005 el 15-09</div>
+    <div><b>Validacion humana</b>Brayan E-master entra y ve su panel (DoD 6 de la 005), 15-09</div>
+  </div>
+</header>
+
+<section id="resumen">
+  <div class="kpis">
+    <div class="kpi accent"><div class="v">34</div><div class="l">requisitos en las dos specs (27 RF + 7 RNF)</div></div>
+    <div class="kpi"><div class="v">18</div><div class="l">cumplidos con evidencia funcional en <code>.sdd/evidence/</code></div></div>
+    <div class="kpi"><div class="v">15</div><div class="l">probados en unidad, sin evidencia funcional propia</div></div>
+    <div class="kpi"><div class="v">1</div><div class="l">declarado sin prueba en produccion (el acreedor, RF_12 de la 005)</div></div>
+    <div class="kpi"><div class="v">1201</div><div class="l">pruebas en verde, 31 archivos, 12,0 s (re-ejecutadas para este informe)</div></div>
+    <div class="kpi"><div class="v">0</div><div class="l">errores de lint y tipos · 0 dependencias nuevas · 0 <code>static{</code> en los chunks</div></div>
+  </div>
+  <p>Ningun requisito esta en rojo. La distincion que importa es entre <em>cumplido</em> (hay una prueba y ademas una traza real: un asiento de dinero, una respuesta 200/403 de produccion, una captura o la firma del responsable) y <em>probado</em> (la prueba pasa, pero nadie lo ha visto ocurrir de verdad). Quince requisitos estan en el segundo grupo, y la mayoria son de pantalla del administrador o de estados de error que no se pueden provocar en produccion sin romper algo.</p>
+</section>
+
+<section id="veredicto">
+  <h2><span class="n">1</span>Veredicto por requisito</h2>
+  <div class="legend">
+    <span><span class="badge b-ok">Cumplido</span> prueba + evidencia funcional</span>
+    <span><span class="badge b-warn">Probado</span> prueba en verde, sin evidencia funcional</span>
+    <span><span class="badge b-info">Declarado</span> sin evidencia en produccion, por decision de la spec</span>
+  </div>
+
+  <h3>Spec 004 · La base de una comunidad es lo que Kentro cobra de verdad</h3>
+  <p>Evidencia funcional: <code>.sdd/evidence/004/smoke-close.json</code>, <code>smoke-check.json</code> y <code>smoke-compare.json</code> (produccion, 2026-09-13). Pruebas en <code>src/lib/seller-charges.test.ts</code> (SC), <code>community-pricing.test.ts</code> (CP), <code>community-view.test.ts</code> (CV) y <code>community-cashback-entries.test.ts</code> (CCE).</p>
+  <div class="tw"><table>
+    <thead><tr><th>Req</th><th>Que exige</th><th>Veredicto</th><th>Prueba que lo cubre</th><th>Evidencia funcional</th></tr></thead>
+    <tbody>
+    <tr><td class="req">RF_01</td><td>La base es lo que se cobraria sin comunidad (fallido 12.000)</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SC:626 <i>SELLER_FAILED_FEE_FIXED_COP es 12.000</i><br>SC:736 <i>ajustes de produccion SIN zona: 12.000 / 12.000 / 2.000</i></td><td><code>smoke-check.json</code>: <code>baseFailedFeeCop: 12000</code>, asiento <code>failed_fee -12000</code></td></tr>
+    <tr><td class="req">RF_02</td><td>Una sola copia de la regla, servidor y app</td><td><span class="badge b-warn">Probado</span></td><td class="test">SC:782-797 <i>resolveTariffs de wallet-entries ES la de seller-charges</i><br>SC:812-893, CV:3267 <i>guardas de "sin copia propia"</i></td><td>Estructural: la guarda es la evidencia. La doble copia del fijo del fallido quedo eliminada (T3).</td></tr>
+    <tr><td class="req">RF_03</td><td>Al crear se congela el precio del lider, no la base</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SC:1009-1015 <i>freezeOrderPricing recibe communityBase</i><br>SC:1462-1508 <i>DANDA no entra en comunidad</i></td><td><code>smoke-close.json</code>: <code>communityPricing.pricingVersion: 2</code>, <code>frozenAt</code></td></tr>
+    <tr><td class="req">RF_04</td><td>Nunca menos que una tienda sin comunidad; sin precio propio, cashback cero</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">CP (T4/T5) <i>communityChargeAtClose: base que sube y baja, legado 9.000 cobra 12.000</i></td><td><code>smoke-close.json</code>: cobro -12.000, sin asiento de cashback</td></tr>
+    <tr><td class="req">RF_05</td><td>Rechazar un precio bajo la base sin zona, nombrandola</td><td><span class="badge b-warn">Probado</span></td><td class="test">SC:971-987 <i>scheduleCommunityPrice rechaza con el reason de la funcion pura</i></td><td>Ningun lider ha fijado precio; no hay rechazo real registrado.</td></tr>
+    <tr><td class="req">RF_06</td><td>Sin cashback por la diferencia ajustes-base real</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">CCE (T5) <i>fallido de comunidad: cobro 12.000, sin cashback</i></td><td><code>smoke-check.json</code>: dos asientos, ninguno <code>community_cashback</code></td></tr>
+    <tr><td class="req">RF_07</td><td>El panel muestra lo que se cobraria hoy</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3109 <i>E-master: los tres a la base, fallido 12.000 y no 9.000</i><br>CV:3149, CV:3354</td><td>Sin captura del panel del administrador en <code>evidence/004</code>.</td></tr>
+    <tr><td class="req">RF_08</td><td>Rotulo "base" con margen $0 y motivo</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3139, 3188, 3197, 3212, 3221, 3340</td><td>Idem.</td></tr>
+    <tr><td class="req">RF_09</td><td>Rotulo "precio del lider" con margen</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3123 <i>manejo propio de 2.300 =&gt; margen de 300</i>, CV:3320-3328</td><td>Idem.</td></tr>
+    <tr><td class="req">RF_10</td><td>"Tu tarifa" muestra lo que se cobra sin zona</td><td><span class="badge b-warn">Probado</span></td><td class="test">SC:993-998 <i>getMyStoreTariff llama a communityBase</i>, CV:3308</td><td>Sin captura de la tarjeta.</td></tr>
+    <tr><td class="req">RF_11</td><td>Al cerrar: base del momento, mayor de los dos, cashback la diferencia</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">CP (T4), CCE (T5), <code>order-corrections-plan.test.ts</code> <i>correccion recalcula la base</i></td><td><code>smoke-close.json</code>: cierre real en produccion con transportista desechable</td></tr>
+    <tr><td class="req">RF_12</td><td>Aviso de zona donde se muestre precio o margen</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3230, 3304, 3308, 3314 <i>ZONE_BASE_NOTICE</i></td><td>Sin captura.</td></tr>
+    <tr><td class="req">RF_13</td><td>Al subir la base en ajustes, elevar al piso con aviso e historial</td><td><span class="badge b-warn">Probado</span></td><td class="test">CP (T7) <i>planFloorRaise, floorRaisedAt.&lt;campo&gt;, guarda de settings/global</i></td><td>El disparador esta vivo desde el 13-09 y nunca ha tenido motivo para dispararse (0 precios propios).</td></tr>
+    <tr><td class="req">RF_14</td><td>Pasada unica al desplegar, ejecutable en seco</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">CP (T8) <i>idempotencia: segunda pasada vacia</i></td><td>Pasada en seco contra produccion el 11-09: 1 comunidad, 0 cambios (nota T8 en <code>state.json</code>)</td></tr>
+    <tr><td class="req">RF_15</td><td>Subida programada aparte, sin sumarse</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3166, CV:3333</td><td>Sin captura.</td></tr>
+    <tr><td class="req">RNF_01</td><td>Ninguna tienda sin comunidad cambia de cobro, centavo a centavo</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SC:166-534 <i>caracterizacion (46 casos, incluida DANDA)</i></td><td><code>smoke-compare.json</code>: posicion de plataforma identica en las 15 cifras, <code>differences: []</code>, 10.986 asientos antes y despues</td></tr>
+    <tr><td class="req">RNF_02</td><td>El administrador no descarga nada nuevo</td><td><span class="badge b-warn">Probado</span></td><td class="test">CV:3238, CV:3254 <i>la fila no depende de zonas ni de pedidos</i></td><td>No se midio la descarga del admin (no cambio ningun objetivo).</td></tr>
+    <tr><td class="req">RNF_03</td><td>La regla es probable sin red</td><td><span class="badge b-warn">Probado</span></td><td class="test">SC:804 <i>seller-charges.ts es puro</i></td><td>Estructural.</td></tr>
+    </tbody></table></div>
+
+  <h3>Spec 005 · La tienda que ademas lidera puede entrar y ver sus dos pantallas</h3>
+  <p>Evidencia funcional: <code>.sdd/evidence/005/verify-reproduce.json</code> (13-09, antes del arreglo), <code>verify-check.json</code> (15-09, 5/5), seis capturas en <code>capturas/</code> y la validacion del responsable. Pruebas en <code>load-status.test.ts</code> (LS), <code>spec-005-guards.test.ts</code> (G), <code>session-hats.test.ts</code> (SH) y <code>state-store-targets.test.ts</code> (ST).</p>
+  <div class="tw"><table>
+    <thead><tr><th>Req</th><th>Que exige</th><th>Veredicto</th><th>Prueba que lo cubre</th><th>Evidencia funcional</th></tr></thead>
+    <tbody>
+    <tr><td class="req">RF_01</td><td>La tienda-lider ve su tienda completa</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">LS:548 <i>con las dos mitades bien salen todas</i>, ST:434 <i>la tienda propia NO va envuelta</i>, G:1276</td><td><code>verify-check</code> tienda_lider: tienda propia 200 · <code>escritorio-pantalla-tienda.png</code> · Brayan E-master (DoD 6)</td></tr>
+    <tr><td class="req">RF_02</td><td>Se ve pertenezca o no a la comunidad que lidera</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">LS:597 <i>la propia que ademas pertenece sale UNA vez</i>, LS:657</td><td>Produccion cubre el caso "fuera de toda comunidad" (la cuenta desechable y Brayan); el caso "dentro" solo en unidad</td></tr>
+    <tr><td class="req">RF_03</td><td>Selector visible en todo momento, tambien con la tienda caida</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SH:571 <i>DoD 2: la cabecera USA canPickHat y onHatChange en el JSX</i>, SH:593, SH:818</td><td><code>escritorio-selector-de-papel.png</code>, <code>movil-selector-de-papel.png</code> <span class="why">Capturas anteriores a T15: muestran el selector con el estilo viejo. El estilo final lo valido el responsable en produccion, sin captura.</span></td></tr>
+    <tr><td class="req">RF_04</td><td>Cambiar de papel sin volver a entrar</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SH:608 <i>cambiar de papel no recarga la pagina</i></td><td>Las dos pantallas se capturaron en la misma sesion del guion (<code>capturedAt 15:38:07</code>)</td></tr>
+    <tr><td class="req">RF_05</td><td>El lider ve las tiendas de SU comunidad, ninguna ajena</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1244, G:1276, G:1551-1593 <i>la tabla no cuelga de no_orders_in_period</i></td><td><code>verify-check</code>: tienda_lider y lider_puro leen 1 tienda; tienda_ajena 403 <span class="why">La tabla con ceros (T16) no tiene captura: <code>movil-pantalla-comunidad.png</code> es anterior y aun dice "no movieron pedidos" sin tabla. Validada por el responsable.</span></td></tr>
+    <tr><td class="req">RF_06</td><td>Si falla la comunidad, la tienda sigue</td><td><span class="badge b-warn">Probado</span></td><td class="test">LS:560 <i>con la mitad de comunidad caida la tienda propia SIGUE AHI</i>, ST:392, ST:416</td><td>No provocable en produccion tras el arreglo. Antes del arreglo, <code>verify-reproduce</code> muestra el sintoma inverso (403 que tumbaba todo).</td></tr>
+    <tr><td class="req">RF_07</td><td>Fallo de carga = aviso + reintentar, nunca "perfil pendiente"</td><td><span class="badge b-warn">Probado</span></td><td class="test">LS:99 <i>failed da load_failed, nunca perfil pendiente</i>, G:626-753 <i>canal onError, reintento sin recargar</i></td><td>No provocable sin cortar la red del guion.</td></tr>
+    <tr><td class="req">RF_08</td><td>"Perfil pendiente" solo tras carga buena, con dos textos</td><td><span class="badge b-warn">Probado</span></td><td class="test">LS:104-200 (tabla completa), G:718, G:733</td><td>Ninguna cuenta real esta en esos dos casos.</td></tr>
+    <tr><td class="req">RF_09</td><td>Abre primero la tienda</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SH:233 <i>para una tienda que ademas lidera abre el OPERATIVO</i>, SH:644</td><td>El guion captura la tienda antes de tocar el selector; Brayan entra en su tienda</td></tr>
+    <tr><td class="req">RF_10</td><td>Lista no obtenida = aviso + reintentar</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">LS:318 <i>callable caida da load_failed</i>, G:923</td><td>Evidencia accidental: en T11 la pantalla dijo "No se pudieron cargar tus cifras — INTERNAL" cuando faltaba el indice (T14). El aviso funciono antes de que existiera el motivo previsto.</td></tr>
+    <tr><td class="req">RF_11</td><td>Comunidad vacia no es error ni ofrece reintentar</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">LS:325-344, G:911 <i>la conflacion !stats || desaparece</i>, G:945</td><td><code>verify-check</code> comunidad_vacia: 200 con 0 documentos <span class="why">Del lado del servidor. La pantalla vacia no tiene captura.</span></td></tr>
+    <tr><td class="req">RF_12</td><td>El acreedor sabe que ya no gobierna y sigue viendo su deuda</td><td><span class="badge b-info">Declarado</span></td><td class="test">LS:304, LS:362-413 <i>acreedor da not_governing siempre</i>, SH:476-523, G:893, G:933, CV:926-998 <i>communityCashbackOwedCop</i></td><td>DoD 4: fabricar un acreedor exige cashback real. Sin evidencia en produccion, por decision de la spec.</td></tr>
+    <tr><td class="req">RNF_01</td><td>Las cuentas sin vinculo no cambian nada</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SH:102-126 <i>seis papeles sin selector</i>, SH:702, ST:519-555</td><td><code>verify-check</code> tienda_sin_comunidad: 200, sin consulta de comunidad</td></tr>
+    <tr><td class="req">RNF_02</td><td>El servidor decide por lo que la cuenta ES</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:380 <i>allow write sigue siendo solo del admin</i>, G:1287</td><td><code>verify-check</code> tienda_ajena: 403 PERMISSION_DENIED tras el cambio de regla</td></tr>
+    <tr><td class="req">RNF_03</td><td>Descarga acotada a la 003; el sombrero no entra en la suscripcion</td><td><span class="badge b-warn">Probado</span></td><td class="test">ST:118-128, ST:565, SH:740-753</td><td>No se midio la descarga real del lider-tienda en produccion.</td></tr>
+    <tr><td class="req">RNF_04</td><td>Cabe en 390 px y sigue el sistema de diseno</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">SH:625 <i>(forma)</i>, SH:788-808 <i>activa bg-acid text-deep, inactiva sin acido</i>, G:1354</td><td>Capturas a 390 px (estilo pre-T15) + validacion del responsable del estilo final (T15)</td></tr>
+    </tbody></table></div>
+
+  <div class="callout">
+    <p><b>Lo que falta para que los quince "probados" pasen a "cumplidos"</b>: cuatro capturas (panel de comunidades del admin, "Tu tarifa", la comunidad vacia, el selector y la tabla despues de T15/T16) y un entorno donde provocar fallos de carga sin tocar produccion. Lo primero cuesta una tarde; lo segundo es la spec 002.</p>
+  </div>
+</section>
+
+<section id="smoke">
+  <h2><span class="n">2</span>Metricas del smoke</h2>
+  <p>Ninguna de las dos specs fija requisitos de tiempo, asi que no hay contra que comparar: se registran los tiempos medidos para que el siguiente ciclo tenga linea base.</p>
+
+  <h3>004 · Pedido real cerrado en produccion (2026-09-13)</h3>
+  <ul class="timeline">
+    <li><span class="t">00:40:20</span><span><code>count</code>: linea base de la posicion (15 cifras) y del saldo de la tienda "Prueba"; 0 pedidos de comunidad abiertos</span></li>
+    <li><span class="t">00:48:48</span><span><code>create</code>: pedido <code>smoke004-order-…</code> con transportista desechable; sello <code>pricingVersion 2</code></span></li>
+    <li><span class="t">00:49:01</span><span><code>close</code> como fallido cobrable: <b>13 s</b> desde la creacion, incluida la callable de cierre</span></li>
+    <li><span class="t">00:49:11</span><span><code>check</code>: dos asientos, ninguno en un corte; <code>problems: []</code></span></li>
+    <li><span class="t">00:49:20</span><span><code>cleanup</code>: respaldo y borrado del pedido, sus asientos, su auditoria y el transportista</span></li>
+    <li><span class="t">00:49:33</span><span><code>compare</code>: <code>differences: []</code>. 45 s de punta a punta, 0 errores, 0 peticiones fallidas</span></li>
+  </ul>
+  <div class="tw"><table>
+    <thead><tr><th>Cifra</th><th>Antes</th><th>Despues</th></tr></thead>
+    <tbody>
+    <tr><td>Asientos de wallet</td><td class="num">10.986</td><td class="num">10.986</td></tr>
+    <tr><td>Cortes</td><td class="num">62</td><td class="num">62</td></tr>
+    <tr><td>Caja de la plataforma</td><td class="num">$30.993.781</td><td class="num">$30.993.781</td></tr>
+    <tr><td>Neto de la plataforma</td><td class="num">$7.039.980</td><td class="num">$7.039.980</td></tr>
+    <tr><td>Saldo de la tienda "Prueba"</td><td class="num">$0</td><td class="num">$0</td></tr>
+    <tr><td>Cobro del fallido en el pedido de prueba</td><td class="num" colspan="2">-$12.000 (base real), pago al transportista $8.000, cashback ninguno</td></tr>
+    </tbody></table></div>
+
+  <h3>005 · Reproduccion, comprobacion y capturas contra produccion</h3>
+  <ul class="timeline">
+    <li><span class="t">13-09 01:45</span><span><code>reproduce</code> (regla vieja): tienda propia 200, <code>sellers where communityId ==</code> <b>403</b>, control (<code>cities</code>) 200. Sintoma reproducido con 1 tienda en la comunidad.</span></li>
+    <li><span class="t">15-09 15:37:38</span><span><code>setup</code>: 3 comunidades, 4 cuentas, 4 tiendas con prefijo <code>smoke005-</code></span></li>
+    <li><span class="t">15:37:53</span><span><code>check</code> (regla nueva + indice): <b>5/5</b> en 15 s. Un unico 403, el esperado (tienda_ajena). Consulta de comunidad vacia: 200 con 0 documentos.</span></li>
+    <li><span class="t">15:38:07</span><span><code>capture</code>: 6 capturas en 2 viewports (1280 y 390 px) contra <code>localhost:3005</code>, 14 s</span></li>
+    <li><span class="t">15:38:21</span><span><code>cleanup</code>: LIMPIO, sin restos con el prefijo. 43 s de punta a punta.</span></li>
+  </ul>
+  <p>Errores de consola: el guion no los recoge (registra respuestas REST, no la consola del navegador). Es un hueco del guion, no de la app, y va a la deuda tecnica.</p>
+</section>
+
+<section id="degradado">
+  <h2><span class="n">3</span>Que se degrado</h2>
+  <p>Nada que antes pasara ha dejado de pasar. Lo que si cambio, medido entre <code>62279b0</code> (antes del ciclo) y <code>fb5a6e4</code>:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Indicador</th><th>Antes</th><th>Despues</th><th>Lectura</th></tr></thead>
+    <tbody>
+    <tr><td>Casos <code>it()</code> en <code>src/**/*.test.ts</code></td><td class="num">746</td><td class="num">1.101</td><td>+355 escritos; 1.201 ejecuciones por las parametrizadas. Ninguno en rojo, ninguno saltado.</td></tr>
+    <tr><td>Archivos de prueba</td><td class="num">28</td><td class="num">31</td><td><code>seller-charges</code>, <code>load-status</code>, <code>spec-005-guards</code></td></tr>
+    <tr><td>Duracion de la suite</td><td class="num">no medida</td><td class="num">12,0 s</td><td>Sin linea base anterior; queda esta.</td></tr>
+    <tr><td><code>operations-app.tsx</code></td><td class="num">13.031 lineas</td><td class="num">13.245</td><td>+214. El monolito sigue creciendo; ver deuda.</td></tr>
+    <tr><td>Dependencias (<code>package.json</code>, <code>functions/</code>)</td><td class="num">—</td><td class="num">+0</td><td>Solo cambiaron dos scripts de deploy. El bundle (<code>.next/static</code>, 2,6 MB) no tiene linea base para comparar.</td></tr>
+    <tr><td>Avisos de lint</td><td class="num">3</td><td class="num">3</td><td>Los mismos tres <code>exhaustive-deps</code>; 0 errores antes y despues.</td></tr>
+    <tr><td>Indices de Firestore en produccion</td><td class="num">39</td><td class="num">40</td><td>Aditivo, verificado local == prod antes de desplegar.</td></tr>
+    <tr><td>Regla <code>sellerInMyCommunity</code></td><td class="num">get() sobre comodin</td><td class="num">resource.data</td><td>Menos accesos a documento por consulta. Mejora, no degradacion.</td></tr>
+    </tbody></table></div>
+  <h3>Dos cambios de comportamiento que no son regresiones pero conviene vigilar</h3>
+  <ul>
+    <li><b>El disparador de elevacion al piso esta vivo por primera vez.</b> Antes escuchaba <code>settings/app</code>, que no existe en produccion; desde el 13-09 escucha <code>settings/global</code>. La proxima vez que el administrador suba una tarifa base, se ejecutara. Con 0 precios propios no hara nada, pero es la primera vez que puede hacer algo.</li>
+    <li><b><code>npm run deploy</code> y <code>deploy:hosting</code> llevan ahora <code>ALLOW_FUNCTIONS_DEPLOY=1</code>.</b> Era obligatorio (la ruta dinamica <code>/registro/[slug]</code> arrastra la funcion SSR y disparaba el guard), y con <code>--only hosting</code> es seguro. Pero la variable que el guard exigia "de forma deliberada" (principio 7) ahora se pone de forma rutinaria. El guard sigue protegiendo un <code>firebase deploy</code> a secas; ya no protege un <code>npm run deploy</code> desde un checkout incompleto.</li>
+  </ul>
+</section>
+
+<section id="hallazgos">
+  <h2><span class="n">4</span>Lo que el ciclo enseno</h2>
+  <p>Ocho hallazgos, en el orden en que aparecieron. Ninguno lo predijo la spec ni el plan; todos salieron de medir, desplegar o mirar.</p>
+
+  <div class="finding"><div class="k">H1</div><div><h4>La causa del 403 se midio, pero no se demostro</h4><p>La consulta <code>sellers where communityId ==</code> fallaba con el mismo codigo para dos causas posibles: la forma de la regla (un <code>get()</code> sobre el comodin) y el limite de accesos a documento por consulta. La comunidad de prueba tenia una sola tienda, con lo que el limite no deberia alcanzarse, y eso apunta a la regla sin probarlo. El arreglo de T2 sirve para las dos, asi que el resultado es bueno; el diagnostico queda como "no concluyente" en el propio informe de reproduccion.</p><div class="where">.sdd/evidence/005/verify-reproduce.json · report[] · firestore.rules sellerInMyCommunity()</div></div></div>
+
+  <div class="finding"><div class="k">H2</div><div><h4>El indice ausente era un defecto latente de la spec 001</h4><p><code>getCommunityStats</code> hace <code>sum(amountCop)</code> sobre <code>walletEntries</code> con rango de <code>createdAt</code>, y eso exige un indice compuesto que no existia ni en el repo ni en produccion. Nadie habia llegado a esa pantalla desde la 001. El plan de la 005 decia "sin indices nuevos" y se equivocaba. Brayan lo habria visto igual. Se anadio el indice 40 y se espero a <code>READY</code> antes de repetir las capturas.</p><div class="where">firestore.indexes.json · functions/src/community-stats.ts · T14</div></div></div>
+
+  <div class="finding"><div class="k">H3</div><div><h4>El selector de la 003 nunca se pinto, y su guarda pasaba en vacio</h4><p>La 003 se dio por implementada con una prueba que solo exigia que <code>shouldShowHatSelector(</code> apareciera en el archivo. Aparecia; el JSX no lo usaba. Es el hueco exacto por el que la primera cuenta real no tuvo forma de llegar a su comunidad. La guarda se endurecio para exigir <code>canPickHat</code> y <code>onHatChange</code> dentro del cuerpo de <code>Header</code>.</p><div class="where">src/lib/session-hats.test.ts:571 · operations-app.tsx Header</div></div></div>
+
+  <div class="finding"><div class="k">H4</div><div><h4><code>auth.ts</code> no propagaba <code>communityStanding</code></h4><p>El tipo de reclamos no lo declaraba y el envoltorio no lo emitia, asi que <code>session.communityStanding</code> era siempre <code>undefined</code>, y un cast en la pantalla lo admitia. No rompia nada (los sombreros los da el vinculo), pero hacia inalcanzable distinguir al acreedor. Cabo suelto de la 003 encontrado en el analisis de la 005.</p><div class="where">src/lib/firebase/auth.ts · session-hats.test.ts:476-523</div></div></div>
+
+  <div class="finding"><div class="k">H5</div><div><h4>Con la carga caida, la app se quedaba en el esqueleto para siempre</h4><p><code>hydrated</code> solo pasaba a <code>true</code> cuando llegaban datos. Si la carga fallaba, no habia datos, no habia hidratacion y no habia pantalla: ni aviso, ni reintento, ni "perfil pendiente". Lo encontro el coder al cablear el canal de error de T8; el manejador de error ahora hidrata para poder contar que no hay datos.</p><div class="where">src/components/operations-app.tsx · T8 · spec-005-guards.test.ts:705</div></div></div>
+
+  <div class="finding"><div class="k">H6</div><div><h4>T15 y T16 nacieron de la validacion humana, no de las pruebas</h4><p>Con 1.188 pruebas en verde y 5/5 en produccion, el responsable entro y vio dos cosas: el selector no seguia el sistema de diseno (activo en <code>bg-field</code> en vez de acido, una decision equivocada del orquestador en T7) y el lider no veia la lista de sus tiendas si no habian movido pedidos (la tabla colgaba de <code>no_orders_in_period</code>). Ninguna prueba podia verlas: la primera es estetica y la segunda era una omision que la spec no nombraba. Cada una costo un despliegue de hosting mas.</p><div class="where">745eac4 · fb5a6e4 · DoD 7 de la 005</div></div></div>
+
+  <div class="finding"><div class="k">H7</div><div><h4>Las reglas siguen sin ser probables en unidad</h4><p>T2 reescribio la regla y no pudo ni validar su sintaxis en local (exigia un <code>firebase.json</code> fuera del alcance). La comprobacion real fue el despliegue firmado de T13. Entre T2 y T13 el 403 siguio vivo en produccion. Es el argumento mas concreto que ha tenido la spec 002 hasta ahora.</p><div class="where">firestore.rules · specs/002_entorno_de_verificacion.md (borrador, reafirmada hoy)</div></div></div>
+
+  <div class="finding"><div class="k">H8</div><div><h4>La captura de escritorio pilla el "Cargando"</h4><p>El guion toma la captura de escritorio 1,5 s despues del clic en "Comunidad", y la callable de cifras tarda mas. <code>escritorio-pantalla-comunidad.png</code> muestra "Cargando las cifras de tu comunidad…" sobre fondo vacio. La movil, tomada despues, si muestra la pantalla entera. La evidencia valida de la 005 para esa pantalla es solo la movil.</p><div class="where">scripts/verify-005.js · capture · .sdd/evidence/005/capturas/escritorio-pantalla-comunidad.png</div></div></div>
+</section>
+
+<section id="deuda">
+  <h2><span class="n">5</span>Deuda tecnica observada</h2>
+  <p>Concreta y ubicada. Dos partidas historicas quedaron saldadas en este ciclo y se listan al final.</p>
+
+  <div class="debt"><h4>Tres avisos <code>exhaustive-deps</code> historicos</h4><span class="badge b-warn">abierta</span><div class="where">src/components/operations-app.tsx:479 (useEffect sin session/state) · :801 (useMemo sin state) · :2547 (useEffect sin processQueue)</div><p>No rompen nada hoy, pero son cierres sobre estado viejo esperando a que un refactor los convierta en un fallo mudo. <code>docs/rendimiento.md</code> ya documenta la trampa de <code>React.memo</code> con <code>state</code> entero; estos tres son la misma familia.</p></div>
+
+  <div class="debt"><h4>El monolito crece: 13.245 lineas</h4><span class="badge b-warn">abierta</span><div class="where">src/components/operations-app.tsx · Header, SellerView, CommunityLeaderView, StoreTariffCard</div><p>Todo lo de este ciclo entro ahi. Las guardas de fuente de la 005 y la 003 hacen regex sobre este archivo (<code>session-hats.test.ts:571-644, 788-818</code>; <code>spec-005-guards.test.ts:718-753, 877-945, 1551-1602</code>), y <code>docs/design-system.md</code> ya advierte contra las regex sobre clases. Un refactor que mueva <code>Header</code> a su archivo pone en rojo pruebas que afirman comportamiento correcto.</p></div>
+
+  <div class="debt"><h4>La pantalla se verifica por regex, no por render</h4><span class="badge b-warn">abierta</span><div class="where">src/lib/spec-005-guards.test.ts · src/lib/session-hats.test.ts</div><p>No hay pruebas de componente (no existe testing-library en el repo). H3 es lo que pasa con esta clase de prueba: afirmo que el selector existia cuando solo existia su nombre. Se endurecio, pero sigue siendo la misma clase. Decidir si entra una dependencia de render es una decision del plan de la spec 002 o de una spec propia.</p></div>
+
+  <div class="debt"><h4>El guion de capturas espera un tiempo fijo</h4><span class="badge b-warn">abierta</span><div class="where">scripts/verify-005.js · paso capture · 1,5 s tras el clic</div><p>H8. Debe esperar al selector de la primera cifra, no a un reloj. Ademas no recoge la consola del navegador, asi que un error de JS en produccion no quedaria en la evidencia. El DoD 5 de las specs 006 a 009 ya lo exige.</p></div>
+
+  <div class="debt"><h4>Las capturas de la 005 son anteriores a T15 y T16</h4><span class="badge b-warn">abierta</span><div class="where">.sdd/evidence/005/capturas/*.png (capturedAt 15:38:07, antes de 745eac4 y fb5a6e4)</div><p>Lo que esta en produccion (selector en acido, tabla de tiendas con ceros) no tiene captura; solo la palabra del responsable. Repetir <code>setup → capture → cleanup</code> cuesta un minuto y cierra el hueco.</p></div>
+
+  <div class="debt"><h4><code>communityStanding</code> ausente se lee como lider</h4><span class="badge b-neutral">deliberada</span><div class="where">src/lib/load-status.ts · communityStoresState · nota de T4</div><p>Necesario mientras haya tokens sin la posicion (hasta que todos renueven). Cuando <code>auth.ts</code> lleve una semana emitiendola, la comparacion deberia pasar a exigir <code>"leader"</code> en positivo. Sin fecha.</p></div>
+
+  <div class="debt"><h4>Al acreedor no se le muestra lo causado sin cortar</h4><span class="badge b-neutral">deliberada</span><div class="where">operations-app.tsx CommunityLeaderView · nota de T9</div><p>Vive en <code>walletEntries</code>, cuya suscripcion la 003 elimino por volumen (principio 11). La pantalla lo dice en vez de pintar un cero. Reabrirla seria el fallo del principio 8; agregarlo en servidor seria la solucion, y no tiene spec.</p></div>
+
+  <div class="debt"><h4>"Sube a …" de <code>StoreTariffCard</code> usa <code>text-acid</code></h4><span class="badge b-warn">abierta</span><div class="where">operations-app.tsx · nota de T10 de la 004 · regla 2 de docs/design-system.md</div><p>Deuda previa a la 004, anotada entonces como fuera de alcance y sin tarea desde entonces.</p></div>
+
+  <div class="debt"><h4>El guard de functions se sortea de forma rutinaria</h4><span class="badge b-neutral">aceptada</span><div class="where">package.json scripts deploy / deploy:hosting · docs/deploy.md · d6b12f3</div><p>Ver seccion 3. Documentado y justificado; se anota para que el principio 7 de la constitucion no se lea como si siguiera intacto.</p></div>
+
+  <h3>Saldadas en este ciclo</h3>
+  <div class="debt"><h4>La doble copia del fijo del fallido</h4><span class="badge b-ok">saldada</span><div class="where">src/lib/finance.ts · functions/src/wallet-entries.ts · functions/src/community-order-pricing.ts</div><p>T2 y T3 de la 004 movieron la regla a <code>seller-charges.ts</code> y borraron <code>applySellerTariffOverrides</code>. Una busqueda de <code>12000</code> en los tres archivos no devuelve nada; las guardas SC:812-893 y SC:1024 lo mantienen asi.</p></div>
+  <div class="debt"><h4><code>docs/deploy.md</code> y <code>CLAUDE.md</code> documentaban un comando que fallaba</h4><span class="badge b-ok">saldada</span><div class="where">d6b12f3</div><p>Desde que existe <code>/registro/[slug]</code>, <code>firebase deploy --only hosting</code> fallaba con "Blocked Firebase Functions deploy". Corregidos prosa y scripts a la vez.</p></div>
+  <div class="debt"><h4>Contrasena del desechable en la evidencia</h4><span class="badge b-ok">verificada</span><div class="where">.sdd/evidence/004/smoke-state.json · .sdd/evidence/005/verify-state.json</div><p>La nota de T11 advertia que no se commiteara antes del cleanup. Comprobado para este informe: ningun archivo de evidencia contiene <code>password</code>; los estados se guardaron ya limpios.</p></div>
+</section>
+
+<section id="propuestas">
+  <h2><span class="n">6</span>Propuestas para el siguiente ciclo, ya como specs borrador</h2>
+  <p>Cada una esta escrita en <code>specs/</code> con sus requisitos EARS esbozados, su fuera de alcance y un DoD que dice como se va a demostrar. Entran por la puerta, con revision adversarial pendiente. El orden es una sugerencia de prioridad.</p>
+  <div class="specs">
+    <div class="spec"><div class="id">006</div><h4>El lider fija sus precios desde su pantalla</h4><p>Las callables (<code>scheduleCommunityPrice</code>, <code>cancelScheduledCommunityPrice</code>) y sus envoltorios existen desde la 001; ninguna pantalla los llama. Hasta que exista, toda comunidad cobra la base y el cashback es siempre cero: la 001, la 003 y la 004 construyeron una maquinaria que nadie puede usar.</p><div class="path">specs/006_lider_fija_sus_precios.md</div></div>
+    <div class="spec"><div class="id">007</div><h4>El lider ve quien entro por su enlace y cuando</h4><p>El alta ya escribe <code>communityJoinedAt</code> y <code>communitySignupSlug</code>, y desde la 005 el lider baja sus tiendas. Solo falta pintarlo. Cero documentos nuevos.</p><div class="path">specs/007_lider_ve_quien_entro_por_su_enlace.md</div></div>
+    <div class="spec"><div class="id">002</div><h4>Entorno de verificacion aislado</h4><p>Ya existia en borrador. Se reafirma con tres argumentos nuevos de este ciclo (H1, H2, H7) en su historial de cambios. Es la unica de la lista que no anade nada al producto y la que mas haria por la siguiente spec.</p><div class="path">specs/002_entorno_de_verificacion.md (fila anadida al historial)</div></div>
+    <div class="spec"><div class="id">008</div><h4>El lider se entera de que su precio fue elevado al piso</h4><p>RF_35 de la 001 escribe <code>floorRaisedAt</code> desde la 004 y nadie la lee. Depende de la 006 (sin precios propios no hay nada que elevar) y ratifica o revierte la decision que la 004 tomo "sin respuesta del responsable".</p><div class="path">specs/008_aviso_de_elevacion_al_piso.md</div></div>
+    <div class="spec"><div class="id">009</div><h4>Recordar el sombrero entre visitas</h4><p>Fuera de alcance consciente de la 005. Solo interfaz, por <code>uid</code>, con <code>localStorage</code> protegido; el recuerdo no toca descargas ni permisos.</p><div class="path">specs/009_recordar_el_sombrero.md</div></div>
+  </div>
+  <p>Lo que sigue fuera y no se propone: el camino inverso (un lider que quiere abrir tienda), el precio de comunidad por zona, y decidir si el fallido lo manda la pantalla de ajustes o los $12.000 fijos. Las tres siguen siendo decisiones del responsable, no huecos.</p>
+</section>
+
+<section id="cierre">
+  <h2>Cierre y siguiente paso</h2>
+  <p>Suite final: 1.201 pruebas en verde, <code>tsc</code> limpio en raiz y <code>functions/</code>, lint 0 errores y 3 avisos, build sin <code>static{</code>. Las dos specs quedan como <code>implementada</code> y desplegada; la fase del arnes pasa a <code>release</code>. No hay PR abierto para <code>feat/pedido-manual-multilinea</code> (33 commits sobre <code>main</code>): abrirlo y enlazar este informe es trabajo de <code>/sdd-release</code>.</p>
+  <p>Una recomendacion de orden para el siguiente ciclo: antes de abrir la 006, cerrar los dos huecos baratos de este informe (repetir las capturas de la 005 y arreglar la espera del guion). Son diez minutos y convierten cinco "probados" en "cumplidos".</p>
+</section>
+
+<footer>Informe generado en la fase <code>report</code> del arnes SDD el 2026-09-15. Fuentes: <code>.sdd/state.json</code>, <code>.sdd/evidence/004</code>, <code>.sdd/evidence/005</code>, <code>specs/004_*</code>, <code>specs/005_*</code>, la suite y el lint re-ejecutados sobre <code>fb5a6e4</code>.</footer>
+</main>
+</div>
