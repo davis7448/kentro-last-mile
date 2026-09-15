@@ -156,6 +156,7 @@ export async function createManualFirebaseOrder(input: {
   customerPhone: string;
   addressRaw: string;
   normalizedAddress?: string;
+  deliveryNotes?: string;
   zoneId?: string;
   paymentMethod: PaymentMethod;
   fulfillmentMode: FulfillmentMode;
@@ -250,6 +251,7 @@ export async function updateFirebaseImportedOrder(input: {
   customerPhone: string;
   addressRaw: string;
   normalizedAddress?: string;
+  deliveryNotes?: string;
   zoneId?: string;
   paymentMethod: PaymentMethod;
   fulfillmentMode: FulfillmentMode;

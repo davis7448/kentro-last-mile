@@ -101,6 +101,40 @@ describe("createManualOrder", () => {
     expect(state.orders[0].lineItems).toEqual([{ quantity: 1, productName: "Producto A", sku: SKU }]);
     expect(state.inventory[0].reserved).toBe(1);
   });
+
+  /*
+   * Spec 013, T4 (RF_09, RF_10 lado local). `deliveryNotes` todavia no esta en el tipo del input de
+   * `createManualOrder` (lo gana en esta tarea, plan §2.4); `Order.deliveryNotes` si existe (T1).
+   * El cast a `Parameters<typeof createManualOrder>[1]` deja pasar la clave extra sin `any` y
+   * mantiene `tsc --noEmit` en verde en RED; cuando el coder ensanche el tipo, el cast sobra pero
+   * no estorba.
+   */
+  type ManualInput = Parameters<typeof createManualOrder>[1];
+  const conIndicaciones = (deliveryNotes?: string): ManualInput =>
+    ({ ...manualInput, productName: "Producto A", sku: SKU, deliveryNotes }) as ManualInput;
+
+  it("RF_09 · copia `deliveryNotes` recortado al pedido creado", () => {
+    const state = createManualOrder(baseState([item()]), conIndicaciones("  timbre azul  "));
+    expect(state.orders[0].deliveryNotes).toBe("timbre azul");
+  });
+
+  it("RF_09 · con `deliveryNotes` de solo espacios el pedido no lleva la clave con valor", () => {
+    const state = createManualOrder(baseState([item()]), conIndicaciones("   "));
+    expect(state.orders[0].deliveryNotes).toBeUndefined();
+  });
+
+  it("RF_09 · sin `deliveryNotes` el pedido tampoco lleva la clave con valor", () => {
+    const state = createManualOrder(baseState([item()]), conIndicaciones(undefined));
+    expect(state.orders[0].deliveryNotes).toBeUndefined();
+  });
+
+  it("RF_10 · las indicaciones no acaban en `normalizedAddress`: con `deliveryNotes` y sin corregida, queda undefined", () => {
+    const state = createManualOrder(baseState([item()]), conIndicaciones("timbre azul"));
+    const order = state.orders[0];
+    // Positiva de control: la direccion original sigue siendo la que se envio.
+    expect(order.addressRaw).toBe("Calle 1");
+    expect(order.normalizedAddress).toBeUndefined();
+  });
 });
 
 describe("invariante de reserva", () => {

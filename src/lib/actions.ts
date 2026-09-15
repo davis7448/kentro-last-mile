@@ -290,6 +290,7 @@ export function createManualOrder(
     customerPhone: string;
     addressRaw: string;
     normalizedAddress?: string;
+    deliveryNotes?: string;
     zoneId?: string;
     paymentMethod: PaymentMethod;
     fulfillmentMode: FulfillmentMode;
@@ -322,6 +323,7 @@ export function createManualOrder(
     customerPhone: input.customerPhone.trim(),
     addressRaw: input.addressRaw.trim(),
     normalizedAddress: input.normalizedAddress?.trim() || undefined,
+    deliveryNotes: input.deliveryNotes?.trim() || undefined,
     addressRisk,
     status: addressRisk === "review" ? "address_risk" : "ready_to_assign",
     paymentMethod: input.paymentMethod,
