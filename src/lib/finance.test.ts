@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerAbonoRows, sellerBalance, summarizeWalletPeriod } from "./finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerAbonoRows, summarizeWalletPeriod } from "./finance";
 import { seedState } from "./seed";
 import type { AppState, Order, WalletEntry } from "./types";
 
 describe("wallet calculations", () => {
-  it("reserves 9.000 COP per pending order before withdrawal", () => {
-    const state = seedState();
-    const balance = sellerBalance(state, "seller-1");
-    expect(balance.pendingOrders).toBeGreaterThan(0);
-    expect(balance.reservedCop).toBe(balance.pendingOrders * 9000);
-  });
+  // La reserva fija de 9.000 por pedido abierto se retiro en la spec 018 (seller-retention.ts).
 
   it("creates seller and driver entries for delivered COD warehouse orders", () => {
     const state = seedState();

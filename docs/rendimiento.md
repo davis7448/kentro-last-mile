@@ -21,6 +21,30 @@ JavaScript del primer pintado: **1,55 MB sin comprimir / 358 KB por la red**.
 De la carga del admin, **3,58 MB son la colección `walletEntries` entera** (10.452 asientos, el
 68%), y crece ~3.700 al mes. Es la próxima deuda: ver "Pendiente" abajo.
 
+## Tarjeta heroe de la tienda (spec 018, RNF_04)
+
+Tiempo desde pulsar "Entrar" hasta que la tarjeta heroe de la tienda muestra pesos. Guion:
+`node scripts/verify-018.js perf <etiqueta>` — Playwright Chromium en el VPS, contexto nuevo por carga
+(en frio), tienda **Bella Mujer** con una cuenta desechable que el guion borra al terminar, mediana de
+5 cargas. Umbral de la spec: la medicion posterior no puede pasar de la linea base + 10 %.
+
+| Momento | Movil 390×844 | Escritorio 1280×800 |
+|---|---|---|
+| Antes (2026-09-16, cifra calculada en el navegador) | 989 ms | 975 ms |
+| Despues, primer despliegue (2026-09-17, cifra de la callable al terminar la carga) | 1.574 ms | 1.417 ms |
+| Despues de T16 (peticion en paralelo con la carga, callable a 512 MiB) | 1.094 ms | 1.049 ms |
+| Despues de T16, repeticion 1 minuto despues | 1.726 ms | 1.054 ms |
+
+| Despues de T18 (la pantalla de entrada despierta `getSellerBalance`) | 991 ms | 1.023 ms |
+| Despues de T18, repeticion 1 minuto despues | 1.015 ms | 894 ms |
+
+**Lectura (2026-09-17):** tras T16 el movil seguia fuera del +10 % por el arranque en frio de
+`getSellerBalance`. T18 lo resolvio sin coste fijo: `AuthScreen` lanza una llamada vacia a la callable
+al montar, asi la instancia arranca mientras se escribe la clave. Con eso las dos medidas quedan dentro
+(movil +0,2 % y +2,6 %). Si algun dia vuelve a salirse (por ejemplo, con sesion guardada que no pasa por
+la pantalla de entrada), las siguientes palancas son un programador que la llame cada 5 min o
+`minInstances: 1`, ambas con coste y decision del responsable.
+
 ## Cómo medir
 
 El propio código trae el instrumento. En el navegador:

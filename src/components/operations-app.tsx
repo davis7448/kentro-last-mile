@@ -48,6 +48,8 @@ import {
   applyFirebaseOrderTransition,
   type OrderTransitionPatch,
   createFirebaseSettlement,
+  getFirebaseSellerBalance,
+  warmFirebaseSellerBalance,
   createManagedFirebaseUser,
   closeFirebaseOrder,
   confirmFirebaseImportedOrder,
@@ -75,6 +77,8 @@ import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, ZONE_BASE_NOTICE
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
+import { buildSellerBalanceInput, computeSellerBalance, payoutRejectionMessage, type SellerBalance } from "../../functions/src/seller-balance";
+import { buildCodReceivedSet, isSellerEntryEligible } from "../../functions/src/seller-ledger";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
@@ -92,7 +96,7 @@ import {
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerAbonoRows, sellerBalance, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerAbonoRows, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
 import type { DriverFinancialSummary, SellerAbonoRow } from "@/lib/finance";
 import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
@@ -1363,6 +1367,10 @@ function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const canSubmit = Boolean(email.trim() && password && (!needsBootstrap || name.trim()));
+  // Spec 018 RNF_04: calienta la funcion del saldo mientras se escribe la clave.
+  useEffect(() => {
+    warmFirebaseSellerBalance();
+  }, []);
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-8">
@@ -6886,7 +6894,7 @@ const PAYOUT_STATUS_LABELS: Record<string, string> = {
 };
 
 /** Boton de la tienda para pedir su liquidacion. Antes era una funcion pura que no guardaba nada. */
-function SellerPayoutRequest({ sellerId, payouts }: { sellerId: string; payouts: PayoutRequest[] }) {
+function SellerPayoutRequest({ sellerId, payouts, balance }: { sellerId: string; payouts: PayoutRequest[]; balance?: SellerBalance }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -6914,6 +6922,11 @@ function SellerPayoutRequest({ sellerId, payouts }: { sellerId: string; payouts:
         Liquidacion solicitada por <span className="tabular">{formatCop(open.amountCop)}</span> el {formatDateTime(open.createdAt)}. Kentro la esta procesando.
       </p>
     );
+  }
+
+  // Spec 018 RF_16: sin disponible no hay nada que pedir; se dice por que en vez de dejar pulsar.
+  if (balance && balance.availableCop <= 0) {
+    return <p className="mt-3 rounded-2xl bg-field px-3 py-2 text-xs text-ink-60">{payoutRejectionMessage(balance)}</p>;
   }
 
   return (
@@ -6985,25 +6998,49 @@ function AdminPayoutRow({ payout, sellers }: { payout: PayoutRequest; sellers: S
   );
 }
 
-function WalletPanel({ state }: { state: AppState }) {
+function WalletPanel({ state, ownBalance }: { state: AppState; ownBalance?: SellerBalanceState }) {
   const pendingPayouts = state.payouts.filter((payout) => payout.status === "requested");
   const otherPayouts = state.payouts.filter((payout) => payout.status !== "requested");
+  // Spec 018 RF_19: la tienda recibe su saldo del servidor (`ownBalance`); el admin lo calcula con
+  // los datos que ya tiene y la MISMA regla.
+  // Hora del calculo en cada pintado: un `useMemo` con dependencias vacias la congelaba (R1-RF_01-1).
+  const balanceNow = new Date().toISOString();
   return (
     <Card>
       <h2 className="mb-3 font-bold">Wallets vendedores</h2>
       <PaginatedList items={state.sellers} pageSize={8} className="grid gap-3" empty={<p className="text-sm text-ink-60">No hay vendedores registrados todavia.</p>}>
         {(seller) => {
-          const balance = sellerBalance(state, seller.id);
+          const balanceState: SellerBalanceState = ownBalance ?? { status: "ready", balance: sellerBalanceFromState(state, seller.id, balanceNow) };
+          const balance = balanceState.status === "ready" ? balanceState.balance : undefined;
           return (
             <div key={seller.id} className="rounded-2xl border border-white/10 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{seller.name}</p>
-                  <p className="text-sm text-ink-60">Reserva: <span className="tabular">{formatCop(balance.reservedCop)}</span> · {balance.pendingOrders} pendientes</p>
+              <p className="font-semibold">{seller.name}</p>
+              {balanceState.status === "loading" && <div aria-label="Calculando saldo" className="mt-2 h-16 animate-pulse rounded-2xl bg-field" />}
+              {balanceState.status === "error" && <p className="mt-2 rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">No pudimos calcular el saldo. {balanceState.message}</p>}
+              {balance && balance.unreadableEntryIds.length > 0 && (
+                <p className="mt-2 rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">Saldo incompleto: hay movimientos sin pedido legible.</p>
+              )}
+              {balance && balance.unreadableEntryIds.length === 0 && (
+                <div className="mt-2 grid gap-1 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold">Disponible para liquidar</span>
+                    <span className="tabular text-base font-bold text-mint">{formatCop(balance.availableCop)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 text-ink-70">
+                    <span>Efectivo aun con el domiciliario ({balance.codPendingOrderCount} {balance.codPendingOrderCount === 1 ? "pedido" : "pedidos"})</span>
+                    <span className="tabular">{formatCop(balance.codPendingCop)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 text-ink-70">
+                    <span>Retenido ({balance.heldOrderCount} {balance.heldOrderCount === 1 ? "pedido" : "pedidos"}; {balance.streetOrderCount} en la calle)</span>
+                    <span className="tabular">{formatCop(balance.heldCop)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 border-t border-white/[0.06] pt-1 text-ink-60">
+                    <span>Total sin cortar</span>
+                    <span className="tabular">{formatCop(balance.totalUnsettledCop)}</span>
+                  </div>
                 </div>
-                <p className="text-right font-bold"><span className="tabular">{formatCop(balance.availableCop)}</span></p>
-              </div>
-              {state.activeRole === "seller" && <SellerPayoutRequest sellerId={seller.id} payouts={state.payouts} />}
+              )}
+              {state.activeRole === "seller" && <SellerPayoutRequest sellerId={seller.id} payouts={state.payouts} balance={balance} />}
               {state.activeRole === "seller" && <StoreTariffCard />}
             </div>
           );
@@ -7333,6 +7370,8 @@ type LiquidationRow = {
   payoutCop: number;
   netCop: number;
   status: "pendiente" | "conciliada";
+  /** Spec 018: el saldo de la tienda con la regla unica (solo filas de tienda). */
+  sellerBalance?: SellerBalance;
 };
 
 type LiquidationOrderAudit = {
@@ -7406,63 +7445,10 @@ function netChargeCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
   return Math.max(0, -net);
 }
 
-function orderCashToReturnCop(state: AppState, orderId: string) {
-  const sellerEntries = state.wallet.filter((entry) => entry.ownerType === "seller" && entry.orderId === orderId);
-  const driverEntries = state.wallet.filter((entry) => entry.ownerType === "driver" && entry.orderId === orderId);
-  const codCop = netAmountCop(sellerEntries, ["cod_revenue", "cod_remittance"]);
-  const driverPayCop = netAmountCop(driverEntries, ["driver_earning"]);
-  return Math.max(0, codCop - driverPayCop);
-}
-
-function receivedDriverOrderIds(state: AppState) {
-  const orderIds = new Set<string>();
-  for (const settlement of state.settlements) {
-    if (settlement.kind !== "driver") continue;
-
-    // Fuente autoritativa: cashAllocations, igual que createSettlement en el backend.
-    // Sin esto, la pantalla marcaba como elegibles pedidos (p.ej. fallidos) que el backend
-    // no liquida, mostrando un saldo por pagar menor al que realmente se cerraba y dejando
-    // residuales negativos atascados.
-    if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
-      for (const allocation of settlement.cashAllocations) {
-        if (allocation.covered && allocation.orderId) orderIds.add(allocation.orderId);
-      }
-      continue;
-    }
-
-    if (settlement.status === "paid" || settlement.status === "reconciled" || settlement.cashPendingCop === 0) {
-      for (const orderId of settlement.orderIds) orderIds.add(orderId);
-      continue;
-    }
-
-    // Fallback legacy: settlements sin cashAllocations (datos viejos); reparto por efectivo recibido.
-    const receivedCop = (settlement.cashReceipts ?? []).reduce((sum, receipt) => sum + receipt.amountCop, 0);
-    if (receivedCop <= 0) continue;
-
-    let remainingCop = receivedCop;
-    const sortedOrderIds = [...settlement.orderIds].sort((leftId, rightId) => {
-      const left = state.orders.find((order) => order.id === leftId);
-      const right = state.orders.find((order) => order.id === rightId);
-      return (left?.trackingCode ?? leftId).localeCompare(right?.trackingCode ?? rightId);
-    });
-
-    for (const orderId of sortedOrderIds) {
-      const requiredCop = orderCashToReturnCop(state, orderId);
-      if (requiredCop <= 0) {
-        orderIds.add(orderId);
-        continue;
-      }
-      if (remainingCop < requiredCop) break;
-      remainingCop -= requiredCop;
-      orderIds.add(orderId);
-    }
-  }
-  return orderIds;
-}
-
 function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = state.wallet): LiquidationOrderAudit[] {
   const orderIds = new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]);
-  const codReceivedOrderIds = receivedDriverOrderIds(state);
+  // Spec 018 RF_04: la definicion unica de efectivo recibido, la misma del corte.
+  const codReceivedOrderIds = buildCodReceivedSet(state.settlements);
   // Indices por id: antes esta funcion escaneaba TODOS los movimientos por cada pedido
   // (O(pedidos x movimientos) = ~14M iteraciones, ~600 ms por llamada). Con los indices
   // es O(pedidos + movimientos) y baja a milisegundos.
@@ -7545,16 +7531,7 @@ function auditsForOrderIds(audits: LiquidationOrderAudit[], orderIds: string[]) 
   return audits.filter((audit) => orderIdSet.has(audit.orderId));
 }
 
-function isSellerEntryEligible(entry: WalletEntry, auditByOrderId: Map<string, LiquidationOrderAudit>) {
-  if (entry.ownerType !== "seller") return true;
-  // Los abonos a tienda no dependen de un pedido: siempre reducen el saldo por pagar.
-  // Ni los abonos ni el 4x1000 cuelgan de un pedido: no pasan por la compuerta de COD recibido.
-  if (entry.type === "seller_abono" || entry.type === "gmf_tax") return true;
-  if (!entry.orderId) return false;
-  return auditByOrderId.get(entry.orderId)?.sellerEligible ?? false;
-}
-
-function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWallet: WalletEntry[] = state.wallet, audits: LiquidationOrderAudit[] = buildLiquidationOrderAudits(state, relatedWallet)): LiquidationRow[] {
+function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWallet: WalletEntry[] = state.wallet, audits: LiquidationOrderAudit[] = buildLiquidationOrderAudits(state, relatedWallet), keepSellerIds: ReadonlySet<string> = new Set()): LiquidationRow[] {
   const sellerRows = state.sellers.map((seller) => {
     const ownEntries = entries.filter((entry) => entry.ownerType === "seller" && entry.ownerId === seller.id);
     const orderIds = Array.from(new Set(ownEntries.map((entry) => entry.orderId).filter(Boolean) as string[]));
@@ -7658,7 +7635,9 @@ function buildLiquidationRows(state: AppState, entries: WalletEntry[], relatedWa
     };
   });
 
-  return [...sellerRows, ...driverRows].filter((row) => row.orders > 0 || row.netCop !== 0);
+  // Spec 018 (R1-RF_20-1): una tienda sin nada que cortar hoy pero con efectivo pendiente, retenido o
+  // saldo incompleto sigue apareciendo; si no, el admin nunca veria por que no se le paga.
+  return [...sellerRows, ...driverRows].filter((row) => row.orders > 0 || row.netCop !== 0 || (row.role === "seller" && keepSellerIds.has(row.id)));
 }
 
 type StoreLiquidationRow = {
@@ -7985,11 +7964,13 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   const { rows, sellerRows, driverRows, storeRows, supplierRows, communityLeaderRows, blockedSellerAudits, openAudits } = useMemo(() => {
     const openEntries = selectOpenWalletEntries(state.wallet);
     const audits = buildLiquidationOrderAudits(state, openEntries);
-    const auditByOrderId = new Map(audits.map((audit) => [audit.orderId, audit]));
+    // Spec 018: la elegibilidad de tienda es la del servidor (seller-ledger.ts), no una copia local.
+    const ordersById = new Map(state.orders.map((order) => [order.id, order]));
+    const codReceived = buildCodReceivedSet(state.settlements);
 
     const pendingEntries = openEntries.filter((entry) => !entry.settlementId);
     const eligiblePendingSellerEntries = pendingEntries.filter(
-      (entry) => entry.ownerType === "seller" && isSellerEntryEligible(entry, auditByOrderId)
+      (entry) => entry.ownerType === "seller" && isSellerEntryEligible(entry, ordersById, codReceived)
     );
     // Un costo de producto ya liquidado con la tienda paso la compuerta de COD en ese corte, asi
     // que sigue habilitado para el proveedor sin necesidad de releer el pedido (que puede ser muy
@@ -7999,18 +7980,37 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
         entry.ownerType === "seller" &&
         entry.type === "product_cost" &&
         !entry.supplierSettlementId &&
-        (Boolean(entry.settlementId) || isSellerEntryEligible(entry, auditByOrderId))
+        (Boolean(entry.settlementId) || isSellerEntryEligible(entry, ordersById, codReceived))
     );
 
+    // Spec 018 RF_01/RF_20: cada tienda con la MISMA regla que su pantalla, la solicitud y el corte.
+    // La fila se construye con los asientos que el corte cerraria (pedidos completos, sin pasar del
+    // disponible), asi lo que el admin ve es exactamente lo que se corta.
+    const balanceNow = new Date().toISOString();
+    const sellerBalances = new Map(state.sellers.map((seller) => [seller.id, sellerBalanceFromState(state, seller.id, balanceNow)]));
+    const selectedEntryIds = new Set(
+      [...sellerBalances.values()].flatMap((balance) => (balance.unreadableEntryIds.length > 0 ? [] : balance.selection.entryIds))
+    );
+    const selectedSellerEntries = eligiblePendingSellerEntries.filter((entry) => selectedEntryIds.has(entry.id));
+
     const driverLiquidationRows = buildLiquidationRows(state, pendingEntries.filter((entry) => entry.ownerType === "driver"), state.wallet, audits).filter((row) => row.role === "driver");
-    const sellerLiquidationRows = buildLiquidationRows(state, eligiblePendingSellerEntries, state.wallet, audits).filter((row) => row.role === "seller");
+    const sellersWithSomethingPending = new Set(
+      [...sellerBalances].filter(([, balance]) => balance.heldCop !== 0 || balance.codPendingCop !== 0 || balance.unreadableEntryIds.length > 0).map(([sellerId]) => sellerId)
+    );
+    const sellerLiquidationRows = buildLiquidationRows(state, selectedSellerEntries, state.wallet, audits, sellersWithSomethingPending)
+      .filter((row) => row.role === "seller")
+      .map((row) => {
+        const balance = sellerBalances.get(row.id);
+        const withheld = balance ? balance.heldCop !== 0 || balance.codPendingCop !== 0 || balance.unreadableEntryIds.length > 0 : false;
+        return { ...row, sellerBalance: balance, status: withheld ? ("pendiente" as const) : row.status };
+      });
     const pendingSellerOrderIds = new Set(pendingEntries.filter((entry) => entry.ownerType === "seller").map((entry) => entry.orderId).filter(Boolean) as string[]);
 
     return {
       rows: [...sellerLiquidationRows, ...driverLiquidationRows],
       sellerRows: sellerLiquidationRows,
       driverRows: driverLiquidationRows,
-      storeRows: buildStoreLiquidationRows(state, eligiblePendingSellerEntries),
+      storeRows: buildStoreLiquidationRows(state, selectedSellerEntries),
       supplierRows: buildSupplierLiquidationRows(state, supplierPendingEntries),
       // El cashback del lider no pasa por la compuerta de COD de las tiendas: es margen ya
       // causado al cerrar el pedido, no plata que haya que esperar del domiciliario. Se le pasan
@@ -8110,12 +8110,21 @@ function LiquidationsPage({ state, setState }: { state: AppState; setState: (sta
   };
 
   const closeRow = (row: LiquidationRow, chargeGmf?: boolean, note?: string) => {
+    // Spec 018 (R2-RF_20-1): una fila de tienda sin asientos (todo retenido, solo efectivo con el
+    // domiciliario o saldo incompleto) no tiene nada que cortar. Enviar la lista vacia hacia que el
+    // servidor tomara la tienda entera y el corte quedara marcado como pagado sin transferencia.
+    if (row.role === "seller" && row.walletEntryIds.length === 0) {
+      setError(row.sellerBalance ? `No hay nada que cortar para ${row.name}. ${payoutRejectionMessage(row.sellerBalance)}` : `No hay nada que cortar para ${row.name}.`);
+      return;
+    }
     // Rango abierto a proposito: el corte tiene que llevarse TODO lo pendiente de la cuenta, que es
     // exactamente lo que muestra la fila. Mandar el rango de la pantalla dejaba fuera lo anterior
     // (y ademas recortaba el dia en curso, porque endDate es fecha local y createdAt es UTC).
     setBusyId(`${row.role}-${row.id}`);
     setError(null);
-    void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate: "", endDate: "", chargeGmf, note })
+    // Spec 018: en tienda se envian los asientos exactos de la fila (pedidos completos ya elegidos
+    // con la regla unica); el servidor vuelve a aplicar la misma regla sobre ellos.
+    void createFirebaseSettlement({ kind: row.role, ownerId: row.id, startDate: "", endDate: "", walletEntryIds: row.role === "seller" ? row.walletEntryIds : undefined, chargeGmf, note })
       .then(async ({ settlement, walletEntries }) => {
         if (row.role === "driver" && row.cashToReturnCop > 0) {
           mergeSettlement(settlement, walletEntries);
@@ -9183,6 +9192,42 @@ function SellerAbonoTable({ rows, totalCop, gmfCop }: { rows: SellerAbonoRow[]; 
   );
 }
 
+/**
+ * Spec 018 RF_20: lo que queda fuera del disponible y por que. Mismas cifras que ve la tienda.
+ * RF_22: con asientos que no se pueden atribuir, no se muestra una cifra parcial.
+ */
+/** Spec 018: el saldo de una tienda desde el estado del navegador (admin), con la regla unica. */
+function sellerBalanceFromState(state: AppState, sellerId: string, now: string): SellerBalance {
+  return computeSellerBalance(
+    buildSellerBalanceInput({
+      sellerId,
+      wallet: state.wallet,
+      orders: state.orders,
+      settlements: state.settlements,
+      settings: state.settings as unknown as Record<string, unknown>,
+      zones: state.zones as unknown as Record<string, unknown>[],
+      now
+    })
+  );
+}
+
+function SellerBalanceBreakdown({ balance }: { balance: SellerBalance }) {
+  if (balance.unreadableEntryIds.length > 0) {
+    return (
+      <p className="mt-2 rounded-2xl bg-rust/10 px-2 py-1.5 text-xs font-semibold text-rust">
+        Saldo incompleto: {balance.unreadableEntryIds.length} movimiento(s) sin pedido legible. No se corta hasta revisarlos.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 border-t border-white/[0.06] pt-2">
+      <DetailLine label={`Efectivo aun con el domiciliario (${balance.codPendingOrderCount})`} value={formatCop(balance.codPendingCop)} />
+      <DetailLine label={`Retenido (${balance.heldOrderCount} pedidos; ${balance.streetOrderCount} en la calle)`} value={formatCop(balance.heldCop)} />
+      <DetailLine label="Total sin cortar" value={formatCop(balance.totalUnsettledCop)} />
+    </div>
+  );
+}
+
 function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
   return (
     <div className="grid gap-3">
@@ -9221,6 +9266,7 @@ function LiquidationRowDetail({ row }: { row: LiquidationRow }) {
             {row.abonoCop > 0 && <DetailLine label="Abonos ya pagados" value={formatCop(row.abonoCop)} tone="rust" />}
             {row.abonoGmfCop > 0 && <DetailLine label="4x1000 de abonos" value={formatCop(row.abonoGmfCop)} tone="rust" />}
             <DetailLine label="A pagar a tienda" value={formatCop(row.receivableCop)} tone="mint" />
+            {row.sellerBalance && <SellerBalanceBreakdown balance={row.sellerBalance} />}
           </div>
         )}
         <div className="rounded-2xl bg-panel p-3">
@@ -11346,6 +11392,54 @@ function SellerLoadFailedNotice({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+type SellerBalanceState =
+  | { status: "loading" }
+  | { status: "ready"; balance: SellerBalance }
+  | { status: "error"; message: string };
+
+/** Spec 018 RF_21: el saldo se refresca solo cada 5 minutos, no en tiempo real. */
+const SELLER_BALANCE_REFRESH_MS = 300000;
+
+/**
+ * Spec 018: el saldo de la tienda, calculado en el servidor con la regla unica (la tienda no puede
+ * leer los cortes de los domiciliarios). Se pide al montar, cada 5 minutos y al volver a la
+ * pestana. RF_22: un fallo NO conserva la cifra anterior; mostrar un saldo viejo como si fuera el
+ * de ahora es justo el tipo de error silencioso que esta spec existe para quitar.
+ */
+function useSellerBalance(sellerId: string, enabled: boolean): { state: SellerBalanceState; retry: () => void } {
+  const [balanceState, setBalanceState] = useState<SellerBalanceState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!enabled || !sellerId) return;
+    let cancelled = false;
+    const load = () => {
+      getFirebaseSellerBalance({ sellerId })
+        .then((balance) => {
+          if (!cancelled) setBalanceState({ status: "ready", balance });
+        })
+        .catch((reason: unknown) => {
+          if (!cancelled) setBalanceState({ status: "error", message: reason instanceof Error ? reason.message : "No se pudo calcular el saldo." });
+        });
+    };
+    load();
+    const timer = window.setInterval(load, SELLER_BALANCE_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [sellerId, enabled, attempt]);
+  const retry = () => {
+    setBalanceState({ status: "loading" });
+    setAttempt((value) => value + 1);
+  };
+  return { state: balanceState, retry };
+}
+
 function SellerView({ state, setState, session, orderSearch, onOrderSearchChange, startDate, endDate, statusFilter, historyStart, searchingHistory, view, onStartDate, onEndDate, onStatusFilter, onSelectRange, periodStats = null, periodStatsError = null, hideFinance = false, loadOutcome = "ok", onRetryLoad }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; startDate: string; endDate: string; statusFilter: string; historyStart?: string; searchingHistory?: boolean; view: AppView; onStartDate: (value: string) => void; onEndDate: (value: string) => void; onStatusFilter: (value: string) => void; onSelectRange: (startDate: string, endDate: string) => void; periodStats?: OrderPeriodStats | null; periodStatsError?: string | null; hideFinance?: boolean; loadOutcome?: LoadOutcome; onRetryLoad?: () => void }) {
   const seller = state.sellers.find((item) => item.id === session.profileId);
   const [sellerOrderTab, setSellerOrderTab] = useState<"operation" | "failed">("operation");
@@ -11421,6 +11515,10 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
   const localKpis = useMemo(() => computeLogisticsKpis(rangeOrders, state), [rangeOrders, state]);
   // Mismas cuatro cifras, pero del periodo completo cuando el rango se sale de lo descargado.
   const sellerKpis = periodStats ?? localKpis;
+  // Spec 018: antes del return anticipado (principio 13). El logistico de tienda no pide saldo.
+  // RNF_04: con la tienda de la SESION la peticion sale en paralelo con la carga de Firestore; con
+  // `seller?.id` esperaba a que llegara la lista de tiendas y la tarjeta tardaba +50 %.
+  const sellerBalance = useSellerBalance(session.profileId, !hideFinance);
 
   // Quien decide que se puede AFIRMAR es `storeProfileState` (T3), no esta pantalla. El viejo
   // `if (!seller)` no sabia si la carga funciono, asi que una lista de tiendas vacia por un fallo
@@ -11467,9 +11565,25 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
           <div className="grid gap-3 lg:grid-cols-[auto_1fr]">
             {!hideFinance && (
               <div className="glass-acid flex min-w-[240px] flex-col justify-center rounded-3xl p-4">
-                <p className="text-[12px] font-semibold opacity-70">Saldo pendiente por liquidar</p>
-                <p className="tabular mt-0.5 text-[28px] font-extrabold leading-none">{formatCop(Math.max(0, sellerBalance(state, seller.id).ledgerCop))}</p>
-                <p className="mt-1.5 text-[11px] leading-snug opacity-70">Lo pendiente de hoy, no el acumulado.</p>
+                <p className="text-[12px] font-semibold opacity-70">Disponible para liquidar</p>
+                {sellerBalance.state.status === "ready" ? (
+                  <>
+                    <p className="tabular mt-0.5 text-[28px] font-extrabold leading-none">{formatCop(sellerBalance.state.balance.availableCop)}</p>
+                    <p className="mt-1.5 text-[11px] leading-snug opacity-70">
+                      Lo que Kentro te puede pagar hoy, en pedidos completos.
+                      {sellerBalance.state.balance.heldCop + sellerBalance.state.balance.codPendingCop !== 0 && ` Retenido o con el domiciliario: ${formatCop(sellerBalance.state.balance.heldCop + sellerBalance.state.balance.codPendingCop)}.`}
+                    </p>
+                  </>
+                ) : sellerBalance.state.status === "error" ? (
+                  <div className="mt-1 grid gap-1.5">
+                    <p className="text-[13px] font-semibold leading-snug">No pudimos calcular tu saldo.</p>
+                    <button type="button" className="focus-ring w-fit rounded-full bg-deep/20 px-3 py-1.5 text-xs font-semibold" onClick={sellerBalance.retry}>
+                      Reintentar
+                    </button>
+                  </div>
+                ) : (
+                  <div aria-label="Calculando saldo" className="mt-1 h-7 w-40 animate-pulse rounded-full bg-deep/20" />
+                )}
               </div>
             )}
             {/* Los cuatro INDICADORES, no el reparto por estado: dicen como va la operacion, no
@@ -11605,7 +11719,7 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
               defaultOpen={pendingPayouts > 0}
               help="Aqui pides que Kentro te transfiera el saldo pendiente. La solicitud se cierra cuando el corte se crea de verdad."
             >
-              <WalletPanel state={state} />
+              <WalletPanel state={state} ownBalance={hideFinance ? undefined : sellerBalance.state} />
             </CollapsiblePanel>
           )}
           {!hideFinance && (

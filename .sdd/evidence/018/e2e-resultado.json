@@ -1,0 +1,101 @@
+{
+  "baseUrl": "https://kentro-last-mile.web.app",
+  "esperado": {
+    "disponible": "$ 109.610",
+    "efectivo": "$ 1.249.070",
+    "retenido": "$ 244.670",
+    "total": "$ 1.603.350"
+  },
+  "recorridos": [
+    {
+      "folder": "HU_01-RF_18-RF_19",
+      "viewport": "390x844",
+      "ok": true,
+      "checks": [
+        {
+          "what": "RF_18 tarjeta heroe muestra $ 109.610",
+          "ok": true
+        },
+        {
+          "what": "RF_18 sin 'Lo pendiente de hoy'",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Disponible para liquidar $ 109.610",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Efectivo aun con el domiciliario $ 1.249.070",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Retenido $ 244.670",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Total sin cortar $ 1.603.350",
+          "ok": true
+        },
+        {
+          "what": "RF_07 el panel no muestra 'Reserva'",
+          "ok": true
+        }
+      ],
+      "consoleErrors": 0,
+      "failedRequests": []
+    },
+    {
+      "folder": "HU_01-RF_18-RF_19",
+      "viewport": "1280x800",
+      "ok": true,
+      "checks": [
+        {
+          "what": "RF_18 tarjeta heroe muestra $ 109.610",
+          "ok": true
+        },
+        {
+          "what": "RF_18 sin 'Lo pendiente de hoy'",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Disponible para liquidar $ 109.610",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Efectivo aun con el domiciliario $ 1.249.070",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Retenido $ 244.670",
+          "ok": true
+        },
+        {
+          "what": "RF_19 panel: Total sin cortar $ 1.603.350",
+          "ok": true
+        },
+        {
+          "what": "RF_07 el panel no muestra 'Reserva'",
+          "ok": true
+        }
+      ],
+      "consoleErrors": 0,
+      "failedRequests": []
+    },
+    {
+      "folder": "HU_02-RF_20",
+      "viewport": "1280x800",
+      "ok": true,
+      "checks": [
+        {
+          "what": "RF_20 fila Bella Mujer del cierre muestra $ 109.610 (igual que la tienda)",
+          "ok": true
+        }
+      ],
+      "rowWaitMs": 4597,
+      "rowText": "Bella Mujer20 pedidos · 8/12Saldo a recibir$ 109.610Neto$ 109.6104x1000-$ 438A girar$ 109.172DetalleAbonarPagar tienda",
+      "consoleErrors": 0,
+      "failedRequests": []
+    }
+  ],
+  "cuentasBorradas": true
+}

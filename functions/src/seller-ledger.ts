@@ -12,8 +12,10 @@ export type WalletEntryDoc = Record<string, any>;
 export type SettlementDoc = Record<string, any>;
 
 /**
- * Pedidos cuyo COD ya entro de la flota. Misma fuente autoritativa que createSettlement:
- * cashAllocations cuando existe, y si no el estado del corte del domiciliario.
+ * Pedidos cuyo COD ya entro de la flota. Es LA definicion (spec 018, RF_04), la que usa el corte:
+ * cashAllocations cubiertas cuando existen; si no, el corte del domiciliario pagado o conciliado.
+ * Antes el cliente y esta funcion aceptaban ademas `cashPendingCop === 0` en un corte pendiente, y
+ * el corte no: la pantalla podia prometer un pago que el corte no cerraba.
  */
 export function buildCodReceivedSet(settlements: SettlementDoc[]) {
   const codReceived = new Set<string>();
@@ -25,7 +27,7 @@ export function buildCodReceivedSet(settlements: SettlementDoc[]) {
       }
       continue;
     }
-    if (settlement.status === "paid" || settlement.status === "reconciled" || settlement.cashPendingCop === 0) {
+    if (settlement.status === "paid" || settlement.status === "reconciled") {
       for (const orderId of settlement.orderIds ?? []) codReceived.add(String(orderId));
     }
   }
@@ -48,53 +50,6 @@ export function isSellerEntryEligible(entry: WalletEntryDoc, ordersById: Map<str
   // Un pedido no entregado (fallido) no tiene COD por recaudar: su cobro no debe esperar.
   if (order.status !== "delivered" && order.status !== "liquidated") return true;
   return codReceived.has(String(entry.orderId));
-}
-
-export type SellerPayableSummary = {
-  /** Neto que un corte podria cerrar hoy. */
-  eligibleCop: number;
-  /** Neto retenido porque el COD del pedido aun no entra de la flota. */
-  blockedCop: number;
-  /** Pedidos distintos que aportan al neto elegible. */
-  eligibleOrderCount: number;
-  /** Pedidos distintos que retienen plata, para poder explicarle a la tienda el porque. */
-  blockedOrderIds: string[];
-};
-
-/**
- * Reparte los asientos sin liquidar de una tienda entre lo que ya se puede pagar y lo que
- * sigue retenido. Es el numero que ve la tienda cuando pide su liquidacion, y tiene que ser
- * el mismo que el admin puede cerrar de verdad con createSettlement.
- */
-export function summarizeSellerPayable(
-  entries: WalletEntryDoc[],
-  ordersById: Map<string, OrderDoc>,
-  codReceived: Set<string>
-): SellerPayableSummary {
-  let eligibleCop = 0;
-  let blockedCop = 0;
-  const eligibleOrders = new Set<string>();
-  const blockedOrders = new Set<string>();
-
-  for (const entry of entries) {
-    if (entry.settlementId) continue;
-    if (!SELLER_LIQUIDATION_TYPES.has(String(entry.type))) continue;
-    const amountCop = Number(entry.amountCop || 0);
-    if (isSellerEntryEligible(entry, ordersById, codReceived)) {
-      eligibleCop += amountCop;
-      if (entry.orderId) eligibleOrders.add(String(entry.orderId));
-    } else {
-      blockedCop += amountCop;
-      if (entry.orderId) blockedOrders.add(String(entry.orderId));
-    }
-  }
-
-  return {
-    eligibleCop: Math.round(eligibleCop),
-    blockedCop: Math.round(blockedCop),
-    eligibleOrderCount: eligibleOrders.size,
-    blockedOrderIds: [...blockedOrders]
-  };
 }
 
 /**

@@ -2,85 +2,87 @@
   "version": 1,
   "phase": "release",
   "activeSpec": {
-    "file": "specs/013_pedido_manual_entero_y_direccion_en_la_guia.md",
+    "file": "specs/018_saldo_de_tienda_igual_al_cierre.md",
     "status": "approved"
   },
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_05",
-        "RF_06",
-        "RF_07",
-        "RF_09",
-        "RF_11",
-        "RNF_02"
+        "RF_04",
+        "RF_22",
+        "RNF_04"
       ],
       "files": [
-        "src/lib/order-address-lines.ts",
-        "src/lib/order-address-lines.test.ts",
-        "src/lib/types.ts"
+        "scripts/verify-018.js",
+        ".sdd/evidence/018/t1-linea-base.txt",
+        "docs/rendimiento.md"
       ],
       "testWritten": true,
       "done": true
     },
     "T2": {
       "requirements": [
-        "RF_05",
         "RF_06",
         "RF_07",
-        "RF_08",
+        "RF_09",
+        "RF_10",
         "RF_11",
-        "RNF_01",
         "RNF_02"
       ],
       "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/spec-013-guards.test.ts",
-        ".sdd/evidence/013/mutacion-rnf02.txt"
+        "functions/src/seller-retention.ts",
+        "src/lib/seller-retention.test.ts",
+        ".sdd/evidence/018/mutacion-rnf02.txt"
       ],
       "testWritten": true,
       "done": true
     },
     "T3": {
       "requirements": [
-        "RF_08",
-        "RF_12",
-        "RNF_02"
+        "RF_03",
+        "RF_04"
       ],
       "files": [
-        "src/lib/order-export.ts",
-        "src/lib/order-export.test.ts",
-        "src/lib/spec-013-guards.test.ts"
+        "functions/src/seller-ledger.ts",
+        "src/lib/seller-ledger.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T4": {
       "requirements": [
-        "RF_09",
-        "RF_10",
-        "RF_11",
+        "RF_02",
+        "RF_05",
+        "RF_08",
+        "RF_12",
         "RF_13",
+        "RF_14",
+        "RF_15",
+        "RF_16",
+        "RF_23",
+        "RF_24",
         "RNF_01"
       ],
       "files": [
-        "functions/src/orders.ts",
-        "src/lib/firebase/auth.ts",
-        "src/lib/actions.ts",
-        "src/lib/actions.test.ts",
-        "src/lib/spec-013-guards.test.ts"
+        "functions/src/seller-balance.ts",
+        "src/lib/seller-balance.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T5": {
       "requirements": [
-        "RF_09",
-        "RF_10"
+        "RF_01",
+        "RF_22",
+        "RNF_03"
       ],
       "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/spec-013-guards.test.ts"
+        "functions/src/seller-balance-api.ts",
+        "functions/src/index.ts",
+        "src/lib/firebase/auth.ts",
+        "src/lib/spec-018-guards.test.ts",
+        "scripts/verify-018.js",
+        ".sdd/evidence/018/t5-query-check.txt"
       ],
       "testWritten": true,
       "done": true
@@ -88,15 +90,15 @@
     "T6": {
       "requirements": [
         "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04",
-        "RNF_03",
-        "RNF_04"
+        "RF_12",
+        "RF_13",
+        "RF_17",
+        "RF_23",
+        "RF_24"
       ],
       "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/spec-013-guards.test.ts"
+        "functions/src/orders.ts",
+        "src/lib/spec-018-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
@@ -104,16 +106,182 @@
     "T7": {
       "requirements": [
         "RF_01",
-        "RF_02",
-        "RF_04",
-        "RF_05",
-        "RF_06",
-        "RF_07"
+        "RF_16"
       ],
       "files": [
-        "scripts/verify-013.js",
-        "src/lib/spec-013-guards.test.ts",
-        ".sdd/evidence/013/**"
+        "functions/src/orders.ts",
+        "functions/src/seller-ledger.ts",
+        "src/lib/seller-ledger.test.ts",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T8": {
+      "requirements": [
+        "RF_25",
+        "RF_01",
+        "RNF_01"
+      ],
+      "files": [
+        "functions/src/store-summary.ts",
+        "functions/src/store-api.ts",
+        "src/lib/store-summary.test.ts",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T9": {
+      "requirements": [
+        "RF_04",
+        "RF_20"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T10": {
+      "requirements": [
+        "RF_01",
+        "RF_20",
+        "RF_22"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T11": {
+      "requirements": [
+        "RF_18",
+        "RF_21",
+        "RF_22"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T12": {
+      "requirements": [
+        "RF_07",
+        "RF_16",
+        "RF_19"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/finance.ts",
+        "src/lib/finance.test.ts",
+        "src/lib/actions.ts",
+        "src/lib/types.ts",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T13": {
+      "requirements": [
+        "RF_01",
+        "RF_08",
+        "RF_09",
+        "RNF_04"
+      ],
+      "files": [
+        "scripts/verify-018.js",
+        "docs/rendimiento.md",
+        ".sdd/evidence/018/t13-medicion.txt"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T14": {
+      "requirements": [
+        "RF_01",
+        "RF_02",
+        "RF_09",
+        "RF_14",
+        "RF_20",
+        "RF_22",
+        "RF_24",
+        "RF_25"
+      ],
+      "files": [
+        "functions/src/seller-balance.ts",
+        "src/lib/seller-balance.test.ts",
+        "functions/src/store-api.ts",
+        "functions/src/orders.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T15": {
+      "requirements": [
+        "RF_08",
+        "RF_14",
+        "RF_20",
+        "RF_22",
+        "RF_23",
+        "RF_24"
+      ],
+      "files": [
+        "functions/src/seller-balance.ts",
+        "src/lib/seller-balance.test.ts",
+        "functions/src/orders.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T16": {
+      "requirements": [
+        "RNF_04",
+        "RF_18"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "functions/src/seller-balance-api.ts",
+        "src/lib/spec-018-guards.test.ts",
+        "scripts/verify-018.js",
+        "docs/rendimiento.md",
+        ".sdd/evidence/018/t13-medicion.txt"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T17": {
+      "requirements": [
+        "RF_26"
+      ],
+      "files": [
+        "functions/src/store-summary.ts",
+        "functions/src/store-api.ts",
+        "src/lib/store-summary.test.ts",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T18": {
+      "requirements": [
+        "RNF_04"
+      ],
+      "files": [
+        "src/components/operations-app.tsx",
+        "src/lib/firebase/auth.ts",
+        "src/lib/spec-018-guards.test.ts",
+        "docs/rendimiento.md",
+        ".sdd/evidence/018/t13-medicion.txt"
       ],
       "testWritten": true,
       "done": true
@@ -193,7 +361,7 @@
     },
     "013": {
       "file": "specs/013_pedido_manual_entero_y_direccion_en_la_guia.md",
-      "status": "implementada",
+      "status": "pendiente de release",
       "origen": "reporte del responsable 2026-09-15: formulario de pedido manual cortado en 3 columnas (peor en movil) y guia sin direccion cuando la tienda usa 'normalizada' como observacion",
       "approved": "2026-09-15",
       "nota": "Aprobada bajo el objetivo 'haz todo el flujo'; seis decisiones del orquestador marcadas revertibles en la seccion 8.",
@@ -220,6 +388,29 @@
       "file": "specs/016_editar_un_pedido_con_la_misma_comodidad.md",
       "status": "borrador",
       "origen": "informe de cierre 013 (H6)"
+    },
+    "017": {
+      "file": "specs/017_reimportar_no_pisa_lo_operado.md",
+      "status": "draft",
+      "paused": "2026-09-16: en pausa mientras se redacta la 018"
+    },
+    "018": {
+      "file": "specs/018_saldo_de_tienda_igual_al_cierre.md",
+      "status": "implementada",
+      "approved": "2026-09-16",
+      "plan": "specs/018_plan.md",
+      "origen": "2026-09-16: saldo de tienda (Bella Mujer 1.603.350) no coincide con cierre del admin (354.280)",
+      "tasks": "specs/018_tasks.md",
+      "deployed": "2026-09-17",
+      "functionsDeployed": "2026-09-17 (getSellerBalance, createSettlement, requestSellerPayout, storeApi, applyOrderTransition)",
+      "hostingDeployed": "2026-09-17 (dos veces: tras T15 y tras T16)",
+      "smoke": "2026-09-17 E2E produccion PASA (HU_01 390/1280, HU_02 1280, 0 errores consola, 0 red fallida); compare al peso en 5 tiendas; static{ 0",
+      "review": "3 rondas adversariales de un agente: 6+3 hallazgos corregidos (T14, T15), ronda 3 limpia",
+      "report": ".sdd/evidence/018/informe-cierre-018.md",
+      "pendiente": "nada de la spec; PR y push cuando el responsable lo decida",
+      "verificacionHumana": "2026-09-17: el responsable confirma que Bella Mujer ve el mismo valor en su pantalla y en el cierre del admin (DoD 7).",
+      "rf26": "2026-09-17: storeApi desplegada; indice y resumen traen avisos con el cambio (probado en produccion)",
+      "rnf04": "2026-09-17: cumplido tras T18 (movil 991/1.015 ms, escritorio 1.023/894 ms vs 989/975 ms antes)"
     }
   },
   "archivedTasks": {
@@ -1584,6 +1775,120 @@
         "testWritten": true,
         "done": true,
         "note": "La proteccion de DANDA atada a comportamiento: degradar el throw a 'return;' pone 2 pruebas en rojo y quitar la llamada del sello, 3 guardas. La guarda T6 de '<X>.has(sellerId)' quedo obsoleta y fue reemplazada por una equivalente que conserva su exigencia."
+      }
+    },
+    "013": {
+      "T1": {
+        "requirements": [
+          "RF_05",
+          "RF_06",
+          "RF_07",
+          "RF_09",
+          "RF_11",
+          "RNF_02"
+        ],
+        "files": [
+          "src/lib/order-address-lines.ts",
+          "src/lib/order-address-lines.test.ts",
+          "src/lib/types.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_05",
+          "RF_06",
+          "RF_07",
+          "RF_08",
+          "RF_11",
+          "RNF_01",
+          "RNF_02"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-013-guards.test.ts",
+          ".sdd/evidence/013/mutacion-rnf02.txt"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_08",
+          "RF_12",
+          "RNF_02"
+        ],
+        "files": [
+          "src/lib/order-export.ts",
+          "src/lib/order-export.test.ts",
+          "src/lib/spec-013-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_09",
+          "RF_10",
+          "RF_11",
+          "RF_13",
+          "RNF_01"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "src/lib/firebase/auth.ts",
+          "src/lib/actions.ts",
+          "src/lib/actions.test.ts",
+          "src/lib/spec-013-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RF_09",
+          "RF_10"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-013-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T6": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03",
+          "RF_04",
+          "RNF_03",
+          "RNF_04"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-013-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T7": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_04",
+          "RF_05",
+          "RF_06",
+          "RF_07"
+        ],
+        "files": [
+          "scripts/verify-013.js",
+          "src/lib/spec-013-guards.test.ts",
+          ".sdd/evidence/013/**"
+        ],
+        "testWritten": true,
+        "done": true
       }
     }
   },

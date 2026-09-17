@@ -4,6 +4,7 @@ import { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, sign
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import type { BulkSignupDisableReport } from "../../../functions/src/community-containment";
+import type { SellerBalance } from "../../../functions/src/seller-balance";
 import { validateLogo } from "../../../functions/src/community-pricing";
 import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { clearFirebaseLocalCache, getFirebaseClient } from "./client";
@@ -440,6 +441,34 @@ export async function setFirebaseStoreUchatConfig(input: { sellerId: string; api
   const payload = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const result = await callable(payload);
   return result.data as { ok: boolean; configured: boolean; enabled: boolean; platform: "chatby" | "chateapro" | "lucidbot"; dropiConfigured: boolean };
+}
+
+/**
+ * Spec 018: saldo de una tienda calculado en el servidor (disponible, efectivo con el domiciliario,
+ * retenido y total). La tienda consulta la suya; el admin pasa `sellerId`.
+ */
+export async function getFirebaseSellerBalance(input: { sellerId?: string } = {}): Promise<SellerBalance> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "getSellerBalance");
+  const result = await callable(input.sellerId ? { sellerId: input.sellerId } : {});
+  return result.data as SellerBalance;
+}
+
+/**
+ * Spec 018 RNF_04: llamada vacia para que `getSellerBalance` este caliente cuando la tienda entre.
+ * Se hace desde la pantalla de entrada, sin sesion, asi que el servidor responde "permiso denegado":
+ * ese rechazo ES el resultado esperado y por eso se descarta. Lo unico que importa es que arranque la
+ * instancia mientras la persona escribe su clave.
+ */
+export function warmFirebaseSellerBalance(): void {
+  const client = getFirebaseClient();
+  if (!client) return;
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getSellerBalance");
+  callable({}).catch(() => {
+    // Rechazo esperado (sin sesion): no hay nada que mostrar ni que reintentar.
+  });
 }
 
 export async function createFirebaseSettlement(input: {

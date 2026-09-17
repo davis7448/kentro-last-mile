@@ -575,6 +575,7 @@ export type AppState = {
     fulfillmentFeeCop: number;
     driverDeliveredPayCop: number;
     driverFailedPayCop: number;
+    /** @deprecated Spec 018: la reserva fija por pedido abierto se retiro; la retencion sale de la tarifa real (functions/src/seller-retention.ts). Sin lectores. */
     pendingReserveCop: number;
     debtBlockDays: number;
     failedRateAlertPercent: number;

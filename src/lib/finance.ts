@@ -379,19 +379,6 @@ export function selectOpenWalletEntries(wallet: WalletEntry[]): WalletEntry[] {
   return wallet.filter((entry) => !entry.settlementId || (entry.type === "product_cost" && !entry.supplierSettlementId));
 }
 
-export function sellerBalance(state: AppState, sellerId: string) {
-  const ledgerCop = state.wallet
-    .filter((entry) => entry.ownerType === "seller" && entry.ownerId === sellerId)
-    .reduce((sum, entry) => sum + entry.amountCop, 0);
-  const pendingOrders = state.orders.filter(
-    (order) =>
-      order.sellerId === sellerId &&
-      !["delivered", "failed", "cancelled", "liquidated"].includes(order.status)
-  ).length;
-  const reservedCop = pendingOrders * state.settings.pendingReserveCop;
-  return { ledgerCop, pendingOrders, reservedCop, availableCop: Math.max(0, ledgerCop - reservedCop) };
-}
-
 export type DriverSettlementCashRow = {
   settlementId: string;
   label: string;

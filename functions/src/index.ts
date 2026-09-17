@@ -36,6 +36,7 @@ export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
 export { cleanupShopifySyncIssues } from "./sync-issues-cleanup";
 export { getOrderStats } from "./order-stats";
 export { getPlatformPosition } from "./platform-position";
+export { getSellerBalance } from "./seller-balance-api";
 export { correctOrderStatus } from "./order-corrections";
 
 initializeApp();

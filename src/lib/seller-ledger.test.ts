@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 // La logica vive en el backend (unica fuente de verdad para la elegibilidad de pago). Se importa
 // desde functions/ en vez de duplicarla aqui: es la cifra que se le paga a una tienda y ya estaba
 // triplicada entre la UI, store-api.ts y createSettlement.
-import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange, summarizeSellerPayable } from "../../functions/src/seller-ledger";
+import { computeSellerBalance } from "../../functions/src/seller-balance";
+import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange } from "../../functions/src/seller-ledger";
 
 const orders = new Map<string, Record<string, unknown>>([
   ["o-prepago", { paymentMethod: "prepaid", status: "delivered" }],
@@ -25,79 +26,57 @@ describe("buildCodReceivedSet", () => {
     expect(set.has("o-3")).toBe(true);
   });
 
+  it("spec 018 RF_04: un corte pendiente sin asignaciones NO cuenta aunque su cashPendingCop sea 0 (regla del corte)", () => {
+    const set = buildCodReceivedSet([{ kind: "driver", status: "pending", cashPendingCop: 0, orderIds: ["o-5"] }]);
+    expect(set.has("o-5")).toBe(false);
+  });
+
+  it("spec 018 RF_04: el corte conciliado sin asignaciones si cuenta", () => {
+    const set = buildCodReceivedSet([{ kind: "driver", status: "reconciled", orderIds: ["o-6"] }]);
+    expect(set.has("o-6")).toBe(true);
+  });
+
+  it("spec 018 RF_04: una asignacion cubierta sin orderId se ignora", () => {
+    const set = buildCodReceivedSet([{ kind: "driver", cashAllocations: [{ covered: true }, { orderId: "o-7", covered: true }] }]);
+    expect([...set]).toEqual(["o-7"]);
+  });
+
+  it("spec 018 RF_03: abonos, 4x1000 y restituciones siguen siendo pagables sin pedido", () => {
+    for (const entry of [
+      { type: "seller_abono", amountCop: -50_000 },
+      { type: "gmf_tax", amountCop: -200 },
+      { type: "seller_abono", amountCop: 30_000 }
+    ]) {
+      expect(isSellerEntryEligible(entry, orders, new Set())).toBe(true);
+    }
+  });
+
   it("ignora los cortes que no son de domiciliario", () => {
     const set = buildCodReceivedSet([{ kind: "seller", status: "paid", orderIds: ["o-4"] }]);
     expect(set.size).toBe(0);
   });
 });
 
-describe("summarizeSellerPayable", () => {
-  const codReceived = new Set(["o-cod-cobrado"]);
-
-  it("separa lo liquidable de lo retenido por COD sin recaudar", () => {
-    const summary = summarizeSellerPayable(
-      [
-        { type: "cod_revenue", orderId: "o-prepago", amountCop: 100_000 },
-        { type: "cod_revenue", orderId: "o-cod-cobrado", amountCop: 50_000 },
-        { type: "cod_revenue", orderId: "o-cod-pendiente", amountCop: 70_000 },
-        { type: "delivery_fee", orderId: "o-cod-pendiente", amountCop: -12_000 }
+// `summarizeSellerPayable` se retiro en la spec 018: su reparto vive ahora en `computeSellerBalance`
+// (seller-balance.ts), que ademas aplica la retencion. Se conserva el caso auditado de OnStok.
+describe("spec 018 · computeSellerBalance conserva el reparto auditado de OnStok (19-ago-2026)", () => {
+  it("2.180.800 sin liquidar = 2.108.900 liquidables + 71.900 con el domiciliario", () => {
+    const balance = computeSellerBalance({
+      openEntries: [
+        { id: "e-1", type: "cod_revenue", orderId: "o-prepago", amountCop: 2_108_900 },
+        { id: "e-2", type: "cod_revenue", orderId: "o-cod-pendiente", amountCop: 71_900 }
       ],
-      orders,
-      codReceived
-    );
-    expect(summary.eligibleCop).toBe(150_000);
-    expect(summary.blockedCop).toBe(58_000);
-    expect(summary.eligibleOrderCount).toBe(2);
-    expect(summary.blockedOrderIds).toEqual(["o-cod-pendiente"]);
-  });
-
-  it("no cobra espera al fallido: no tiene COD por recaudar", () => {
-    const summary = summarizeSellerPayable(
-      [{ type: "failed_fee", orderId: "o-fallido", amountCop: -12_000 }],
-      orders,
-      codReceived
-    );
-    expect(summary.eligibleCop).toBe(-12_000);
-    expect(summary.blockedCop).toBe(0);
-  });
-
-  it("los abonos a tienda siempre entran, sin pedido asociado", () => {
-    const summary = summarizeSellerPayable(
-      [{ type: "seller_abono", amountCop: -30_000 }],
-      orders,
-      codReceived
-    );
-    expect(summary.eligibleCop).toBe(-30_000);
-  });
-
-  it("excluye lo ya liquidado y los tipos que no cuentan para el corte", () => {
-    const summary = summarizeSellerPayable(
-      [
-        { type: "cod_revenue", orderId: "o-prepago", amountCop: 100_000, settlementId: "stl-1" },
-        { type: "driver_earning", orderId: "o-prepago", amountCop: 9_000 },
-        { type: "platform_margin", orderId: "o-prepago", amountCop: 3_000 }
-      ],
-      orders,
-      codReceived
-    );
-    expect(summary.eligibleCop).toBe(0);
-    expect(summary.blockedCop).toBe(0);
-  });
-
-  it("reproduce el caso auditado de OnStok (19-ago-2026)", () => {
-    // 2.180.800 sin liquidar = 2.108.900 liquidables + 71.900 retenidos por KNT-003392,
-    // un entregado COD cuyo efectivo aun no entra de la flota.
-    const summary = summarizeSellerPayable(
-      [
-        { type: "cod_revenue", orderId: "o-prepago", amountCop: 2_108_900 },
-        { type: "cod_revenue", orderId: "o-cod-pendiente", amountCop: 71_900 }
-      ],
-      orders,
-      codReceived
-    );
-    expect(summary.eligibleCop).toBe(2_108_900);
-    expect(summary.blockedCop).toBe(71_900);
-    expect(summary.eligibleCop + summary.blockedCop).toBe(2_180_800);
+      ordersById: orders,
+      streetCandidates: [],
+      codReceived: new Set(["o-cod-cobrado"]),
+      chargedFulfillmentOrderIds: new Set(),
+      settings: {},
+      zonesById: new Map(),
+      now: "2026-08-19T12:00:00.000Z"
+    });
+    expect(balance.availableCop).toBe(2_108_900);
+    expect(balance.codPendingCop).toBe(71_900);
+    expect(balance.totalUnsettledCop).toBe(2_180_800);
   });
 });
 
