@@ -136,6 +136,11 @@ sea el flete que de verdad se le cobraria a esa tienda si el pedido vuelve.
   retenido y por cuantos pedidos en la calle.
 - **RF_25 (ubicua):** La API de solo lectura para tiendas MUST devolver el disponible, el efectivo aun con
   el domiciliario y el retenido con la misma regla que la pantalla de la tienda.
+- **RF_26 (evento):** **Cuando** alguien —persona o agente automatico— consulte la API de solo lectura
+  para tiendas (su indice o su resumen de saldo), el sistema MUST incluir en la propia respuesta que significa
+  cada cifra del saldo y un aviso fechado del cambio del 2026-09-17 (`disponibleCop` ya descuenta la retencion
+  por pedidos en la calle; `retenidoCop` y `retenidoPedidos` son nuevos), para que quien consulte se entere sin
+  documentacion aparte.
 
 ### Pantallas
 
@@ -262,6 +267,7 @@ sea el flete que de verdad se le cobraria a esa tienda si el pedido vuelve.
 
 | Fecha | Cambio | Motivo |
 |---|---|---|
+| 2026-09-17 | RF_26: la API para tiendas avisa en su respuesta del cambio de `disponibleCop` y explica `retenidoCop` | Pedido del responsable al aprobar la entrega: que el agente que consulte la API se entere |
 | 2026-09-16 | Segunda enmienda tras `/sdd-analyze`: RF_14 y RF_24 cubren la seleccion que suma cero o menos; decisiones 8.10 y 8.11 | Hallazgos 1 y 5 de la segunda pasada |
 | 2026-09-16 | Enmienda tras `/sdd-analyze`: retencion por pedidos completos sin movimientos (RF_02, RF_08, RF_12-RF_14), cortes con rango (RF_23), corte vacio (RF_24), API de tiendas (RF_25), linea base de rendimiento previa (RNF_04), bodega a la 019 | Hallazgos 1, 2, 3 del analisis y decisiones 8.4, 8.7-8.9 |
 | 2026-09-16 | Revision adversarial: regla de cobro real, retencion escrita en el corte, solicitud bloqueada en cero, una definicion de efectivo recibido; requisitos renumerados RF_01-RF_22 | Seis preguntas del revisor y decisiones 8.3-8.6 |

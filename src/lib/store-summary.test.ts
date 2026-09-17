@@ -59,3 +59,21 @@ describe("spec 018 · RF_25 · buildStoreSummary", () => {
     expect(summary.pagos.some((pago) => pago.tipo === "liquidacion" && pago.montoCop === 90000)).toBe(true);
   });
 });
+
+describe("spec 018 · RF_26 · la API avisa del cambio a quien la consulta", () => {
+  const balance = computeSellerBalance(buildSellerBalanceInput({ sellerId: SELLER, wallet, orders, settlements, settings: {}, zones: [], now: NOW }));
+  const summary = buildStoreSummary(wallet, new Map(settlements.map((s) => [s.id, s])), balance, settlements);
+
+  it("el resumen trae un aviso fechado que nombra disponibleCop y retenidoCop", () => {
+    expect(summary.avisos).toHaveLength(1);
+    const [aviso] = summary.avisos;
+    expect(aviso.fecha).toBe("2026-09-17");
+    expect(aviso.cambio).toMatch(/disponibleCop/);
+    expect(aviso.cambio).toMatch(/retenidoCop/);
+    expect(aviso.cambio).toMatch(/pedidos en la calle/);
+  });
+
+  it("significado explica tambien retenidoPedidos", () => {
+    expect(summary.significado.retenidoPedidos).toMatch(/pedidos/);
+  });
+});

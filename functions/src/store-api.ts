@@ -11,7 +11,7 @@ import {
   type SettlementDoc,
   type WalletEntryDoc
 } from "./seller-ledger";
-import { buildStoreSummary, chargeMagnitude, sumType } from "./store-summary";
+import { buildStoreSummary, chargeMagnitude, STORE_BALANCE_NOTICE, sumType } from "./store-summary";
 
 /**
  * API de solo lectura para tiendas (sellers).
@@ -299,12 +299,13 @@ export const storeApi = onRequest(async (request, response) => {
       ok: true,
       tienda: config.sellerName ?? sellerId,
       endpoints: {
-        "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponible/en_liquidacion/bloqueado_cod), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
+        "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
         "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
         "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa, estado de pago y desglose financiero real por pedido (cod, flete, costo producto, neto).",
         "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
       },
-      autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>."
+      autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>.",
+      avisos: [STORE_BALANCE_NOTICE]
     });
     return;
   }

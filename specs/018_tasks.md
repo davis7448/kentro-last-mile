@@ -167,6 +167,15 @@ Reescritas el 2026-09-16 tras las dos pasadas de `/sdd-analyze`.
   * Verificacion: guardas (el hook recibe `session.profileId`; la callable declara memoria); nueva medicion `perf`
     en produccion dentro de +10 %, o riesgo elevado al responsable con `minInstances`.
 
+- [x] **T17: La API para tiendas avisa del cambio a quien la consulta**
+  * Requisitos cubiertos: RF_26
+  * Archivos: functions/src/store-summary.ts, functions/src/store-api.ts, src/lib/store-summary.test.ts, src/lib/spec-018-guards.test.ts
+  * Accion: aviso fechado `STORE_BALANCE_NOTICE` en `store-summary.ts`; `buildStoreSummary` lo devuelve en
+    `avisos`; el indice (`docs`) lo incluye y su descripcion de `/resumen` nombra `retenidoCop`.
+  * Verificacion: `store-summary.test.ts` (el resumen trae el aviso con fecha y los campos nombrados); guarda
+    del indice; despliegue de `storeApi` y consulta real al indice.
+
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |
@@ -196,6 +205,7 @@ Reescritas el 2026-09-16 tras las dos pasadas de `/sdd-analyze`.
 | RF_23 | T4, T6 |
 | RF_24 | T4, T6 |
 | RF_25 | T8 |
+| RF_26 | T17 |
 | RNF_01 | T4, T8 |
 | RNF_02 | T2 |
 | RNF_03 | T5 |

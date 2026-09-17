@@ -258,6 +258,19 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T17": {
+      "requirements": [
+        "RF_26"
+      ],
+      "files": [
+        "functions/src/store-summary.ts",
+        "functions/src/store-api.ts",
+        "src/lib/store-summary.test.ts",
+        "src/lib/spec-018-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",
@@ -380,7 +393,9 @@
       "smoke": "2026-09-17 E2E produccion PASA (HU_01 390/1280, HU_02 1280, 0 errores consola, 0 red fallida); compare al peso en 5 tiendas; static{ 0",
       "review": "3 rondas adversariales de un agente: 6+3 hallazgos corregidos (T14, T15), ronda 3 limpia",
       "report": ".sdd/evidence/018/informe-cierre-018.md",
-      "pendiente": "DoD 7 (responsable mira Bella Mujer tienda y admin); RNF_04 movil no fiable: decidir minInstances; avisar contrato API (disponibleCop baja, retenidoCop nuevo)"
+      "pendiente": "RNF_04 movil: el responsable elige opcion de arranque en frio (recomendada A: despertar la callable al abrir la app)",
+      "verificacionHumana": "2026-09-17: el responsable confirma que Bella Mujer ve el mismo valor en su pantalla y en el cierre del admin (DoD 7).",
+      "rf26": "2026-09-17: storeApi desplegada; indice y resumen traen avisos con el cambio (probado en produccion)"
     }
   },
   "archivedTasks": {

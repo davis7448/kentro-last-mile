@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-09-17
 - **Estado:** desplegada en produccion el 2026-09-17 (functions y hosting, dos veces: tras T15 y tras T16)
-- **Pendiente del responsable:** DoD 7 (mirar Bella Mujer en tienda y admin), decision sobre RNF_04 en movil
+- **Pendiente del responsable:** decision sobre RNF_04 en movil
 
 ## Que cambio para las tiendas
 
@@ -50,7 +50,7 @@ porque ahora se retiene el flete de devolucion de sus 15 pedidos en la calle (18
 4. Dos cortes encadenados sin pedido partido: **si**.
 5. Produccion, cinco tiendas al peso: **si**.
 6. lint (0 errores, 3 avisos previos), tsc raiz y functions, suite: **si**.
-7. El responsable mira Bella Mujer en tienda y admin: **pendiente**.
+7. El responsable mira Bella Mujer en tienda y admin: **si** (confirmado por el responsable el 2026-09-17: mismo valor en las dos pantallas).
 
 ## Revision adversarial
 
@@ -68,7 +68,7 @@ fases):
 1. **RNF_04 en movil.** La tarjeta de la tienda depende ahora de una funcion del servidor; con la funcion en
    frio la carga pasa de 2 s. Opciones: aceptar el tiempo actual, o `minInstances: 1` en `getSellerBalance`
    (coste fijo mensual de una instancia de 512 MiB siempre encendida).
-2. **Aviso a quien use la API para tiendas:** `saldoPendiente.disponibleCop` baja y aparece `retenidoCop`.
+2. ~~Aviso a quien use la API para tiendas~~ — resuelto con RF_26 (T17): la API lo explica en `avisos` de su indice y de `/resumen`, desplegado y comprobado en produccion.
 
 ## Seguimiento propuesto (fuera de esta spec)
 

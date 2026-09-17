@@ -305,3 +305,12 @@ describe("spec 018 · T16 · RNF_04: la cifra no espera a la carga de Firestore"
     expect(/export const getSellerBalance = onCall\(\{[^}]*memory: "512MiB"/.test(api)).toBe(true);
   });
 });
+
+describe("spec 018 · T17 · RF_26: el indice de la API avisa del cambio", () => {
+  it("la respuesta de docs incluye el aviso y la descripcion de /resumen nombra retenidoCop", () => {
+    const api = source("functions/src/store-api.ts");
+    const docs = api.slice(api.indexOf('if (resource === "docs")'), api.indexOf("return;", api.indexOf('if (resource === "docs")')));
+    expect(docs.includes("avisos: [STORE_BALANCE_NOTICE]")).toBe(true);
+    expect(/"GET \/resumen":[^\n]*retenidoCop/.test(docs)).toBe(true);
+  });
+});

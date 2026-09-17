@@ -19,6 +19,18 @@ export function sumType(entries: WalletEntryDoc[], types: string[]) {
  * `SellerBalance` (spec 018, RF_25): la API dice exactamente lo mismo que la pantalla de la tienda
  * y el cierre del admin. Aqui solo se suma lo que ya entro a cortes.
  */
+/**
+ * RF_26: aviso que viaja DENTRO de la respuesta. Quien consulta la API suele ser un agente automatico
+ * sin acceso a esta documentacion: si `disponibleCop` baja de un dia para otro sin explicacion, lo
+ * reportara como un error. Se conserva con su fecha para que el cambio tenga historia.
+ */
+export const STORE_BALANCE_NOTICE = {
+  fecha: "2026-09-17",
+  cambio:
+    "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+  campos: ["disponibleCop", "retenidoCop", "retenidoPedidos", "bloqueadoCodCop", "totalCop"]
+} as const;
+
 export function buildStoreSummary(
   sellerEntries: WalletEntryDoc[],
   settlementsById: Map<string, SettlementDoc>,
@@ -84,8 +96,10 @@ export function buildStoreSummary(
     pagos,
     abonos,
     ajustes,
+    avisos: [STORE_BALANCE_NOTICE],
     significado: {
       disponibleCop: "Saldo que la plataforma ya te puede pagar hoy, en pedidos completos (COD recibido del domiciliario o prepago), neto de abonos y sin la retencion.",
+      retenidoPedidos: "Cuantos pedidos (o ajustes a tu favor) quedan enteros para el siguiente corte por la retencion.",
       retenidoCop: "Saldo pagable que queda para el siguiente corte mientras tengas pedidos en la calle que podrian volver como fallidos (se retiene el flete de devolucion). Los pedidos retenidos van enteros.",
       enLiquidacionCop: "Ya incluido en un corte creado pero aun no pagado.",
       bloqueadoCodCop: "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
