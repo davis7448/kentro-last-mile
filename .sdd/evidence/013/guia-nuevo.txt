@@ -1,0 +1,54 @@
+Rotulo SMK013-2 · 1 pedido
+Imprimir
+
+KENTRO
+
+SMK013-2
+COBRAR $ 50.000
+
+ESCANEAR PARA ABRIR PEDIDO
+
+SMK013-2
+
+Camara: QR · Despacho: pistola
+
+SMK013-2
+
+CLIENTE
+
+Cliente de prueba 2
+
+3000000000
+
+VENDEDOR
+
+Verify 013 - tienda desechable
+
+Recogida vendedor
+
+DIRECCION
+
+Carrera 66 # 9-32
+
+CORRECCION O NOTA
+
+Carrera 66 # 9-32, Cali, Colombia
+
+INDICACIONES
+
+Local al fondo, preguntar por Marta
+
+PRODUCTO
+
+Producto de prueba
+
+Sin SKU
+
+CANTIDAD
+
+1
+
+Sin zona
+
+Ref MAN-SMOKE013-2
+Listo para asignar

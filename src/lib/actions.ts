@@ -1,6 +1,13 @@
 "use client";
 
 import { entriesForClosedOrder, sellerBalance } from "./finance";
+import {
+  applyInventoryMovementsToItems,
+  inventoryMovementsForOrder,
+  normalizeOrderLines,
+  orderOwnsInventoryReservation,
+  summarizeOrderLines
+} from "./inventory-movements";
 import type { AddressRisk, AppState, AuditEvent, FailedCategory, FulfillmentMode, Order, OrderStatus, PaymentMethod, Role } from "./types";
 
 const actorByRole: Record<Role, string> = {
@@ -8,7 +15,8 @@ const actorByRole: Record<Role, string> = {
   seller: "seller",
   seller_logistics: "seller_logistics",
   driver: "driver",
-  messenger: "messenger"
+  messenger: "messenger",
+  community_leader: "community_leader"
 };
 
 function audit(state: AppState, action: string, entity: string, entityId: string, summary: string): AuditEvent {
@@ -32,33 +40,19 @@ function nextLocalTrackingCode(state: AppState) {
   return `KNT-${String(next).padStart(6, "0")}`;
 }
 
-function reserveInventoryForOrder(state: AppState, sellerId: string, sku?: string) {
-  if (!sku) return { state, ok: true };
-  const item = state.inventory.find((entry) => entry.sellerId === sellerId && entry.sku === sku);
-  if (!item) return { state, ok: true };
-  if (item.available - item.reserved <= 0) return { state, ok: false };
-  return {
-    ok: true,
-    state: {
-      ...state,
-      inventory: state.inventory.map((entry) => entry.id === item.id ? { ...entry, reserved: entry.reserved + 1 } : entry)
-    }
-  };
-}
-
+// Espejo offline de las rutas de inventario del backend. Nunca bloquea por falta de stock:
+// un SKU sin ficha simplemente no mueve nada.
 function settleInventoryForClosedOrder(state: AppState, order: Order, outcome: "delivered" | "failed", retry: boolean) {
-  if (!order.sku) return state;
-  const item = state.inventory.find((entry) => entry.sellerId === order.sellerId && entry.sku === order.sku);
-  if (!item) return state;
+  if (!orderOwnsInventoryReservation(order)) return state;
+  if (outcome === "failed" && retry) return state;
   return {
     ...state,
-    inventory: state.inventory.map((entry) => {
-      if (entry.id !== item.id) return entry;
-      if (outcome === "delivered") {
-        return { ...entry, available: Math.max(0, entry.available - 1), reserved: Math.max(0, entry.reserved - 1) };
-      }
-      return retry ? entry : { ...entry, reserved: Math.max(0, entry.reserved - 1) };
-    })
+    inventory: applyInventoryMovementsToItems(
+      state.inventory,
+      order.sellerId,
+      inventoryMovementsForOrder(order),
+      outcome === "delivered" ? "consume" : "release"
+    )
   };
 }
 
@@ -151,6 +145,21 @@ export function rescheduleCustomerCall(state: AppState, orderId: string, resched
       updatedAt: new Date().toISOString()
     }),
     note
+  );
+}
+
+export function registerNoAnswerAttempt(state: AppState, orderId: string): AppState {
+  const stamp = new Date().toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const attempt = `No contesta ${stamp}`;
+  return mutateOrder(
+    state,
+    orderId,
+    (order) => ({
+      ...order,
+      callNote: order.callNote ? `${order.callNote} | ${attempt}` : attempt,
+      updatedAt: new Date().toISOString()
+    }),
+    attempt
   );
 }
 
@@ -260,49 +269,17 @@ export function closeFailed(state: AppState, orderId: string, input: FailedEvide
   };
 }
 
-export function requestPayout(state: AppState, sellerId: string): AppState {
-  const balance = sellerBalance(state, sellerId);
-  if (balance.availableCop <= 0) return state;
-  return {
-    ...state,
-    payouts: [
-      {
-        id: `pay-${Date.now()}`,
-        sellerId,
-        amountCop: balance.availableCop,
-        status: "requested",
-        createdAt: new Date().toISOString()
-      },
-      ...state.payouts
-    ],
-    audit: [
-      audit(state, "payout.request", "seller", sellerId, `Solicitud automatica por ${balance.availableCop} COP`),
-      ...state.audit
-    ]
-  };
-}
-
-export function approvePayout(state: AppState, payoutId: string): AppState {
-  const payout = state.payouts.find((item) => item.id === payoutId);
-  if (!payout) return state;
-  return {
-    ...state,
-    payouts: state.payouts.map((item) => (item.id === payoutId ? { ...item, status: "paid" } : item)),
-    wallet: [
-      {
-        id: `we-${payoutId}`,
-        ownerType: "seller",
-        ownerId: payout.sellerId,
-        type: "payout",
-        amountCop: -payout.amountCop,
-        description: `Liquidacion pagada ${payoutId}`,
-        createdAt: new Date().toISOString()
-      },
-      ...state.wallet
-    ],
-    audit: [audit(state, "payout.paid", "payout", payoutId, "Liquidacion marcada como pagada"), ...state.audit]
-  };
-}
+// requestPayout / approvePayout se eliminaron a proposito.
+//
+// requestPayout era una funcion pura: agregaba la solicitud al estado de React y nada mas, y el
+// efecto que persiste el estado se salia para todo rol que no fuera admin, asi que la tienda veia
+// "requested" en pantalla y el documento nunca llegaba a Firestore. Ahora va por el callable
+// requestSellerPayout, que calcula el monto en el servidor.
+//
+// approvePayout escribia un asiento de wallet `type: "payout"` en negativo. Ese tipo no cuenta
+// para los cortes (SELLER_LIQUIDATION_TYPES), asi que bajaba el saldo en pantalla sin estampar
+// settlementId en los asientos originales: el siguiente corte los volvia a pagar. Una solicitud
+// ahora se cierra sola cuando createSettlement crea el corte real, o con rejectSellerPayout.
 
 export function createManualOrder(
   state: AppState,
@@ -313,12 +290,15 @@ export function createManualOrder(
     customerPhone: string;
     addressRaw: string;
     normalizedAddress?: string;
+    deliveryNotes?: string;
     zoneId?: string;
     paymentMethod: PaymentMethod;
     fulfillmentMode: FulfillmentMode;
     totalCop: number;
     productName?: string;
     sku?: string;
+    quantity?: number;
+    lineItems?: Array<{ productName?: string; sku?: string; quantity: number }>;
     addressRisk: AddressRisk;
   }
 ): AppState {
@@ -328,9 +308,10 @@ export function createManualOrder(
   const orderId = `ord-${Date.now()}`;
   const orderNumber = input.shopifyOrderId?.trim() || `MAN-${String(state.orders.length + 1).padStart(4, "0")}`;
   const addressRisk = input.addressRisk;
-  const selectedSku = input.sku?.trim() || undefined;
-  const reservation = reserveInventoryForOrder(state, seller.id, selectedSku);
-  if (!reservation.ok) return state;
+  const collapsed = summarizeOrderLines(normalizeOrderLines(input));
+  const movements = inventoryMovementsForOrder(collapsed);
+  const reservedSomething = movements.some((movement) =>
+    state.inventory.some((item) => item.sellerId === seller.id && item.sku?.trim().toUpperCase() === movement.skuKey));
   const order: Order = {
     id: orderId,
     trackingCode: nextLocalTrackingCode(state),
@@ -342,13 +323,17 @@ export function createManualOrder(
     customerPhone: input.customerPhone.trim(),
     addressRaw: input.addressRaw.trim(),
     normalizedAddress: input.normalizedAddress?.trim() || undefined,
+    deliveryNotes: input.deliveryNotes?.trim() || undefined,
     addressRisk,
     status: addressRisk === "review" ? "address_risk" : "ready_to_assign",
     paymentMethod: input.paymentMethod,
     fulfillmentMode: input.fulfillmentMode,
     totalCop: input.totalCop,
-    productName: input.productName?.trim() || undefined,
-    sku: selectedSku,
+    productName: collapsed.productName,
+    sku: collapsed.sku,
+    quantity: collapsed.quantity,
+    lineItems: collapsed.lineItems.length > 0 ? collapsed.lineItems : undefined,
+    inventoryReserved: reservedSomething || undefined,
     pickupPointName: seller.pickupPointName || seller.name,
     pickupAddress: seller.pickupAddress || "",
     evidence: [],
@@ -357,7 +342,8 @@ export function createManualOrder(
   };
 
   return {
-    ...reservation.state,
+    ...state,
+    inventory: applyInventoryMovementsToItems(state.inventory, seller.id, movements, "reserve"),
     orders: [order, ...state.orders],
     audit: [audit(state, "order.manual_created", "order", order.id, `Pedido manual ${order.shopifyOrderId} creado`), ...state.audit]
   };

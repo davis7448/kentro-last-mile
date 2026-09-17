@@ -1,17 +1,42 @@
 import { initializeApp } from "firebase-admin/app";
+import { createCommunityPricingResolver } from "./community-order-pricing";
+import { stripUndefined } from "./wallet-entries";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import crypto from "crypto";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
-export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, reconcileInventoryReservations, recordDriverCashReceipt, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
+export {
+  cancelScheduledCommunityPrice,
+  createCommunityLeader,
+  disableCommunitySignupsInRange,
+  dismissMassSignupAlert,
+  getMyStoreTariff,
+  grantCommunityLeadership,
+  reassignSellerCommunity,
+  revokeCommunityLeadership,
+  scheduleCommunityPrice,
+  setCommunityLeaderStatus,
+  setCommunityLinkStatus,
+  setCommunityLogo,
+  setCommunitySlug
+} from "./communities";
+export { onSettingsFloorRaise } from "./community-floor-trigger";
+export { getCommunityBySlug, registerSellerBySlug } from "./community-signup";
+export { getCommunityStats } from "./community-stats";
+export { applyOrderTransition, assignMessengerToOrders, cancelOrder, classifyFailedOrder, closeOrder, confirmImportedOrder, confirmRetryOrder, createManualOrder, createMessengerProfile, createOrUpdatePickupBatch, createSettlement, getOrderAuditTrail, reconcileInventoryReservations, recordDriverCashReceipt, recordSellerAbono, recordSupplierAbono, rejectSellerPayout, requestSellerPayout, unassignMessengerFromOrders, updateImportedOrder, updateOrderAdjustments, updateSettlementStatus } from "./orders";
 export { importShopifyOrder, shopifyComplianceWebhook, shopifyCustomersDataRequest, shopifyCustomersRedact, shopifyOAuthCallback, shopifyOAuthStart, shopifyPilotOAuthStart, shopifyShopRedact, shopifyTenantOAuthStart, syncShopifyHistoricalOrders } from "./shopify";
 export { mercadotiendaContactFormWebhook } from "./contact-form";
 export { onstockOrderWebhook } from "./onstock-webhook";
 export { createStoreWebhookConfig, storeOrderWebhook } from "./store-webhook";
+export { createStoreApiKey, storeApi } from "./store-api";
 export { uchatConfirmWebhook } from "./uchat-webhook";
 export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
+export { cleanupShopifySyncIssues } from "./sync-issues-cleanup";
+export { getOrderStats } from "./order-stats";
+export { getPlatformPosition } from "./platform-position";
+export { correctOrderStatus } from "./order-corrections";
 
 initializeApp();
 
@@ -130,19 +155,32 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
 
   const docId = `shopify-${order.id}`;
   const orderRef = db.collection("orders").doc(docId);
+  const pricingSellerSnap = await db.collection("sellers").doc(sellerId).get();
+  const pricingStamp = await createCommunityPricingResolver(db)(
+    { id: sellerId, ...(pricingSellerSnap.data() ?? {}) },
+    undefined,
+    new Date().toISOString()
+  );
   await db.runTransaction(async (transaction) => {
     const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
     const existingData = existing.data() ?? {};
     const seller = sellerSnap.data() ?? {};
     const trackingCode = typeof existingData.trackingCode === "string" ? existingData.trackingCode : await nextTrackingCode(transaction);
     const items = summarizeShopifyLineItems(order.line_items ?? [], shopDomain);
-    transaction.set(orderRef, {
+    // stripUndefined es obligatorio: el Admin SDK rechaza `undefined` como valor y para una
+    // tienda SIN comunidad el sello viene vacio. Sin esto el webhook devolvia 500 en cada
+    // pedido de Cali de DANDA y Kovia (del 2026-09-11 al 2026-09-15, ~2.000 reintentos de
+    // Shopify) y ningun pedido entraba. Las otras cinco rutas de creacion ya lo hacian.
+    transaction.set(orderRef, stripUndefined({
       id: docId,
       trackingCode,
       shopifyOrderId: order.name,
       shopifyNumericId: order.id,
       shopDomain,
       sellerId,
+      // Precio de comunidad congelado al crear (RF_21).
+      communityId: pricingStamp.communityId,
+      communityPricing: pricingStamp.communityPricing,
       driverId: existingData.driverId ?? null,
       cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",
@@ -163,7 +201,7 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       source: "shopify_webhook",
       createdAt: existingData.createdAt ?? order.created_at ?? new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    }), { merge: true });
   });
 
   await storeSnap.docs[0].ref.set({ lastWebhookAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });

@@ -1,0 +1,314 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; background: #f7f8f4; color: #17201d; -webkit-font-smoothing: antialiased; }
+    a { color: #2b5f4b; } a:hover { color: #17201d; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .disp { font-family: 'Archivo', 'IBM Plex Sans', sans-serif; }
+    th { font-weight: 600; text-align: left; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: #f7f8f4; box-sizing: border-box;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; height: 60px; background: #17201d;">
+    <div style="display: flex; align-items: center; gap: 26px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d9ed5a" stroke-width="2" stroke-linecap="square"><path d="M3 7h11l3 4h4v6h-3"/><path d="M3 17h2"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg>
+        <span class="disp" style="font-size: 19px; font-weight: 800; color: #f7f8f4; letter-spacing: 0.01em;">KENTRO</span>
+      </div>
+      <div style="display: flex; gap: 2px;">
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Operacion</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Wallet</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Inventario</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 600; color: #17201d; background: #d9ed5a; border-radius: 3px;">Liquidaciones</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #d9ed5a;">EN VIVO</span>
+      <span style="font-size: 12px; color: rgba(247,248,244,0.7);">Administrador</span>
+    </div>
+  </div>
+
+  <div style="padding: 28px 32px 40px;">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px;">
+      <div>
+        <p class="mono" style="margin: 0 0 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; color: #56605b;">CORTE FINANCIERO</p>
+        <h1 class="disp" style="margin: 0; font-size: 38px; font-weight: 800; letter-spacing: -0.025em; line-height: 1;">Pendiente por liquidar</h1>
+        <p style="margin: 8px 0 0; font-size: 14px; color: #454f4a;">Acumulado total. No depende del rango de fechas.</p>
+      </div>
+      <button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; color: #17201d; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+        Exportar CSV
+      </button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 2px solid #17201d; background: #fff;">
+      <div style="padding: 22px 24px; border-right: 1px solid rgba(23,32,29,0.14);">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">TIENDAS POR PAGAR</p>
+        <p class="mono disp" style="margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-family: 'IBM Plex Mono', monospace;">$ 17.581.261</p>
+        <p style="margin: 10px 0 0; font-size: 12px; color: #56605b;">8 tiendas habilitadas</p>
+      </div>
+      <div style="padding: 22px 24px; border-right: 1px solid rgba(23,32,29,0.14);">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">SALDO DOMICILIARIOS</p>
+        <p class="mono" style="margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1;">$ 550.000</p>
+        <p style="margin: 10px 0 0; font-size: 12px; color: #56605b;">sin corte cerrado</p>
+      </div>
+      <div style="padding: 22px 24px;">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">RETENIDO PROVEEDORES</p>
+        <p class="mono" style="margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: #b45436;">$ 6.885.750</p>
+        <p style="margin: 10px 0 0; font-size: 12px; color: #56605b;">ADMA LABORATORIO $ 1.586.900</p>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 372px; gap: 20px; margin-top: 20px;">
+
+      <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 2px solid #17201d;">
+          <p class="disp" style="margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.01em;">Tiendas disponibles para pagar</p>
+          <span class="mono" style="font-size: 11px; color: #56605b;">8 cuentas</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 1px solid rgba(23,32,29,0.14);">
+              <th style="padding: 9px 20px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">TIENDA</th>
+              <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">PEDIDOS</th>
+              <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">COD RECAUDADO</th>
+              <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">SALDO A PAGAR</th>
+              <th style="padding: 9px 20px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{stores}}" as="row" hint-placeholder-count="5">
+              <tr style="border-bottom: 1px solid rgba(23,32,29,0.08);">
+                <td style="padding: 11px 20px;">
+                  <p style="margin: 0; font-size: 13px; font-weight: 600;">{{row.name}}</p>
+                  <p class="mono" style="margin: 2px 0 0; font-size: 11px; color: #56605b;">{{row.shop}}</p>
+                </td>
+                <td class="mono" style="padding: 11px 12px; font-size: 13px; color: #454f4a;">{{row.orders}}</td>
+                <td class="mono" style="padding: 11px 12px; font-size: 13px; text-align: right; color: #454f4a;">{{row.cod}}</td>
+                <td class="mono" style="padding: 11px 12px; font-size: 14px; font-weight: 600; text-align: right;">{{row.due}}</td>
+                <td style="padding: 11px 20px; text-align: right;">
+                  <button type="button" style="min-height: 34px; padding: 0 12px; border: 1px solid #2b5f4b; border-radius: 3px; background: rgba(43,95,75,0.06); color: #2b5f4b; font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">Cerrar corte</button>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #efe9dc; border-top: 2px solid #17201d;">
+          <span class="mono" style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; color: #17201d;">TOTAL</span>
+          <span class="mono" style="font-size: 17px; font-weight: 700;">$ 17.581.261</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff; padding: 18px 20px;">
+          <p class="disp" style="margin: 0 0 4px; font-size: 15px; font-weight: 700;">Resultado de la plataforma</p>
+          <p style="margin: 0 0 16px; font-size: 12px; line-height: 1.5; color: #56605b;">Posicion acumulada. No depende del rango.</p>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed rgba(23,32,29,0.18);">
+              <span style="font-size: 13px; color: #454f4a;">Caja actual</span><span class="mono" style="font-size: 14px; font-weight: 600;">$ 12.409.331</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed rgba(23,32,29,0.18);">
+              <span style="font-size: 13px; color: #454f4a;">Por cobrar al domiciliario</span><span class="mono" style="font-size: 14px; font-weight: 600;">$ 550.000</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed rgba(23,32,29,0.18);">
+              <span style="font-size: 13px; color: #454f4a;">Por pagar a tiendas</span><span class="mono" style="font-size: 14px; font-weight: 600; color: #b45436;">$ 17.581.261</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; padding-top: 4px;">
+              <span style="font-size: 13px; font-weight: 600;">Utilidad acumulada</span><span class="mono" style="font-size: 18px; font-weight: 700; color: #2b5f4b;">$ 4.217.500</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff; padding: 18px 20px;">
+          <p class="disp" style="margin: 0 0 14px; font-size: 15px; font-weight: 700;">Bloqueado por COD</p>
+          <p class="mono" style="margin: 0; font-size: 28px; font-weight: 700; color: #b45436; letter-spacing: -0.02em;">$ 1.240.900</p>
+          <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #56605b;">Pedidos entregados cuyo efectivo aun no entra de la flota. Se libera al marcar el recaudo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff; margin-top: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 2px solid #17201d;">
+        <p class="disp" style="margin: 0; font-size: 15px; font-weight: 700;">Liquidaciones cerradas</p>
+        <span class="mono" style="font-size: 11px; color: #56605b;">45 cortes</span>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(23,32,29,0.14);">
+            <th style="padding: 9px 20px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">CUENTA</th>
+            <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">PERIODO</th>
+            <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">ESPERADO</th>
+            <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">RECIBIDO</th>
+            <th style="padding: 9px 12px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">PENDIENTE</th>
+            <th style="padding: 9px 20px; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">ESTADO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: #efe9dc; border-bottom: 1px solid rgba(23,32,29,0.14);">
+            <td style="padding: 12px 20px;">
+              <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"><path d="M6 9l6 6 6-6"/></svg>
+                Domiciliario
+              </span>
+            </td>
+            <td class="mono" style="padding: 12px; font-size: 12px; color: #454f4a;">18 ago &rarr; 20 ago</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right;">$ 8.208.225</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; color: #2b5f4b; font-weight: 600;">$ 8.208.225</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; font-weight: 600;">$ 0</td>
+            <td style="padding: 12px 20px;">
+              <span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid #17201d; border-radius: 2px; background: #17201d; color: #f7f8f4; font-size: 10px; font-weight: 600; letter-spacing: 0.1em;">CONCILIADA</span>
+            </td>
+          </tr>
+          <tr style="background: #efe9dc;">
+            <td colspan="6" style="padding: 0 20px 20px;">
+              <div style="border: 1px solid rgba(23,32,29,0.2); background: #fff;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid rgba(23,32,29,0.14);">
+                  <p class="mono" style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.16em;">RECAUDOS RECIBIDOS</p>
+                  <span class="mono" style="font-size: 11px; color: #56605b;">4 abonos &middot; $ 8.208.225</span>
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid rgba(23,32,29,0.1);">
+                      <th style="padding: 7px 16px; font-size: 10px; letter-spacing: 0.12em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">FECHA</th>
+                      <th style="padding: 7px 12px; font-size: 10px; letter-spacing: 0.12em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">VALOR</th>
+                      <th style="padding: 7px 12px; font-size: 10px; letter-spacing: 0.12em; color: #56605b; font-family: 'IBM Plex Mono', monospace; text-align: right;">PENDIENTE DESPUES</th>
+                      <th style="padding: 7px 16px; font-size: 10px; letter-spacing: 0.12em; color: #56605b; font-family: 'IBM Plex Mono', monospace;">NOTA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <sc-for list="{{receipts}}" as="r" hint-placeholder-count="4">
+                      <tr style="border-bottom: 1px solid rgba(23,32,29,0.06);">
+                        <td class="mono" style="padding: 10px 16px; font-size: 12px; color: #454f4a;">{{r.date}}</td>
+                        <td class="mono" style="padding: 10px 12px; font-size: 13px; font-weight: 600; text-align: right; color: #2b5f4b;">{{r.amount}}</td>
+                        <td class="mono" style="padding: 10px 12px; font-size: 13px; text-align: right;">{{r.after}}</td>
+                        <td style="padding: 10px 16px; font-size: 12px; color: #454f4a; line-height: 1.45;">{{r.note}}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(23,32,29,0.08);">
+            <td style="padding: 12px 20px;"><span style="font-size: 13px; font-weight: 600; padding-left: 20px;">DANDA</span></td>
+            <td class="mono" style="padding: 12px; font-size: 12px; color: #454f4a;">15 ago &rarr; 18 ago</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; color: #56605b;">&mdash;</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; color: #56605b;">&mdash;</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; font-weight: 600;">$ 0</td>
+            <td style="padding: 12px 20px;"><span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid #2b5f4b; border-radius: 2px; background: rgba(43,95,75,0.08); color: #2b5f4b; font-size: 10px; font-weight: 600; letter-spacing: 0.1em;">PAGADA</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 20px;"><span style="font-size: 13px; font-weight: 600; padding-left: 20px;">Bella Mujer</span></td>
+            <td class="mono" style="padding: 12px; font-size: 12px; color: #454f4a;">13 ago &rarr; 14 ago</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; color: #56605b;">&mdash;</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; color: #56605b;">&mdash;</td>
+            <td class="mono" style="padding: 12px; font-size: 13px; text-align: right; font-weight: 600;">$ 0</td>
+            <td style="padding: 12px 20px;"><span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid #2b5f4b; border-radius: 2px; background: rgba(43,95,75,0.08); color: #2b5f4b; font-size: 10px; font-weight: 600; letter-spacing: 0.1em;">PAGADA</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 16px; margin: 44px 0 20px;">
+      <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.2em; color: #56605b; white-space: nowrap;">CORTE / LINEA DE SEPARACION</span>
+      <span style="flex-grow: 1; height: 0; border-top: 2px dashed rgba(23,32,29,0.3);"></span>
+    </div>
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 16px;">
+      <div>
+        <h2 class="disp" style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;">Resumen del periodo</h2>
+        <p style="margin: 8px 0 0; font-size: 14px; color: #454f4a; max-width: 620px;">Solo esta seccion depende de las fechas. Lo pendiente de arriba es el total acumulado, sin recortar por rango.</p>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 10px;">
+        <label style="display: flex; flex-direction: column; gap: 5px;">
+          <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">DESDE</span>
+          <span class="mono" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; font-size: 13px;">2026-05-16</span>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 5px;">
+          <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">HASTA</span>
+          <span class="mono" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; font-size: 13px;">2026-08-22</span>
+        </label>
+        <button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; color: #17201d; cursor: pointer;">Ver todo</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid rgba(23,32,29,0.16); background: #fff;">
+      <sc-for list="{{period}}" as="m" hint-placeholder-count="4">
+        <div style="padding: 18px 20px; border-right: 1px solid rgba(23,32,29,0.1);">
+          <p class="mono" style="margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">{{m.label}}</p>
+          <p class="mono" style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em;">{{m.value}}</p>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px;">
+      <div style="border: 1px solid rgba(23,32,29,0.16); background: #efe9dc; padding: 16px 18px;">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #17201d;">PEDIDOS</p>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Entregados</span><span class="mono" style="font-size: 13px; font-weight: 600;">1.999</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Fallidos</span><span class="mono" style="font-size: 13px; font-weight: 600;">58</span></div>
+        </div>
+      </div>
+      <div style="border: 1px solid rgba(23,32,29,0.16); background: #efe9dc; padding: 16px 18px;">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #17201d;">COBRADO A TIENDAS</p>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Entregas</span><span class="mono" style="font-size: 13px; font-weight: 600;">$ 24.967.500</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Fallidos</span><span class="mono" style="font-size: 13px; font-weight: 600;">$ 717.000</span></div>
+        </div>
+      </div>
+      <div style="border: 1px solid rgba(23,32,29,0.16); background: #efe9dc; padding: 16px 18px;">
+        <p class="mono" style="margin: 0 0 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #17201d;">PAGADO A DOMICILIARIOS</p>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Entregas</span><span class="mono" style="font-size: 13px; font-weight: 600;">$ 21.033.000</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 13px; color: #454f4a;">Fallidos</span><span class="mono" style="font-size: 13px; font-weight: 600;">$ 449.000</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      stores: [
+        { name: 'DANDA', shop: 'danda.com.co', orders: 2998, cod: '$ 148.902.400', due: '$ 9.350.800' },
+        { name: 'Bella Mujer', shop: 'bellamujer.co', orders: 140, cod: '$ 12.480.900', due: '$ 2.329.541' },
+        { name: 'OnStok', shop: 'onstok.com', orders: 77, cod: '$ 9.115.300', due: '$ 2.192.800' },
+        { name: 'Nambu', shop: 'nambu.co', orders: 74, cod: '$ 7.240.100', due: '$ 1.704.710' },
+        { name: 'Senziacol', shop: 'senziacol.com', orders: 67, cod: '$ 4.980.600', due: '$ 1.085.910' },
+        { name: 'Kovia', shop: 'kovia.co', orders: 67, cod: '$ 3.117.200', due: '$ 573.500' },
+        { name: 'Mercadotienda', shop: 'Sin tienda conectada', orders: 50, cod: '$ 1.845.000', due: '$ 228.000' },
+        { name: 'vive zen', shop: 'vivezen.co', orders: 11, cod: '$ 612.000', due: '$ 116.000' }
+      ],
+      receipts: [
+        { date: '20 ago, 1:01 a.m.', amount: '$ 2.022.682', after: '$ 6.185.543', note: 'abono efectivo correspondiente a agosto 18 del 2026' },
+        { date: '20 ago, 1:02 a.m.', amount: '$ 464.300', after: '$ 5.721.243', note: 'abono recaudo nequi Martha correspondiente a agosto 18 del 2026' },
+        { date: '20 ago, 4:05 p.m.', amount: '$ 4.735.000', after: '$ 986.243', note: 'abono recaudo efectivo correspondiente a agosto 19 del 2026' },
+        { date: '21 ago, 1:58 p.m.', amount: '$ 986.243', after: '$ 0', note: 'abono recaudo nequi martha correspondiente al dia agosto 19 del 2026' }
+      ],
+      period: [
+        { label: 'COD RECIBIDO', value: '$ 203.079.378' },
+        { label: 'COBROS A TIENDAS', value: '$ 25.689.500' },
+        { label: 'PAGO DOMICILIARIOS', value: '$ 21.472.000' },
+        { label: 'MARGEN OPERATIVO', value: '$ 4.217.500' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

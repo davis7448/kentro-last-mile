@@ -1,0 +1,75 @@
+{
+  "comparedAt": "2026-09-13T00:49:33.166Z",
+  "countedAt": "2026-09-13T00:40:20.581Z",
+  "before": {
+    "walletEntryCount": 10986,
+    "settlementCount": 62,
+    "position": {
+      "cashCop": 30993781,
+      "receivedFromDriverCop": 239808672,
+      "paidToSellersCop": 208814891,
+      "driverReceivableCop": 5833919,
+      "driverPendingInSettlementsCop": 5161719,
+      "driverCodOutsideSettlementsCop": 672200,
+      "payableToSellersCop": 19831220,
+      "withheldForSuppliersCop": 9956500,
+      "withheldBySupplier": [
+        {
+          "supplierId": "sup-1781914882801",
+          "supplierName": "ADMA LABORATORIO",
+          "amountCop": 9449500
+        },
+        {
+          "supplierId": "sup-1781914554522",
+          "supplierName": "ADMA COMPANY",
+          "amountCop": 507000
+        }
+      ],
+      "feesCop": 35416500,
+      "driverPayCop": 29204000,
+      "profitCop": 6212500,
+      "assetsCop": 36827700,
+      "liabilitiesCop": 29787720,
+      "netCop": 7039980
+    },
+    "storeBalanceCop": 0
+  },
+  "after": {
+    "walletEntryCount": 10986,
+    "settlementCount": 62,
+    "position": {
+      "cashCop": 30993781,
+      "receivedFromDriverCop": 239808672,
+      "paidToSellersCop": 208814891,
+      "driverReceivableCop": 5833919,
+      "driverPendingInSettlementsCop": 5161719,
+      "driverCodOutsideSettlementsCop": 672200,
+      "payableToSellersCop": 19831220,
+      "withheldForSuppliersCop": 9956500,
+      "withheldBySupplier": [
+        {
+          "supplierId": "sup-1781914882801",
+          "supplierName": "ADMA LABORATORIO",
+          "amountCop": 9449500
+        },
+        {
+          "supplierId": "sup-1781914554522",
+          "supplierName": "ADMA COMPANY",
+          "amountCop": 507000
+        }
+      ],
+      "feesCop": 35416500,
+      "driverPayCop": 29204000,
+      "profitCop": 6212500,
+      "assetsCop": 36827700,
+      "liabilitiesCop": 29787720,
+      "netCop": 7039980
+    },
+    "storeBalanceCop": 0
+  },
+  "differences": [],
+  "openCommunityOrders": {
+    "before": 0,
+    "after": 0
+  }
+}

@@ -1,8 +1,13 @@
-export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger";
+/**
+ * OJO con los dos "lideres": `driver` es el lider LOGISTICO (recoge y reparte) y
+ * `community_leader` es el lider de COMUNIDAD (agrupa tiendas y cobra cashback). No tienen
+ * ninguna relacion. En pantalla nunca se escribe "lider" a secas: ver `roleLabel`.
+ */
+export type Role = "admin" | "seller" | "seller_logistics" | "driver" | "messenger" | "community_leader";
 export type PaymentMethod = "cod" | "prepaid";
 export type FulfillmentMode = "seller_pickup" | "warehouse";
 export type AddressRisk = "accepted" | "review" | "rejected";
-export type FailedCategory = "failed_visit" | "no_coverage" | "bad_order_or_no_contact" | "pending_review";
+export type FailedCategory = "failed_visit" | "no_coverage" | "bad_order_or_no_contact" | "bad_phone" | "pending_review";
 export type OrderStatus =
   | "imported"
   | "address_risk"
@@ -51,6 +56,89 @@ export type Zone = {
   driverDeliveredPayCop?: number;
   driverFailedPayCop?: number;
 };
+export type CommunityPricingFields = {
+  sellerDeliveredFeeCop?: number;
+  sellerFailedFeeCop?: number;
+  fulfillmentFeeCop?: number;
+};
+
+/** Subida de precio programada. Las subidas esperan ocho dias; las bajadas entran ya. */
+export type ScheduledPriceChange = {
+  field: keyof CommunityPricingFields;
+  fromCop: number;
+  toCop: number;
+  effectiveAt: string;
+  scheduledBy: string;
+  scheduledAt: string;
+};
+
+export type CommunityPriceHistoryEntry = {
+  field: keyof CommunityPricingFields;
+  fromCop: number;
+  toCop: number;
+  effectiveAt: string;
+  actorUid: string;
+  actorRole: Role;
+  createdAt: string;
+};
+
+export type Community = {
+  id: string;
+  /** Nombre visible. No es unico: dos comunidades pueden llamarse igual. */
+  name: string;
+  /** Nombre corto del enlace. Este SI es unico. */
+  slug: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPhone: string;
+  /** URL publica del logo. La pantalla de registro se pinta SIN sesion y no puede firmar. */
+  logoPath?: string;
+  linkStatus: "active" | "revoked";
+  status: "active" | "disabled";
+  /**
+   * Uid de quien lidera HOY. Opcional de verdad: hay comunidades anteriores a la concesion de rol
+   * y `planLeaderRevocation` lo BORRA. Sin el (o en blanco) la comunidad cobra solo la base.
+   */
+  leaderUid?: string;
+  pricing: CommunityPricingFields;
+  /** Una programada como mucho por concepto: la segunda reemplaza a la primera. */
+  scheduled?: Partial<Record<keyof CommunityPricingFields, ScheduledPriceChange>>;
+  massSignupAlertAt?: string;
+  massSignupAlertDismissedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** communitySlugs/{slug}. `retiredAt` presente = slug viejo, valido 30 dias mas. */
+export type CommunitySlugDoc = {
+  communityId: string;
+  retiredAt?: string;
+};
+
+/**
+ * Precio congelado en el pedido al crearlo. Se guardan final Y base por concepto: el cashback
+ * es la resta de dos numeros que cambian por separado, y con los dos se puede auditar de donde
+ * salio. Ausente = pedido sin comunidad, que cobra la tarifa viva y no genera cashback.
+ */
+export type OrderCommunityPricing = {
+  communityId: string;
+  frozenAt: string;
+  /** `2` desde la spec 004: la base se decide al cerrar. Ausente = pedido legado. */
+  pricingVersion?: 2;
+  // Precio PROPIO del lider congelado al crear, tal cual (puede quedar bajo la base; el piso lo
+  // pone el cierre). Ausente = el lider no fijo precio para ese concepto.
+  leaderDeliveredFeeCop?: number;
+  leaderFailedFeeCop?: number;
+  leaderFulfillmentFeeCop?: number;
+  // Referencia AL CREAR (precio final y base). El cierre de un pedido v2 no los usa para cobrar.
+  sellerDeliveredFeeCop: number;
+  baseDeliveredFeeCop: number;
+  sellerFailedFeeCop: number;
+  baseFailedFeeCop: number;
+  fulfillmentFeeCop: number;
+  baseFulfillmentFeeCop: number;
+};
+
 export type Seller = {
   id: string;
   name: string;
@@ -63,6 +151,18 @@ export type Seller = {
   pickupContactPhone?: string;
   pickupNotes?: string;
   debtBlockedAt?: string;
+  /**
+   * Cobra en efectivo: sus pagos no pasan por el banco, asi que no generan 4x1000.
+   * Va como marca por cuenta y no fijo en codigo, porque la forma de pago cambia.
+   */
+  paysInCash?: boolean;
+  /** Comunidad a la que pertenece. Permanente salvo reasignacion de un administrador. */
+  communityId?: string;
+  communityJoinedAt?: string;
+  /** Por que enlace entro. Se conserva aunque el lider cambie su nombre corto. */
+  communitySignupSlug?: string;
+  /** Ciudad, punto de recogida y cuenta bancaria completos: sin esto no puede crear pedidos. */
+  onboardingComplete?: boolean;
 };
 export type ShopifyStore = {
   id: string;
@@ -125,7 +225,7 @@ export type ShopifySyncIssue = {
   resolvedAt?: string;
   orderId?: string;
 };
-export type Driver = { id: string; name: string; phone: string; active: boolean };
+export type Driver = { id: string; name: string; phone: string; active: boolean; paysInCash?: boolean };
 export type Messenger = {
   id: string;
   leaderDriverId: string;
@@ -144,6 +244,7 @@ export type Supplier = {
   phone?: string;
   notes?: string;
   active: boolean;
+  paysInCash?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -189,6 +290,9 @@ export type InventoryItem = {
 
 export type Order = {
   id: string;
+  /** Como se confirmo el pedido: a mano desde la app o automaticamente por el bot de
+   *  ChatBy. Las rutas de UChat ya lo escribian en Firestore sin declararlo aqui. */
+  confirmedVia?: "manual" | "uchat" | "uchat_pull";
   trackingCode?: string;
   shopifyOrderId: string;
   sellerId: string;
@@ -204,6 +308,8 @@ export type Order = {
   customerPhone: string;
   addressRaw: string;
   normalizedAddress?: string;
+  /** Indicaciones de la tienda para el mensajero ("timbre azul", "preguntar por Marta"); nunca sustituye a la direccion (spec 013). */
+  deliveryNotes?: string;
   geoProvider?: "mapbox" | "google_address_validation";
   lat?: number;
   lng?: number;
@@ -217,6 +323,8 @@ export type Order = {
   sku?: string;
   quantity?: number;
   lineItems?: OrderLineItem[];
+  /** Marcador: este pedido reservo inventario y por tanto debe liberarlo al cerrarse. */
+  inventoryReserved?: boolean;
   labelPrintedAt?: string;
   labelPrintedBy?: string;
   labelPrintCount?: number;
@@ -234,11 +342,16 @@ export type Order = {
   evidence: Evidence[];
   createdAt: string;
   updatedAt: string;
+  /** Instante del cierre. Es el eje de fecha del dinero; se escribe en TODA transicion terminal. */
+  closedAt?: string;
+  /** Denormalizado al crear: sin el no se pueden agregar las cifras de una comunidad. */
+  communityId?: string;
+  communityPricing?: OrderCommunityPricing;
 };
 
 export type WalletEntry = {
   id: string;
-  ownerType: "seller" | "driver" | "admin";
+  ownerType: "seller" | "driver" | "admin" | "community_leader";
   ownerId: string;
   orderId?: string;
   settlementId?: string;
@@ -252,7 +365,12 @@ export type WalletEntry = {
     | "platform_margin"
     | "cod_remittance"
     | "payout"
-    | "cash_shortage";
+    | "seller_abono"
+    | "cash_shortage"
+    /** Gravamen a los movimientos financieros (4x1000) sobre lo que sale por transferencia. */
+    | "gmf_tax"
+    /** Margen del lider de comunidad: precio que cobra a su tienda menos la base de Kentro. */
+    | "community_cashback";
   amountCop: number;
   description: string;
   supplierSettlementId?: string;
@@ -273,7 +391,7 @@ export type CashReceipt = {
 
 export type Settlement = {
   id: string;
-  kind: "seller" | "driver" | "supplier";
+  kind: "seller" | "driver" | "supplier" | "community_leader";
   ownerId: string;
   ownerName: string;
   startDate: string;
@@ -295,18 +413,39 @@ export type Settlement = {
   cashReceivedCop?: number;
   cashReceiptStatus?: "none" | "partial" | "complete";
   cashPendingCop?: number;
+  /** Efectivo entregado por encima de lo esperado (queda a favor del domiciliario). */
+  cashExcessCop?: number;
+  /** Monto realmente transferido cuando el corte se pago por menos del neto. */
+  paidAmountCop?: number;
+  /** 4x1000 retenido en este corte. 0 si la cuenta cobra en efectivo. */
+  gmfCop?: number;
   cashReceipts?: CashReceipt[];
   cashAllocations?: Array<{
     orderId?: string;
-    amountCop: number;
+    expectedCop?: number;
+    receivedCop?: number;
+    covered?: boolean;
+    amountCop?: number;
   }>;
 };
 
 export type PayoutRequest = {
   id: string;
   sellerId: string;
+  sellerName?: string;
+  /** Neto liquidable calculado por el servidor con la misma regla que createSettlement. */
   amountCop: number;
+  /** Saldo retenido porque el COD de esos pedidos aun no entra de la flota. */
+  blockedCop?: number;
+  eligibleOrderCount?: number;
   status: "requested" | "approved" | "rejected" | "paid";
+  requestedBy?: string;
+  requestedByEmail?: string;
+  /** Corte que la cerro. Una solicitud solo se paga creando la liquidacion real. */
+  settlementId?: string;
+  paidAt?: string;
+  rejectedAt?: string;
+  rejectedReason?: string;
   createdAt: string;
 };
 
@@ -317,8 +456,93 @@ export type AuditEvent = {
   action: string;
   entity: string;
   entityId: string;
+  /** Solo en eventos nuevos: los historicos solo tienen el cambio dentro de `summary`. */
+  fromStatus?: string;
+  toStatus?: string;
   summary: string;
   createdAt: string;
+};
+
+/** Una fila del historial de un pedido, tal como la devuelve el callable
+ *  `getOrderAuditTrail`: igual que `AuditEvent` pero con el actor ya resuelto a nombre y
+ *  correo (traducir el uid exige Admin SDK, el cliente no puede hacerlo). */
+export type OrderAuditEntry = {
+  id: string;
+  createdAt: string;
+  action: string;
+  actorId: string;
+  actorLabel: string;
+  actorEmail?: string;
+  actorRole?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  summary: string;
+};
+
+/** Las cuatro correcciones administrativas de estado que admite el callable
+ *  `correctOrderStatus`. Cada una exige un estado de partida concreto; la matriz completa
+ *  vive en functions/src/order-corrections-plan.ts. */
+export type OrderCorrectionKind =
+  | "failed_to_delivered"
+  | "delivered_to_failed"
+  | "cancelled_to_operational"
+  | "failed_to_retry_pending";
+
+export type OrderCorrectionNote = { code: string; message: string };
+
+export type OrderCorrectionSettlementPreview = {
+  id: string;
+  kind: "seller" | "driver" | "supplier";
+  ownerName: string;
+  before: { walletEntryCount: number; orderCount: number; netCop: number; cashExpectedCop?: number; cashPendingCop?: number };
+  after: { walletEntryCount: number; orderCount: number; netCop: number; cashExpectedCop?: number; cashPendingCop?: number };
+  relatedEntryPatches: Array<{ id: string; amountCop: number; reason: string }>;
+};
+
+/** Consecuencias completas de una correccion, calculadas en el servidor ANTES de escribir.
+ *  El mismo objeto se devuelve en la previsualizacion y en la aplicacion, porque el
+ *  planificador es puro: lo que el admin aprueba es literalmente lo que se escribe.
+ *  `blockers` no vacio significa que la correccion no puede aplicarse. */
+export type OrderCorrectionPlan = {
+  kind: OrderCorrectionKind;
+  orderId: string;
+  trackingCode: string;
+  fromStatus: string;
+  toStatus: string;
+  orderPatchPreview: Record<string, string>;
+  /** Numero de visita fallida que quedara registrada; decide el sufijo `-N` de los asientos. */
+  failedAttempt?: number;
+  entriesToDelete: WalletEntry[];
+  entriesToCreate: WalletEntry[];
+  entriesToCompensate: Array<{ sourceId: string; frozenSettlementId: string; entry: WalletEntry }>;
+  entriesToKeep: WalletEntry[];
+  settlementsToRecalculate: OrderCorrectionSettlementPreview[];
+  frozenSettlements: Array<{ id: string; kind: string; status: string; ownerName: string }>;
+  inventory: { kind: string; movements: Array<{ skuKey: string; quantity: number }> };
+  financials: {
+    sellerNetBeforeCop: number;
+    sellerNetAfterCop: number;
+    sellerDeltaCop: number;
+    driverNetBeforeCop: number;
+    driverNetAfterCop: number;
+    driverDeltaCop: number;
+  };
+  warnings: OrderCorrectionNote[];
+  blockers: OrderCorrectionNote[];
+  auditAction: string;
+  auditSummary: string;
+};
+
+/** Saldo real de las cuentas de la operacion en un momento dado, para contrastarlo
+ *  contra el saldo teorico y detectar desfases a tiempo. */
+export type CashSnapshot = {
+  id: string;
+  balanceCop: number;
+  expectedCop: number;
+  differenceCop: number;
+  note?: string;
+  createdAt: string;
+  createdBy: string;
 };
 
 export type AppState = {
@@ -326,6 +550,8 @@ export type AppState = {
   cities: City[];
   zones: Zone[];
   sellers: Seller[];
+  /** Comunidades. Solo las carga el admin (todas) y el lider (la suya). */
+  communities: Community[];
   shopifyStores: ShopifyStore[];
   storeWebhookConfigs: StoreWebhookConfig[];
   shopifyInstallRequests: ShopifyInstallRequest[];
@@ -341,6 +567,7 @@ export type AppState = {
   settlements: Settlement[];
   payouts: PayoutRequest[];
   audit: AuditEvent[];
+  cashSnapshots: CashSnapshot[];
   settings: {
     activeCityId: string;
     sellerDeliveredFeeCop: number;

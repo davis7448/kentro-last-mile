@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -679,6 +680,12 @@ async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sel
   const now = new Date().toISOString();
   const docId = `shopify-${order.id}`;
   const orderRef = db.collection("orders").doc(docId);
+  const pricingSellerSnap = await db.collection("sellers").doc(sellerId).get();
+  const pricingStamp = await createCommunityPricingResolver(db)(
+    { id: sellerId, ...(pricingSellerSnap.data() ?? {}) },
+    undefined,
+    now
+  );
   return db.runTransaction(async (transaction) => {
     const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
     const seller = sellerSnap.data() ?? {};
@@ -692,6 +699,10 @@ async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sel
       shopifyNumericId: order.id,
       shopDomain,
       sellerId,
+      // Precio de comunidad congelado al crear (RF_21). Si este camino se quedara sin
+      // sellar, el pedido cobraria la base y el lider no cobraria, sin ningun error.
+      communityId: pricingStamp.communityId,
+      communityPricing: pricingStamp.communityPricing,
       driverId: null,
       cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",

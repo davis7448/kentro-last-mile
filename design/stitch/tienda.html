@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+
+<html lang="es-CO"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logística Danda - Tablero</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#281b1a",
+                        "surface-container-highest": "#e2e3df",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed-dim": "#bfc9c4",
+                        "secondary-fixed": "#e8e2d5",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed": "#141d1a",
+                        "secondary": "#625e54",
+                        "on-tertiary-fixed-variant": "#534342",
+                        "tertiary-fixed-dim": "#d8c1bf",
+                        "on-error-container": "#93000a",
+                        "ink-black": "#17201d",
+                        "surface": "#f9faf6",
+                        "outline": "#737875",
+                        "on-primary-fixed-variant": "#3f4945",
+                        "on-background": "#1a1c1a",
+                        "primary": "#010604",
+                        "tertiary": "#0b0303",
+                        "on-secondary-container": "#68645a",
+                        "inverse-on-surface": "#f0f1ed",
+                        "on-secondary-fixed": "#1d1c14",
+                        "secondary-container": "#e8e2d5",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f3f4f0",
+                        "paper-white": "#f7f8f4",
+                        "primary-fixed": "#dbe5e0",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e2e3df",
+                        "secondary-fixed-dim": "#cbc6ba",
+                        "on-tertiary-container": "#958180",
+                        "error": "#ba1a1a",
+                        "stamp-blue": "#003366",
+                        "on-primary-container": "#7e8884",
+                        "outline-variant": "#c3c8c4",
+                        "inverse-surface": "#2e312f",
+                        "surface-container-high": "#e7e9e5",
+                        "on-secondary": "#ffffff",
+                        "on-surface-variant": "#434846",
+                        "on-secondary-fixed-variant": "#49473d",
+                        "surface-bright": "#f9faf6",
+                        "surface-dim": "#d9dad7",
+                        "inverse-primary": "#bfc9c4",
+                        "stamp-red": "#b22222",
+                        "background": "#f9faf6",
+                        "tertiary-fixed": "#f5dddb",
+                        "surface-container": "#edeeea",
+                        "manila-tan": "#efe9dc",
+                        "on-tertiary-fixed": "#251817",
+                        "on-surface": "#1a1c1a",
+                        "surface-tint": "#57605d",
+                        "primary-container": "#17201d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin": "24px",
+                        "container-max-width": "1280px",
+                        "gutter": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "code-sm": ["JetBrains Mono"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "code-md": ["JetBrains Mono"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "code-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "code-md": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Custom Stamp Styles */
+        .stamp-approved {
+            border: 2px solid theme('colors.stamp-blue');
+            color: theme('colors.stamp-blue');
+            transform: rotate(-2deg);
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: theme('borderRadius.DEFAULT');
+        }
+        .stamp-failed {
+            border: 2px solid theme('colors.stamp-red');
+            color: theme('colors.stamp-red');
+            transform: rotate(3deg);
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: theme('borderRadius.DEFAULT');
+        }
+        .stamp-transit {
+            border: 2px solid theme('colors.ink-black');
+            color: theme('colors.ink-black');
+            transform: rotate(-1deg);
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: theme('borderRadius.DEFAULT');
+        }
+    </style>
+</head>
+<body class="bg-paper-white text-ink-black font-body-md antialiased min-h-screen flex">
+<!-- SideNavBar Component -->
+<aside class="hidden md:flex flex-col w-64 h-full fixed left-0 top-0 pt-4 bg-manila-tan border-r border-ink-black">
+<div class="px-margin mb-8">
+<div class="w-12 h-12 mb-4 bg-surface-container-highest border border-ink-black rounded flex items-center justify-center">
+<img alt="Logo de la Empresa" class="w-10 h-10 object-contain mix-blend-multiply" data-alt="A minimalist black and white industrial logo featuring geometric shapes representing logistics boxes, sharp clean lines, on a solid white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlYpfU1rQx2Jm6tTQ0Xqs0rZ_jzjX0Zlu1DYmCraIi6cDuRRn4zTHtg0SeKNiza46Nj-IAB1jkSAQaQ_kRxSVaMmmeTur_22iP4y5JeFQNFQ0MtD9O9dF3mye9OGFzlRVrpR1EwxhScoYq9XC7UT-rgmUDSVhb4CFKb4wQlIhaYc6butYeTzpDzfhX-bHRihv_QMexypqbdy8vtoylf4vWd1yUZJ_DxQw-6GhvFilNWQMbXvdt_sraLLd4BBfgGbRasyoMSBon1wZV"/>
+</div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-ink-black uppercase tracking-tighter">DANDA.COM.CO</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant mt-1">Vendedor Platino</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<!-- Active Tab -->
+<a class="flex items-center px-4 py-3 bg-ink-black text-paper-white font-bold rounded-DEFAULT group" href="#">
+<span class="material-symbols-outlined mr-3" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-caps text-label-caps">Tablero</span>
+</a>
+<a class="flex items-center px-4 py-3 text-ink-black hover:bg-surface-container-highest transition-all rounded-DEFAULT group active:translate-x-1" href="#">
+<span class="material-symbols-outlined mr-3">local_shipping</span>
+<span class="font-label-caps text-label-caps">Pedidos</span>
+</a>
+<a class="flex items-center px-4 py-3 text-ink-black hover:bg-surface-container-highest transition-all rounded-DEFAULT group active:translate-x-1" href="#">
+<span class="material-symbols-outlined mr-3">account_balance_wallet</span>
+<span class="font-label-caps text-label-caps">Billetera</span>
+</a>
+<a class="flex items-center px-4 py-3 text-ink-black hover:bg-surface-container-highest transition-all rounded-DEFAULT group active:translate-x-1" href="#">
+<span class="material-symbols-outlined mr-3">link</span>
+<span class="font-label-caps text-label-caps">Conexiones</span>
+</a>
+<a class="flex items-center px-4 py-3 text-ink-black hover:bg-surface-container-highest transition-all rounded-DEFAULT group active:translate-x-1" href="#">
+<span class="material-symbols-outlined mr-3">support_agent</span>
+<span class="font-label-caps text-label-caps">Soporte</span>
+</a>
+</nav>
+<div class="p-4 mt-auto border-t border-ink-black">
+<button class="w-full py-3 px-4 bg-paper-white border border-ink-black text-ink-black font-label-caps text-label-caps text-center flex items-center justify-center hover:bg-surface-container-highest transition-colors rounded-DEFAULT">
+                 NUEVA CARGA
+            </button>
+<a class="flex items-center px-4 py-3 mt-4 text-ink-black hover:bg-surface-container-highest transition-all rounded-DEFAULT" href="#">
+<span class="material-symbols-outlined mr-3">logout</span>
+<span class="font-label-caps text-label-caps">Cerrar Sesión</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 flex flex-col min-h-screen">
+<!-- TopAppBar Component (Desktop Top) -->
+<header class="flex justify-between items-center px-margin py-unit w-full bg-paper-white border-b border-ink-black h-16 shrink-0">
+<div class="flex items-center space-x-4 w-1/3">
+<h1 class="font-headline-md text-headline-md font-bold tracking-tighter text-ink-black hidden md:block">LOGÍSTICA DANDA</h1>
+</div>
+<div class="flex-1 flex justify-center w-1/3">
+<!-- Search bar intentionally omitted per layout focus -->
+</div>
+<div class="flex items-center justify-end space-x-6 w-1/3">
+<button class="text-ink-black hover:underline transition-colors duration-150 p-2">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-ink-black hover:underline transition-colors duration-150 p-2">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full border border-ink-black overflow-hidden bg-manila-tan">
+<img alt="Avatar de Usuario Logística" class="w-full h-full object-cover grayscale" data-alt="A formal black and white headshot of a logistics worker wearing a collared shirt, flat lighting, high contrast." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5kfEWT0pyvdEVAv9vxkIOGUx-9021AwdsE92eotnhXcm4xU-uGqY2AGXfsF3e93WTIMTVatGVfVJEikKMHJQZ3A2naLwXYmjohOxaixCHgK-BjA7Ki6INRwXpk698Dnf_KHVwoLvWB6UGQ5ZkB0RfW7UztZguzqJbvtT5cqXNUh2RxkbTHqMjpaswfr4xsNHDqNVCy5G3eUG1_987I5uoWyl9NCCDKPe-gLR81sJ2P4ZEtP6W0R2EBl9NnIkWBDnMGSHQ_dSsZa8S"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Content Grid -->
+<div class="p-margin max-w-container-max-width w-full mx-auto flex-1 bg-paper-white">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Destacado: Saldo Pendiente -->
+<section class="col-span-1 md:col-span-8 border border-ink-black rounded-DEFAULT bg-manila-tan p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start border-b border-ink-black pb-4 mb-4">
+<div>
+<h2 class="font-label-caps text-label-caps text-on-surface-variant uppercase">Liquidación Pendiente</h2>
+<p class="font-headline-lg text-headline-lg mt-2">$ 9.350.800</p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1 italic">* Saldo pendiente de liquidación actual, no acumulado histórico.</p>
+</div>
+<div class="bg-paper-white border border-ink-black p-2 rounded-DEFAULT flex items-center space-x-2">
+<span class="w-2 h-2 bg-stamp-blue rounded-full block"></span>
+<span class="font-code-sm text-code-sm uppercase">Shopify Conectado</span>
+</div>
+</div>
+<div class="mt-auto pt-4 flex justify-end">
+<button class="border-2 border-ink-black bg-ink-black text-paper-white font-label-caps text-label-caps py-3 px-8 rounded-DEFAULT hover:bg-surface-tint transition-colors uppercase tracking-widest relative overflow-hidden group">
+<span class="relative z-10 flex items-center">
+                                SOLICITAR LIQUIDACIÓN
+                                <span class="material-symbols-outlined ml-2 text-[16px]">assignment_turned_in</span>
+</span>
+</button>
+</div>
+</section>
+<!-- KPIs de Pedidos (Formulario Industrial) -->
+<section class="col-span-1 md:col-span-4 flex flex-col gap-unit">
+<div class="border border-ink-black rounded-DEFAULT bg-paper-white p-4 flex justify-between items-center h-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Entregados</span>
+<span class="font-headline-md text-headline-md mt-1">1,432</span>
+</div>
+<span class="material-symbols-outlined text-outline">inventory_2</span>
+</div>
+<div class="border border-ink-black rounded-DEFAULT bg-paper-white p-4 flex justify-between items-center h-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">En Ruta</span>
+<span class="font-headline-md text-headline-md mt-1">128</span>
+</div>
+<span class="material-symbols-outlined text-outline">local_shipping</span>
+</div>
+<div class="border border-ink-black rounded-DEFAULT bg-paper-white p-4 flex justify-between items-center h-full">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-stamp-red">Fallidos</span>
+<span class="font-headline-md text-headline-md mt-1">14</span>
+</div>
+<span class="material-symbols-outlined text-stamp-red">error</span>
+</div>
+</section>
+<!-- Tabla de Últimos Pedidos (El Manifiesto) -->
+<section class="col-span-1 md:col-span-8 border border-ink-black rounded-DEFAULT bg-paper-white mt-4">
+<div class="p-4 border-b border-ink-black bg-manila-tan">
+<h3 class="font-label-caps text-label-caps uppercase">Últimos Pedidos</h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-ink-black">
+<th class="p-4 font-label-caps text-label-caps font-bold border-r border-ink-black w-32">GUÍA</th>
+<th class="p-4 font-label-caps text-label-caps font-bold border-r border-ink-black">CLIENTE</th>
+<th class="p-4 font-label-caps text-label-caps font-bold border-r border-ink-black w-40 text-center">ESTADO</th>
+<th class="p-4 font-label-caps text-label-caps font-bold text-right">VALOR (COP)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-ink-black hover:bg-surface-container-low transition-colors">
+<td class="p-4 font-code-sm text-code-sm border-r border-ink-black">#DN-84920</td>
+<td class="p-4 font-body-md text-body-md border-r border-ink-black uppercase">Ferretería El Llave</td>
+<td class="p-4 border-r border-ink-black text-center">
+<span class="stamp-approved font-label-caps text-label-caps">ENTREGADO</span>
+</td>
+<td class="p-4 font-code-sm text-code-sm text-right">$ 450.000</td>
+</tr>
+<tr class="border-b border-ink-black hover:bg-surface-container-low transition-colors">
+<td class="p-4 font-code-sm text-code-sm border-r border-ink-black">#DN-84919</td>
+<td class="p-4 font-body-md text-body-md border-r border-ink-black uppercase">Materiales San José</td>
+<td class="p-4 border-r border-ink-black text-center">
+<span class="stamp-transit font-label-caps text-label-caps">EN RUTA</span>
+</td>
+<td class="p-4 font-code-sm text-code-sm text-right">$ 1.250.000</td>
+</tr>
+<tr class="border-b border-ink-black hover:bg-surface-container-low transition-colors">
+<td class="p-4 font-code-sm text-code-sm border-r border-ink-black">#DN-84918</td>
+<td class="p-4 font-body-md text-body-md border-r border-ink-black uppercase">Constructora Andina</td>
+<td class="p-4 border-r border-ink-black text-center">
+<span class="stamp-failed font-label-caps text-label-caps">FALLIDO</span>
+</td>
+<td class="p-4 font-code-sm text-code-sm text-right">$ 890.500</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="p-4 font-code-sm text-code-sm border-r border-ink-black">#DN-84917</td>
+<td class="p-4 font-body-md text-body-md border-r border-ink-black uppercase">Suministros del Valle</td>
+<td class="p-4 border-r border-ink-black text-center">
+<span class="stamp-approved font-label-caps text-label-caps">ENTREGADO</span>
+</td>
+<td class="p-4 font-code-sm text-code-sm text-right">$ 320.000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Historial de Wallet -->
+<section class="col-span-1 md:col-span-4 border border-ink-black rounded-DEFAULT bg-paper-white mt-4 flex flex-col">
+<div class="p-4 border-b border-ink-black bg-manila-tan flex justify-between items-center">
+<h3 class="font-label-caps text-label-caps uppercase">Movimientos Wallet</h3>
+<span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+</div>
+<div class="flex-1 flex flex-col">
+<!-- Movimiento Item -->
+<div class="p-3 border-b border-ink-black flex justify-between items-center hover:bg-surface-container-low transition-colors">
+<div>
+<p class="font-label-caps text-label-caps font-bold">ABONO PEDIDO #DN-84920</p>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-1">24 Oct 2023 - 14:30</p>
+</div>
+<p class="font-code-sm text-code-sm text-stamp-blue">+$ 450.000</p>
+</div>
+<div class="p-3 border-b border-ink-black flex justify-between items-center hover:bg-surface-container-low transition-colors">
+<div>
+<p class="font-label-caps text-label-caps font-bold">COMISIÓN PLATAFORMA</p>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-1">24 Oct 2023 - 14:30</p>
+</div>
+<p class="font-code-sm text-code-sm text-stamp-red">-$ 13.500</p>
+</div>
+<div class="p-3 border-b border-ink-black flex justify-between items-center hover:bg-surface-container-low transition-colors">
+<div>
+<p class="font-label-caps text-label-caps font-bold">ABONO PEDIDO #DN-84917</p>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-1">24 Oct 2023 - 11:15</p>
+</div>
+<p class="font-code-sm text-code-sm text-stamp-blue">+$ 320.000</p>
+</div>
+<div class="p-3 border-b border-ink-black flex justify-between items-center hover:bg-surface-container-low transition-colors">
+<div>
+<p class="font-label-caps text-label-caps font-bold">LIQUIDACIÓN BANCARIA</p>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-1">23 Oct 2023 - 09:00</p>
+</div>
+<p class="font-code-sm text-code-sm text-stamp-red">-$ 5.200.000</p>
+</div>
+<div class="p-4 mt-auto">
+<button class="w-full py-2 border border-ink-black bg-paper-white hover:bg-manila-tan transition-colors font-label-caps text-label-caps flex justify-center items-center rounded-DEFAULT">
+                                CARGAR HISTORIAL COMPLETO
+                            </button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</body></html>

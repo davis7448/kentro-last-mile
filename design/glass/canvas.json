@@ -1,0 +1,10 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Liquidaciones · liquid glass", "x": 0, "y": 0, "w": 1120, "h": 820 },
+    { "file": "Recetario.dc.html", "title": "Recetario · donde si y donde no", "x": 1200, "y": 0, "w": 1120, "h": 980 }
+  ],
+  "annotations": [
+    { "id": "regla", "x": 0, "y": -150, "w": 660, "text": "VIDRIO COMO ACENTO\nLleva vidrio: el boton primario, el grupo de pestanas, el avatar, el badge y la tarjeta heroe.\n\nNO lleva vidrio: la tabla de tiendas ni los bloques de cifras. Ahi se lee en columna y el fondo tiene que ser opaco." }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -9,3 +9,16 @@ coverage
 *.tsbuildinfo
 npm-debug.log*
 .firebase
+
+# Respaldos que genera scripts/purge-shopify-sync-issues.js (varios MB)
+shopify-sync-issues-backup-*.jsonl
+
+# Respaldos locales de datos de Firestore (no versionar)
+backups/
+
+# Exportaciones de datos operativos que se generan en la raiz al trabajar. Llevan nombres de
+# clientes y movimientos de caja: no van al historial de git, que es practicamente irreversible.
+/libro-caja-kentro.csv
+/pendientes-recoger.csv
+/pendientes-recoger.pdf
+/danda-pendientes.pdf

@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; background: #f7f8f4; color: #17201d; -webkit-font-smoothing: antialiased; }
+    a { color: #2b5f4b; } a:hover { color: #17201d; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .disp { font-family: 'Archivo', 'IBM Plex Sans', sans-serif; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: #f7f8f4; box-sizing: border-box;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; height: 60px; background: #17201d;">
+    <div style="display: flex; align-items: center; gap: 26px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d9ed5a" stroke-width="2" stroke-linecap="square"><path d="M3 7h11l3 4h4v6h-3"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg>
+        <span class="disp" style="font-size: 19px; font-weight: 800; color: #f7f8f4;">KENTRO</span>
+      </div>
+      <div style="display: flex; gap: 2px;">
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 600; color: #17201d; background: #d9ed5a; border-radius: 3px;">Operacion</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Wallet</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Inventario</span>
+        <span style="padding: 8px 14px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Liquidaciones</span>
+      </div>
+    </div>
+    <span style="font-size: 12px; color: rgba(247,248,244,0.7);">Administrador</span>
+  </div>
+
+  <div style="padding: 26px 32px 40px;">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px;">
+      <div>
+        <p class="mono" style="margin: 0 0 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; color: #56605b;">EMBUDO OPERATIVO</p>
+        <h1 class="disp" style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.025em; line-height: 1;">Operacion del dia</h1>
+      </div>
+      <span class="mono" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid rgba(23,32,29,0.2); border-radius: 2px; background: #efe9dc; font-size: 11px; color: #454f4a;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Cerrados descargados desde 2026-08-16
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; border: 2px solid #17201d; background: #fff;">
+      <sc-for list="{{kpis}}" as="k" hint-placeholder-count="6">
+        <div style="padding: 16px 18px; border-right: 1px solid rgba(23,32,29,0.12);">
+          <p class="mono" style="margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: #56605b; line-height: 1.3;">{{k.label}}</p>
+          <p class="mono" style="margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: {{k.tone}};">{{k.value}}</p>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; align-items: flex-end; gap: 10px; margin-top: 18px; padding: 16px 18px; border: 1px solid rgba(23,32,29,0.16); background: #fff;">
+      <label style="display: flex; flex-direction: column; gap: 5px;">
+        <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">DESDE</span>
+        <span class="mono" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; font-size: 13px;">2026-08-16</span>
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 5px;">
+        <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">HASTA</span>
+        <span class="mono" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; font-size: 13px;">2026-08-22</span>
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 5px;">
+        <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">ESTADO</span>
+        <span style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; font-size: 13px; min-width: 150px;">Todos</span>
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 5px;">
+        <span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: #56605b;">TIENDA</span>
+        <span style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; font-size: 13px; min-width: 170px;">Todas las tiendas</span>
+      </label>
+      <span style="flex-grow: 1;"></span>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; font-size: 13px; color: #56605b; min-width: 300px;">Buscar por KNT, # Shopify, cliente, telefono</span>
+        <button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: none; border-radius: 3px; background: #17201d; color: #f7f8f4; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/></svg>
+          Escanear QR
+        </button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px;">
+      <sc-for list="{{orders}}" as="o" hint-placeholder-count="6">
+        <div style="border: 1px solid rgba(23,32,29,0.18); border-left: 4px solid {{o.tone}}; border-radius: 3px; background: #fff;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px dashed rgba(23,32,29,0.2); background: #efe9dc;">
+            <span class="mono" style="font-size: 15px; font-weight: 700;">{{o.code}}</span>
+            <span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid {{o.tone}}; border-radius: 2px; color: {{o.tone}}; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;">{{o.state}}</span>
+          </div>
+          <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 12px 14px;">
+            <div style="min-width: 0;">
+              <p style="margin: 0 0 3px; font-size: 13px; font-weight: 600;">{{o.store}} &middot; {{o.client}}</p>
+              <p style="margin: 0 0 6px; font-size: 13px; color: #56605b;">{{o.address}}</p>
+              <p class="mono" style="margin: 0; font-size: 11px; color: #56605b;">{{o.courier}}</p>
+            </div>
+            <p class="mono" style="margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap;">{{o.amount}}</p>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      kpis: [
+        { label: 'TOTAL FILTRADO', value: '3.510', tone: '#17201d' },
+        { label: 'PENDIENTE CONFIRMAR', value: '50', tone: '#b45436' },
+        { label: 'LISTO SIN LIDER', value: '74', tone: '#b45436' },
+        { label: 'RECOGIDOS', value: '117', tone: '#2f6d92' },
+        { label: 'ENTREGADOS', value: '1.999', tone: '#2b5f4b' },
+        { label: 'FALLIDOS', value: '1.210', tone: '#b45436' }
+      ],
+      orders: [
+        { code: 'KNT-003412', state: 'EN TRANSITO', tone: '#2f6d92', store: 'DANDA', client: 'Luisa Marmolejo', address: 'Carrera 66 #13-40, El Refugio', courier: 'Martha Ospina', amount: '$ 148.000' },
+        { code: 'KNT-003411', state: 'RECOGIDO', tone: '#2f6d92', store: 'Bella Mujer', client: 'Andres Portilla', address: 'Calle 5 #38-71, San Fernando', courier: 'Jhon Restrepo', amount: '$ 92.500' },
+        { code: 'KNT-003409', state: 'ENTREGADO', tone: '#2b5f4b', store: 'OnStok', client: 'Diana Cabal', address: 'Av 6N #28-13, Menga', courier: 'Yeison Carabali', amount: '$ 215.000' },
+        { code: 'KNT-003405', state: 'FALLIDO', tone: '#b45436', store: 'Nambu', client: 'Carlos Zapata', address: 'Calle 70 #1A-22, Floralia', courier: 'Martha Ospina', amount: '$ 64.900' },
+        { code: 'KNT-003402', state: 'IMPORTADO', tone: '#56605b', store: 'Senziacol', client: 'Paola Grisales', address: 'Carrera 39 #4B-18, Tequendama', courier: 'Sin asignar', amount: '$ 133.400' },
+        { code: 'KNT-003398', state: 'LLAMADA', tone: '#56605b', store: 'Kovia', client: 'Julian Bedoya', address: 'Calle 44 #86-30, Ciudad Cordoba', courier: 'Sin asignar', amount: '$ 78.000' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

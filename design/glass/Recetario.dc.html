@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#0e1116; color:#f4f6f8;
+           font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;
+           -webkit-font-smoothing:antialiased; letter-spacing:-.012em; }
+    a { color:#c6f24e; text-decoration:none; } a:hover { text-decoration:underline; }
+    .n { font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+    .glass { position:relative; isolation:isolate;
+      background:linear-gradient(140deg, rgba(255,255,255,.13), rgba(255,255,255,.035));
+      backdrop-filter:blur(22px) saturate(170%); -webkit-backdrop-filter:blur(22px) saturate(170%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 10px 30px rgba(0,0,0,.42); }
+    .glass::before { content:""; position:absolute; inset:0; border-radius:inherit; padding:1px;
+      background:linear-gradient(140deg, rgba(255,255,255,.65), rgba(198,242,78,.40) 38%,
+                 rgba(255,255,255,.06) 58%, rgba(125,205,255,.45));
+      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none; }
+    .glass::after { content:""; position:absolute; left:0; right:0; top:0; height:48%;
+      border-radius:inherit; pointer-events:none;
+      background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0)); }
+    .glass-acid { position:relative; isolation:isolate; color:#10140c;
+      background:linear-gradient(140deg, rgba(212,250,110,.92), rgba(168,222,60,.80));
+      backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.65), inset 0 -14px 26px rgba(120,170,20,.28),
+                  0 12px 34px rgba(150,210,50,.22); }
+    .glass-acid::after { content:""; position:absolute; left:0; right:0; top:0; height:52%;
+      border-radius:inherit; pointer-events:none;
+      background:linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,0)); }
+    .solid { background:#191e25; box-shadow:0 14px 34px rgba(0,0,0,.34); }
+    code { font-family:ui-monospace,monospace; font-size:12px; color:#c6f24e; }
+    .cell { border-radius:20px; padding:22px; }
+  </style>
+</helmet>
+
+<div style="position:relative;width:1120px;padding:44px 40px 52px;box-sizing:border-box;background:#0e1116;overflow:hidden;">
+  <div style="position:absolute;top:-100px;right:60px;width:520px;height:420px;border-radius:999px;
+              background:radial-gradient(closest-side, rgba(198,242,78,.24), transparent);filter:blur(56px);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-120px;left:-60px;width:520px;height:440px;border-radius:999px;
+              background:radial-gradient(closest-side, rgba(90,170,255,.22), transparent);filter:blur(58px);pointer-events:none;"></div>
+
+  <div style="position:relative;">
+    <span class="glass-acid" style="display:inline-flex;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:800;margin-bottom:18px;">RECETARIO DE VIDRIO</span>
+    <h1 style="margin:0;font-size:40px;font-weight:800;letter-spacing:-.04em;line-height:1;">Donde si, y donde no</h1>
+    <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#9aa5b3;max-width:640px;">
+      El vidrio es un acento, no un material de construccion. Va donde hay UNA cosa que mira el ojo;
+      nunca detras de datos que se leen en columna.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:34px;">
+
+      <div class="glass cell">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:.1em;color:#c6f24e;">SI &middot; 01</p>
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">Boton primario</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+          <button type="button" class="glass-acid" style="min-height:46px;padding:0 22px;border:none;border-radius:999px;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer;">Pagar tienda</button>
+          <button type="button" class="glass" style="min-height:46px;padding:0 22px;border:none;border-radius:999px;color:#f4f6f8;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;">Cerrar corte</button>
+        </div>
+        <p style="margin:14px 0 0;font-size:13px;line-height:1.55;color:#9aa5b3;">Una accion, texto corto, area pequena. El brillo especular refuerza que se puede pulsar.</p>
+      </div>
+
+      <div class="glass cell">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:.1em;color:#c6f24e;">SI &middot; 02</p>
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">Grupo de pestanas</p>
+        <div class="glass" style="display:inline-flex;align-items:center;gap:4px;padding:5px;border-radius:999px;">
+          <span style="padding:8px 16px;border-radius:999px;font-size:13.5px;font-weight:500;color:#9aa5b3;">Operacion</span>
+          <span class="glass-acid" style="padding:8px 16px;border-radius:999px;font-size:13.5px;font-weight:700;">Liquidaciones</span>
+        </div>
+        <p style="margin:14px 0 0;font-size:13px;line-height:1.55;color:#9aa5b3;">El contenedor flota sobre el fondo y la pastilla activa es de vidrio acido. Dos capas de vidrio, no tres.</p>
+      </div>
+
+      <div class="glass-acid cell">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:.1em;opacity:.6;">SI &middot; 03</p>
+        <p style="margin:0 0 12px;font-size:16px;font-weight:800;">Tarjeta heroe</p>
+        <p class="n" style="margin:0;font-size:36px;font-weight:800;line-height:1;">$ 4.217.500</p>
+        <p style="margin:12px 0 0;font-size:13px;line-height:1.55;opacity:.7;">UNA sola por pantalla. Es la cifra que resume el estado del negocio; si hay dos, ninguna destaca.</p>
+      </div>
+
+      <div class="solid cell">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:.1em;color:#ff8b7c;">NO &middot; 01</p>
+        <p style="margin:0 0 16px;font-size:16px;font-weight:700;">Tablas de dinero</p>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <div style="display:flex;justify-content:space-between;gap:14px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.07);">
+            <span style="font-size:13.5px;color:#9aa5b3;">DANDA</span><span class="n" style="font-size:14.5px;font-weight:700;">$ 9.350.800</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:14px;">
+            <span style="font-size:13.5px;color:#9aa5b3;">Bella Mujer</span><span class="n" style="font-size:14.5px;font-weight:700;">$ 2.329.541</span>
+          </div>
+        </div>
+        <p style="margin:14px 0 0;font-size:13px;line-height:1.55;color:#9aa5b3;">Superficie opaca. Un fondo que cambia bajo cada fila destruye la comparacion en columna, que es justo para lo que existe esta tabla.</p>
+      </div>
+    </div>
+
+    <div class="solid cell" style="margin-top:18px;">
+      <p style="margin:0 0 14px;font-size:16px;font-weight:700;">La receta, en tres capas</p>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;">
+        <div>
+          <p style="margin:0 0 6px;font-size:13.5px;font-weight:600;color:#c6f24e;">1 &middot; Fondo translucido</p>
+          <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9aa5b3;"><code>backdrop-filter: blur(22px) saturate(170%)</code> sobre un degradado blanco al 13%. Sin luz de color detras, no se ve nada: por eso el fondo lleva brillos difuminados.</p>
+        </div>
+        <div>
+          <p style="margin:0 0 6px;font-size:13.5px;font-weight:600;color:#c6f24e;">2 &middot; Borde cromatico</p>
+          <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9aa5b3;">Un <code>::before</code> de 1px con degradado blanco, verde y azul, recortado con <code>mask-composite</code>. Es lo que da la refraccion del canto.</p>
+        </div>
+        <div>
+          <p style="margin:0 0 6px;font-size:13.5px;font-weight:600;color:#c6f24e;">3 &middot; Brillo especular</p>
+          <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9aa5b3;">Un <code>::after</code> que cubre el 48% superior con blanco degradado a transparente. Simula la luz entrando por arriba.</p>
+        </div>
+      </div>
+      <p style="margin:16px 0 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.07);font-size:13px;line-height:1.6;color:#9aa5b3;">
+        <b style="color:#f4f6f8;">Coste y compatibilidad.</b> <code>backdrop-filter</code> repinta en cada scroll: con pocos elementos es gratis, con cientos hunde el rendimiento en telefonos de gama baja. Por eso el vidrio se queda en la consola de escritorio y en elementos contados. Safari necesita <code>-webkit-backdrop-filter</code>; donde no exista, el degradado de base ya deja el componente legible.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

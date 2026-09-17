@@ -1,0 +1,53 @@
+{
+  "reproducedAt": "2026-09-13T01:45:23.929Z",
+  "uid": "smoke005-1789263910474",
+  "claims": {
+    "role": "seller",
+    "sellerId": "smoke005-seller-own-1789263910474",
+    "communityId": "smoke005-com-1789263910474",
+    "communityStanding": "leader"
+  },
+  "communityId": "smoke005-com-1789263910474",
+  "ownSellerId": "smoke005-seller-own-1789263910474",
+  "communitySellerCount": 1,
+  "outcome": "FALLA_PERMISSION_DENIED",
+  "report": [
+    "La consulta se rechaza por permisos. Esto es compatible con las DOS causas del plan 0, que",
+    "dan el mismo codigo: la forma de la regla (get sobre el comodin) y el limite de accesos a",
+    "documento (10 por lectura simple, 20 por consulta; cada candidato gasta un exists y un get).",
+    "Esta comunidad tiene 1 tienda(s): con una sola tienda el limite de accesos NO",
+    "deberia alcanzarse, y eso DEBILITA la deduccion de que la causa sea la forma de la regla.",
+    "T2 sirve para las dos causas —resource.data quita el get y el consumo de accesos—, pero la",
+    "causa exacta no queda demostrada aqui: hay que anotarla en la spec como no concluyente."
+  ],
+  "ownStore": {
+    "label": "tienda propia por id",
+    "passed": true,
+    "httpStatus": 200,
+    "code": null,
+    "status": null,
+    "message": null,
+    "documentCount": 1,
+    "raw": "{\n  \"name\": \"projects/kentro-last-mile/databases/(default)/documents/sellers/smoke005-seller-own-1789263910474\",\n  \"fields\": {\n    \"updatedAt\": {\n      \"stringValue\": \"2026-09-13T01:45:10.474Z\"\n    },\n    \"onboardingComplete\": {\n      \"booleanValue\": false\n    },\n    \"bankAccount\": {\n      \"stringValue\": \"\"\n    },\n    \"createdAt\": {\n      \"stringValue\": \"2026-09-13T01:45:10.474Z\"\n    },\n    \"cityId\": {\n      \"stringValue\": \"\"\n    },\n    \"id\": {\n      \"stringValue\": \"smoke005-seller-own-1789263910474\"\n    },\n    \"shopDomain\": {\n      \"stringValue\": \"\"\n    },\n    \"name\": {\n      \"stringValue\": \"Verify 005 - tienda del lider, FUERA de toda comunidad (desechable)\"\n    }\n  },\n  \"createTime\": \"2026-09-13T01:45:13.156133Z\",\n  \"updateTime\": \"2026-09-13T01:45:13.156133Z\"\n}\n"
+  },
+  "communityStores": {
+    "label": "sellers where communityId == la suya",
+    "passed": false,
+    "httpStatus": 403,
+    "code": 403,
+    "status": "PERMISSION_DENIED",
+    "message": "Missing or insufficient permissions.",
+    "documentCount": null,
+    "raw": "[{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Missing or insufficient permissions.\",\n    \"status\": \"PERMISSION_DENIED\"\n  }\n}\n]"
+  },
+  "control": {
+    "label": "control: cities, abierta a cualquier sesion",
+    "passed": true,
+    "httpStatus": 200,
+    "code": null,
+    "status": null,
+    "message": null,
+    "documentCount": 1,
+    "raw": "[{\n  \"document\": {\n    \"name\": \"projects/kentro-last-mile/databases/(default)/documents/cities/city-bog\",\n    \"fields\": {\n      \"name\": {\n        \"stringValue\": \"Bogota\"\n      },\n      \"id\": {\n        \"stringValue\": \"city-bog\"\n      },\n      \"active\": {\n        \"booleanValue\": false\n      }\n    },\n    \"createTime\": \"2026-05-08T20:37:37.844116Z\",\n    \"updateTime\": \"2026-05-11T00:18:49.696770Z\"\n  },\n  \"readTime\": \"2026-09-13T01:45:23.403049Z\"\n}\n]"
+  }
+}

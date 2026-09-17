@@ -1,0 +1,322 @@
+<title>Cierre del ciclo 013</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f5f7f1; --bg-2:#ecefe6; --ink:#171b15; --ink-2:#4d554a; --ink-3:#7a8276;
+  --line:#d6dbcf; --line-2:#c3c9bb;
+  --accent:#3d6a1e; --accent-ink:#f5f7f1; --accent-soft:#e3edd6;
+  --ok:#2c6e47; --ok-bg:#dcefe2; --warn:#8a5a10; --warn-bg:#f5e7c4; --bad:#9c2f2f; --bad-bg:#f4d9d6; --info:#2f5a86; --info-bg:#dbe7f3;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f120e; --bg-2:#161a14; --ink:#eaeee3; --ink-2:#aab3a3; --ink-3:#7d867a;
+    --line:#272d24; --line-2:#343b30;
+    --accent:#c6f24e; --accent-ink:#0f120e; --accent-soft:#1f2916;
+    --ok:#8bd6a4; --ok-bg:#15301f; --warn:#e6bd63; --warn-bg:#3a2c0d; --bad:#e6837d; --bad-bg:#3b1a18; --info:#8fb8e6; --info-bg:#132639;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f120e; --bg-2:#161a14; --ink:#eaeee3; --ink-2:#aab3a3; --ink-3:#7d867a;
+  --line:#272d24; --line-2:#343b30;
+  --accent:#c6f24e; --accent-ink:#0f120e; --accent-soft:#1f2916;
+  --ok:#8bd6a4; --ok-bg:#15301f; --warn:#e6bd63; --warn-bg:#3a2c0d; --bad:#e6837d; --bad-bg:#3b1a18; --info:#8fb8e6; --info-bg:#132639;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.page{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;max-width:1240px;margin:0 auto;padding:40px 32px 96px}
+@media (max-width:900px){.page{grid-template-columns:minmax(0,1fr);gap:24px;padding:24px 18px 72px}}
+nav.toc{position:sticky;top:24px;align-self:start;font-size:13px}
+@media (max-width:900px){nav.toc{position:static;border-bottom:1px solid var(--line);padding-bottom:16px}}
+nav.toc .eyebrow{margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+@media (max-width:900px){nav.toc ol{flex-direction:row;flex-wrap:wrap;gap:6px 14px}}
+nav.toc a{color:var(--ink-2);text-decoration:none}
+nav.toc a:hover{color:var(--ink)}
+main{min-width:0}
+.eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+header.head{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:36px}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(34px,5vw,54px);line-height:1.05;letter-spacing:-.01em;margin:10px 0 14px;text-wrap:balance}
+.lede{max-width:68ch;color:var(--ink-2);font-size:17px;margin:0 0 20px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 28px;font-size:13.5px;color:var(--ink-2)}
+.meta b{display:block;color:var(--ink);font-weight:600}
+.meta code{font-size:12.5px}
+h2{font-family:var(--display);font-weight:500;font-size:30px;line-height:1.15;letter-spacing:-.01em;margin:64px 0 8px;text-wrap:balance}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--ink-3);margin-right:10px;vertical-align:middle}
+h3{font-size:17px;font-weight:600;margin:32px 0 8px}
+p{max-width:68ch;margin:0 0 14px}
+ul,ol{max-width:68ch;padding-left:22px;margin:0 0 14px}
+li{margin:0 0 6px}
+li p{margin:0}
+code{font-family:var(--mono);font-size:.86em;background:var(--bg-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:26px 0 30px}
+.kpi{background:var(--bg-2);padding:16px 18px}
+.kpi .v{font-family:var(--display);font-size:34px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink)}
+.kpi .l{font-size:12.5px;color:var(--ink-2);margin-top:8px;line-height:1.35}
+.kpi.accent .v{color:var(--accent)}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.6}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-bad{background:var(--bad-bg);color:var(--bad)}
+.b-info{background:var(--info-bg);color:var(--info)}
+.b-neutral{background:var(--bg-2);color:var(--ink-2);border:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-size:13px;color:var(--ink-2);margin:8px 0 18px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;margin:0 0 22px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:10px 12px;background:var(--bg-2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.req{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--ink)}
+td.test{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);line-height:1.5;min-width:260px}
+td.test i{font-style:normal;color:var(--ink-3)}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+td .why{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 6px 6px 0;margin:18px 0 22px;max-width:70ch}
+.callout p:last-child{margin:0}
+.finding{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;padding:18px 0;border-top:1px solid var(--line);max-width:78ch}
+.finding:last-of-type{border-bottom:1px solid var(--line)}
+.finding .k{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-top:4px}
+.finding h4{margin:0 0 6px;font-size:15.5px;font-weight:600}
+.finding p{margin:0 0 6px;font-size:14.5px;color:var(--ink-2)}
+.finding .where{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.debt{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0 0 12px;max-width:78ch;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:start}
+.debt h4{margin:0;font-size:15px;font-weight:600}
+.debt .where{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);grid-column:1/-1}
+.debt p{margin:0;font-size:14px;color:var(--ink-2);grid-column:1/-1}
+.specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:18px 0 8px}
+.spec{border:1px solid var(--line);border-radius:8px;padding:16px 18px;background:var(--bg-2)}
+.spec .id{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:500}
+.spec h4{font-family:var(--display);font-weight:500;font-size:19px;margin:6px 0 8px;line-height:1.2}
+.spec p{font-size:13.5px;color:var(--ink-2);margin:0 0 8px}
+.spec .path{font-family:var(--mono);font-size:11px;color:var(--ink-3);word-break:break-all}
+.timeline{list-style:none;padding:0;margin:0 0 16px;max-width:70ch;font-size:14px}
+.timeline li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.timeline .t{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.guia{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:0 0 18px;max-width:70ch;white-space:pre-wrap;overflow-x:auto}
+.guia b{color:var(--ink-3);font-weight:500;letter-spacing:.06em;font-size:10.5px}
+.dod{list-style:none;padding:0;margin:0 0 16px;max-width:70ch}
+.dod li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3);max-width:70ch}
+@media (prefers-reduced-motion: no-preference){a{transition:color .15s}}
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Indice">
+  <div class="eyebrow">Indice</div>
+  <ol>
+    <li><a href="#resumen">Resumen</a></li>
+    <li><a href="#veredicto">1 · Veredicto por requisito</a></li>
+    <li><a href="#smoke">2 · Metricas de la verificacion</a></li>
+    <li><a href="#degradado">3 · Que se degrado</a></li>
+    <li><a href="#hallazgos">4 · Lo que el ciclo enseno</a></li>
+    <li><a href="#deuda">5 · Deuda tecnica</a></li>
+    <li><a href="#propuestas">6 · Siguiente ciclo</a></li>
+    <li><a href="#cierre">Cierre y siguiente paso</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="head">
+  <div class="eyebrow">Kentro · Informe de fase <code>report</code> · SDD</div>
+  <h1>Cierre del ciclo 013</h1>
+  <p class="lede">El pedido manual se ve entero en cualquier pantalla, y la guia lleva siempre la direccion: la nota de la tienda ya no la pisa, va debajo con su rotulo, y las indicaciones tienen casilla propia. Desplegado a produccion el 2026-09-15 (functions a las 20:08 UTC, hosting a las 20:21). Este informe dice, requisito por requisito, que esta demostrado, que solo esta probado, que cambio de comportamiento y que entra al siguiente ciclo.</p>
+  <div class="meta">
+    <div><b>Rama</b><code>feat/pedido-manual-multilinea</code> · 44 commits sobre <code>main</code> · sin PR abierto</div>
+    <div><b>Commits del ciclo</b><code>231a542</code> borrador · <code>2d883d6</code> aprobada+plan+tareas · <code>599e530</code> T1–T3, T5, T6 · <code>4e5d9fe</code> T4 · <code>1139a0c</code> T7</div>
+    <div><b>Produccion</b><code>createManualOrder</code> y <code>updateImportedOrder</code> 20:08 UTC; hosting (funcion SSR) 20:21 UTC; el bundle servido contiene los textos de la spec</div>
+    <div><b>Validacion humana</b>Pendiente: DoD 6 (la tienda que reporto el fallo) y DoD 7 (aprobacion de la entrega)</div>
+  </div>
+</header>
+
+<section id="resumen">
+  <div class="kpis">
+    <div class="kpi accent"><div class="v">17</div><div class="l">requisitos en la spec (13 RF + 4 RNF)</div></div>
+    <div class="kpi"><div class="v">12</div><div class="l">cumplidos con evidencia funcional en <code>.sdd/evidence/013/</code></div></div>
+    <div class="kpi"><div class="v">5</div><div class="l">probados en unidad o por guarda, sin evidencia funcional propia</div></div>
+    <div class="kpi"><div class="v">5<span style="font-size:18px;color:var(--ink-3)">/7</span></div><div class="l">puntos del Definition of Done; faltan los dos humanos</div></div>
+    <div class="kpi"><div class="v">1.326</div><div class="l">pruebas en verde, 33 archivos, 11,6 s (re-ejecutadas para este informe)</div></div>
+    <div class="kpi"><div class="v">0</div><div class="l">errores de lint y tipos · 0 dependencias nuevas · 0 <code>static{</code> en los 9 chunks de produccion</div></div>
+  </div>
+  <p>Ningun requisito esta en rojo. Lo que separa <em>cumplido</em> de <em>probado</em> es si alguien lo vio ocurrir: una medida real del navegador a 390 y 1.280 px, el texto de una guia impresa de verdad, una fila leida de produccion. Los cinco "probados" son la tarjeta y el Excel (RF_08, RF_12), la escritura de indicaciones por la callable (RF_09), las vias que no deben escribirlas (RF_13) y la guia de los pedidos no manuales (RNF_01): todos con prueba, ninguno con traza.</p>
+  <p>Un dato que la spec no tenia y este informe si: en produccion hay <b>4.891 pedidos</b>, y solo <b>4</b> estan en el caso que motivo la regla de compatibilidad (nota de la tienda en "normalizada", distinta de la original). Los cuatro estan entregados. Ninguno tiene la original vacia; ninguno tiene todavia indicaciones (el campo lleva horas en produccion).</p>
+</section>
+
+<section id="veredicto">
+  <h2><span class="n">1</span>Veredicto por requisito</h2>
+  <div class="legend">
+    <span><span class="badge b-ok">Cumplido</span> prueba + evidencia funcional</span>
+    <span><span class="badge b-warn">Probado</span> prueba en verde, sin evidencia funcional</span>
+  </div>
+  <p>Evidencia funcional: <code>.sdd/evidence/013/medidas-movil.json</code> y <code>medidas-escritorio.json</code> (16 controles cada uno, 19:50 UTC), <code>guia-viejo.txt</code> y <code>guia-nuevo.txt</code> (texto de la ventana de impresion), <code>resultado-capture.json</code>, cuatro capturas en <code>capturas/</code>, <code>mutacion-rnf02.txt</code>, y la lectura de produccion hecha para este informe. Pruebas en <code>src/lib/order-address-lines.test.ts</code> (OAL, 41), <code>spec-013-guards.test.ts</code> (G, 57), <code>order-export.test.ts</code> (OE, 7 nuevas) y <code>actions.test.ts</code> (A, 4 nuevas).</p>
+  <div class="tw"><table>
+    <thead><tr><th>Req</th><th>Que exige</th><th>Veredicto</th><th>Prueba que lo cubre</th><th>Evidencia funcional</th></tr></thead>
+    <tbody>
+    <tr><td class="req">RF_01</td><td>Formulario entero, sin desplazamiento horizontal, a 390 px y en escritorio</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1066 <i>el &lt;form de ManualOrderPanel lleva min-w-0</i>, G:1316 <i>el guion mide scrollWidth contra clientWidth</i></td><td><code>medidas-movil.json</code>: <code>scrollWidth 390 = clientWidth 390</code>; escritorio 1280 = 1280; los 16 controles con <code>dentro: true</code> · <code>movil-formulario.png</code></td></tr>
+    <tr><td class="req">RF_02</td><td>Desplegado toma la fila entera; los otros paneles bajan</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:981 <i>spanWhenOpen en props y tipo</i>, G:992 <i>lg:col-span-full condicionado a open &amp;&amp; spanWhenOpen</i>, G:1009 <i>el panel "Crear pedido manual" lo lleva</i></td><td><code>panelesDesplegados: {manual, liquidacion}</code> los dos a la vez en ambas medidas; <code>escritorio-formulario.png</code> con el formulario a todo el ancho y "Solicitudes de liquidacion" debajo</td></tr>
+    <tr><td class="req">RF_03</td><td>Filas de varios controles se apilan en telefono, no desbordan</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1034 <i>ninguna grid-cols-[…] usa fr sin minmax(0,…); sin w-20</i>, G:1049 <i>fila de producto minmax(0,2fr)_minmax(0,1fr)_5rem_auto, inputs w-full min-w-0</i></td><td>A 390 px, Producto, SKU, Cant. y Quitar terminan todos en <code>right: 331</code>: apilados a todo el ancho. En escritorio, en 745 / 1048 / 1136 / 1208: en fila.</td></tr>
+    <tr><td class="req">RF_04</td><td>Todo control a 44 px o mas, ninguno escondido</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1021 <i>cada &lt;input, &lt;select, &lt;textarea y &lt;button de ManualOrderPanel lleva min-h-11</i>, G:1324</td><td>16 de 16 controles con <code>height ≥ 44</code> en las dos medidas (inputs y selects 44, las dos areas de texto 58); <code>controlesMal: []</code></td></tr>
+    <tr><td class="req">RF_05</td><td>La guia lleva siempre "Direccion" con la original; vacia = "SIN DIRECCION"</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">OAL:104–138 <i>siete casos: original tal cual, recortada, vacia, solo espacios, vacia con corregida debajo</i>, G:271</td><td><code>guia-viejo.txt</code> y <code>guia-nuevo.txt</code>: "DIRECCION" seguida de la original en las dos <span class="why">El caso "SIN DIRECCION" solo en unidad: en produccion no hay ningun pedido con la original vacia (0 de 4.891).</span></td></tr>
+    <tr><td class="req">RF_06</td><td>Indicaciones en linea aparte, debajo, nunca en su lugar</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">OAL:294–333 <i>ultima linea, recortada, nunca ocupa "Direccion", no se compara con nada</i></td><td><code>guia-nuevo.txt</code>: "INDICACIONES · Local al fondo, preguntar por Marta" tras la direccion y la correccion · <code>guia-nuevo.png</code></td></tr>
+    <tr><td class="req">RF_07</td><td>Corregida distinta en linea "Correccion o nota"; igual (sin tildes, mayusculas, espacios) no se repite</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">OAL:149–286 <i>pedido viejo real, igualdad en directo (12 casos de sameAddressText), puntuacion distinta = dos lineas</i></td><td><code>guia-nuevo.txt</code>: "CORRECCION O NOTA · Carrera 66 # 9-32, Cali, Colombia" bajo "Carrera 66 # 9-32" <span class="why">La regla de igualdad solo en unidad; en produccion 1 pedido tiene la corregida igual a la original y ya no la duplica.</span></td></tr>
+    <tr><td class="req">RF_08</td><td>Tarjeta, vista del mensajero y Excel: las mismas lineas, del mismo sitio</td><td><span class="badge b-warn">Probado</span></td><td class="test">G:245–321 <i>OrderCard recorre orderAddressLines(, rotulo en su &lt;p&gt; sin truncate; OrderRow no lee la direccion</i>, G:402–435, OE:231–276</td><td>Solo la guia tiene traza real. Las capturas muestran los pedidos plegados (<code>OrderRow</code>), no la tarjeta abierta; ningun Excel se descargo.</td></tr>
+    <tr><td class="req">RF_09</td><td>Campo propio de indicaciones, opcional, separado</td><td><span class="badge b-warn">Probado</span></td><td class="test">G:546–575 <i>los dos schemas y las dos escrituras</i>, G:609–625 <i>wrappers y createManualOrder local</i>, A:116–131</td><td>Las callables estan desplegadas (20:08 UTC, <code>gcloud functions describe</code>), pero el pedido de prueba con indicaciones lo escribio el admin SDK del guion, no la callable. Ningun pedido real lleva aun <code>deliveryNotes</code>.</td></tr>
+    <tr><td class="req">RF_10</td><td>La tienda escribe indicaciones al crear y al editar; no ve "normalizada"</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:770 <i>ningun formulario conserva la casilla, el estado ni el envio</i>, G:781–813 <i>textarea no required; ManualOrderPanel la envia y la resetea; ImportedOrderReviewForm la siembra y la envia dos veces</i></td><td>La lista de 16 controles medidos incluye "Indicaciones para el mensajero (opcional)" y no incluye ninguna "normalizada" <span class="why">Crear: medido. Editar: solo guarda; el formulario de revision no se abrio en el guion.</span></td></tr>
+    <tr><td class="req">RF_11</td><td>Las notas viejas en "normalizada" se siguen mostrando, sin borrar ni mover</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">OAL:149–175 <i>el pedido viejo real: dos lineas, tal cual</i>, G:575 <i>updateImportedOrder conserva normalizedAddress y el merge: true</i>, OE:231</td><td><code>guia-viejo.txt</code>: "CORRECCION O NOTA · timbre azul, preguntar por Marta" · Produccion: 4 pedidos en este caso, todos <code>delivered</code>, intactos</td></tr>
+    <tr><td class="req">RF_12</td><td>Columna "indicaciones" al final del Excel, sin mover las demas</td><td><span class="badge b-warn">Probado</span></td><td class="test">OE:222 <i>es la ULTIMA columna</i>, OE:227 <i>las anteriores son exactamente las de hoy</i>, OE:276 <i>cada fila tiene exactamente esas claves</i>, G:435</td><td>Sin exportacion real descargada.</td></tr>
+    <tr><td class="req">RF_13</td><td>Shopify, webhook de tienda, OnStock y formulario crean sin indicaciones</td><td><span class="badge b-warn">Probado</span></td><td class="test">G:595 <i>index.ts, store-webhook.ts, onstock-webhook.ts y contact-form.ts no contienen deliveryNotes</i>, OAL:318</td><td>Indirecta: 0 de 4.891 pedidos con <code>deliveryNotes</code> a las 20:35 UTC. Consistente, pero no es una prueba de la via.</td></tr>
+    <tr><td class="req">RNF_01</td><td>Ninguna via de creacion cambia; las guias se ven igual salvo RF_05–07</td><td><span class="badge b-warn">Probado</span></td><td class="test">G:271 <i>la guia sigue pasando por escapeHtml(</i>, G:595; los 33 archivos de la suite en verde</td><td>Las dos guias impresas son de pedidos manuales del guion; no se imprimio la de un pedido de Shopify.</td></tr>
+    <tr><td class="req">RNF_02</td><td>Una sola funcion pura para las cuatro superficies, con comprobacion que falla si alguna la evita</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">OAL:391–421 <i>pura: no muta, array nuevo, determinista, solo label y text</i>, G:259 <i>cero lecturas directas en el monolito</i>, G:415 <i>ni en el Excel</i>, G:346 <i>DoD 4 · mutacion</i></td><td><code>mutacion-rnf02.txt</code>: reintroducir <code>order.normalizedAddress ?? order.addressRaw</code> en la guia hace fallar la misma guarda (19:04 UTC)</td></tr>
+    <tr><td class="req">RNF_03</td><td>Sistema de diseno y checklist de cierre (390 px sin desbordar, 44 px)</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1021, G:1034, G:1066</td><td>Las dos medidas (<code>sinDesbordamiento: true</code>, 16/16 a 44 px) son exactamente los dos puntos medibles del checklist</td></tr>
+    <tr><td class="req">RNF_04</td><td>RF_01–04 se verifican con guardas y con la medida real, como unica excepcion al principio 4</td><td><span class="badge b-ok">Cumplido</span></td><td class="test">G:1078 <i>declaracion</i>, G:1222–1388 <i>forma del guion: tres pasos, prefijo, evidencia solo en 013, no escribe en capture</i></td><td>La medida se hizo (T7, 19:49–19:51 UTC) y la excepcion queda declarada en la spec y en la guarda</td></tr>
+    </tbody></table></div>
+
+  <h3>Definition of Done</h3>
+  <ul class="dod">
+    <li><span class="badge b-ok">1</span><span>RF_05–RF_13, RNF_01 y RNF_02 con prueba sobre la funcion pura, con el pedido viejo real y el de tres lineas: <code>OAL:149</code> y <code>OAL:341</code>.</span></li>
+    <li><span class="badge b-ok">2</span><span>Guardas de fuente y medida a 390 y 1.280 px con los dos paneles desplegados: <code>medidas-*.json</code>, <code>ok: true</code> en ambas.</span></li>
+    <li><span class="badge b-ok">3</span><span>Guia del pedido con tres lineas y guia del pedido viejo con dos: <code>guia-nuevo.txt</code>, <code>guia-viejo.txt</code>, <code>resultado-capture.json</code> 6/6 comprobaciones.</span></li>
+    <li><span class="badge b-ok">4</span><span>La comprobacion de RNF_02 falla de verdad por mutacion: <code>mutacion-rnf02.txt</code>.</span></li>
+    <li><span class="badge b-ok">5</span><span><code>tsc</code> raiz y <code>functions/</code> limpios; lint 0 errores (re-ejecutados a las 20:33 UTC).</span></li>
+    <li><span class="badge b-warn">6</span><span><b>Pendiente.</b> La tienda que reporto el fallo no ha confirmado en produccion.</span></li>
+    <li><span class="badge b-warn">7</span><span><b>Pendiente.</b> El humano no ha validado ni aprobado la entrega. Este informe es la entrada para hacerlo.</span></li>
+  </ul>
+  <div class="callout">
+    <p><b>Lo que falta para que los cinco "probados" pasen a "cumplidos"</b>: abrir un pedido en la tarjeta y capturarla (RF_08), crear un pedido manual con indicaciones desde la app desplegada y no desde el admin SDK (RF_09), descargar un Excel (RF_12) e imprimir la guia de un pedido de Shopify (RNF_01). Todo cabe en la validacion de DoD 6: si la tienda que reporto el fallo crea un pedido real con indicaciones y lo imprime, cierra tres de los cinco de una vez.</p>
+  </div>
+</section>
+
+<section id="smoke">
+  <h2><span class="n">2</span>Metricas de la verificacion</h2>
+  <p>La spec no fija requisitos de tiempo, asi que no hay contra que comparar: se registra lo medido como linea base. <b>No hubo fase de smoke contra la URL desplegada</b>: la medida de T7 corrio en la app local (<code>localhost:3005</code>) contra la Firestore de produccion con una tienda desechable, antes del despliegue. Lo que si se comprobo de produccion, para este informe, va en la segunda tabla.</p>
+
+  <h3>T7 · Medida real con <code>scripts/verify-013.js</code> (2026-09-15, UTC)</h3>
+  <ul class="timeline">
+    <li><span class="t">19:04:47</span><span><b>Mutacion de RNF_02</b> (DoD 4): 2 pruebas en verde, 7 saltadas, 414 ms.</span></li>
+    <li><span class="t">19:49:09</span><span><code>setup</code>: tienda, cuenta y dos pedidos <code>smoke013-</code> escritos por admin SDK (uno viejo con "timbre azul" en normalizada; otro con direccion, corregida distinta e indicaciones).</span></li>
+    <li><span class="t">19:50:48</span><span><code>capture</code> escritorio 1.280 px: sin desbordamiento, 16/16 controles.</span></li>
+    <li><span class="t">19:50:49</span><span><code>capture</code> movil 390 px: sin desbordamiento, 16/16 controles.</span></li>
+    <li><span class="t">19:50:51</span><span>Dos ventanas de impresion capturadas: 6/6 comprobaciones de rotulos. <b>102 s</b> desde el setup.</span></li>
+    <li><span class="t">19:51:01</span><span><code>cleanup</code>: sin restos con el prefijo; <code>state.json</code> guardado sin contrasena. <b>112 s</b> de punta a punta, 0 errores del guion.</span></li>
+    <li><span class="t">20:08:05</span><span>Despliegue de functions: <code>updateImportedOrder</code>; 20:08:09 <code>createManualOrder</code>.</span></li>
+    <li><span class="t">20:21:33</span><span>Despliegue de hosting (la funcion SSR <code>ssrkentrolastmile</code> lleva esa hora). Orden functions → hosting respetado, como pedia el plan (§2.4).</span></li>
+  </ul>
+  <p>Errores de consola y peticiones fallidas: <b>el guion no los recoge</b>. Es el mismo hueco que se anoto en el informe 004/005 sobre <code>verify-005.js</code>, copiado a <code>verify-013.js</code> con el resto del arnes. Va a la deuda y a la spec 015.</p>
+
+  <h3>Produccion, leida para este informe (20:33–20:36 UTC)</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Que</th><th>Medido</th><th>Lectura</th></tr></thead>
+    <tbody>
+    <tr><td>HTML de <code>kentro-last-mile.web.app</code></td><td class="num">200 · 0,33 s · 11,9 KB</td><td><code>cache-control: no-cache, must-revalidate</code>, como fija <code>firebase.json</code></td></tr>
+    <tr><td>JavaScript servido</td><td class="num">9 chunks · 1,63 MB</td><td>El mayor, 474 KB en 0,16 s; <code>immutable</code> un año. Sin linea base comparable (el informe anterior midio <code>.next/static</code> local, 2,6 MB, que incluye lo no servido).</td></tr>
+    <tr><td>Textos de la spec en el bundle</td><td class="num">1 chunk</td><td>"Indicaciones para el mensajero" y "Correccion o nota" estan en el chunk principal: produccion sirve el cliente de la 013</td></tr>
+    <tr><td><code>static{</code> en los chunks</td><td class="num">0</td><td>El objetivo de navegadores (Safari/iOS 14) sigue respetado</td></tr>
+    <tr><td>Pedidos en Firestore</td><td class="num">4.891</td><td>3.954 por webhook de Shopify, 421 por webhook de tienda, 307 sincronizacion historica, 77 OnStock, 27 importacion o recuperacion manual, 105 sin <code>source</code> (los manuales no lo llevan)</td></tr>
+    <tr><td>Con "normalizada" no vacia</td><td class="num">5</td><td>4 distintas de la original (todas <code>delivered</code>, de dos tiendas), 1 igual: esa es la unica fila cuyo Excel cambia (RF_07)</td></tr>
+    <tr><td>Con la original vacia</td><td class="num">0</td><td>"SIN DIRECCION" no aparecera en ninguna guia existente</td></tr>
+    <tr><td>Con <code>deliveryNotes</code></td><td class="num">0</td><td>Nadie ha usado la casilla todavia; el campo lleva menos de una hora en produccion al medir</td></tr>
+    </tbody></table></div>
+</section>
+
+<section id="degradado">
+  <h2><span class="n">3</span>Que se degrado</h2>
+  <p>Nada que antes pasara ha dejado de pasar. Lo que cambio, medido entre <code>231a542</code> (el borrador de la spec, antes de tocar codigo) y <code>1139a0c</code>:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Indicador</th><th>Antes</th><th>Despues</th><th>Lectura</th></tr></thead>
+    <tbody>
+    <tr><td>Casos <code>it()</code> en <code>src/**/*.test.ts</code></td><td class="num">1.105</td><td class="num">1.211</td><td>+106 escritos; 1.326 ejecuciones (antes 1.201). Ninguno en rojo, ninguno saltado.</td></tr>
+    <tr><td>Archivos de prueba</td><td class="num">31</td><td class="num">33</td><td><code>order-address-lines</code>, <code>spec-013-guards</code></td></tr>
+    <tr><td>Duracion de la suite</td><td class="num">12,0 s</td><td class="num">11,6 s</td><td>Dentro del ruido; no empeora.</td></tr>
+    <tr><td><code>operations-app.tsx</code></td><td class="num">13.245 lineas</td><td class="num">13.266</td><td>+21. La spec quito tres lecturas y anadio una prop, un mapa de lineas y comentarios; el monolito sigue siendo el sitio de todo.</td></tr>
+    <tr><td>Codigo de produccion tocado</td><td class="num">—</td><td class="num">+59 / ±110 lineas</td><td>Un modulo nuevo de 59 lineas y cambios en 6 archivos existentes; las pruebas y guardas suman 2.000 lineas. Proporcion 1:18.</td></tr>
+    <tr><td>Dependencias (<code>package.json</code>, <code>functions/</code>)</td><td class="num">—</td><td class="num">+0</td><td>Ningun cambio en ningun <code>package.json</code>.</td></tr>
+    <tr><td>Avisos de lint</td><td class="num">3</td><td class="num">3</td><td>Los mismos tres <code>exhaustive-deps</code> (ahora en :480, :802, :2564 por el desplazamiento); 0 errores antes y despues.</td></tr>
+    <tr><td>Indices y reglas de Firestore</td><td class="num">—</td><td class="num">±0</td><td>Ninguna consulta nueva; la creacion y la edicion van por callables.</td></tr>
+    <tr><td>Functions redesplegadas</td><td class="num">—</td><td class="num">2 (+SSR)</td><td>Sin funciones nuevas ni borradas; el guard se sorteo con la variable, como esta documentado.</td></tr>
+    </tbody></table></div>
+
+  <h3>Cuatro cambios de comportamiento que no son regresiones pero conviene vigilar</h3>
+  <ul>
+    <li><b>El Excel cambia en dos celdas para casos raros.</b> <code>direccion_normalizada</code> va vacia cuando la corregida es "igual" a la original (1 pedido en produccion; antes se duplicaba) y <code>direccion_original</code> diria "SIN DIRECCION" con la original vacia (0 pedidos hoy). Quien procese el archivo por posicion no se ve afectado: la columna nueva va al final.</li>
+    <li><b>El administrador tambien pierde la casilla "normalizada" al crear un pedido.</b> Decision del plan (§2.5): la direccion la corrige quien reparte, en <code>resolveAddress</code>. Si el admin la usaba para adelantar una direccion corregida al crear, ya no puede; el servidor la sigue aceptando de un cliente viejo.</li>
+    <li><b>Las tarjetas de los pedidos viejos crecen.</b> Los 4 pedidos con nota en normalizada muestran ahora una linea mas ("Correccion o nota: …") entera, sin recortar. En produccion es inocuo (4 pedidos entregados); en el estado de demostracion (<code>seed.ts</code>) todos los pedidos llevan una normalizada con sufijo ", Cali, Colombia" y todos ganan esa linea.</li>
+    <li><b>La guia gana hasta dos lineas de 11 px bajo la direccion.</b> Se comprobo con <code>guia-nuevo.png</code> que con tres lineas el bloque de producto no se desplaza; no se comprobo con una indicacion de tres lineas recortada al maximo mas una correccion larga.</li>
+  </ul>
+</section>
+
+<section id="hallazgos">
+  <h2><span class="n">4</span>Lo que el ciclo enseno</h2>
+  <p>Seis hallazgos, en el orden en que aparecieron. Ninguno lo predijo la spec ni el plan.</p>
+
+  <div class="finding"><div class="k">H1</div><div><h4>"Todos los pedidos manuales de hoy" eran cuatro</h4><p>La spec presento el pedido viejo con la nota en "normalizada" como "el caso de todos los pedidos manuales de hoy" y dedico RF_11 y una decision revertible a el. Leida produccion: 4 pedidos de 4.891, todos entregados. La regla de compatibilidad sigue siendo correcta (no cuesta nada y no adivina), pero la migracion que la spec dejo "fuera de alcance" para otra decision queda resuelta con el dato: no hay nada que migrar. El responsable vio el sintoma en un pedido reciente y la spec lo generalizo sin contar.</p><div class="where">specs/013 §1 y §6 · lectura de produccion para este informe (orders, 5 campos proyectados)</div></div></div>
+
+  <div class="finding"><div class="k">H2</div><div><h4>El plan nombro la funcion equivocada y la guarda lo corrigio antes que el coder</h4><p>El plan y la tarea T2 decian que la tarjeta era <code>OrderRow</code> (:1851). La lectura directa vivia en <code>OrderCard</code> (1637–2052); <code>OrderRow</code> es la fila plegada que monta la tarjeta al abrirse. Lo detecto la fase de pruebas al escribir el extractor, y la guarda quedo sobre <code>OrderCard</code> con una exigencia menor sobre <code>OrderRow</code>. Un plan que cita numeros de linea de un archivo de 13.000 es exacto el dia que se escribe y aproximado al siguiente.</p><div class="where">specs/013_plan.md §1 · spec-013-guards.test.ts:142–146</div></div></div>
+
+  <div class="finding"><div class="k">H3</div><div><h4>La medida se hizo antes de desplegar, y por eso RF_09 sigue "probado"</h4><p>T7 corrio a las 19:50 y las functions se desplegaron a las 20:08. Fue valido porque el guion escribe los pedidos con el admin SDK, no con la callable, y lo que media era la pantalla y la guia. Pero la consecuencia es que la unica escritura de <code>deliveryNotes</code> por el camino real (formulario → <code>createManualOrder</code> → Firestore) no la ha hecho nadie. Es exactamente el hueco que cerraria DoD 6.</p><div class="where">.sdd/evidence/013/state.json · gcloud functions describe createManualOrder</div></div></div>
+
+  <div class="finding"><div class="k">H4</div><div><h4>La tercera copia del arnes de verificacion</h4><p><code>verify-013.js</code> comparte dieciseis funciones con el mismo nombre con <code>verify-005.js</code> (<code>ensureSeller</code>, <code>ensureAuthAccount</code>, <code>deleteIfSmoke</code>, <code>captureAtWidth</code>, <code>stepSetup</code>, <code>stepCleanup</code>…). Se copiaron a proposito, como dice la cabecera de las guardas, porque no hay un sitio comun. Con ellas se copiaron las dos carencias ya anotadas en el informe anterior: no recoge la consola y espera un reloj (<code>networkidle</code> + 1.500 ms). Lo que era deuda en un guion es ahora deuda en tres.</p><div class="where">scripts/smoke-004.js · scripts/verify-005.js (960) · scripts/verify-013.js (588)</div></div></div>
+
+  <div class="finding"><div class="k">H5</div><div><h4>Los pedidos manuales no llevan <code>source</code></h4><p>Al contar en produccion, 105 pedidos no tienen campo <code>source</code>; por eliminacion son los manuales. Ninguna consulta puede aislarlos sin bajarlos todos. No afecta a la 013, pero cualquier indicador "cuantos pedidos manuales entran" (la 010 los necesitaria para su alerta) se topa con esto.</p><div class="where">functions/src/orders.ts createManualOrder · conteo porSource</div></div></div>
+
+  <div class="finding"><div class="k">H6</div><div><h4>La edicion del pedido importado recibio la casilla nueva pero no los 44 px</h4><p>La 013 acoto RF_01–RF_04 al formulario de crear, y T5 cambio en <code>ImportedOrderReviewForm</code> solo la casilla de indicaciones. Sus trece controles siguen en <code>py-2 text-sm</code> (unos 38 px) y nadie los ha medido en telefono. Es el formulario por el que pasa cada pedido de Shopify con direccion dudosa: se usa mas veces al dia que el de crear.</p><div class="where">src/components/operations-app.tsx ImportedOrderReviewForm · 13 controles, 0 con min-h-11</div></div></div>
+</section>
+
+<section id="deuda">
+  <h2><span class="n">5</span>Deuda tecnica observada</h2>
+  <p>Concreta y ubicada. Primero la que nace en este ciclo, luego la heredada que sigue abierta, y al final lo que este ciclo saldo.</p>
+
+  <div class="debt"><h4>1.393 lineas de guardas de fuente para 59 lineas de modulo</h4><span class="badge b-warn">abierta</span><div class="where">src/lib/spec-013-guards.test.ts · extractores copiados de spec-005-guards.test.ts (repoSourceWithoutComments, funcionesSeguras, cierreSeguro…)</div><p>La comprobacion de RNF_02 es buena y demostrada por mutacion; pero 57 pruebas afirman sobre la FORMA del monolito (nombres de clase, orden de props, un <code>&lt;p&gt;</code> sin <code>truncate</code>). Mover <code>OrderCard</code> a su archivo o renombrar una clase de Tailwind pone en rojo pruebas que afirman comportamiento correcto. Los extractores son ya la tercera copia (003, 005, 013). Lo que las guardas protegen de verdad (una sola funcion para la direccion) cabria en una regla de ESLint <code>no-restricted-syntax</code> de diez lineas.</p></div>
+
+  <div class="debt"><h4>Tres arneses de verificacion, ninguno recoge la consola</h4><span class="badge b-warn">abierta</span><div class="where">scripts/smoke-004.js · scripts/verify-005.js · scripts/verify-013.js</div><p>H4. Propuesta como spec 015. Mientras tanto, cada captura de evidencia es una imagen sin saber si la pagina fallo por debajo.</p></div>
+
+  <div class="debt"><h4>El formulario de editar pedido sigue por debajo de 44 px</h4><span class="badge b-warn">abierta</span><div class="where">operations-app.tsx ImportedOrderReviewForm · 13 controles con py-2 text-sm</div><p>H6. Fuera de alcance consciente de la 013; propuesta como spec 016.</p></div>
+
+  <div class="debt"><h4>El estado local inventa una "corregida" que ahora se ve</h4><span class="badge b-neutral">menor</span><div class="where">src/lib/actions.ts:175 (resolveAddress: normalizedAddress ?? `${addressRaw}, Cali, Colombia`) · src/lib/seed.ts:109–177</div><p>En modo sin Firebase, resolver una direccion le pega ", Cali, Colombia" a la original; con la 013 eso es "distinta" y pinta una linea "Correccion o nota" en cada tarjeta de demostracion. No toca produccion (ahi resuelve la callable). Es la unica lectura <code>normalizedAddress ??</code> que queda en <code>src/</code>, fuera del alcance de la guarda porque escribe, no pinta.</p></div>
+
+  <div class="debt"><h4>Los pedidos manuales no llevan <code>source</code></h4><span class="badge b-neutral">menor</span><div class="where">functions/src/orders.ts createManualOrder · 105 pedidos sin el campo</div><p>H5. Un <code>source: "manual"</code> al crear cuesta una linea y no rompe nada; retroalimentar los 105 existentes es un guion de un solo uso.</p></div>
+
+  <div class="debt"><h4>La guia no esta medida en el peor caso</h4><span class="badge b-neutral">menor</span><div class="where">printOrderLabels · .address (28 mm) + .address-extra (3 lineas × 2) · guia-nuevo.png</div><p>Con una direccion de 28 mm, una correccion de tres lineas y una indicacion de tres lineas, la seccion de direccion mide mas que hoy y podria empujar el bloque de producto fuera del rotulo. El caso capturado (una linea de cada) cabe con holgura; el peor no se ha impreso.</p></div>
+
+  <h3>Heredada, sigue abierta</h3>
+  <div class="debt"><h4>Tres avisos <code>exhaustive-deps</code> historicos</h4><span class="badge b-warn">abierta</span><div class="where">operations-app.tsx:480 · :802 · :2564</div><p>Los mismos tres del informe anterior, desplazados de linea. Sin cambio.</p></div>
+  <div class="debt"><h4>El monolito: 13.266 lineas</h4><span class="badge b-warn">abierta</span><div class="where">src/components/operations-app.tsx</div><p>+21 en este ciclo. La 013 fue disciplinada (la logica nueva vive en un modulo puro de 59 lineas), pero las guardas de tres specs hacen ya regex sobre este archivo y encarecen cada refactor.</p></div>
+  <div class="debt"><h4>Las capturas de la 005 siguen siendo anteriores a T15/T16 · "Sube a …" en <code>text-acid</code> · el guard de functions se sortea de rutina</h4><span class="badge b-neutral">sin cambio</span><div class="where">Informe 004/005, seccion 5</div><p>Anotadas alli; ninguna se toco en este ciclo.</p></div>
+
+  <h3>Saldada en este ciclo</h3>
+  <div class="debt"><h4>La nota pisaba la direccion en tres sitios</h4><span class="badge b-ok">saldada</span><div class="where">operations-app.tsx :936 (guia) · :1851 (tarjeta) · :2257 (semilla del formulario de revision) · order-export.ts:163</div><p>Las tres lecturas <code>normalizedAddress ?? addressRaw</code> y las dos celdas sueltas del Excel salen ahora de <code>orderAddressLines</code>. La guarda G:259 mantiene el archivo a cero lecturas directas y la mutacion demuestra que vigila.</p></div>
+  <div class="debt"><h4>Fila de producto con <code>fr</code> sin <code>minmax(0,…)</code> y cantidad a <code>w-20</code></h4><span class="badge b-ok">saldada</span><div class="where">ManualOrderPanel · fila de producto</div><p>Era la causa del desbordamiento en telefono. La guarda G:1034 impide que vuelva a entrar un <code>fr</code> desnudo en ese formulario.</p></div>
+</section>
+
+<section id="propuestas">
+  <h2><span class="n">6</span>Propuestas para el siguiente ciclo, ya como specs borrador</h2>
+  <p>Tres specs nuevas en <code>specs/</code>, con requisitos EARS, fuera de alcance y DoD. Entran por la puerta, con revision adversarial pendiente. El orden es una sugerencia; las tres son pequenas.</p>
+  <div class="specs">
+    <div class="spec"><div class="id">014</div><h4>Las indicaciones llegan con el pedido de la tienda conectada</h4><p>Fuera de alcance consciente de la 013. El 81 % de los pedidos entra por Shopify y el webhook descarta la <code>note</code> que el cliente deja al pagar (comprobado: <code>index.ts</code> no la lee). El campo y la linea de la guia ya existen; falta llenarlos.</p><div class="path">specs/014_indicaciones_desde_la_tienda_conectada.md</div></div>
+    <div class="spec"><div class="id">015</div><h4>Un solo guion de verificacion, que ademas recoge la consola</h4><p>H4. Tercera copia del arnes; ninguna registra errores de consola ni peticiones fallidas, y todas esperan un reloj. Tramo pequeno y entregable de la 002, como la 012 lo es para el webhook.</p><div class="path">specs/015_un_solo_guion_de_verificacion.md</div></div>
+    <div class="spec"><div class="id">016</div><h4>La tienda edita un pedido con la misma comodidad con la que lo crea</h4><p>H6. Las cuatro reglas de disposicion de la 013, aplicadas y medidas sobre <code>ImportedOrderReviewForm</code>, el formulario que la tienda usa mas veces al dia.</p><div class="path">specs/016_editar_un_pedido_con_la_misma_comodidad.md</div></div>
+  </div>
+  <h3>Lo que la 013 dejo fuera y sigue fuera</h3>
+  <ul>
+    <li><b>Migrar las notas viejas de "normalizada" a "indicaciones".</b> Con el dato de H1 (4 pedidos, todos entregados) no vale una spec ni un guion: RF_11 las muestra bien y nadie va a volver a repartirlas.</li>
+    <li><b>Comparar direcciones por significado.</b> Sigue siendo otra decision; con una sola "igual" en produccion, no hay presion.</li>
+    <li><b>Cambiar como el mensajero resuelve o corrige direcciones.</b> Sin motivo nuevo.</li>
+  </ul>
+  <p>Y una decision revertible de la seccion 8 de la spec que conviene que el responsable ratifique al validar: que el <b>administrador</b> tambien haya perdido la casilla "normalizada" al crear pedidos (plan §2.5). La spec lo argumento; nadie lo ha confirmado.</p>
+</section>
+
+<section id="cierre">
+  <h2>Cierre y siguiente paso</h2>
+  <p>Suite final: 1.326 pruebas en verde, <code>tsc</code> limpio en raiz y <code>functions/</code>, lint 0 errores y 3 avisos, produccion sirviendo el bundle de la spec sin <code>static{</code>. La 013 queda como <code>implementada</code> y desplegada, con DoD 6 y 7 pendientes de dos personas: la tienda que reporto el fallo y el responsable. La fase del arnes pasa a <code>release</code>. No hay PR abierto para <code>feat/pedido-manual-multilinea</code> (44 commits sobre <code>main</code>): abrirlo y enlazar este informe y el anterior es trabajo de <code>/sdd-release</code>.</p>
+  <p>Una recomendacion de orden: pedirle a la tienda que reporto el fallo que cree un pedido manual real con una indicacion y lo imprima. Ese unico gesto cierra DoD 6 y convierte tres de los cinco "probados" (RF_08, RF_09, RNF_01) en "cumplidos" sin escribir una linea.</p>
+</section>
+
+<footer>Informe generado en la fase <code>report</code> del arnes SDD el 2026-09-15. Fuentes: <code>.sdd/state.json</code>, <code>.sdd/evidence/013</code>, <code>specs/013_*</code>, la suite, el lint y <code>tsc</code> re-ejecutados sobre <code>1139a0c</code>; el bundle de produccion y dos functions consultados en vivo; una lectura de solo lectura de <code>orders</code> con cinco campos proyectados.</footer>
+</main>
+</div>

@@ -1,0 +1,25 @@
+{
+  "uid": "smoke013-user-1789501749817",
+  "email": "smoke013-user-1789501749817@example.com",
+  "updatedAt": "2026-09-15T19:51:01.989Z",
+  "runId": "1789501749817",
+  "sellerId": "smoke013-tienda-1789501749817",
+  "claims": {
+    "role": "seller",
+    "sellerId": "smoke013-tienda-1789501749817"
+  },
+  "oldOrderId": "smoke013-pedido-viejo-1789501749817",
+  "newOrderId": "smoke013-pedido-nuevo-1789501749817",
+  "oldTrackingCode": "SMK013-1",
+  "newTrackingCode": "SMK013-2",
+  "setupAt": "2026-09-15T19:49:09.817Z",
+  "capturedAt": "2026-09-15T19:50:51.723Z",
+  "captureBaseUrl": "http://localhost:3005",
+  "captureResult": {
+    "movil": true,
+    "escritorio": true,
+    "guiaViejo": true,
+    "guiaNuevo": true
+  },
+  "cleanedAt": "2026-09-15T19:51:01.989Z"
+}

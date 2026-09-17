@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html lang="es-CO"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logística Consola - Liquidaciones</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-container": "#958180",
+                      "tertiary-fixed-dim": "#d8c1bf",
+                      "surface-container-low": "#f3f4f0",
+                      "on-error-container": "#93000a",
+                      "on-secondary": "#ffffff",
+                      "verde-success": "#2b5f4b",
+                      "on-secondary-fixed-variant": "#49473d",
+                      "on-primary-fixed-variant": "#3f4945",
+                      "inverse-primary": "#bfc9c4",
+                      "inverse-on-surface": "#f0f1ed",
+                      "primary-container": "#17201d",
+                      "error": "#ba1a1a",
+                      "tertiary": "#0b0303",
+                      "on-secondary-fixed": "#1d1c14",
+                      "on-primary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-surface": "#1a1c1a",
+                      "secondary-container": "#e8e2d5",
+                      "surface-container-high": "#e7e9e5",
+                      "surface-dim": "#d9dad7",
+                      "surface-bright": "#f9faf6",
+                      "surface-tint": "#57605d",
+                      "background": "#f9faf6",
+                      "rojo-error": "#b45436",
+                      "tertiary-fixed": "#f5dddb",
+                      "on-primary-container": "#7e8884",
+                      "border-hairline": "#17201d33",
+                      "on-tertiary-fixed-variant": "#534342",
+                      "primary-fixed": "#dbe5e0",
+                      "outline-variant": "#c3c8c4",
+                      "surface-variant": "#e2e3df",
+                      "secondary-fixed-dim": "#cbc6ba",
+                      "surface-container-highest": "#e2e3df",
+                      "primary": "#010604",
+                      "secondary": "#625e54",
+                      "on-primary-fixed": "#141d1a",
+                      "on-error": "#ffffff",
+                      "surface-container": "#edeeea",
+                      "primary-fixed-dim": "#bfc9c4",
+                      "on-surface-variant": "#434846",
+                      "on-background": "#1a1c1a",
+                      "error-container": "#ffdad6",
+                      "surface": "#f9faf6",
+                      "inverse-surface": "#2e312f",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-container": "#281b1a",
+                      "secondary-fixed": "#e8e2d5",
+                      "on-tertiary-fixed": "#251817",
+                      "outline": "#737875",
+                      "on-secondary-container": "#68645a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "4px",
+                      "hairline": "1px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px",
+                      "margin-mobile": "16px"
+              },
+              "fontFamily": {
+                      "label-caps": [
+                              "Archivo Narrow"
+                      ],
+                      "headline-md": [
+                              "Archivo Narrow"
+                      ],
+                      "code-md": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "IBM Plex Sans"
+                      ],
+                      "headline-sm": [
+                              "Archivo Narrow"
+                      ],
+                      "headline-lg": [
+                              "Archivo Narrow"
+                      ],
+                      "body-md": [
+                              "IBM Plex Sans"
+                      ]
+              },
+              "fontSize": {
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "code-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: #f7f8f4; /* Papel Level 0 */
+            color: #010604; /* Tinta / Primary */
+        }
+        .hairline-b { border-bottom: 1px solid #17201d33; }
+        .hairline-r { border-right: 1px solid #17201d33; }
+        .hairline-t { border-top: 1px solid #17201d33; }
+        .hairline-l { border-left: 1px solid #17201d33; }
+        .hairline-all { border: 1px solid #17201d33; }
+        
+        .tinta-border { border: 1px solid #17201d; }
+        .tinta-border-2 { border: 2px solid #17201d; }
+        .tinta-bg { background-color: #17201d; color: #f7f8f4; }
+        
+        .manila-bg { background-color: #efe9dc; }
+        
+        /* Ledger Table Styles */
+        .ledger-table th, .ledger-table td {
+            border-bottom: 1px solid #17201d33;
+            border-right: 1px solid #17201d33;
+            padding: 8px 12px;
+            height: 40px;
+        }
+        .ledger-table th:last-child, .ledger-table td:last-child {
+            border-right: none;
+        }
+        .ledger-row:hover { background-color: #efe9dc; }
+        
+        .dashed-sep {
+            border-top: 2px dashed #17201d;
+            position: relative;
+            margin: 48px 0;
+        }
+        .dashed-label {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #f7f8f4;
+            padding: 0 16px;
+            font-family: 'Archivo Narrow', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #17201d;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen font-body-md text-body-md flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-primary-container dark:bg-primary-container text-on-primary-fixed flex justify-between items-center px-margin-desktop h-[44px] w-full border-b border-outline-variant flat no shadows">
+<div class="flex items-center gap-6">
+<h1 class="font-headline-md text-headline-md font-bold tracking-tighter text-surface dark:text-surface-bright">LOGÍSTICA_CONSOLA</h1>
+<nav class="hidden md:flex gap-6 h-full items-center">
+<a class="font-label-caps text-label-caps text-on-primary-container dark:text-on-primary-container hover:text-surface transition-colors duration-150 cursor-pointer active:opacity-80" href="#">Operación</a>
+<a class="font-label-caps text-label-caps text-on-primary-container dark:text-on-primary-container hover:text-surface transition-colors duration-150 cursor-pointer active:opacity-80" href="#">Wallet</a>
+<a class="font-label-caps text-label-caps text-on-primary-container dark:text-on-primary-container hover:text-surface transition-colors duration-150 cursor-pointer active:opacity-80" href="#">Inventario</a>
+<a class="font-label-caps text-label-caps text-surface dark:text-surface-bright border-b-2 border-surface dark:border-surface-bright pb-1 cursor-pointer active:opacity-80" href="#">Liquidaciones</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined cursor-pointer hover:text-surface text-on-primary-container" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-surface text-on-primary-container" data-icon="settings">settings</span>
+<img alt="Admin Profile Avatar" class="w-8 h-8 rounded border border-outline-variant bg-surface" data-alt="A small, stylized profile avatar placeholder for an admin user in a high-contrast industrial logistics dashboard. The avatar should look like a simple monochrome stamp or technical illustration of a generic user head. Light mode background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBml0gHar9Z3aroKbL2tPHPH8-z5LgrO8RK5fLbHMY1LdWxz3RYF0yseBoYOSoSButtXNFmWkV8AcGQ8emz8HQ7BI20rdqvXIOaza7jyaHos9DrjEiDT0bv-pAwZyqiW7vaAHnQUk0Bo7CBAD0mtRQw9cg1_BIJpq0TuckfTqyf-qx76bL6nv1XWoMQG0OWA-FhFJNIhmeNN5huVrCt33fynu6S3K08JqkVQrx4krdNEO5DCd4KiSE3NFjN_vscxhojYJZwAWDQNmEo"/>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow max-w-7xl mx-auto w-full px-gutter py-margin-desktop grid grid-cols-1 gap-8">
+<!-- Block: PENDIENTE POR LIQUIDAR -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-end border-b-2 border-primary pb-2">
+<h2 class="font-headline-sm text-headline-sm uppercase text-primary">PENDIENTE POR LIQUIDAR</h2>
+<span class="font-code-md text-code-md text-on-surface-variant">CORTE ACTUAL</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- KPI 1 -->
+<div class="manila-bg tinta-border p-4 flex flex-col gap-2 rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Tiendas por pagar</span>
+<span class="font-code-md text-[28px] leading-tight font-bold text-primary">$ 17.581.261</span>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface tinta-border p-4 flex flex-col gap-2 rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Saldo domiciliarios</span>
+<span class="font-code-md text-[28px] leading-tight font-bold text-primary">$ 550.000</span>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface tinta-border p-4 flex flex-col gap-2 rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Retenido proveedores</span>
+<span class="font-code-md text-[28px] leading-tight font-bold text-primary">$ 6.885.750</span>
+</div>
+</div>
+</section>
+<!-- Store Table Section -->
+<section class="flex flex-col gap-4 mt-4">
+<div class="tinta-border bg-surface rounded-sm overflow-hidden">
+<div class="manila-bg hairline-b px-4 py-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="storefront">storefront</span>
+<span class="font-label-caps text-label-caps">DETALLE POR TIENDA</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse ledger-table font-code-md text-code-md">
+<thead class="manila-bg font-label-caps text-label-caps text-on-surface-variant uppercase">
+<tr>
+<th class="w-[200px]">Tienda</th>
+<th class="w-[80px] text-right">Pedidos</th>
+<th class="text-right">COD Recaudado</th>
+<th class="text-right">Saldo a Pagar</th>
+<th class="w-[120px] text-center">Acción</th>
+</tr>
+</thead>
+<tbody>
+<tr class="ledger-row bg-surface">
+<td class="font-body-md font-semibold">DANDA</td>
+<td class="text-right">142</td>
+<td class="text-right">$ 12.500.000</td>
+<td class="text-right font-bold">$ 9.350.800</td>
+<td class="text-center p-1">
+<button class="w-full bg-surface border border-primary text-primary font-label-caps text-label-caps py-1 px-2 rounded-sm hover:bg-secondary-container transition-colors">CERRAR CORTE</button>
+</td>
+</tr>
+<tr class="ledger-row manila-bg">
+<td class="font-body-md font-semibold">Bella Mujer</td>
+<td class="text-right">56</td>
+<td class="text-right">$ 3.100.000</td>
+<td class="text-right font-bold">$ 2.329.541</td>
+<td class="text-center p-1">
+<button class="w-full bg-surface border border-primary text-primary font-label-caps text-label-caps py-1 px-2 rounded-sm hover:bg-secondary-container transition-colors">CERRAR CORTE</button>
+</td>
+</tr>
+<tr class="ledger-row bg-surface">
+<td class="font-body-md font-semibold">OnStok</td>
+<td class="text-right">48</td>
+<td class="text-right">$ 2.800.500</td>
+<td class="text-right font-bold">$ 2.192.800</td>
+<td class="text-center p-1">
+<button class="w-full bg-surface border border-primary text-primary font-label-caps text-label-caps py-1 px-2 rounded-sm hover:bg-secondary-container transition-colors">CERRAR CORTE</button>
+</td>
+</tr>
+<tr class="ledger-row manila-bg">
+<td class="font-body-md font-semibold">Nambu</td>
+<td class="text-right">31</td>
+<td class="text-right">$ 2.100.000</td>
+<td class="text-right font-bold">$ 1.704.710</td>
+<td class="text-center p-1">
+<button class="w-full bg-surface border border-primary text-primary font-label-caps text-label-caps py-1 px-2 rounded-sm hover:bg-secondary-container transition-colors">CERRAR CORTE</button>
+</td>
+</tr>
+<tr class="ledger-row bg-surface">
+<td class="font-body-md font-semibold">Senziacol</td>
+<td class="text-right">19</td>
+<td class="text-right">$ 1.450.000</td>
+<td class="text-right font-bold">$ 1.085.910</td>
+<td class="text-center p-1">
+<button class="w-full bg-surface border border-primary text-primary font-label-caps text-label-caps py-1 px-2 rounded-sm hover:bg-secondary-container transition-colors">CERRAR CORTE</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Separator -->
+<div class="dashed-sep">
+<span class="dashed-label">FIN DE BLOQUE OPERATIVO</span>
+</div>
+<!-- Section: RESUMEN DEL PERIODO -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-end border-b border-primary pb-2">
+<h2 class="font-headline-sm text-headline-sm uppercase text-primary">RESUMEN DEL PERIODO</h2>
+<!-- Date Picker Pseudo-component -->
+<div class="flex items-center gap-2 font-code-md text-code-md text-on-surface-variant bg-surface border border-primary px-3 py-1 rounded-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="calendar_month">calendar_month</span>
+<span>01-Oct - 15-Oct</span>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter">
+<!-- Metric 1 -->
+<div class="border border-outline-variant p-4 flex flex-col gap-1 bg-surface rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">COD recibido</span>
+<span class="font-code-md text-code-md font-bold">$ 203.079.378</span>
+</div>
+<!-- Metric 2 -->
+<div class="border border-outline-variant p-4 flex flex-col gap-1 bg-surface rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Cobros a tiendas</span>
+<span class="font-code-md text-code-md font-bold text-rojo-error">-$ 25.689.500</span>
+</div>
+<!-- Metric 3 -->
+<div class="border border-outline-variant p-4 flex flex-col gap-1 bg-surface rounded-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Pago domiciliarios</span>
+<span class="font-code-md text-code-md font-bold text-rojo-error">-$ 21.472.000</span>
+</div>
+<!-- Metric 4 -->
+<div class="tinta-border-2 p-4 flex flex-col gap-1 manila-bg rounded-sm">
+<span class="font-label-caps text-label-caps text-primary">Margen operativo</span>
+<span class="font-code-md text-code-md font-bold text-verde-success">$ 4.217.500</span>
+</div>
+</div>
+</section>
+</main>
+</body></html>

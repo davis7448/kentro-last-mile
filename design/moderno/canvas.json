@@ -1,0 +1,40 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "1 \u00b7 Claro / Azul",
+      "x": 0,
+      "y": 0,
+      "w": 980,
+      "h": 800
+    },
+    {
+      "file": "B.dc.html",
+      "title": "2 \u00b7 Claro / Verde Kentro",
+      "x": 1040,
+      "y": 0,
+      "w": 980,
+      "h": 800
+    },
+    {
+      "file": "C.dc.html",
+      "title": "3 \u00b7 Oscuro moderno",
+      "x": 2080,
+      "y": 0,
+      "w": 980,
+      "h": 800
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -160,
+      "w": 720,
+      "text": "REGISTRO MODERNO\nEsquinas de 12px, elevacion suave en vez de bordes duros, sans limpia en todo y monoespaciada SOLO en las cifras.\n\nLo anterior fallaba por los mismos tics: 0px de radio, filetes, mayusculas con tracking y mono por todas partes."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

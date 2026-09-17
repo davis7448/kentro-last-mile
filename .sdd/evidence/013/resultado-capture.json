@@ -1,0 +1,73 @@
+{
+  "capturadoEn": "2026-09-15T19:50:51.673Z",
+  "baseUrl": "http://localhost:3005",
+  "movil": true,
+  "escritorio": true,
+  "guiaViejo": true,
+  "guiaNuevo": true,
+  "guias": {
+    "viejo": [
+      {
+        "rotulo": "Direccion",
+        "fragmentos": [
+          "Direccion",
+          "Calle 5 # 38-25 apto 301"
+        ],
+        "debeEstar": true,
+        "esta": true,
+        "ok": true
+      },
+      {
+        "rotulo": "Correccion o nota",
+        "fragmentos": [
+          "Correccion o nota",
+          "timbre azul"
+        ],
+        "debeEstar": true,
+        "esta": true,
+        "ok": true
+      },
+      {
+        "rotulo": "Indicaciones",
+        "fragmentos": [
+          "Indicaciones"
+        ],
+        "debeEstar": false,
+        "esta": false,
+        "ok": true
+      }
+    ],
+    "nuevo": [
+      {
+        "rotulo": "Direccion",
+        "fragmentos": [
+          "Direccion",
+          "Carrera 66 # 9-32"
+        ],
+        "debeEstar": true,
+        "esta": true,
+        "ok": true
+      },
+      {
+        "rotulo": "Correccion o nota",
+        "fragmentos": [
+          "Correccion o nota",
+          "Carrera 66 # 9-32, Cali, Colombia"
+        ],
+        "debeEstar": true,
+        "esta": true,
+        "ok": true
+      },
+      {
+        "rotulo": "Indicaciones",
+        "fragmentos": [
+          "Indicaciones",
+          "Local al fondo"
+        ],
+        "debeEstar": true,
+        "esta": true,
+        "ok": true
+      }
+    ]
+  }
+}

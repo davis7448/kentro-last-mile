@@ -1,5 +1,5 @@
-import JSZip from "jszip";
 import { isChargeableFailedOrder } from "./finance";
+import { orderAddressLines } from "./order-address-lines";
 import type { AppState, FailedCategory, Order, OrderStatus, WalletEntry } from "./types";
 
 export type OrderExportCell = string | number;
@@ -63,7 +63,8 @@ export const orderExportColumns = [
   "creado_en",
   "actualizado_en",
   "pedido_json",
-  "evidencias_json"
+  "evidencias_json",
+  "indicaciones"
 ] as const;
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -87,6 +88,7 @@ const failedCategoryLabels: Record<FailedCategory, string> = {
   failed_visit: "Fallido real con visita",
   no_coverage: "Sin cobertura",
   bad_order_or_no_contact: "Pedido malo / no contesta",
+  bad_phone: "Sin telefono / linea inactiva",
   pending_review: "Pendiente revisar"
 };
 
@@ -113,6 +115,17 @@ function rowFrom(values: Partial<OrderExportRow>, columns: readonly string[]): O
 
 function fullOrderExportRow(values: Partial<OrderExportRow>): OrderExportRow {
   return rowFrom(values, orderExportColumns);
+}
+
+// Las tres celdas de direccion salen del mismo modulo que la guia y la tarjeta (spec 013, RNF_02).
+function addressCells(order: Order) {
+  const lines = orderAddressLines(order);
+  const textOf = (label: (typeof lines)[number]["label"]) => lines.find((line) => line.label === label)?.text ?? "";
+  return {
+    direccion_original: textOf("Direccion"),
+    direccion_normalizada: textOf("Correccion o nota"),
+    indicaciones: textOf("Indicaciones")
+  };
 }
 
 // Suma, por pedido, los movimientos de wallet del vendedor (lo realmente cobrado/recaudado),
@@ -160,8 +173,7 @@ export function buildOrderExportRows(orders: Order[], state: AppState): OrderExp
       estado: statusLabel(order.status),
       cliente: order.customerName,
       telefono: order.customerPhone,
-      direccion_original: order.addressRaw,
-      direccion_normalizada: order.normalizedAddress,
+      ...addressCells(order),
       lat: order.lat,
       lng: order.lng,
       metodo_pago: order.paymentMethod,
@@ -258,7 +270,13 @@ function worksheetXml(columns: readonly string[], rows: OrderExportCell[][]) {
 }
 
 // Genera y descarga un .xlsx generico a partir de columnas + filas de datos.
+//
+// JSZip se carga aqui dentro, no en la cabecera: es la unica puerta de entrada a la libreria en
+// toda la app (las tres funciones de descarga pasan por esta) y solo se cruza cuando alguien pulsa
+// "Descargar". Importarla arriba la metia en el bundle inicial de TODOS los roles, incluido el
+// mensajero, que no exporta nada.
 async function downloadXlsx(sheetName: string, columns: readonly string[], dataRows: OrderExportCell[][], filename: string) {
+  const { default: JSZip } = await import("jszip");
   const sheetRows = [[...columns], ...dataRows];
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -326,6 +344,7 @@ const walletTypeLabels: Record<string, string> = {
   platform_margin: "Margen plataforma",
   cod_remittance: "Remesa COD",
   payout: "Pago a tienda",
+  seller_abono: "Abono a tienda",
   cash_shortage: "Faltante de efectivo"
 };
 

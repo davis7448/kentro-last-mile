@@ -30,6 +30,61 @@ service cloud.firestore {
       return role() == "driver" && request.auth.token.driverId == driverId;
     }
 
+    // Lider de COMUNIDAD. Nada que ver con isDriver, que es el lider LOGISTICO.
+    //
+    // Spec 003: liderar NO es un papel, es una atribucion propia de la cuenta — una tienda puede
+    // liderar sin dejar de vender, y exigir `role()` la dejaria fuera. El vinculo es el
+    // `communityId` del reclamo; un vendedor nunca lo lleva (la pertenencia de su tienda vive en
+    // el documento del vendedor), asi que no hay ambiguedad posible.
+    //
+    // Las dos guardas NO son adorno: `isCommunityLeader` gobierna lecturas de `walletEntries` y
+    // `settlements`, asi que sin exigir que el reclamo exista y no sea vacio se abriria el dinero
+    // a cuentas sin comunidad. Y un ACREEDOR conserva el vinculo para poder cobrar lo causado
+    // pero ya no gobierna: aqui se le excluye, y sus cortes se le abren mas abajo por su propia via.
+    function hasCommunityClaim(communityId) {
+      return signedIn()
+        && request.auth.token.communityId is string
+        && request.auth.token.communityId != ""
+        && request.auth.token.communityId == communityId;
+    }
+
+    function isCommunityLeader(communityId) {
+      return hasCommunityClaim(communityId) && request.auth.token.communityStanding != "creditor";
+    }
+
+    // RF_22: a quien la plataforma le sigue debiendo, aunque ya no lidere.
+    function isCommunityCreditor(communityId) {
+      return hasCommunityClaim(communityId);
+    }
+
+    // Una tienda es de la comunidad del lider que consulta.
+    //
+    // Decide con el documento que se esta evaluando y NO sale a buscar otro. Antes hacia
+    // `exists()` + `get()` sobre el id comodin del `match`, y la consulta
+    // `sellers where communityId == la suya` se rechazaba con 403 PERMISSION_DENIED (medido
+    // contra produccion el 2026-09-13, spec 005 T1). Las dos causas posibles daban el mismo
+    // codigo —la forma de la regla, o el limite de accesos a documento (20 por consulta, uno
+    // por candidato)— y esta forma las elimina a las dos: sin acceso externo no hay ni `get()`
+    // que evaluar ni accesos que gastar. Es el mismo patron que ya funciona en `messengers`,
+    // `orders`, `inventory` y `productCatalog`: comparar `resource.data.<campo>` con el reclamo.
+    //
+    // SE RETIRA UN `exists()` QUE TENIA UN MOTIVO ESCRITO, y el motivo no desaparece: iba antes
+    // del `get()` para que un sellerId inexistente denegara por predicado falso y no por error de
+    // evaluacion. Con esta forma el caso cambia de naturaleza pero no se va — al leer un documento
+    // que no existe `resource` es nulo, asi que `resource.data` vuelve a ser error de evaluacion.
+    // El desenlace sigue siendo DENEGAR, igual que hoy, que es lo correcto. Y en el caso que le
+    // importa a RF_08 —la tienda propia que ya no existe— corta antes `isStoreMember(sellerId)`,
+    // que decide con el reclamo y no mira el documento.
+    //
+    // `get("communityId", "")` y no `resource.data.communityId`: una tienda sin comunidad no tiene
+    // el campo, y leerlo directo seria error de evaluacion en vez de `false`.
+    //
+    // No abre nada de mas: `isCommunityLeader` sigue exigiendo el reclamo presente, no vacio e
+    // igual al de la comunidad, y sigue excluyendo al acreedor.
+    function sellerInMyCommunity() {
+      return isCommunityLeader(resource.data.get("communityId", ""));
+    }
+
     function isMessenger(messengerId) {
       return role() == "messenger" && request.auth.token.messengerId == messengerId;
     }
@@ -52,7 +107,7 @@ service cloud.firestore {
     }
 
     function sellerOrderCreate() {
-      return isSeller(request.resource.data.sellerId)
+      return isStoreMember(request.resource.data.sellerId)
         && request.resource.data.driverId == null
         && request.resource.data.status in ["ready_to_assign", "address_risk"]
         && request.resource.data.evidence.size() == 0;
@@ -103,8 +158,28 @@ service cloud.firestore {
     }
 
     match /sellers/{sellerId} {
-      allow read: if isAdmin() || isStoreMember(sellerId);
+      // El lider de comunidad ve la ficha operativa de SUS tiendas. El saldo, la deuda y el
+      // recaudo no viven aqui: estan en walletEntries y settlements, que tiene cerrados.
+      allow read: if isAdmin() || isStoreMember(sellerId) || sellerInMyCommunity();
+      // Ni la tienda ni su lider cambian de comunidad por su cuenta (RF_11).
       allow write: if isAdmin();
+    }
+
+    match /communities/{communityId} {
+      // Su lider la lee entera. Ninguna otra comunidad, ni siquiera de forma agregada (RF_52).
+      allow read: if isAdmin() || isCommunityLeader(communityId);
+      // Precios, marca y estado pasan SIEMPRE por callable: aqui no se escribe nunca.
+      allow write: if false;
+
+      match /priceHistory/{entryId} {
+        allow read: if isAdmin() || isCommunityLeader(communityId);
+        allow write: if false;
+      }
+    }
+
+    match /communitySlugs/{slug} {
+      // La resolucion del enlace publico la hace una callable sin sesion, con el SDK admin.
+      allow read, write: if false;
     }
 
     match /drivers/{driverId} {
@@ -141,6 +216,9 @@ service cloud.firestore {
         || isMessenger(resource.data.messengerId)
         || messengerBelongsToDriver(resource.data.messengerId)
         || (role() == "driver" && resource.data.driverId == null && resource.data.status == "ready_to_assign");
+      // OJO: el lider de comunidad NO aparece aqui, y es deliberado. RF_31 le prohibe el
+      // detalle de un pedido y los datos del cliente final; sus cifras salen agregadas del
+      // servidor (getCommunityStats), sin que el navegador baje ni un pedido.
       allow create: if isAdmin() || sellerOrderCreate();
       // El ciclo de vida de los pedidos (status/driverId/evidence/etc.) se modifica SOLO por el
       // servidor via callables (admin SDK, que ignoran estas reglas, auditan y validan la
@@ -170,27 +248,47 @@ service cloud.firestore {
     match /walletEntries/{entryId} {
       allow read: if isAdmin()
         || (resource.data.ownerType == "seller" && isSeller(resource.data.ownerId))
-        || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId));
+        || (resource.data.ownerType == "driver" && isDriver(resource.data.ownerId))
+        // Su PROPIO cashback si; el saldo de sus tiendas no. RF_31 prohibe lo de las tiendas,
+        // no lo suyo: sin esto el lider no podria ver lo que se le debe.
+        //
+        // Spec 003 RF_22: va por ACREEDOR y no por lider. Dejar de liderar no es dejar de ser
+        // acreedor — a quien se retiro se le sigue debiendo, y con `isCommunityLeader` aqui se le
+        // apagaria la pantalla desde la que cobra.
+        || (resource.data.ownerType == "community_leader" && isCommunityCreditor(resource.data.ownerId));
       allow write: if isAdmin();
     }
 
     match /settlements/{settlementId} {
       allow read: if isAdmin()
         || (resource.data.kind == "seller" && isSeller(resource.data.ownerId))
-        || (resource.data.kind == "driver" && isDriver(resource.data.ownerId));
+        || (resource.data.kind == "driver" && isDriver(resource.data.ownerId))
+        // RF_22: sus cortes los ve mientras se le deba, lidere o no.
+        || (resource.data.kind == "community_leader" && isCommunityCreditor(resource.data.ownerId));
       allow write: if isAdmin();
     }
 
+    // Solicitudes de liquidacion. El vendedor YA NO crea el documento: el monto es una cifra
+    // financiera derivada de walletEntries y las reglas no pueden validarla, asi que un create
+    // desde el cliente permitia pedir cualquier cantidad. Se crean por el callable
+    // requestSellerPayout (Admin SDK, no pasa por reglas). La tienda solo lee las suyas.
     match /payouts/{payoutId} {
       allow read: if isAdmin() || isSeller(resource.data.sellerId);
-      allow create: if isAdmin() || isSeller(request.resource.data.sellerId);
-      allow update: if isAdmin();
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /auditEvents/{eventId} {
       allow read: if isAdmin();
       allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // Cuadre de caja: saldo real de las cuentas de la operacion, para contrastarlo
+    // contra el saldo teorico. Solo el admin lo ve y lo registra; nunca se edita ni
+    // se borra, para que el historico de desfases sea confiable.
+    match /cashSnapshots/{snapshotId} {
+      allow read, create: if isAdmin();
       allow update, delete: if false;
     }
 
@@ -207,6 +305,12 @@ service cloud.firestore {
     // Tokens de API de ChatBy/UChat: nunca legibles/escribibles por cliente.
     // Solo las Cloud Functions (admin SDK) los usan.
     match /storeUchatSecrets/{sellerId} {
+      allow read, write: if false;
+    }
+
+    // API keys de la API de solo lectura para tiendas (storeApi): nunca accesibles
+    // por cliente; se generan/consultan via callable createStoreApiKey.
+    match /storeApiConfigs/{sellerId} {
       allow read, write: if false;
     }
 

@@ -88,9 +88,15 @@ export function buildMissingProductCostEntries(state: AppState, product: Product
     if (state.settlements.some((settlement) => settlement.kind === "seller" && settlement.walletEntryIds.some((entryId) => orderEntryIds.has(entryId)))) continue;
     // Dedupe por producto. La rama !entry.productId cubre entradas legacy (we-{orderId}-product-cost
     // sin productId): se prefiere no doble-cobrar aunque deje sin backfill otro producto del pedido.
-    if (state.wallet.some((entry) => entry.orderId === order.id && entry.type === "product_cost" && (entry.productId === product.id || !entry.productId))) continue;
+    // Los asientos en CERO no cuentan como cobro hecho: se generaban al guardar el producto
+    // antes de configurarle costo y, al bloquear el dedupe, dejaban el costo real sin cobrar
+    // para siempre. El id es determinista, asi que regenerarlos los sobrescribe con el valor bueno.
+    if (state.wallet.some((entry) => entry.orderId === order.id && entry.type === "product_cost" && Number(entry.amountCop) !== 0 && (entry.productId === product.id || !entry.productId))) continue;
     const line = productCostLinesForOrder(order, stateWithProduct).find((item) => item.productId === product.id);
     if (!line) continue;
+    // Sin costo resuelto no hay nada que cobrar: crear el asiento en cero solo ensuciaria
+    // la liquidacion y bloquearia el backfill cuando si se configure el costo.
+    if (line.totalCostCop <= 0) continue;
     const hasLineItems = Array.isArray(order.lineItems) && order.lineItems.length > 0;
     entries.push({
       id: hasLineItems ? `we-${order.id}-product-cost-${product.id}` : `we-${order.id}-product-cost`,

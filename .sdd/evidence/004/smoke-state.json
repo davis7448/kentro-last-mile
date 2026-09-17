@@ -1,0 +1,55 @@
+{
+  "countedAt": "2026-09-13T00:40:20.581Z",
+  "openCommunityOrders": {
+    "total": 0,
+    "withCommunity": 0,
+    "byStatus": {},
+    "orderIds": []
+  },
+  "before": {
+    "walletEntryCount": 10986,
+    "settlementCount": 62,
+    "position": {
+      "cashCop": 30993781,
+      "receivedFromDriverCop": 239808672,
+      "paidToSellersCop": 208814891,
+      "driverReceivableCop": 5833919,
+      "driverPendingInSettlementsCop": 5161719,
+      "driverCodOutsideSettlementsCop": 672200,
+      "payableToSellersCop": 19831220,
+      "withheldForSuppliersCop": 9956500,
+      "withheldBySupplier": [
+        {
+          "supplierId": "sup-1781914882801",
+          "supplierName": "ADMA LABORATORIO",
+          "amountCop": 9449500
+        },
+        {
+          "supplierId": "sup-1781914554522",
+          "supplierName": "ADMA COMPANY",
+          "amountCop": 507000
+        }
+      ],
+      "feesCop": 35416500,
+      "driverPayCop": 29204000,
+      "profitCop": 6212500,
+      "assetsCop": 36827700,
+      "liabilitiesCop": 29787720,
+      "netCop": 7039980
+    },
+    "storeBalanceCop": 0
+  },
+  "updatedAt": "2026-09-13T00:49:33.167Z",
+  "runId": "1789260529130",
+  "driverId": "smoke004-1789260529130",
+  "driverEmail": "smoke004-1789260529130@kentro.invalid",
+  "orderId": "smoke004-order-1789260529130",
+  "createdAt": "2026-09-13T00:48:48.823Z",
+  "communityId": "com-1789149566989",
+  "closedAt": "2026-09-13T00:49:01.138Z",
+  "checkedAt": "2026-09-13T00:49:11.349Z",
+  "cleanedAt": "2026-09-13T00:49:20.887Z",
+  "backupFile": ".sdd/evidence/004/smoke-backup-2026-09-13T00-49-20-396Z.json",
+  "comparedAt": "2026-09-13T00:49:33.166Z",
+  "compareOk": true
+}

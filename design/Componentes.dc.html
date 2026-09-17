@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; background: #f7f8f4; color: #17201d; -webkit-font-smoothing: antialiased; }
+    a { color: #2b5f4b; } a:hover { color: #17201d; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .disp { font-family: 'Archivo', 'IBM Plex Sans', sans-serif; }
+  </style>
+</helmet>
+
+<div style="width: 1400px; padding: 48px 56px 64px; box-sizing: border-box; background: #f7f8f4;">
+
+  <div style="padding-bottom: 22px; border-bottom: 3px solid #17201d;">
+    <p class="mono" style="margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.22em; color: #56605b;">PRIMITIVAS / ANTES Y DESPUES</p>
+    <h1 class="disp" style="margin: 0; font-size: 46px; font-weight: 800; letter-spacing: -0.03em; line-height: 1;">Componentes</h1>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 0; border: 1px solid rgba(23,32,29,0.16); border-top: none;">
+    <div style="padding: 12px 24px; background: #efe9dc; border-right: 1px solid rgba(23,32,29,0.16);">
+      <p class="mono" style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: #56605b;">ANTES</p>
+    </div>
+    <div style="padding: 12px 24px; background: #17201d;">
+      <p class="mono" style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: #d9ed5a;">DESPUES</p>
+    </div>
+  </div>
+
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid rgba(23,32,29,0.16); border-top: none; background: #fff;">
+    <div style="padding: 24px; border-right: 1px solid rgba(23,32,29,0.16); background: #fbfbf9;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">BOTON</p>
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 92px;">
+        <button type="button" style="padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; background: #17201d; color: #fff; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600;">Cerrar corte</button>
+        <span class="mono" style="font-size: 11px; color: #b45436;">36 px</span>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #b45436;">125 de 129 botones bajo el minimo de 44px. Un mensajero los falla con una mano.</p>
+    </div>
+    <div style="padding: 24px;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">BOTON</p>
+      <div style="display: flex; align-items: center; gap: 14px; min-height: 92px;">
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+          <button type="button" style="min-height: 44px; padding: 0 16px; border: none; border-radius: 3px; background: #17201d; color: #f7f8f4; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">Cerrar corte</button>
+          <span class="mono" style="font-size: 10px; color: #56605b;">CONSOLA &middot; 44 px</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+          <button type="button" style="min-height: 64px; padding: 0 26px; border: none; border-radius: 3px; background: #d9ed5a; color: #17201d; font-family: 'Archivo', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: 0.03em; cursor: pointer; box-shadow: 0 3px 0 #17201d;">ENTREGADO</button>
+          <span class="mono" style="font-size: 10px; color: #56605b;">CALLE &middot; 64 px</span>
+        </div>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #2b5f4b;">Dos alturas de un mismo boton. La calle nunca baja de 56px; la accion primaria va a 64px.</p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid rgba(23,32,29,0.16); border-top: none; background: #fff;">
+    <div style="padding: 24px; border-right: 1px solid rgba(23,32,29,0.16); background: #fbfbf9;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">TARJETA DE PEDIDO</p>
+      <div style="border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: #fff; padding: 16px; box-shadow: 0 14px 40px rgba(23,32,29,0.08);">
+        <p style="margin: 0 0 4px; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 700;">KNT-003412</p>
+        <p style="margin: 0 0 8px; font-family: system-ui, sans-serif; font-size: 13px; color: rgba(0,0,0,0.5);">DANDA &middot; Carrera 66 #13-40</p>
+        <span style="display: inline-flex; padding: 4px 8px; border-radius: 6px; background: rgba(75,143,184,0.15); color: #4b8fb8; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600;">En transito</span>
+        <p style="margin: 10px 0 0; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 700;">$148.000</p>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #b45436;">La guia, la tienda y el dinero pesan igual. El gris de la direccion da 3.95:1.</p>
+    </div>
+    <div style="padding: 24px;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">TARJETA DE PEDIDO</p>
+      <div style="border: 1px solid rgba(23,32,29,0.18); border-left: 4px solid #2f6d92; border-radius: 3px; background: #fff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px dashed rgba(23,32,29,0.2); background: #efe9dc;">
+          <span class="mono" style="font-size: 15px; font-weight: 700;">KNT-003412</span>
+          <span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid #2f6d92; border-radius: 2px; color: #2f6d92; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;">EN TRANSITO</span>
+        </div>
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 12px 14px;">
+          <div>
+            <p style="margin: 0 0 2px; font-size: 13px; font-weight: 600;">DANDA</p>
+            <p style="margin: 0; font-size: 13px; color: #56605b;">Carrera 66 #13-40, El Refugio</p>
+          </div>
+          <p class="mono" style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap;">$ 148.000</p>
+        </div>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #2b5f4b;">Guia y dinero en monoespaciado. El estado se lee en el filete lateral antes que en el sello. Gris a 6.11:1.</p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid rgba(23,32,29,0.16); border-top: none; background: #fff;">
+    <div style="padding: 24px; border-right: 1px solid rgba(23,32,29,0.16); background: #fbfbf9;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">EVIDENCIA</p>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <div style="width: 64px; height: 64px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; background: #e6e8e2; display: flex; align-items: center; justify-content: center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+        <div><p style="margin: 0; font-family: system-ui, sans-serif; font-size: 13px;">Foto de entrega</p></div>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #b45436;">Descarga el JPEG completo (381 KB de media, hasta 3,8 MB) para pintarlo a 64px.</p>
+    </div>
+    <div style="padding: 24px;">
+      <p class="mono" style="margin: 0 0 16px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #56605b;">EVIDENCIA</p>
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+        <div style="width: 72px; height: 72px; border: 1px solid rgba(23,32,29,0.2); border-radius: 2px; background: #efe9dc; display: flex; align-items: center; justify-content: center; position: relative;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#56605b" stroke-width="2" stroke-linecap="square"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <span class="mono" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 2px 0; text-align: center; background: #17201d; color: #d9ed5a; font-size: 8px; font-weight: 700; letter-spacing: 0.1em;">ENTREGA</span>
+        </div>
+        <div>
+          <p style="margin: 0 0 3px; font-size: 13px; font-weight: 600;">Foto de entrega</p>
+          <p class="mono" style="margin: 0; font-size: 11px; color: #56605b;">21 ago, 4:05 p.m.</p>
+        </div>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #2b5f4b;">Carga diferida y dimensiones reservadas. El tipo de evidencia se sella sobre la miniatura.</p>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

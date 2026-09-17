@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "vitest run",
-    "deploy": "firebase deploy --only hosting,firestore:rules",
-    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy": "ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only hosting,firestore:rules",
+    "deploy:hosting": "ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only hosting",
     "deploy:rules": "firebase deploy --only firestore:rules",
     "deploy:functions": "ALLOW_FUNCTIONS_DEPLOY=1 firebase deploy --only functions"
   },
@@ -32,9 +33,20 @@
     "@types/node": "^20",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^3.2.4"
-  }
+  },
+  "browserslist": [
+    "chrome 87",
+    "edge 88",
+    "firefox 78",
+    "safari 14",
+    "ios_saf 14",
+    "opera 73"
+  ]
 }

@@ -1,0 +1,50 @@
+Rotulo SMK013-1 · 1 pedido
+Imprimir
+
+KENTRO
+
+SMK013-1
+COBRAR $ 50.000
+
+ESCANEAR PARA ABRIR PEDIDO
+
+SMK013-1
+
+Camara: QR · Despacho: pistola
+
+SMK013-1
+
+CLIENTE
+
+Cliente de prueba 1
+
+3000000000
+
+VENDEDOR
+
+Verify 013 - tienda desechable
+
+Recogida vendedor
+
+DIRECCION
+
+Calle 5 # 38-25 apto 301
+
+CORRECCION O NOTA
+
+timbre azul, preguntar por Marta
+
+PRODUCTO
+
+Producto de prueba
+
+Sin SKU
+
+CANTIDAD
+
+1
+
+Sin zona
+
+Ref MAN-SMOKE013-1
+Listo para asignar

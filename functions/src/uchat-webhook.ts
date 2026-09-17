@@ -249,6 +249,8 @@ export const uchatConfirmWebhook = onRequest(async (request, response) => {
       actorRole: "system",
       action: "order.confirmed_uchat",
       entity: "order",
+      fromStatus: "imported",
+      toStatus: "ready_to_assign",
       entityId: snap.id,
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por UChat/ChatBy`,
       createdAt: now

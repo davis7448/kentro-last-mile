@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin:0; background:#0b0f0d; color:#e8f0ec; font-family:'JetBrains Mono',monospace; -webkit-font-smoothing:antialiased; }
+    a { color:#7dff9b; } a:hover { color:#e8f0ec; }
+    .m { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+    .d { font-family:'JetBrains Mono',monospace; }
+  </style>
+</helmet>
+
+<div style="width:900px;padding:32px 34px 40px;box-sizing:border-box;background:#0b0f0d;">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:18px;border-bottom:1px solid rgba(232,240,236,.10);">
+    <div>
+      <p class="m" style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.2em;color:#7dff9b;">OPCION A</p>
+      <h1 class="d" style="margin:0;font-size:38px;font-weight:800;letter-spacing:-.02em;line-height:1;">Terminal</h1>
+      <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:#8b9a93;max-width:520px;">Mono en todo. Rejilla de filetes, sin tarjetas. Verde acido como unico acento.</p>
+    </div>
+    <div style="display:flex;gap:6px;padding-top:6px;">
+      <span style="width:26px;height:26px;background:#7dff9b;border-radius:0px;"></span>
+      <span style="width:26px;height:26px;background:#ff6b5a;border-radius:0px;"></span>
+      <span style="width:26px;height:26px;background:#111714;border:1px solid rgba(232,240,236,.10);border-radius:0px;"></span>
+    </div>
+  </div>
+
+  <p class="m" style="margin:26px 0 12px;font-size:10px;font-weight:600;letter-spacing:.18em;color:#8b9a93;">PENDIENTE POR LIQUIDAR</p>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+    <div style="background:#111714;border:1px solid rgba(232,240,236,.10);border-radius:0px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8b9a93;">TIENDAS POR PAGAR</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;">$ 17.581.261</p>
+    </div>
+    <div style="background:#111714;border:1px solid rgba(232,240,236,.10);border-radius:0px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8b9a93;">DOMICILIARIOS</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;">$ 550.000</p>
+    </div>
+    <div style="background:#111714;border:1px solid rgba(232,240,236,.10);border-radius:0px;padding:16px 18px;">
+      <p class="m" style="margin:0 0 8px;font-size:10px;letter-spacing:.14em;color:#8b9a93;">PROVEEDORES</p>
+      <p class="m" style="margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;color:#ff6b5a;">$ 6.885.750</p>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;background:#111714;border:1px solid rgba(232,240,236,.10);border-radius:0px;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid rgba(232,240,236,.10);">
+      <span class="d" style="font-size:14px;font-weight:700;">Tiendas disponibles para pagar</span>
+      <span class="m" style="font-size:11px;color:#8b9a93;">8 cuentas</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th class="m" style="padding:8px 18px;text-align:left;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8b9a93;">TIENDA</th>
+        <th class="m" style="padding:8px 10px;text-align:right;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8b9a93;">PEDIDOS</th>
+        <th class="m" style="padding:8px 10px;text-align:right;font-size:10px;font-weight:600;letter-spacing:.14em;color:#8b9a93;">SALDO A PAGAR</th>
+        <th style="padding:8px 18px;"></th>
+      </tr></thead>
+      <tbody>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+          <tr style="border-top:1px solid rgba(232,240,236,.10);">
+            <td style="padding:11px 18px;font-size:13px;font-weight:600;">{{r.n}}</td>
+            <td class="m" style="padding:11px 10px;text-align:right;font-size:13px;color:#8b9a93;">{{r.o}}</td>
+            <td class="m" style="padding:11px 10px;text-align:right;font-size:14px;font-weight:700;">{{r.d}}</td>
+            <td style="padding:11px 18px;text-align:right;">
+              <button type="button" style="min-height:34px;padding:0 12px;border:1px solid #7dff9b;border-radius:0px;background:transparent;color:#7dff9b;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;">Cerrar corte</button>
+            </td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;">
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid #7dff9b;border-radius:0px;color:#7dff9b;font-size:10px;font-weight:600;letter-spacing:.1em;">ENTREGADO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid #ff6b5a;border-radius:0px;color:#ff6b5a;font-size:10px;font-weight:600;letter-spacing:.1em;">FALLIDO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border:1px solid rgba(232,240,236,.10);border-radius:0px;color:#8b9a93;font-size:10px;font-weight:600;letter-spacing:.1em;">IMPORTADO</span>
+    <span class="m" style="display:inline-flex;padding:5px 10px;border-radius:0px;background:#7dff9b;color:#0b0f0d;font-size:10px;font-weight:700;letter-spacing:.1em;">ACCION</span>
+  </div>
+
+  <p style="margin:22px 0 0;padding-top:16px;border-top:1px solid rgba(232,240,236,.10);font-size:13px;line-height:1.6;color:#8b9a93;max-width:640px;">Se lee como una consola de operaciones. Denso, sin adornos, todo alineado a rejilla.</p>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { rows: [
+      { n:'DANDA', o:2998, d:'$ 9.350.800' },
+      { n:'Bella Mujer', o:140, d:'$ 2.329.541' },
+      { n:'OnStok', o:77, d:'$ 2.192.800' },
+      { n:'Nambu', o:74, d:'$ 1.704.710' },
+      { n:'Senziacol', o:67, d:'$ 1.085.910' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

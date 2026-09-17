@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; background: #f7f8f4; color: #17201d; -webkit-font-smoothing: antialiased; }
+    a { color: #2b5f4b; } a:hover { color: #17201d; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .disp { font-family: 'Archivo', 'IBM Plex Sans', sans-serif; }
+  </style>
+</helmet>
+
+<div style="width: 1200px; background: #f7f8f4; box-sizing: border-box;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 30px; height: 58px; background: #17201d;">
+    <div style="display: flex; align-items: center; gap: 22px;">
+      <span class="disp" style="font-size: 18px; font-weight: 800; color: #f7f8f4;">KENTRO</span>
+      <div style="display: flex; gap: 2px;">
+        <span style="padding: 7px 13px; font-size: 13px; font-weight: 600; color: #17201d; background: #d9ed5a; border-radius: 3px;">Operacion</span>
+        <span style="padding: 7px 13px; font-size: 13px; font-weight: 500; color: rgba(247,248,244,0.65);">Wallet</span>
+      </div>
+    </div>
+    <span style="font-size: 12px; color: rgba(247,248,244,0.7);">DANDA</span>
+  </div>
+
+  <div style="padding: 26px 30px 40px;">
+
+    <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px;">
+
+      <div style="border: 2px solid #17201d; background: #fff;">
+        <div style="padding: 22px 24px;">
+          <p class="mono" style="margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.18em; color: #56605b;">SALDO PENDIENTE POR LIQUIDAR</p>
+          <p class="mono" style="margin: 0; font-size: 52px; font-weight: 700; letter-spacing: -0.035em; line-height: 1;">$ 9.350.800</p>
+          <p style="margin: 12px 0 0; font-size: 14px; line-height: 1.55; color: #454f4a; max-width: 480px;">Es lo que Kentro te debe hoy, no el acumulado historico. Los cortes ya pagados no suman aqui.</p>
+        </div>
+        <div style="display: flex; gap: 10px; padding: 0 24px 22px;">
+          <button type="button" style="min-height: 44px; padding: 0 18px; border: none; border-radius: 3px; background: #2b5f4b; color: #f7f8f4; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer;">Solicitar liquidacion</button>
+          <button type="button" style="min-height: 44px; padding: 0 18px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; color: #17201d; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer;">Ver movimientos</button>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 24px; background: #efe9dc; border-top: 1px solid rgba(23,32,29,0.16);">
+          <span class="mono" style="font-size: 11px; color: #454f4a;">416 movimientos sin liquidar</span>
+          <span class="mono" style="font-size: 11px; color: #454f4a;">ultimo corte: 15&ndash;18 ago</span>
+        </div>
+      </div>
+
+      <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff; padding: 20px 22px;">
+        <p class="disp" style="margin: 0 0 16px; font-size: 15px; font-weight: 700;">Conexion Shopify</p>
+        <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; border: 1px solid rgba(43,95,75,0.35); border-radius: 3px; background: rgba(43,95,75,0.06);">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#2b5f4b" stroke-width="2.4" stroke-linecap="square"><path d="M4 12l5 5L20 6"/></svg>
+          <div>
+            <p class="mono" style="margin: 0; font-size: 14px; font-weight: 600;">danda.com.co</p>
+            <p style="margin: 2px 0 0; font-size: 12px; color: #56605b;">Sincronizando pedidos</p>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 18px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px dashed rgba(23,32,29,0.18);"><span style="font-size: 13px; color: #454f4a;">Entregados</span><span class="mono" style="font-size: 14px; font-weight: 600; color: #2b5f4b;">1.842</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px dashed rgba(23,32,29,0.18);"><span style="font-size: 13px; color: #454f4a;">En ruta</span><span class="mono" style="font-size: 14px; font-weight: 600; color: #2f6d92;">179</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;"><span style="font-size: 13px; color: #454f4a;">Fallidos</span><span class="mono" style="font-size: 14px; font-weight: 600; color: #b45436;">977</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(23,32,29,0.16); background: #fff; margin-top: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px; border-bottom: 2px solid #17201d;">
+        <p class="disp" style="margin: 0; font-size: 15px; font-weight: 700;">Ultimos pedidos</p>
+        <button type="button" style="min-height: 38px; padding: 0 13px; border: 1px solid rgba(23,32,29,0.28); border-radius: 3px; background: #fff; font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;">Descargar Excel</button>
+      </div>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(23,32,29,0.14);">
+            <th style="padding: 9px 22px; text-align: left; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; font-weight: 600;">GUIA</th>
+            <th style="padding: 9px 12px; text-align: left; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; font-weight: 600;">CLIENTE</th>
+            <th style="padding: 9px 12px; text-align: left; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; font-weight: 600;">ESTADO</th>
+            <th style="padding: 9px 22px; text-align: right; font-size: 10px; letter-spacing: 0.14em; color: #56605b; font-family: 'IBM Plex Mono', monospace; font-weight: 600;">VALOR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{rows}}" as="o" hint-placeholder-count="5">
+            <tr style="border-bottom: 1px solid rgba(23,32,29,0.08);">
+              <td class="mono" style="padding: 11px 22px; font-size: 13px; font-weight: 600;">{{o.code}}</td>
+              <td style="padding: 11px 12px; font-size: 13px; color: #454f4a;">{{o.client}}</td>
+              <td style="padding: 11px 12px;">
+                <span class="mono" style="display: inline-flex; padding: 4px 9px; border: 1.5px solid {{o.tone}}; border-radius: 2px; color: {{o.tone}}; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;">{{o.state}}</span>
+              </td>
+              <td class="mono" style="padding: 11px 22px; font-size: 14px; font-weight: 600; text-align: right;">{{o.amount}}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      rows: [
+        { code: 'KNT-003412', client: 'Luisa Marmolejo', state: 'EN TRANSITO', tone: '#2f6d92', amount: '$ 148.000' },
+        { code: 'KNT-003409', client: 'Diana Cabal', state: 'ENTREGADO', tone: '#2b5f4b', amount: '$ 215.000' },
+        { code: 'KNT-003405', client: 'Carlos Zapata', state: 'FALLIDO', tone: '#b45436', amount: '$ 64.900' },
+        { code: 'KNT-003402', client: 'Paola Grisales', state: 'IMPORTADO', tone: '#56605b', amount: '$ 133.400' },
+        { code: 'KNT-003398', client: 'Julian Bedoya', state: 'LLAMADA', tone: '#56605b', amount: '$ 78.000' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
