@@ -372,7 +372,9 @@
       "suite": "2026-09-17: 1527 pruebas en 41 archivos, todas en verde; tsc raiz y functions limpios; lint 0 errores (3 avisos exhaustive-deps preexistentes)",
       "mutaciones": ".sdd/evidence/017/mutacion-rf01.txt (cae por RF_01) y mutacion-rf10.txt (cae por la guarda 2, la unica red de ese fallo)",
       "regresion": "2026-09-17: la guarda de la spec 005 cazó que el candidato del webhook dejo de ir en stripUndefined(; corregido en las dos vias de Shopify",
-      "pendiente": "DoD 4 (verificacion contra produccion con copia previa) y el despliegue en 4 pasos, ambos los lanza una persona"
+      "pendiente": "DoD 4 (verificacion contra produccion con copia previa) y el despliegue en 4 pasos, ambos los lanza una persona",
+      "audit": "2026-09-17: trazabilidad limpia — los 19 RF y 3 RNF con prueba nombrada, ningun huerfano, nada implementado sin prueba. DoD 1,2,3,5 cumplidos; DoD 4 (produccion) y 6 (firma humana) pendientes.",
+      "commit": "226313a en rama feat/reimportar-no-pisa-lo-operado"
     },
     "018": {
       "file": "specs/018_saldo_de_tienda_igual_al_cierre.md",
