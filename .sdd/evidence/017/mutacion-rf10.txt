@@ -1,0 +1,12 @@
+MUTACION 2 — se quita 'driverId: null' del candidato de shopify.ts.
+El pedido nuevo naceria SIN el campo, y un documento sin el campo no empareja
+where('driverId','==',null): no aparece en el pozo del lider ni en las cifras, sin error.
+
+Ninguna prueba de comportamiento ejercita el candidato de shopify.ts (no se exporta, llama a
+getFirestore() y no hay emulador), asi que la guarda de texto es la UNICA red. Eso demuestra
+por que la guarda 2 existe:
+
+   × guarda 2 — el pedido nuevo nace con su lider vacio (RF_10) > functions/src/shopify.ts conserva su `driverId: null` de creacion 1602ms
+     → expected 'import crypto from "crypto";\nimport …' to match /driverId:\s*null/
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 28 passed (29)

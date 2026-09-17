@@ -27,6 +27,7 @@ import {
   type WalletEntryDoc
 } from "./settlement-math";
 import { createCommunityPricingResolver } from "./community-order-pricing";
+import { CLOSED_STATUSES, MANUAL_EDIT_STAMP } from "./order-import-merge";
 import { operationalDataBlockMessage } from "./community-access";
 import {
   buildWalletEntries,
@@ -97,7 +98,10 @@ const closeOrderSchema = z.object({
  * Estados de los que un pedido ya no sale por la via operativa. Definido arriba porque
  * `closeOrder` lo necesita para sellar `closedAt`, que es el eje de fecha del dinero.
  */
-const TERMINAL_STATUS = new Set(["delivered", "failed", "cancelled", "liquidated"]);
+// Una sola lista, definida en el nucleo de la spec 017: dos listas iguales terminan divergiendo, y
+// si divergieran, una reimportacion trataria un pedido cerrado como abierto y le refrescaria el
+// catalogo (RF_09 caido, sin error y sin aviso).
+const TERMINAL_STATUS = new Set<string>(CLOSED_STATUSES);
 
 const settlementSchema = z.object({
   kind: z.enum(["seller", "driver", "supplier", "community_leader"]),
@@ -509,6 +513,10 @@ export const updateImportedOrder = onCall(async (request) => {
       sku: preserved ? editedSummary?.sku : input.sku?.trim(),
       quantity: preserved ? editedSummary?.quantity : input.quantity,
       lineItems: editedSummary?.lineItems,
+      // Spec 017 (RF_17): la marca de que este pedido ya se toco a mano. Sin ella, "sigue
+      // importado" se leeria como "nadie lo ha tocado" y una reimportacion se llevaria esta
+      // correccion sin error y sin aviso.
+      [MANUAL_EDIT_STAMP]: now,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });
@@ -677,7 +685,9 @@ export const updateOrderAdjustments = onCall(async (request) => {
     const snap = await transaction.get(orderRef);
     if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
     const current = snap.data() ?? {};
-    if (["delivered", "failed", "cancelled", "liquidated"].includes(String(current.status))) {
+    // Misma lista que TERMINAL_STATUS, y por el mismo motivo: si divergiera, el admin podria
+    // ajustar producto y recaudo de un pedido ya cerrado (principio 10).
+    if (TERMINAL_STATUS.has(String(current.status))) {
       throw new HttpsError("failed-precondition", "Closed, cancelled or liquidated orders cannot be adjusted from this form.");
     }
     // Edicion manual de producto (ver resolveEditedOrderLines: un pedido multi-linea
@@ -705,6 +715,9 @@ export const updateOrderAdjustments = onCall(async (request) => {
       lineItems: editedSummary?.lineItems,
       // El marcador sigue al stock: si el producto nuevo no tiene ficha, ya no hay nada que liberar.
       inventoryReserved: inventoryIndex ? nextMovements.some((movement) => inventoryIndex.has(movement.skuKey)) : undefined,
+      // Spec 017 (RF_17): este ajuste toca el RECAUDO de un pedido que puede ir ya en la calle, asi
+      // que es la edicion manual mas cara de perder. La marca impide que una reimportacion la pise.
+      [MANUAL_EDIT_STAMP]: now,
       updatedAt: now
     });
     transaction.set(orderRef, updated, { merge: true });

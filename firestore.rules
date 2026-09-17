@@ -284,6 +284,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    /**
+     * Resumen de cada reimportacion (spec 017, RF_13): cuantos pedidos ya existian y que datos
+     * protegidos se conservaron. Solo el administrador, que es quien lanza las corridas; lleva
+     * codigos de seguimiento de pedidos de varias tiendas, asi que no lo ve nadie mas. Lo escribe
+     * el servidor con el Admin SDK, que ignora estas reglas: desde el cliente, nunca.
+     */
+    match /importRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Cuadre de caja: saldo real de las cuentas de la operacion, para contrastarlo
     // contra el saldo teorico. Solo el admin lo ve y lo registra; nunca se edita ni
     // se borra, para que el historico de desfases sea confiable.

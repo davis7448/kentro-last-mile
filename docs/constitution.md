@@ -1,7 +1,7 @@
 # Constitucion del proyecto: Kentro (plataforma de ultima milla)
 
 Reglas fundamentales de este repositorio. Cualquier propuesta que las viole se rechaza, venga de
-quien venga. Los principios 8 a 12 no son teoria: cada uno esta escrito a partir de un fallo que ya
+quien venga. Los principios 8 a 13 no son teoria: cada uno esta escrito a partir de un fallo que ya
 llego a produccion y costo dinero o dejo la app en blanco.
 
 **Stack real:** Next.js 16 + React 19 + TypeScript estricto + Firebase (Hosting / Functions Node 20 /
@@ -114,7 +114,30 @@ La cache de `firebase.json` (`no-cache` para el HTML, `immutable` un ano para `/
 se toca sin pensar: el `max-age=3600` por defecto de Firebase dejaba la app en blanco en moviles tras
 cada despliegue.
 
-## 13. Lint y diseno antes de subir interfaz
+## 13. Una importacion nunca cambia de dueno a un pedido
+
+Lo que entra de una tienda actualiza lo que la tienda sabe; **no toca nada de lo que la plataforma
+aprendio despues**: ni el lider, ni el mensajero, ni la direccion corregida al confirmar, ni el
+precio de comunidad congelado, ni los productos de un pedido cerrado o editado a mano. La regla vive
+en un solo sitio (`functions/src/order-import-merge.ts`) y la usan todas las vias de entrada; las
+cuatro excepciones estan declaradas ahi mismo, con su razon.
+
+El 2026-09-15, entre las 16:36 y las 16:39, una reimportacion historica dejo **34 pedidos sin
+lider**. Lo que se vio: el mensajero del KNT-004747 se quedo sin poder subir evidencia ni marcar
+entregado. Lo que no se vio, y es lo caro: 26 entregas en efectivo salieron del saldo pendiente del
+lider **sin un solo error en pantalla**.
+
+Dos corolarios que costaron otra tarde de analisis cada uno:
+
+- **`driverId: null` dentro de un `merge` no es "no tocar", es "borrar".** Conservar un campo es
+  **omitir la clave**, nunca reescribir el valor leido. Pero en la CREACION ese `null` tiene que
+  estar: un documento sin el campo no empareja `where("driverId", "==", null)` y el pedido nuevo no
+  aparece en el pozo del lider ni en las cifras.
+- **El estado de un pedido no dice si alguien lo toco.** Dos callables editan a mano sin cambiar el
+  estado, y una de ellas ajusta el **recaudo** de pedidos que ya van en la calle. Por eso una
+  edicion manual deja marca, y un pedido marcado no vuelve a recibir nada de la tienda.
+
+## 14. Lint y diseno antes de subir interfaz
 
 `npm run lint` no es opcional antes de desplegar UI: `react-hooks/rules-of-hooks` va como **error**
 porque un `useMemo` tras un `return` anticipado tumbo la app en moviles con React #310, solo para
