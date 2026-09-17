@@ -1,0 +1,9 @@
+{
+  "spec": "specs/018_saldo_de_tienda_igual_al_cierre.md",
+  "round": 3,
+  "findings": [],
+  "history": [
+    "Ronda 1: R1-RF_20-1, R1-RF_02-1, R1-RF_22-1, R1-RF_24-1, R1-RF_09-1, R1-RF_01-1 corregidos en T14; la ronda 2 los confirmo corregidos.",
+    "Ronda 2: R2-RF_20-1 (alta), R2-RF_23-1 (media), R2-RF_08-1 (baja) corregidos en T15; la ronda 3 (RF_08, RF_14, RF_20, RF_22, RF_23, RF_24) los confirmo corregidos y no encontro hallazgos de severidad media o alta. Tres observaciones de severidad baja quedan anotadas en el informe."
+  ]
+}

@@ -1,0 +1,21 @@
+# Spec 018 — T5 query-check (2026-09-17T00:03:08.107Z)
+- Kovia: 2 candidatos en 158 ms
+- DANDA: 328 candidatos en 362 ms
+- vive zen: 3 candidatos en 106 ms
+- Mercadotienda: 0 candidatos en 140 ms
+- OnStok: 1 candidatos en 116 ms
+- Bodega ShopSeven: 0 candidatos en 161 ms
+- Senziacol: 0 candidatos en 93 ms
+- Bella Mujer: 17 candidatos en 208 ms
+- ADMA COMERCIAL: 1 candidatos en 101 ms
+- PAMI 1: 0 candidatos en 247 ms
+- PAMI 2: 0 candidatos en 93 ms
+- Nambu: 0 candidatos en 135 ms
+- LuminXP: 0 candidatos en 136 ms
+- Prueba: 0 candidatos en 161 ms
+- koera: 0 candidatos en 129 ms
+- Brayan E-master: 0 candidatos en 132 ms
+- Prueba: 0 candidatos en 83 ms
+- SHOPCOLOMBIA: 0 candidatos en 157 ms
+- CEPILLOS FULL: 0 candidatos en 101 ms
+Sin error de indice.

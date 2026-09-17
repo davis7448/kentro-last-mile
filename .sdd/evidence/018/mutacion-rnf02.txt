@@ -1,0 +1,28 @@
+# Spec 018 — mutacion RNF_02 (2026-09-16T23:57:58Z)
+Mutacion: retentionForOrder devuelve 12000 literal para todo pedido en la calle.
+
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_09: recogido y en ruta retienen 3ms
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_09: recogido y en ruta retienen aunque falte la marca de recogida 0ms
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_09: un reabierto y reasignado que ya fue recogido sigue reteniendo 1ms
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_10: sin haber sido recogido nunca, no retiene 0ms
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_10: una marca de recogida vacia cuenta como no recogido 0ms
+   ✓ spec 018 · RF_09 / RF_10 / RF_11 · que pedidos estan en la calle > RF_11: un pedido cerrado deja de retener 0ms
+   ✓ spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > tienda general: el fijo de fallido, igual al cobro real 1ms
+   ✓ spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > el fijo gana a la tarifa de la zona, como en el cierre 0ms
+   × spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > DANDA: no se le cobra fallido, asi que no retiene 9ms
+   × spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > comunidad: el precio congelado del lider cuando supera la base 1ms
+   ✓ spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > comunidad: si el lider esta por debajo de la base, manda la base 0ms
+   × spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > bodega, primera visita: fallido + manejo 1ms
+   ✓ spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > bodega con el manejo ya cobrado: solo el fallido de la siguiente visita 0ms
+   ✓ spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > un pedido que no esta en la calle no retiene nada 0ms
+   × spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > RF_07: el modulo no tiene un valor fijo propio ni una copia de la tarifa 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/lib/seller-retention.test.ts > spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > DANDA: no se le cobra fallido, asi que no retiene
+ FAIL  src/lib/seller-retention.test.ts > spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > comunidad: el precio congelado del lider cuando supera la base
+ FAIL  src/lib/seller-retention.test.ts > spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > bodega, primera visita: fallido + manejo
+ FAIL  src/lib/seller-retention.test.ts > spec 018 · RF_06 / RF_07 / RNF_02 · cuanto retiene > RF_07: el modulo no tiene un valor fijo propio ni una copia de la tarifa
+    141|     expect(code).not.toMatch(/pendingReserveCop|SELLER_FAILED_FEE_FIXE…
+      Tests  4 failed | 11 passed (15)
+
+Restaurado:
+      Tests  15 passed (15)

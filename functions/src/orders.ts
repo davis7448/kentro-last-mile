@@ -13,7 +13,9 @@ import {
   summarizeOrderLines
 } from "./inventory-movements";
 import { gmfForPayout } from "./gmf";
-import { buildCodReceivedSet, isWithinSettlementRange, summarizeSellerPayable } from "./seller-ledger";
+import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange } from "./seller-ledger";
+import { computeSellerBalance, payoutRejectionMessage, selectSettlementEntries } from "./seller-balance";
+import { loadSellerBalanceInput } from "./seller-balance-api";
 import {
   computeDriverCashSummary,
   type DriverCashInputs,
@@ -1251,44 +1253,35 @@ export const createSettlement = onCall(async (request) => {
 
   let candidateDocs = unsettledEntryDocs;
   if (input.kind === "seller" || input.kind === "supplier") {
-    const paidDriverSettlementsSnap = await db
+    const driverSettlementsSnap = await db
       .collection("settlements")
       .where("kind", "==", "driver")
       .get();
-    const codReceivedOrderIds = new Set<string>();
-    for (const settlementDoc of paidDriverSettlementsSnap.docs) {
-      const settlement = settlementDoc.data() as SettlementDoc;
-      if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
-        for (const allocation of settlement.cashAllocations) {
-          if (allocation.covered) codReceivedOrderIds.add(allocation.orderId);
-        }
-        continue;
-      }
-      if (settlement.status === "paid" || settlement.status === "reconciled") {
-        for (const orderId of settlement.orderIds ?? []) {
-          codReceivedOrderIds.add(orderId);
-        }
-      }
-    }
+    // Spec 018 RF_04: la definicion unica de "efectivo recibido", la misma de la pantalla.
+    const codReceivedOrderIds = buildCodReceivedSet(driverSettlementsSnap.docs.map((doc) => doc.data()));
 
     const orderIds = Array.from(new Set(unsettledEntryDocs.map((entry) => String((entry.data() ?? {}).orderId ?? "")).filter(Boolean)));
     const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
     const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
-    candidateDocs = unsettledEntryDocs.filter((entry) => {
-      const data = entry.data() ?? {};
-      // Los abonos a tienda no dependen de un pedido; siempre se liquidan.
-      if (String(data.type ?? "") === "seller_abono" || String(data.type ?? "") === "gmf_tax") return true;
-      const orderId = String(data.orderId ?? "");
-      const order = ordersById.get(orderId);
-      if (!order) return false;
-      if (order.paymentMethod === "prepaid") return true;
-      // Solo se espera el efectivo de pedidos COD ENTREGADOS. Un fallido no recauda nada
-      // (nunca entra a cashAllocations), asi que exigirle "COD recibido" dejaba su cobro
-      // bloqueado de forma permanente.
-      const hasPendingCod = order.status === "delivered" || order.status === "liquidated";
-      if (!hasPendingCod) return true;
-      return codReceivedOrderIds.has(orderId);
-    });
+    candidateDocs = unsettledEntryDocs.filter((entry) => isSellerEntryEligible(entry.data() ?? {}, ordersById, codReceivedOrderIds));
+
+    // Spec 018 RF_12-RF_15, RF_23, RF_24: en tienda se liquidan pedidos COMPLETOS sin pasar del
+    // disponible. El saldo es el de la tienda entera aunque el corte tenga rango o seleccion: lo
+    // pagable que queda fuera ya cubre la retencion. Toda la regla vive en selectSettlementEntries.
+    if (input.kind === "seller" && candidateDocs.length > 0) {
+      const balance = computeSellerBalance(await loadSellerBalanceInput(db, input.ownerId, new Date().toISOString()));
+      // RF_22 (R2-RF_20-1): con movimientos que no se pueden atribuir, el saldo no es fiable.
+      if (balance.unreadableEntryIds.length > 0) {
+        throw new HttpsError("failed-precondition", "No se crea el corte: la tienda tiene movimientos sin pedido legible. Revisalos antes de pagar.");
+      }
+      const candidates = candidateDocs.map((entry) => ({ id: entry.id, ...entry.data() }) as WalletEntryDoc);
+      const choice = selectSettlementEntries(balance, candidates);
+      if (!choice.ok) {
+        throw new HttpsError("failed-precondition", `No se crea el corte: ${payoutRejectionMessage(balance)}`);
+      }
+      const selected = new Set(choice.selection.entryIds);
+      candidateDocs = candidateDocs.filter((entry) => selected.has(entry.id));
+    }
   }
 
   const candidateRefs = candidateDocs.map((entry) => entry.ref);
@@ -2084,7 +2077,11 @@ export const applyOrderTransition = onCall({ memory: "512MiB" }, async (request)
       throw new HttpsError("invalid-argument", `Transicion a "${patch.status}" no permitida por esta via.`);
     }
 
-    const clean = stripUndefined({ ...patch, updatedAt: now } as Record<string, unknown>);
+    // Spec 018 (R1-RF_09-1): la retencion de un pedido reabierto depende de saber que ya salio a
+    // la calle. El boton "confirmar recogido" pasa a `picked_up` sin lote de recogida, que es quien
+    // sellaba `pickedUpAt`; sin la marca, al reagendarse dejaba de retener con la mercancia fuera.
+    const stampsPickup = (patch.status === "picked_up" || patch.status === "in_route") && !order.pickedUpAt && !patch.pickedUpAt;
+    const clean = stripUndefined({ ...patch, ...(stampsPickup ? { pickedUpAt: now } : {}), updatedAt: now } as Record<string, unknown>);
     transaction.set(ref, clean, { merge: true });
     const auditRef = newAuditRef(db);
     transaction.set(auditRef, {
@@ -2303,25 +2300,13 @@ export const requestSellerPayout = onCall(async (request) => {
     throw new HttpsError("failed-precondition", "Ya tienes una solicitud de liquidacion abierta. Espera a que Kentro la procese.");
   }
 
-  const [entriesSnap, settlementsSnap] = await Promise.all([
-    db.collection("walletEntries").where("ownerId", "==", sellerId).get(),
-    db.collection("settlements").where("kind", "==", "driver").get()
-  ]);
-  const entries = entriesSnap.docs.map((doc) => doc.data());
-  const orderIds = [...new Set(entries.map((entry) => String(entry.orderId ?? "")).filter(Boolean))];
-  const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
-  const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as Record<string, any>]));
-  const codReceived = buildCodReceivedSet(settlementsSnap.docs.map((doc) => doc.data()));
-
-  const summary = summarizeSellerPayable(entries, ordersById, codReceived);
-  if (summary.eligibleCop <= 0) {
-    throw new HttpsError(
-      "failed-precondition",
-      summary.blockedCop > 0
-        ? "Todavia no hay saldo liquidable: el efectivo de tus pedidos entregados aun no entra de la flota."
-        : "No tienes saldo pendiente por liquidar."
-    );
+  // Spec 018: la tienda pide exactamente lo que un corte le pagaria hoy (RF_01).
+  const balance = computeSellerBalance(await loadSellerBalanceInput(db, sellerId, new Date().toISOString()));
+  if (balance.unreadableEntryIds.length > 0 || balance.availableCop <= 0) {
+    throw new HttpsError("failed-precondition", payoutRejectionMessage(balance));
   }
+  const includedOrderCount = balance.selection.includedOrderIds.length;
+  const blockedCop = balance.codPendingCop + balance.heldCop;
 
   const now = new Date().toISOString();
   const payoutRef = db.collection("payouts").doc();
@@ -2330,9 +2315,9 @@ export const requestSellerPayout = onCall(async (request) => {
     id: payoutRef.id,
     sellerId,
     sellerName,
-    amountCop: summary.eligibleCop,
-    blockedCop: summary.blockedCop,
-    eligibleOrderCount: summary.eligibleOrderCount,
+    amountCop: balance.availableCop,
+    blockedCop,
+    eligibleOrderCount: includedOrderCount,
     status: "requested" as const,
     requestedBy: request.auth.uid,
     requestedByEmail: typeof request.auth.token.email === "string" ? request.auth.token.email : undefined,
@@ -2348,7 +2333,7 @@ export const requestSellerPayout = onCall(async (request) => {
     action: "payout.requested",
     entity: "seller",
     entityId: sellerId,
-    summary: `${sellerName} solicito liquidacion por ${summary.eligibleCop} COP (${summary.eligibleOrderCount} pedidos)${summary.blockedCop !== 0 ? ` · ${summary.blockedCop} retenidos por COD sin recaudar` : ""}`,
+    summary: `${sellerName} solicito liquidacion por ${balance.availableCop} COP (${includedOrderCount} pedidos)${blockedCop !== 0 ? ` · ${balance.codPendingCop} con el domiciliario y ${balance.heldCop} retenidos por pedidos en la calle` : ""}`,
     createdAt: now
   });
   await batch.commit();

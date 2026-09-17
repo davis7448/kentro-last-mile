@@ -3,14 +3,15 @@ import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
+import { buildSellerBalanceInput, computeSellerBalance } from "./seller-balance";
 import {
   buildCodReceivedSet,
   isSellerEntryEligible,
   type OrderDoc,
-  SELLER_LIQUIDATION_TYPES,
   type SettlementDoc,
   type WalletEntryDoc
 } from "./seller-ledger";
+import { buildStoreSummary, chargeMagnitude, sumType } from "./store-summary";
 
 /**
  * API de solo lectura para tiendas (sellers).
@@ -197,93 +198,6 @@ function computeKpis(orders: OrderDoc[]) {
 }
 
 
-// Suma de delivery_fee/failed_fee/etc como magnitud positiva de cobro (igual que netChargeCop de la UI).
-function chargeMagnitude(entries: WalletEntryDoc[], types: string[]) {
-  return Math.max(0, -entries.filter((e) => types.includes(e.type)).reduce((sum, e) => sum + Number(e.amountCop || 0), 0));
-}
-
-function sumType(entries: WalletEntryDoc[], types: string[]) {
-  return Math.round(entries.filter((e) => types.includes(e.type)).reduce((sum, e) => sum + Number(e.amountCop || 0), 0));
-}
-
-// Resumen financiero consolidado de la tienda, autoritativo (mismos criterios del admin).
-function buildStoreSummary(
-  sellerEntries: WalletEntryDoc[],
-  settlementsById: Map<string, SettlementDoc>,
-  ordersById: Map<string, OrderDoc>,
-  codReceived: Set<string>,
-  sellerSettlements: SettlementDoc[]
-) {
-  const liq = sellerEntries.filter((e) => SELLER_LIQUIDATION_TYPES.has(e.type));
-  let disponibleCop = 0, enLiquidacionCop = 0, bloqueadoCodCop = 0, liquidadoCop = 0;
-  for (const entry of liq) {
-    const amount = Number(entry.amountCop || 0);
-    if (entry.settlementId) {
-      const status = String(settlementsById.get(String(entry.settlementId))?.status ?? "");
-      if (status === "paid" || status === "reconciled") liquidadoCop += amount;
-      else enLiquidacionCop += amount; // corte pendiente
-    } else if (isSellerEntryEligible(entry, ordersById, codReceived)) {
-      disponibleCop += amount;
-    } else {
-      bloqueadoCodCop += amount;
-    }
-  }
-  // Un `seller_abono` NEGATIVO es plata que salio hacia la tienda (un abono real).
-  // Uno POSITIVO restituye deuda: es un ajuste, no un pago, y meterlo aqui inflaba
-  // el historial de pagos de la tienda por el doble de la diferencia.
-  const abonos = sellerEntries
-    .filter((e) => e.type === "seller_abono" && Number(e.amountCop || 0) < 0)
-    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(-Number(e.amountCop || 0)), nota: e.description ?? null }))
-    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
-  const totalAbonadoCop = abonos.reduce((sum, a) => sum + a.montoCop, 0);
-
-  const ajustes = sellerEntries
-    .filter((e) => e.type === "seller_abono" && Number(e.amountCop || 0) > 0)
-    .map((e) => ({ fecha: e.createdAt ?? null, montoCop: Math.round(Number(e.amountCop || 0)), nota: e.description ?? null }))
-    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
-
-  // Un corte puede haberse cerrado pagando menos de su neto: lo que vale como pago
-  // es lo realmente transferido, no el neto del corte.
-  const pagosLiquidaciones = sellerSettlements
-    .filter((s) => s.status === "paid" || s.status === "reconciled")
-    .map((s) => ({
-      tipo: "liquidacion" as const,
-      fecha: s.paidAt ?? s.reconciledAt ?? s.createdAt ?? null,
-      montoCop: Math.round(Number(typeof s.paidAmountCop === "number" ? s.paidAmountCop : s.netCop) || 0),
-      referencia: String(s.id),
-      nota: s.note ?? null
-    }));
-  const pagosAbonos = abonos.map((a) => ({ tipo: "abono" as const, fecha: a.fecha, montoCop: a.montoCop, referencia: "abono", nota: a.nota }));
-  const pagos = [...pagosLiquidaciones, ...pagosAbonos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
-
-  return {
-    saldoPendiente: {
-      disponibleCop: Math.round(disponibleCop),
-      enLiquidacionCop: Math.round(enLiquidacionCop),
-      bloqueadoCodCop: Math.round(bloqueadoCodCop),
-      totalCop: Math.round(disponibleCop + enLiquidacionCop + bloqueadoCodCop)
-    },
-    totales: {
-      codCop: sumType(liq, ["cod_revenue", "cod_remittance"]),
-      cobrosCop: chargeMagnitude(liq, ["delivery_fee", "failed_fee", "fulfillment_fee"]),
-      costoProductoCop: chargeMagnitude(liq, ["product_cost"]),
-      abonadoCop: totalAbonadoCop,
-      liquidadoCop: Math.round(liquidadoCop)
-    },
-    pagos,
-    abonos,
-    ajustes,
-    significado: {
-      disponibleCop: "Saldo que la plataforma ya te puede pagar (COD recibido del domiciliario o prepago), neto de abonos.",
-      enLiquidacionCop: "Ya incluido en un corte creado pero aun no pagado.",
-      bloqueadoCodCop: "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
-      liquidadoCop: "Total neto ya liquidado en cortes pagados/conciliados.",
-      abonadoCop: "Total de abonos (pagos parciales) que ya te hemos entregado.",
-      ajustes: "Correcciones que reabren saldo a tu favor (por ejemplo, un corte cerrado por menos de lo transferido). No son pagos recibidos."
-    }
-  };
-}
-
 function buildPaymentInfo(
   order: OrderDoc,
   sellerEntries: WalletEntryDoc[],
@@ -419,14 +333,35 @@ export const storeApi = onRequest(async (request, response) => {
     const allSettlements = settlementsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
     const settlementsById = new Map(allSettlements.map((settlement) => [String(settlement.id), settlement]));
     const codReceived = buildCodReceivedSet(allSettlements);
-    const ordersByIdAll = new Map(allOrders.map((order) => [String(order.id), order]));
 
     if (resource === "resumen") {
       const sellerSettlements = allSettlements.filter((s) => s.kind === "seller" && s.ownerId === sellerId);
+      // Spec 018 RF_25: el mismo saldo que ve la tienda en la app. Hace falta la tarifa (ajustes y
+      // zonas) para saber cuanto retener por los pedidos en la calle.
+      const zoneIds = [...new Set(allOrders.map((order) => String(order.zoneId ?? "")).filter(Boolean))];
+      const [settingsSnap, zoneSnaps] = await Promise.all([
+        db.collection("settings").doc("global").get(),
+        zoneIds.length ? db.getAll(...zoneIds.map((zoneId) => db.collection("zones").doc(zoneId))) : Promise.resolve([])
+      ]);
+      const balance = computeSellerBalance(buildSellerBalanceInput({
+        sellerId,
+        wallet: sellerEntries,
+        orders: allOrders,
+        settlements: allSettlements,
+        settings: (settingsSnap.data() ?? {}) as Record<string, unknown>,
+        zones: zoneSnaps.filter((snap) => snap.exists).map((snap) => ({ id: snap.id, ...snap.data() })),
+        now: new Date().toISOString()
+      }));
+      // RF_22: con asientos que no se pueden atribuir a un pedido no se devuelve una cifra parcial;
+      // la app muestra error en ese caso y la API tiene que decir lo mismo.
+      if (balance.unreadableEntryIds.length > 0) {
+        response.status(409).json({ ok: false, error: "incomplete_balance", hint: "Hay movimientos sin pedido legible; Kentro debe revisarlos antes de dar el saldo." });
+        return;
+      }
       response.status(200).json({
         ok: true,
         tienda: config.sellerName ?? sellerId,
-        ...buildStoreSummary(sellerEntries, settlementsById, ordersByIdAll, codReceived, sellerSettlements)
+        ...buildStoreSummary(sellerEntries, settlementsById, balance, sellerSettlements)
       });
       return;
     }

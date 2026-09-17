@@ -1,0 +1,57 @@
+# Spec 018 — T1 linea base (2026-09-16T23:51:48.026Z)
+
+## 1. Cierre pendiente por tienda: definicion del cliente (hoy) vs la del corte (spec)
+- Kovia: hoy 833.885 · con la definicion unica 833.885 · diferencia 0
+- DANDA: hoy 229.200 · con la definicion unica 229.200 · diferencia 0
+- vive zen: hoy 57.100 · con la definicion unica 57.100 · diferencia 0
+- Mercadotienda: hoy 69.000 · con la definicion unica 69.000 · diferencia 0
+- OnStok: hoy 552.000 · con la definicion unica 552.000 · diferencia 0
+- Senziacol: hoy 1.289.510 · con la definicion unica 1.289.510 · diferencia 0
+- Bella Mujer: hoy 354.280 · con la definicion unica 354.280 · diferencia 0
+- ADMA COMERCIAL: hoy -26.500 · con la definicion unica -26.500 · diferencia 0
+- Nambu: hoy 2.054.710 · con la definicion unica 2.054.710 · diferencia 0
+- LuminXP: hoy -36.000 · con la definicion unica -36.000 · diferencia 0
+- koera: hoy 33.900 · con la definicion unica 33.900 · diferencia 0
+
+## 2. Pendiente por proveedor (product_cost sin corte de proveedor)
+- ADMA COMPANY: hoy 100.000 · con la definicion unica 100.000 · diferencia 0
+- sup-1781914882801: hoy 7.350.050 · con la definicion unica 7.350.050 · diferencia 0
+- ADMA LABORATORIO: hoy 1.645.900 · con la definicion unica 1.645.900 · diferencia 0
+- sup-1782359073328: hoy 0 · con la definicion unica 0 · diferencia 0
+- sup-1781914554522: hoy 359.000 · con la definicion unica 359.000 · diferencia 0
+- DANDA: hoy 0 · con la definicion unica 0 · diferencia 0
+- sup-1781914504627: hoy 0 · con la definicion unica 0 · diferencia 0
+
+## 3. Asientos abiertos de tienda que no se pueden atribuir (RF_22)
+- liquidables sin pedido o con pedido inexistente: 0
+- de tipos no liquidables: 0
+
+## 4. Pedidos abiertos reabiertos con marca de recogida (retendran)
+- KNT-001216 · DANDA · call_pending · recogido 2026-07-17T01:25:36.253Z
+- KNT-001786 · DANDA · call_pending · recogido 2026-07-17T01:25:36.253Z
+- KNT-001984 · DANDA · call_pending · recogido 2026-07-17T01:25:36.253Z
+- KNT-000619 · DANDA · ready_to_assign · recogido 2026-06-22T02:54:05.537Z
+- KNT-000627 · DANDA · ready_to_assign · recogido 2026-06-22T02:35:41.637Z
+- KNT-000479 · DANDA · ready_to_assign · recogido 2026-06-22T02:38:00.712Z
+- KNT-000623 · DANDA · ready_to_assign · recogido 2026-06-22T03:05:52.625Z
+- KNT-000630 · DANDA · ready_to_assign · recogido 2026-06-22T03:08:55.876Z
+- KNT-000633 · DANDA · ready_to_assign · recogido 2026-06-22T02:18:51.230Z
+- KNT-000636 · DANDA · ready_to_assign · recogido 2026-06-22T02:34:35.740Z
+- KNT-000640 · DANDA · ready_to_assign · recogido 2026-06-22T02:48:16.317Z
+- KNT-001440 · DANDA · ready_to_assign · recogido 2026-07-06T20:17:47.020Z
+- total: 12
+
+## Compuerta
+- tiendas con cifra distinta: 0
+- proveedores con cifra distinta: 0
+- asientos ilegibles: 0
+(Use `node --trace-deprecation ...` to show where the warning was created)
+page.waitForFunction: Timeout 90000ms exceeded.
+    at perfRun (/root/kentro-last-mile/scripts/verify-018.js:238:16)
+    at async perf (/root/kentro-last-mile/scripts/verify-018.js:265:57) {
+  name: 'TimeoutError'
+}
+# Spec 018 — perf "antes" (2026-09-16T23:55:51.066Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 989 ms · corridas 1033, 958, 940, 989, 1045 ms
+- escritorio 1280x800: mediana 975 ms · corridas 960, 975, 790, 1001, 990 ms
+- cuenta desechable borrada

@@ -1,0 +1,29 @@
+# Spec 018 — T13 compare (2026-09-17T00:18:02.463Z)
+
+- Bella Mujer: disponible 109.610 · efectivo con domiciliario 1.249.070 · retenido 244.670 (4 pedidos; 15 en la calle, teorica 180.000) · total 1.603.350 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~272
+- DANDA: disponible 229.200 · efectivo con domiciliario 6.085.900 · retenido 0 (0 pedidos; 204 en la calle, teorica 0) · total 6.315.100 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~824
+- Kovia: disponible 833.885 · efectivo con domiciliario 305.500 · retenido 0 (0 pedidos; 0 en la calle, teorica 0) · total 1.139.385 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~151
+- Nambu: disponible 2.054.710 · efectivo con domiciliario 304.200 · retenido 0 (0 pedidos; 0 en la calle, teorica 0) · total 2.358.910 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~125
+- ADMA COMERCIAL: disponible -26.500 · efectivo con domiciliario 83.500 · retenido 0 (0 pedidos; 0 en la calle, teorica 0) · total 57.000 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~13
+
+Cortes de domiciliario leidos por llamada: 36
+Resultado: COINCIDEN
+
+Nota: la medicion de tiempo 'despues' (RNF_04) requiere hosting desplegado; se ejecuta en la fase smoke con 'node scripts/verify-018.js perf despues' y se anota aqui y en docs/rendimiento.md.
+# Spec 018 — perf "despues" (2026-09-17T00:48:08.125Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 1574 ms · corridas 1930, 1574, 1535, 1645, 1299 ms
+- escritorio 1280x800: mediana 1417 ms · corridas 1581, 1398, 1677, 1369, 1417 ms
+- cuenta desechable borrada
+# Spec 018 — perf "despues-T16" (2026-09-17T00:59:15.006Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 1094 ms · corridas 2114, 1039, 1154, 1094, 969 ms
+- escritorio 1280x800: mediana 1049 ms · corridas 915, 938, 1205, 1086, 1049 ms
+- cuenta desechable borrada
+# Spec 018 — perf "despues-T16-repeticion" (2026-09-17T01:00:12.921Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 1726 ms · corridas 2073, 1737, 1391, 1437, 1726 ms
+- escritorio 1280x800: mediana 1054 ms · corridas 1151, 997, 1054, 1016, 1140 ms
+- cuenta desechable borrada

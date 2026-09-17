@@ -1,0 +1,21 @@
+PASA HU_01-RF_18-RF_19 390x844
+   ok  RF_18 tarjeta heroe muestra $ 109.610
+   ok  RF_18 sin 'Lo pendiente de hoy'
+   ok  RF_19 panel: Disponible para liquidar $ 109.610
+   ok  RF_19 panel: Efectivo aun con el domiciliario $ 1.249.070
+   ok  RF_19 panel: Retenido $ 244.670
+   ok  RF_19 panel: Total sin cortar $ 1.603.350
+   ok  RF_07 el panel no muestra 'Reserva'
+   consola: 0 errores · red >=400: 0
+PASA HU_01-RF_18-RF_19 1280x800
+   ok  RF_18 tarjeta heroe muestra $ 109.610
+   ok  RF_18 sin 'Lo pendiente de hoy'
+   ok  RF_19 panel: Disponible para liquidar $ 109.610
+   ok  RF_19 panel: Efectivo aun con el domiciliario $ 1.249.070
+   ok  RF_19 panel: Retenido $ 244.670
+   ok  RF_19 panel: Total sin cortar $ 1.603.350
+   ok  RF_07 el panel no muestra 'Reserva'
+   consola: 0 errores · red >=400: 0
+FALLA HU_02-RF_20 1280x800
+   MAL RF_20 fila Bella Mujer del cierre muestra $ 109.610 (igual que la tienda)
+   consola: 0 errores · red >=400: 0

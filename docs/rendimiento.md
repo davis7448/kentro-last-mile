@@ -21,6 +21,25 @@ JavaScript del primer pintado: **1,55 MB sin comprimir / 358 KB por la red**.
 De la carga del admin, **3,58 MB son la colección `walletEntries` entera** (10.452 asientos, el
 68%), y crece ~3.700 al mes. Es la próxima deuda: ver "Pendiente" abajo.
 
+## Tarjeta heroe de la tienda (spec 018, RNF_04)
+
+Tiempo desde pulsar "Entrar" hasta que la tarjeta heroe de la tienda muestra pesos. Guion:
+`node scripts/verify-018.js perf <etiqueta>` — Playwright Chromium en el VPS, contexto nuevo por carga
+(en frio), tienda **Bella Mujer** con una cuenta desechable que el guion borra al terminar, mediana de
+5 cargas. Umbral de la spec: la medicion posterior no puede pasar de la linea base + 10 %.
+
+| Momento | Movil 390×844 | Escritorio 1280×800 |
+|---|---|---|
+| Antes (2026-09-16, cifra calculada en el navegador) | 989 ms | 975 ms |
+| Despues, primer despliegue (2026-09-17, cifra de la callable al terminar la carga) | 1.574 ms | 1.417 ms |
+| Despues de T16 (peticion en paralelo con la carga, callable a 512 MiB) | 1.094 ms | 1.049 ms |
+| Despues de T16, repeticion 1 minuto despues | 1.726 ms | 1.054 ms |
+
+**Lectura (2026-09-17):** en escritorio queda dentro del +10 %. En movil NO de forma fiable: las cargas
+con la callable en frio pasan de 2 s. Lo que queda es el arranque en frio de `getSellerBalance`; la
+unica palanca restante es `minInstances: 1`, que tiene coste fijo mensual y requiere decision del
+responsable (spec 018, RNF_04 escalado).
+
 ## Cómo medir
 
 El propio código trae el instrumento. En el navegador:

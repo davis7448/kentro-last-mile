@@ -1,6 +1,6 @@
 "use client";
 
-import { entriesForClosedOrder, sellerBalance } from "./finance";
+import { entriesForClosedOrder } from "./finance";
 import {
   applyInventoryMovementsToItems,
   inventoryMovementsForOrder,
