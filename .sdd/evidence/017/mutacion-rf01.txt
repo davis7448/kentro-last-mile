@@ -1,0 +1,19 @@
+MUTACION 1 — el nucleo vuelve a dejar pasar el grupo 'ownership' sobre un pedido que ya existe.
+Es decir: vuelve a escribir driverId: null encima de un pedido operado (el bug del 2026-09-15).
+
+   × viewAfterMerge > devuelve el pedido completo aunque el parche omita claves 798ms
+     → expected null to be 'driver-1' // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > un pedido in_route conserva lider, mensajero y lote 2ms
+     → expected true to be false // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > un pedido delivered conserva lider, mensajero y lote 1ms
+     → expected true to be false // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > un pedido imported conserva lider, mensajero y lote 94ms
+     → expected true to be false // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > en imported, `driverId` nunca sale como null ni undefined 1ms
+     → expected true to be false // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > en in_route, `driverId` nunca sale como null ni undefined 1ms
+     → expected true to be false // Object.is equality
+   × pertenencia — el pedido no cambia de dueno (RF_01, RF_12) > en delivered, `driverId` nunca sale como null ni undefined 0ms
+     → expected true to be false // Object.is equality
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  7 failed | 52 passed (59)

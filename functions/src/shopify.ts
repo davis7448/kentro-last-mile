@@ -1,8 +1,11 @@
 import crypto from "crypto";
 import { createCommunityPricingResolver } from "./community-order-pricing";
-import { getFirestore, type Transaction } from "firebase-admin/firestore";
+import { emptyTally, summarizeRun, tallyOrder } from "./import-run-summary";
+import { existingFactsFrom, mergeImportedOrder, viewAfterMerge, type ImportOrigin } from "./order-import-merge";
+import { FieldValue, getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { logger } from "firebase-functions/v2";
 import { z } from "zod";
 
 const defaultScopes = ["read_orders", "read_fulfillments", "read_products"];
@@ -415,8 +418,13 @@ export const importShopifyOrder = onCall(async (request) => {
     });
     throw new HttpsError("failed-precondition", `Este pedido no contiene "${orderSkuContains}" en ningún SKU y no se importó.`);
   }
-  const order = await upsertShopifyOrder(shopifyOrder, targetSellerId, shop);
-  await resolveShopifySyncIssue(db, targetSellerId, shop, parsed.data.reference, order.id);
+  const { order, merged } = await upsertShopifyOrder(shopifyOrder, targetSellerId, shop);
+  // Un import suelto no escribe resumen de corrida: seria un documento por pedido, justo lo que
+  // RF_13 evita. Deja rastro en el log cuando de verdad hubo algo que salvar.
+  if (merged.preserved.length > 0) {
+    logger.info("shopify manual import: datos protegidos conservados", { orderId: String(order.id), preserved: merged.preserved });
+  }
+  await resolveShopifySyncIssue(db, targetSellerId, shop, parsed.data.reference, String(order.id));
   await storeDoc.ref.set({ sellerId: targetSellerId, lastManualImportAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
   return { order };
 });
@@ -457,12 +465,14 @@ export const syncShopifyHistoricalOrders = onCall(async (request) => {
   if (!accessToken) throw new HttpsError("failed-precondition", "Shopify store token is missing.");
 
   const fetched = await fetchShopifyOrdersByDateRange(shop, accessToken, startDate, endDate);
-  let imported = 0;
   let skippedOutsideCali = 0;
   let skippedSkuFilter = 0;
-  let existing = 0;
   const orderSkuContains = normalizeSkuFilter(store.orderSkuContains);
   const orders: Array<Record<string, unknown>> = [];
+  const startedAt = new Date().toISOString();
+  // El recuento se acumula FUERA de la transaccion, desde lo que devuelve cada pedido: dentro del
+  // callback, Firestore lo reintenta y los numeros se inflarian sin ningun error (RF_13).
+  let tally = emptyTally();
   for (const shopifyOrder of fetched) {
     if (!isCaliShopifyOrder(shopifyOrder)) {
       skippedOutsideCali++;
@@ -472,14 +482,31 @@ export const syncShopifyHistoricalOrders = onCall(async (request) => {
       skippedSkuFilter++;
       continue;
     }
-    const before = await db.collection("orders").doc(`shopify-${shopifyOrder.id}`).get();
-    const order = await upsertShopifyOrder(shopifyOrder, targetSellerId, shop, "shopify_historical_sync");
-    if (before.exists) existing++;
-    else imported++;
+    const { order, merged } = await upsertShopifyOrder(shopifyOrder, targetSellerId, shop, "shopify_historical_sync");
+    // `imported`/`existing` salen de la fase que devuelve el nucleo, no de una prelectura aparte:
+    // dos fuentes de verdad para la misma cifra terminan divergiendo (y era un `.get()` por pedido).
+    tally = tallyOrder(tally, order, merged);
     orders.push(order);
   }
+  const summary = summarizeRun(tally, {
+    origin: "shopify_historical_sync",
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    range: { startDate, endDate },
+    sellerId: targetSellerId,
+    shopDomain: shop
+  });
+  await db.collection("importRuns").doc(summary.id).set(summary);
   await storeDoc.ref.set({ sellerId: targetSellerId, lastHistoricalSyncAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
-  return { imported, existing, skippedOutsideCali, skippedSkuFilter, fetched: fetched.length, orders };
+  return {
+    imported: tally.created,
+    existing: tally.existing,
+    skippedOutsideCali,
+    skippedSkuFilter,
+    fetched: fetched.length,
+    orders,
+    runId: summary.id
+  };
 });
 
 async function recordShopifySyncIssue(db: FirebaseFirestore.Firestore, input: { sellerId: string; shopDomain: string; reference: string; reason: string; detail?: string }) {
@@ -675,7 +702,7 @@ function cleanShopifyOrderReference(reference: string) {
   return trimmed;
 }
 
-async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sellerId: string, shopDomain: string, source = "shopify_manual_import") {
+async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sellerId: string, shopDomain: string, source: ImportOrigin = "shopify_manual_import") {
   const db = getFirestore();
   const now = new Date().toISOString();
   const docId = `shopify-${order.id}`;
@@ -687,12 +714,22 @@ async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sel
     now
   );
   return db.runTransaction(async (transaction) => {
-    const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
+    const [existingSnap, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
     const seller = sellerSnap.data() ?? {};
-    const trackingCode = typeof existing.data()?.trackingCode === "string" ? String(existing.data()?.trackingCode) : await nextTrackingCode(transaction);
+    const existingRaw = existingSnap.data();
+    // `null` es lo unico que significa "no existe": un `?? {}` convertiria un pedido nuevo en uno
+    // existente vacio, y el nucleo le omitiria estado, lider y evidencia (spec 017).
+    const existing = existingFactsFrom(existingSnap);
+    // Perezoso a proposito: `nextTrackingCode` LEE Y ESCRIBE el contador. Pedirlo para un pedido que
+    // ya tiene codigo quemaria un KNT y tocaria un documento caliente en cada pedido de la corrida.
+    // La condicion es "¿tiene codigo?", no "¿existe?": un pedido existente sin codigo debe recibirlo.
+    const trackingCode = existing?.trackingCode ? existing.trackingCode : await nextTrackingCode(transaction);
     const items = summarizeShopifyLineItems(order.line_items ?? [], shopDomain);
     const address = order.shipping_address;
-    const orderDoc = stripUndefined({
+    // El candidato: lo que se escribiria si el pedido no existiera, con sus valores de creacion
+    // intactos. `driverId: null` se queda aqui — un documento SIN el campo no empareja
+    // `where("driverId", "==", null)` y el pedido nuevo no apareceria en el pozo del lider.
+    const candidate = stripUndefined({
       id: docId,
       trackingCode,
       shopifyOrderId: order.name,
@@ -718,14 +755,21 @@ async function upsertShopifyOrder(order: z.infer<typeof shopifyOrderSchema>, sel
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
       fulfillmentMode: "seller_pickup",
       addressRisk: "review",
-      status: existing.exists ? existing.data()?.status : "imported",
-      evidence: existing.data()?.evidence ?? [],
+      status: "imported",
+      evidence: [],
       source,
-      createdAt: existing.data()?.createdAt ?? order.created_at ?? now,
-      updatedAt: now
+      createdAt: order.created_at ?? now
     });
-    transaction.set(orderRef, orderDoc, { merge: true });
-    return orderDoc;
+    // Quien decide que se conserva es el nucleo, una sola vez y para todas las vias (RNF_01).
+    const merged = mergeImportedOrder({ incoming: candidate, existing, now });
+    const doc: Record<string, unknown> = { ...merged.doc };
+    // RF_18: lo que el nucleo nombra en `clear` se BORRA, no se escribe: es la geocodificacion de
+    // la direccion anterior, y ninguna via de importacion la trae.
+    for (const key of merged.clear) doc[key] = FieldValue.delete();
+    transaction.set(orderRef, doc, { merge: true });
+    // Se devuelve la VISTA tras la escritura, no el parche: esta respuesta viaja al navegador del
+    // admin, que la mete directa en su estado, y el parche pintaria tarjetas sin lider ni estado.
+    return { order: viewAfterMerge(existingRaw, merged), merged };
   });
 }
 

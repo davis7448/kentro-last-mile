@@ -1,9 +1,11 @@
 import { initializeApp } from "firebase-admin/app";
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { stripUndefined } from "./wallet-entries";
-import { getFirestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Transaction } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { logger } from "firebase-functions/v2";
+import { existingFactsFrom, mergeImportedOrder } from "./order-import-merge";
 import crypto from "crypto";
 import { z } from "zod";
 export { createManagedUser, getBootstrapStatus, repairOwnDriverProfile, setUserRole } from "./roles";
@@ -163,16 +165,20 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
     new Date().toISOString()
   );
   await db.runTransaction(async (transaction) => {
-    const [existing, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
-    const existingData = existing.data() ?? {};
+    const [existingSnap, sellerSnap] = await Promise.all([transaction.get(orderRef), transaction.get(db.collection("sellers").doc(sellerId))]);
+    // `null` es lo unico que significa "no existe". El `?? {}` que habia aqui convertia un pedido
+    // nuevo en uno existente vacio en cuanto llegara al nucleo (spec 017).
+    const existing = existingFactsFrom(existingSnap);
     const seller = sellerSnap.data() ?? {};
-    const trackingCode = typeof existingData.trackingCode === "string" ? existingData.trackingCode : await nextTrackingCode(transaction);
+    // Perezoso: `nextTrackingCode` escribe el contador. La condicion es "¿tiene codigo?", no
+    // "¿existe?": un pedido existente sin codigo debe seguir recibiendo uno, como hasta hoy.
+    const trackingCode = existing?.trackingCode ? existing.trackingCode : await nextTrackingCode(transaction);
     const items = summarizeShopifyLineItems(order.line_items ?? [], shopDomain);
     // stripUndefined es obligatorio: el Admin SDK rechaza `undefined` como valor y para una
     // tienda SIN comunidad el sello viene vacio. Sin esto el webhook devolvia 500 en cada
     // pedido de Cali de DANDA y Kovia (del 2026-09-11 al 2026-09-15, ~2.000 reintentos de
     // Shopify) y ningun pedido entraba. Las otras cinco rutas de creacion ya lo hacian.
-    transaction.set(orderRef, stripUndefined({
+    const candidate = stripUndefined({
       id: docId,
       trackingCode,
       shopifyOrderId: order.name,
@@ -182,7 +188,9 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       // Precio de comunidad congelado al crear (RF_21).
       communityId: pricingStamp.communityId,
       communityPricing: pricingStamp.communityPricing,
-      driverId: existingData.driverId ?? null,
+      // Se queda: un documento SIN el campo no empareja `where("driverId", "==", null)`, y el
+      // pedido nuevo no apareceria en el pozo del lider. Quien decide si pisa es el nucleo.
+      driverId: null,
       cityId: "city-cali",
       customerName: address?.name ?? "Cliente Shopify",
       customerPhone: address?.phone ?? "",
@@ -197,12 +205,21 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
       paymentMethod: order.financial_status === "paid" ? "prepaid" : "cod",
       fulfillmentMode: "seller_pickup",
       addressRisk: "review",
-      status: existing.exists && typeof existingData.status === "string" ? existingData.status : "imported",
-      evidence: existingData.evidence ?? [],
+      status: "imported",
+      evidence: [],
       source: "shopify_webhook",
-      createdAt: existingData.createdAt ?? order.created_at ?? new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }), { merge: true });
+      createdAt: order.created_at ?? new Date().toISOString()
+    });
+    const merged = mergeImportedOrder({ incoming: candidate, existing, now: new Date().toISOString() });
+    const doc: Record<string, unknown> = { ...stripUndefined(merged.doc) };
+    // RF_18: lo que el nucleo nombra en `clear` se borra, no se escribe.
+    for (const key of merged.clear) doc[key] = FieldValue.delete();
+    transaction.set(orderRef, doc, { merge: true });
+    // Un webhook no es una corrida: escribir un resumen aqui seria un documento por pedido, que es
+    // lo que RF_13 evita. Deja rastro en el log cuando de verdad hubo algo que salvar.
+    if (merged.preserved.length > 0) {
+      logger.info("shopify webhook: datos protegidos conservados", { orderId: docId, preserved: merged.preserved });
+    }
   });
 
   await storeSnap.docs[0].ref.set({ lastWebhookAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });

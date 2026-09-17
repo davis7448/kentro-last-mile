@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { existingFactsFrom, mergeImportedOrder } from "./order-import-merge";
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -307,7 +308,9 @@ export const onstockOrderWebhook = onRequest(
         createdAt: incoming.created_at ?? now,
         updatedAt: now
       });
-      transaction.create(orderRef, order);
+      // Spec 017 (RNF_01): misma regla que el resto de vias, aunque aqui nunca haya pedido previo.
+      const merged = mergeImportedOrder({ incoming: order, existing: existingFactsFrom(existing), now: new Date().toISOString() });
+      transaction.create(orderRef, merged.doc);
       transaction.set(db.collection("auditEvents").doc(`audit-${sampleRef.id}`), {
         id: `audit-${sampleRef.id}`,
         actorId: "onstock-webhook",
