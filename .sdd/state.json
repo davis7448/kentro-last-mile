@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "audit",
+  "phase": "release",
   "activeSpec": {
     "file": "specs/017_reimportar_no_pisa_lo_operado.md",
     "status": "approved"
@@ -372,9 +372,11 @@
       "suite": "2026-09-17: 1527 pruebas en 41 archivos, todas en verde; tsc raiz y functions limpios; lint 0 errores (3 avisos exhaustive-deps preexistentes)",
       "mutaciones": ".sdd/evidence/017/mutacion-rf01.txt (cae por RF_01) y mutacion-rf10.txt (cae por la guarda 2, la unica red de ese fallo)",
       "regresion": "2026-09-17: la guarda de la spec 005 cazó que el candidato del webhook dejo de ir en stripUndefined(; corregido en las dos vias de Shopify",
-      "pendiente": "DoD 4 (verificacion contra produccion con copia previa) y el despliegue en 4 pasos, ambos los lanza una persona",
+      "pendiente": "solo la firma humana (DoD 6) y mergear el PR #3",
       "audit": "2026-09-17: trazabilidad limpia — los 19 RF y 3 RNF con prueba nombrada, ningun huerfano, nada implementado sin prueba. DoD 1,2,3,5 cumplidos; DoD 4 (produccion) y 6 (firma humana) pendientes.",
-      "commit": "226313a en rama feat/reimportar-no-pisa-lo-operado"
+      "commit": "226313a en rama feat/reimportar-no-pisa-lo-operado",
+      "deployed": "2026-09-17: reglas, las dos callables que sellan, relleno (13 de 526 pedidos; el resto cerrados) y el resto de functions a las 16:54 UTC",
+      "dod4": "2026-09-17: CUMPLIDO. Reimportacion real del 2026-09-15 (39 pedidos, 0 creados) con 24 lideres conservados y 0 datos protegidos cambiados en los 69 del dia. Evidencia en .sdd/evidence/017/dod4-verificacion-produccion.md"
     },
     "018": {
       "file": "specs/018_saldo_de_tienda_igual_al_cierre.md",
