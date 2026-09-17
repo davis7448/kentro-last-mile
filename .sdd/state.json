@@ -3,7 +3,7 @@
   "phase": "release",
   "activeSpec": {
     "file": "specs/017_reimportar_no_pisa_lo_operado.md",
-    "status": "approved"
+    "status": "released"
   },
   "tasks": {
     "T1": {
@@ -360,7 +360,7 @@
     },
     "017": {
       "file": "specs/017_reimportar_no_pisa_lo_operado.md",
-      "status": "implementada",
+      "status": "cerrada",
       "retomada": "2026-09-17: se reanuda tras cerrar la 018",
       "approved": "2026-09-17 (enmendada el mismo dia con RF_15 tras analyze)",
       "origen": "2026-09-15: reimportacion historica de Shopify dejo 34 pedidos sin lider (KNT-004747 sin poder entregar; efectivo del lider descuadrado en silencio)",
@@ -372,11 +372,12 @@
       "suite": "2026-09-17: 1527 pruebas en 41 archivos, todas en verde; tsc raiz y functions limpios; lint 0 errores (3 avisos exhaustive-deps preexistentes)",
       "mutaciones": ".sdd/evidence/017/mutacion-rf01.txt (cae por RF_01) y mutacion-rf10.txt (cae por la guarda 2, la unica red de ese fallo)",
       "regresion": "2026-09-17: la guarda de la spec 005 cazó que el candidato del webhook dejo de ir en stripUndefined(; corregido en las dos vias de Shopify",
-      "pendiente": "solo la firma humana (DoD 6) y mergear el PR #3",
+      "pendiente": "solo mergear el PR #3 a main",
       "audit": "2026-09-17: trazabilidad limpia — los 19 RF y 3 RNF con prueba nombrada, ningun huerfano, nada implementado sin prueba. DoD 1,2,3,5 cumplidos; DoD 4 (produccion) y 6 (firma humana) pendientes.",
       "commit": "226313a en rama feat/reimportar-no-pisa-lo-operado",
       "deployed": "2026-09-17: reglas, las dos callables que sellan, relleno (13 de 526 pedidos; el resto cerrados) y el resto de functions a las 16:54 UTC",
-      "dod4": "2026-09-17: CUMPLIDO. Reimportacion real del 2026-09-15 (39 pedidos, 0 creados) con 24 lideres conservados y 0 datos protegidos cambiados en los 69 del dia. Evidencia en .sdd/evidence/017/dod4-verificacion-produccion.md"
+      "dod4": "2026-09-17: CUMPLIDO. Reimportacion real del 2026-09-15 (39 pedidos, 0 creados) con 24 lideres conservados y 0 datos protegidos cambiados en los 69 del dia. Evidencia en .sdd/evidence/017/dod4-verificacion-produccion.md",
+      "verificacionHumana": "2026-09-17: el responsable firma la entrega tras ver la verificacion contra produccion (DoD 6)."
     },
     "018": {
       "file": "specs/018_saldo_de_tienda_igual_al_cierre.md",
