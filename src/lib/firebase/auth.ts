@@ -456,6 +456,21 @@ export async function getFirebaseSellerBalance(input: { sellerId?: string } = {}
   return result.data as SellerBalance;
 }
 
+/**
+ * Spec 018 RNF_04: llamada vacia para que `getSellerBalance` este caliente cuando la tienda entre.
+ * Se hace desde la pantalla de entrada, sin sesion, asi que el servidor responde "permiso denegado":
+ * ese rechazo ES el resultado esperado y por eso se descarta. Lo unico que importa es que arranque la
+ * instancia mientras la persona escribe su clave.
+ */
+export function warmFirebaseSellerBalance(): void {
+  const client = getFirebaseClient();
+  if (!client) return;
+  const callable = httpsCallable(getFunctions(client.app, "us-central1"), "getSellerBalance");
+  callable({}).catch(() => {
+    // Rechazo esperado (sin sesion): no hay nada que mostrar ni que reintentar.
+  });
+}
+
 export async function createFirebaseSettlement(input: {
   // `community_leader` (RF_49): el callable ya lo acepta desde T8. Faltaba aqui, y era lo unico
   // que impedia cortar el cashback de una comunidad desde la pantalla de liquidaciones.

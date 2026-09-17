@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-09-17
 - **Estado:** desplegada en produccion el 2026-09-17 (functions y hosting, dos veces: tras T15 y tras T16)
-- **Pendiente del responsable:** decision sobre RNF_04 en movil
+- **Pendiente del responsable:** nada de la spec (DoD completo); PR cuando lo decida
 
 ## Que cambio para las tiendas
 
@@ -40,7 +40,7 @@ porque ahora se retiene el flete de devolucion de sus 15 pedidos en la calle (18
 | RF_22 sin cifra parcial | Cumplido | T1: 0 asientos ilegibles; guardas; API 409 |
 | RF_25 API tiendas | Cumplido | `store-summary.test.ts` (contrato: `disponibleCop` baja, nuevo `retenidoCop`) |
 | RNF_01–RNF_03 | Cumplido | pruebas y `query-check` (DANDA 328 candidatos en 362 ms, sin indice nuevo) |
-| **RNF_04 +10 % de tiempo** | **Escritorio si, movil NO fiable** | antes 989/975 ms; despues de T16 1.094 y 1.726 ms en movil, 1.049/1.054 ms en escritorio |
+| RNF_04 +10 % de tiempo | Cumplido tras T18 | antes 989/975 ms; T16 dejaba movil fuera (1.094–1.726 ms); T18 (despertar la callable en la pantalla de entrada): movil 991 y 1.015 ms, escritorio 1.023 y 894 ms |
 
 ## Definition of Done
 
@@ -65,9 +65,7 @@ fases):
 
 ## Decisiones que necesita el responsable
 
-1. **RNF_04 en movil.** La tarjeta de la tienda depende ahora de una funcion del servidor; con la funcion en
-   frio la carga pasa de 2 s. Opciones: aceptar el tiempo actual, o `minInstances: 1` en `getSellerBalance`
-   (coste fijo mensual de una instancia de 512 MiB siempre encendida).
+1. ~~RNF_04 en movil~~ — resuelto con T18 sin coste fijo (opcion A elegida con el responsable).
 2. ~~Aviso a quien use la API para tiendas~~ — resuelto con RF_26 (T17): la API lo explica en `avisos` de su indice y de `/resumen`, desplegado y comprobado en produccion.
 
 ## Seguimiento propuesto (fuera de esta spec)

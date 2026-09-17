@@ -49,6 +49,7 @@ import {
   type OrderTransitionPatch,
   createFirebaseSettlement,
   getFirebaseSellerBalance,
+  warmFirebaseSellerBalance,
   createManagedFirebaseUser,
   closeFirebaseOrder,
   confirmFirebaseImportedOrder,
@@ -1366,6 +1367,10 @@ function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const canSubmit = Boolean(email.trim() && password && (!needsBootstrap || name.trim()));
+  // Spec 018 RNF_04: calienta la funcion del saldo mientras se escribe la clave.
+  useEffect(() => {
+    warmFirebaseSellerBalance();
+  }, []);
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-8">

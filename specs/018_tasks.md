@@ -176,6 +176,14 @@ Reescritas el 2026-09-16 tras las dos pasadas de `/sdd-analyze`.
     del indice; despliegue de `storeApi` y consulta real al indice.
 
 
+- [x] **T18: RNF_04 — despertar la callable del saldo al abrir la pantalla de entrada**
+  * Requisitos cubiertos: RNF_04
+  * Archivos: src/components/operations-app.tsx, src/lib/firebase/auth.ts, src/lib/spec-018-guards.test.ts, docs/rendimiento.md, .sdd/evidence/018/t13-medicion.txt
+  * Accion: opcion A elegida sin coste fijo tras la medicion de T16 (movil fuera del +10 % por arranque en frio):
+    la pantalla de entrada lanza una llamada vacia a `getSellerBalance` para que la instancia este caliente al
+    entrar. La respuesta (permiso denegado) se descarta a proposito.
+  * Verificacion: guarda (AuthScreen llama a `warmFirebaseSellerBalance` al montar); `perf` en produccion.
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |

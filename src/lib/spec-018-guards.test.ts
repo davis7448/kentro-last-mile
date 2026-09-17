@@ -314,3 +314,12 @@ describe("spec 018 · T17 · RF_26: el indice de la API avisa del cambio", () =>
     expect(/"GET \/resumen":[^\n]*retenidoCop/.test(docs)).toBe(true);
   });
 });
+
+describe("spec 018 · T18 · RNF_04: la callable del saldo se despierta en la pantalla de entrada", () => {
+  it("AuthScreen la despierta al montar y el wrapper existe", () => {
+    const app = source("src/components/operations-app.tsx");
+    const auth = functionBlock(app, "AuthScreen");
+    expect(/useEffect\(\(\) => \{\s*warmFirebaseSellerBalance\(\);\s*\}, \[\]\)/.test(auth)).toBe(true);
+    expect(/export function warmFirebaseSellerBalance\(/.test(source("src/lib/firebase/auth.ts"))).toBe(true);
+  });
+});

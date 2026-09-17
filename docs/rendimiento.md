@@ -35,10 +35,15 @@ Tiempo desde pulsar "Entrar" hasta que la tarjeta heroe de la tienda muestra pes
 | Despues de T16 (peticion en paralelo con la carga, callable a 512 MiB) | 1.094 ms | 1.049 ms |
 | Despues de T16, repeticion 1 minuto despues | 1.726 ms | 1.054 ms |
 
-**Lectura (2026-09-17):** en escritorio queda dentro del +10 %. En movil NO de forma fiable: las cargas
-con la callable en frio pasan de 2 s. Lo que queda es el arranque en frio de `getSellerBalance`; la
-unica palanca restante es `minInstances: 1`, que tiene coste fijo mensual y requiere decision del
-responsable (spec 018, RNF_04 escalado).
+| Despues de T18 (la pantalla de entrada despierta `getSellerBalance`) | 991 ms | 1.023 ms |
+| Despues de T18, repeticion 1 minuto despues | 1.015 ms | 894 ms |
+
+**Lectura (2026-09-17):** tras T16 el movil seguia fuera del +10 % por el arranque en frio de
+`getSellerBalance`. T18 lo resolvio sin coste fijo: `AuthScreen` lanza una llamada vacia a la callable
+al montar, asi la instancia arranca mientras se escribe la clave. Con eso las dos medidas quedan dentro
+(movil +0,2 % y +2,6 %). Si algun dia vuelve a salirse (por ejemplo, con sesion guardada que no pasa por
+la pantalla de entrada), las siguientes palancas son un programador que la llame cada 5 min o
+`minInstances: 1`, ambas con coste y decision del responsable.
 
 ## Cómo medir
 

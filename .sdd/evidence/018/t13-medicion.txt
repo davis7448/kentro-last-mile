@@ -27,3 +27,11 @@ Nota: la medicion de tiempo 'despues' (RNF_04) requiere hosting desplegado; se e
 - movil 390x844: mediana 1726 ms · corridas 2073, 1737, 1391, 1437, 1726 ms
 - escritorio 1280x800: mediana 1054 ms · corridas 1151, 997, 1054, 1016, 1140 ms
 - cuenta desechable borrada
+# Spec 018 — perf "despues-T18" (2026-09-17T01:27:10.463Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 991 ms · corridas 1183, 989, 991, 925, 1046 ms
+- escritorio 1280x800: mediana 1023 ms · corridas 1158, 958, 1107, 878, 1023 ms
+- cuenta desechable borrada
+# Spec 018 — perf "despues-T18-repeticion" (2026-09-17T01:28:08.007Z) sobre https://kentro-last-mile.web.app, tienda Bella Mujer
+- movil 390x844: mediana 1015 ms · corridas 1015, 949, 1080, 921, 1118 ms
+- escritorio 1280x800: mediana 894 ms · corridas 862, 855, 986, 894, 1033 ms
+- cuenta desechable borrada
