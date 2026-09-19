@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "phase": "verify",
+  "phase": "release",
   "activeSpec": {
     "file": "specs/022_ningun_pedido_vale_mil_millones.md",
     "status": "approved"
@@ -211,7 +211,7 @@
     },
     "019": {
       "file": "specs/019_el_corte_muestra_lo_que_cobra.md",
-      "status": "entregada",
+      "status": "desplegada",
       "approved": "2026-09-19",
       "verify": "2026-09-19 OK: 3 recorridos (HU_01, HU_02, HU_03) con traza, 0 errores de consola inesperados, 0 peticiones 4xx/5xx inesperadas",
       "audit": "DoD 10/11 — solo falta la firma del responsable",
@@ -221,7 +221,9 @@
       "branch": "feat/el-corte-muestra-lo-que-cobra (apilada sobre feat/reimportar-no-pisa-lo-operado, PR #3)",
       "dod": "11/11",
       "report": "2026-09-19: informe de cierre publicado como Artifact (https://claude.ai/artifact/R8kTtQ7v5n96zarfgh55Zs). 17 requisitos: 10 con evidencia funcional medida, 1 parcial (RF_11), 6 solo con prueba unitaria (RF_07, RF_08, RF_09, RF_12, RF_13, RNF_02). Suite 1588/44, lint 0/3, tsc limpio, sin dependencias nuevas y sin cambios en functions/reglas/indices. Degradacion medida: primer pintado +6,4% movil y +4,0% escritorio, reproducida en dos tandas. Cinco deudas ubicadas (D1-D5). Specs borrador 020-022 creadas.",
-      "pendiente": "desplegar (solo hosting, con ALLOW_FUNCTIONS_DEPLOY=1) y unir el PR #4 DESPUES del PR #3"
+      "pendiente": "desplegar (solo hosting, con ALLOW_FUNCTIONS_DEPLOY=1) y unir el PR #4 DESPUES del PR #3",
+      "deployed": "2026-09-19",
+      "note": "Desplegada junto con la 022 (hosting). Comprobado contra produccion con sesion real de lider: 185 filas, suma = cabecera."
     },
     "020": {
       "file": "specs/020_el_listado_filtra_por_la_fecha_equivocada.md",
@@ -239,9 +241,10 @@
     },
     "022": {
       "file": "specs/022_ningun_pedido_vale_mil_millones.md",
-      "status": "implementada",
+      "status": "desplegada",
       "approved": "2026-09-19",
-      "note": "Pendiente de desplegar functions: hasta entonces el tope solo existe en la pantalla. La verificacion por el canal real lo dice (ui-antes-de-desplegar.txt)."
+      "note": "functions + hosting desplegados el 2026-09-19; comprobado contra produccion: la callable rechaza $11.770.047.900 con HTTP 400 y el formulario avisa antes de enviar.",
+      "deployed": "2026-09-19"
     }
   },
   "archivedTasks": {

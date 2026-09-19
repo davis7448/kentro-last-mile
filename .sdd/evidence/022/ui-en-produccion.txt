@@ -1,0 +1,15 @@
+# Spec 022 — RF_05/RF_01 por el canal real (2026-09-19T21:17:10.517Z)
+  https://kentro-last-mile.web.app · tienda seller-1783783071241 · cuenta desechable smoke022-tienda · movil 390x844
+  pedidos de la tienda en circulacion ANTES: 11
+
+  respuesta de createManualOrder: 400 {"error":{"details":{"formErrors":[],"fieldErrors":{"totalCop":["El valor del pedido ($11.770.047.900) supera el maximo permitido de $2.000.000. Revisa si sobran digitos."]}},"message":"Revisa los dat
+
+  cuenta desechable borrada
+  OK    RF_05 · el formulario avisa junto al campo, sin enviar nada
+  OK    RF_04 · y el aviso dice el importe que se tecleo
+  OK    RF_05 · un importe alto pero posible no bloquea: pide confirmacion
+  OK    RF_05 · y no lo presenta como error
+  OK    RNF_01 · la callable rechaza el mismo importe aunque la pantalla no estuviera (HTTP 400)
+  OK    ningun pedido de prueba queda en circulacion: 11 antes, 11 despues
+
+VERIFICACION OK: el formulario para antes de enviar y la callable rechaza por debajo.

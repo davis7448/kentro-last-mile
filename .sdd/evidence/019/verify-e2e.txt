@@ -23,3 +23,8 @@
   errores de consola: 1 (inesperados: 0) · peticiones 4xx/5xx: 1 (inesperadas: 0)
 
 VERIFICACION FUNCIONAL OK: los tres recorridos completos, sin errores de consola ni peticiones fallidas.
+## DoD 11 — firma de la entrega
+  2026-09-19. El responsable de la plataforma firma la entrega de la spec 019 tras la auditoria
+  de trazabilidad (DoD 10/11 verificados con prueba nombrada o evidencia medida) y los tres
+  recorridos funcionales de esta misma pagina. Con la firma, DoD 11/11.
+  PR: https://github.com/davis7448/kentro-last-mile/pull/4
