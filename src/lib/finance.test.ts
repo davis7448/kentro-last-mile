@@ -853,3 +853,343 @@ describe("driverCashReceiptRows", () => {
     expect(driverCashReceiptRows(corte() as never, 900000, 0)).toEqual([]);
   });
 });
+
+/**
+ * Spec 019 — el detalle de un corte de domiciliario tiene que sumar lo que dice su cabecera.
+ *
+ * El fixture reproduce el corte real `stl-1789686589616-driver-driver-1778271901513`
+ * (14 a 17 de septiembre de 2026), medido contra produccion el 2026-09-19:
+ *
+ *   185 pedidos | codCop 15.996.490 | driverPayCop 1.829.000 | cashExpectedCop 14.167.490
+ *   169 con recaudo  +  16 visitas sin cobro (fallidos y prepago) que suman 120.000 de pago
+ *
+ * En pantalla, ese dia, 82 de las 185 filas salian en $0 por dos motivos que el domiciliario
+ * no podia distinguir: 66 porque su pedido estaba fuera de la ventana de descarga, y 16
+ * porque su importe A FAVOR se truncaba con un Math.max(0, ...). El domiciliario reclamo seis
+ * pedidos de DANDA que ya habia pagado.
+ */
+describe("spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03)", () => {
+  const DRIVER_ID = "driver-1778271901513";
+  const SETTLEMENT_ID = "stl-1789686589616";
+
+  /** Los seis que el domiciliario reclamo, con su valor real. */
+  const DANDA_ORDERS = [
+    { code: "KNT-005077", totalCop: 109900 },
+    { code: "KNT-005058", totalCop: 89900 },
+    { code: "KNT-004892", totalCop: 89900 },
+    { code: "KNT-005064", totalCop: 109900 },
+    { code: "KNT-005054", totalCop: 109900 },
+    { code: "KNT-005060", totalCop: 89900 }
+  ];
+
+  const CASH_ORDER_COUNT = 169;
+  const NO_COLLECTION_COUNT = 16;
+  const EXPECTED_CASH_COP = 14167490;
+  const NO_COLLECTION_PAY_COP = 120000;
+
+  type Fixture = { orders: Order[]; wallet: WalletEntry[]; allocations: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }> };
+
+  /**
+   * Construye los 185 pedidos cuadrando EXACTAMENTE los agregados de produccion.
+   * Los seis de DANDA van literales; el resto se reparte para que la suma cierre.
+   */
+  function buildSettlementFixture(): Fixture {
+    const orders: Order[] = [];
+    const wallet: WalletEntry[] = [];
+    const allocations: Fixture["allocations"] = [];
+
+    const pushOrder = (index: number, totalCop: number, payCop: number, collected: boolean, trackingCode?: string) => {
+      const id = `ord-019-${index}`;
+      orders.push({
+        id,
+        trackingCode: trackingCode ?? `KNT-9${String(index).padStart(5, "0")}`,
+        shopifyOrderId: `#9${index}`,
+        sellerId: "seller-danda",
+        cityId: "city-cali",
+        driverId: DRIVER_ID,
+        customerName: `Cliente ${index}`,
+        customerPhone: "+573000000000",
+        addressRaw: "Calle 1 #1-1, Cali",
+        addressRisk: "accepted",
+        status: collected ? "delivered" : "failed",
+        paymentMethod: collected ? "cod" : "prepaid",
+        fulfillmentMode: "seller_pickup",
+        totalCop,
+        evidence: [],
+        createdAt: "2026-09-11T10:00:00.000Z",
+        updatedAt: "2026-09-17T20:00:00.000Z",
+        closedAt: "2026-09-17T20:00:00.000Z"
+      });
+      if (payCop > 0) {
+        wallet.push({
+          id: `we-019-${index}-pay`,
+          ownerType: "driver",
+          ownerId: DRIVER_ID,
+          orderId: id,
+          settlementId: SETTLEMENT_ID,
+          type: "driver_earning",
+          amountCop: payCop,
+          description: "Pago domiciliario",
+          createdAt: "2026-09-17T20:00:00.000Z"
+        });
+      }
+      // El corte solo guarda asignacion para los pedidos que generan efectivo (settlement-math.ts).
+      if (collected) allocations.push({ orderId: id, expectedCop: totalCop - payCop, receivedCop: 0, covered: false });
+    };
+
+    let index = 0;
+    // 1) Los seis de DANDA, literales, a 11.000 de pago.
+    for (const danda of DANDA_ORDERS) pushOrder(index++, danda.totalCop, 11000, true, danda.code);
+    // 2) Los otros 163 con recaudo: 113 a 11.000 y 50 a 8.000, cuadrando 1.643.000 de pago.
+    for (let n = 0; n < 163; n += 1) {
+      const isLast = n === 162;
+      const totalCop = isLast ? 169090 : 94000;
+      pushOrder(index++, totalCop, n < 113 ? 11000 : 8000, true);
+    }
+    // 3) Las 16 visitas sin cobro: 15 a 8.000 y una sin pago.
+    for (let n = 0; n < NO_COLLECTION_COUNT; n += 1) pushOrder(index++, 0, n < 15 ? 8000 : 0, false);
+
+    return { orders, wallet, allocations };
+  }
+
+  function buildState(fixture: Fixture, overrides: Partial<AppState> = {}): AppState {
+    const codCop = fixture.orders.reduce((sum, order) => sum + (order.status === "delivered" ? order.totalCop : 0), 0);
+    const driverPayCop = fixture.wallet.reduce((sum, entry) => sum + entry.amountCop, 0);
+    return {
+      ...seedState(),
+      orders: fixture.orders,
+      wallet: fixture.wallet,
+      settlements: [{
+        id: SETTLEMENT_ID,
+        kind: "driver",
+        ownerId: DRIVER_ID,
+        ownerName: "Domiciliario",
+        startDate: "2026-09-14",
+        endDate: "2026-09-17",
+        walletEntryIds: fixture.wallet.map((entry) => entry.id),
+        orderIds: fixture.orders.map((order) => order.id),
+        codCop,
+        feesCop: 2386500,
+        driverPayCop,
+        platformMarginCop: 557500,
+        netCop: -(codCop - driverPayCop),
+        status: "pending",
+        createdAt: "2026-09-17T23:09:49.616Z",
+        cashExpectedCop: codCop - driverPayCop,
+        cashAllocations: fixture.allocations
+      }],
+      ...overrides
+    };
+  }
+
+  it("el fixture reproduce los agregados reales del corte", () => {
+    const fixture = buildSettlementFixture();
+    const state = buildState(fixture);
+    const settlement = state.settlements[0];
+
+    expect(fixture.orders).toHaveLength(CASH_ORDER_COUNT + NO_COLLECTION_COUNT);
+    expect(settlement.codCop).toBe(15996490);
+    expect(settlement.driverPayCop).toBe(1829000);
+    expect(settlement.cashExpectedCop).toBe(EXPECTED_CASH_COP);
+    expect(fixture.allocations).toHaveLength(CASH_ORDER_COUNT);
+  });
+
+  it("RF_01 · el detalle pinta una fila por cada pedido del corte, tambien las visitas sin cobro", () => {
+    const state = buildState(buildSettlementFixture());
+    const summary = calculateDriverFinancialSummary(state, DRIVER_ID);
+
+    expect(summary.settlementRows).toHaveLength(1);
+    expect(summary.settlementRows[0].orders).toHaveLength(CASH_ORDER_COUNT + NO_COLLECTION_COUNT);
+  });
+
+  it("RF_02 · las visitas sin cobro valen su pago EN NEGATIVO, no cero", () => {
+    const state = buildState(buildSettlementFixture());
+    const summary = calculateDriverFinancialSummary(state, DRIVER_ID);
+    const rows = summary.settlementRows[0].orders;
+
+    const noCollection = rows.filter((row) => row.totalCop === 0);
+    expect(noCollection).toHaveLength(NO_COLLECTION_COUNT);
+    expect(noCollection.reduce((sum, row) => sum + row.expectedCashCop, 0)).toBe(-NO_COLLECTION_PAY_COP);
+  });
+
+  it("RF_03 · la suma del detalle es exactamente el efectivo esperado de la cabecera", () => {
+    const state = buildState(buildSettlementFixture());
+    const summary = calculateDriverFinancialSummary(state, DRIVER_ID);
+    const row = summary.settlementRows[0];
+
+    const detail = row.orders.reduce((sum, order) => sum + order.expectedCashCop, 0);
+    expect(row.expectedCashCop).toBe(EXPECTED_CASH_COP);
+    expect(detail).toBe(EXPECTED_CASH_COP);
+  });
+
+  it("RF_01 · los seis pedidos que el domiciliario reclamo salen con su importe", () => {
+    const state = buildState(buildSettlementFixture());
+    const summary = calculateDriverFinancialSummary(state, DRIVER_ID);
+    const byCode = new Map(summary.settlementRows[0].orders.map((row) => [row.trackingCode, row]));
+
+    for (const danda of DANDA_ORDERS) {
+      const row = byCode.get(danda.code);
+      expect(row, `falta ${danda.code}`).toBeDefined();
+      expect(row!.expectedCashCop).toBe(danda.totalCop - 11000);
+    }
+    const reclamado = DANDA_ORDERS.reduce((sum, danda) => sum + danda.totalCop - 11000, 0);
+    expect(reclamado).toBe(533400);
+  });
+});
+
+/**
+ * Spec 019 — T3 y T4: que pasa cuando el pedido de un corte NO esta descargado.
+ *
+ * Es el caso que provoco el reclamo: 66 de las 169 filas con recaudo salian en $0 porque su
+ * pedido se creo antes de la ventana de descarga. La fila nunca puede salir en cero: o trae su
+ * importe, o se declara desconocida.
+ */
+describe("spec 019 · T3-T4 · pedidos del corte fuera de la ventana (RF_09, RF_10, RF_11, RF_12)", () => {
+  const DRIVER_ID = "driver-1";
+
+  const order = (overrides: Partial<Order> = {}): Order => ({
+    id: "ord-fuera",
+    trackingCode: "KNT-005077",
+    shopifyOrderId: "#89128",
+    sellerId: "seller-danda",
+    cityId: "city-cali",
+    driverId: DRIVER_ID,
+    customerName: "Caroly Perea",
+    customerPhone: "+573178734803",
+    addressRaw: "Calle 33bn #2bn-83, Cali",
+    addressRisk: "accepted",
+    status: "delivered",
+    paymentMethod: "cod",
+    fulfillmentMode: "seller_pickup",
+    totalCop: 109900,
+    evidence: [],
+    createdAt: "2026-09-11T09:11:18.000Z",
+    updatedAt: "2026-09-17T20:04:47.853Z",
+    closedAt: "2026-09-17T20:04:47.853Z",
+    ...overrides
+  });
+
+  const pay = (amountCop: number): WalletEntry => ({
+    id: "we-pay",
+    ownerType: "driver",
+    ownerId: DRIVER_ID,
+    orderId: "ord-fuera",
+    settlementId: "stl-1",
+    type: "driver_earning",
+    amountCop,
+    description: "Pago domiciliario",
+    createdAt: "2026-09-17T20:04:47.853Z"
+  });
+
+  const stateWith = (opts: {
+    downloaded: boolean;
+    allocations?: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }>;
+    orderOverrides?: Partial<Order>;
+    payCop?: number;
+  }): AppState => ({
+    ...seedState(),
+    orders: opts.downloaded ? [order(opts.orderOverrides)] : [],
+    wallet: [pay(opts.payCop ?? 11000)],
+    settlements: [{
+      id: "stl-1",
+      kind: "driver",
+      ownerId: DRIVER_ID,
+      ownerName: "Domiciliario",
+      startDate: "2026-09-14",
+      endDate: "2026-09-17",
+      walletEntryIds: ["we-pay"],
+      orderIds: ["ord-fuera"],
+      codCop: 109900,
+      feesCop: 0,
+      driverPayCop: opts.payCop ?? 11000,
+      platformMarginCop: 0,
+      netCop: -98900,
+      status: "pending",
+      createdAt: "2026-09-17T23:09:49.616Z",
+      cashExpectedCop: 109900 - (opts.payCop ?? 11000),
+      ...(opts.allocations === undefined ? {} : { cashAllocations: opts.allocations })
+    }]
+  });
+
+  const firstRow = (state: AppState) => calculateDriverFinancialSummary(state, DRIVER_ID).settlementRows[0];
+
+  it("RF_09 · rama 1: con el pedido descargado manda su valor vigente", () => {
+    const row = firstRow(stateWith({ downloaded: true, allocations: [{ orderId: "ord-fuera", expectedCop: 98900, receivedCop: 0, covered: false }] }));
+    expect(row.orders[0].source).toBe("order");
+    expect(row.orders[0].expectedCashCop).toBe(98900);
+    expect(row.orders[0].trackingCode).toBe("KNT-005077");
+    expect(row.detailStatus).toBe("balanced");
+  });
+
+  it("RF_09 · rama 2: sin el pedido, vale el importe que guardo el corte", () => {
+    const row = firstRow(stateWith({ downloaded: false, allocations: [{ orderId: "ord-fuera", expectedCop: 98900, receivedCop: 98900, covered: true }] }));
+    expect(row.orders[0].source).toBe("settlement");
+    expect(row.orders[0].amountKnown).toBe(true);
+    expect(row.orders[0].expectedCashCop).toBe(98900);
+    expect(row.detailCashCop).toBe(98900);
+    expect(row.detailStatus).toBe("balanced");
+  });
+
+  it("RF_09 · rama 3: si el corte tiene asignaciones y no menciona el pedido, registro cero efectivo", () => {
+    const row = firstRow(stateWith({ downloaded: false, allocations: [{ orderId: "otro", expectedCop: 50000, receivedCop: 0, covered: false }] }));
+    expect(row.orders[0].source).toBe("settlement");
+    expect(row.orders[0].expectedCashCop).toBe(-11000);
+    expect(row.orders[0].noCollection).toBe(true);
+  });
+
+  it("RF_09 · rama 4: un corte SIN asignaciones deja la fila sin importe, jamas en cero", () => {
+    const row = firstRow(stateWith({ downloaded: false }));
+    expect(row.orders[0].source).toBe("unknown");
+    expect(row.orders[0].amountKnown).toBe(false);
+    expect(row.unknownAmountCount).toBe(1);
+    // La suma NO incluye la fila desconocida: una suma parcial no se hace pasar por total.
+    expect(row.detailCashCop).toBe(0);
+    expect(row.detailStatus).toBe("incomplete");
+  });
+
+  it("RF_09 · un array de asignaciones VACIO no es lo mismo que no tenerlas", () => {
+    const vacio = firstRow(stateWith({ downloaded: false, allocations: [] }));
+    expect(vacio.orders[0].source).toBe("settlement");
+    expect(vacio.orders[0].expectedCashCop).toBe(-11000);
+    expect(vacio.detailStatus).not.toBe("incomplete");
+  });
+
+  it("RF_10 · ninguna fila usa el identificador interno como etiqueta", () => {
+    for (const state of [stateWith({ downloaded: false }), stateWith({ downloaded: false, allocations: [] })]) {
+      const row = firstRow(state);
+      expect(row.orders[0].trackingCode).toBe("");
+      expect(row.orders[0].trackingCode).not.toBe("ord-fuera");
+    }
+  });
+
+  it("RF_12 · un pedido corregido tras el corte es un AJUSTE POSTERIOR, no un detalle incompleto", () => {
+    // El corte se emitio con el pedido entregado (98.900 de efectivo). Despues se corrigio a
+    // fallido: hoy no recauda nada, asi que la fila vale -11.000 y el detalle se separa 109.900
+    // de la cabecera. La cabecera NO se reescribe: es lo que se liquida.
+    const state = stateWith({
+      downloaded: true,
+      allocations: [{ orderId: "ord-fuera", expectedCop: 98900, receivedCop: 0, covered: false }],
+      orderOverrides: { status: "failed", failedCategory: "failed_visit" }
+    });
+    const row = firstRow(state);
+
+    expect(row.detailStatus).toBe("adjusted");
+    expect(row.orders[0].expectedCashCop).toBe(-11000);
+    expect(row.detailDeltaCop).toBe(-109900);
+    expect(row.expectedCashCop).toBe(98900);
+  });
+
+  it("RF_11 · una fila sin importe gana sobre la diferencia: el detalle esta incompleto, no ajustado", () => {
+    const state = stateWith({ downloaded: false });
+    expect(firstRow(state).detailStatus).toBe("incomplete");
+  });
+
+  it("no mueve las cifras de cabecera: salen del corte, no de los pedidos descargados", () => {
+    const conPedido = calculateDriverFinancialSummary(stateWith({ downloaded: true }), DRIVER_ID);
+    const sinPedido = calculateDriverFinancialSummary(stateWith({ downloaded: false }), DRIVER_ID);
+
+    expect(sinPedido.pendingBalanceCop).toBe(conPedido.pendingBalanceCop);
+    expect(sinPedido.incompleteSettlementsCop).toBe(conPedido.incompleteSettlementsCop);
+    expect(sinPedido.settlementRows[0].expectedCashCop).toBe(conPedido.settlementRows[0].expectedCashCop);
+  });
+});
