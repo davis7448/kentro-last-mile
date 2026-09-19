@@ -1,122 +1,108 @@
 {
   "version": 1,
-  "phase": "release",
+  "phase": "deploy",
   "activeSpec": {
-    "file": "specs/017_reimportar_no_pisa_lo_operado.md",
-    "status": "released"
+    "file": "specs/019_el_corte_muestra_lo_que_cobra.md",
+    "status": "approved"
   },
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_10",
-        "RF_11",
-        "RF_18"
+        "RF_01",
+        "RF_02",
+        "RF_03"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/finance.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T2": {
       "requirements": [
-        "RF_01",
-        "RF_12"
+        "RF_02",
+        "RNF_01"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/finance.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T3": {
       "requirements": [
-        "RF_02",
-        "RF_03",
-        "RF_17",
-        "RF_18"
+        "RF_09",
+        "RF_10",
+        "RF_06"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/finance.ts",
+        "src/lib/finance.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T4": {
       "requirements": [
-        "RF_04"
+        "RF_03",
+        "RF_11",
+        "RF_12"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/finance.ts",
+        "src/lib/finance.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T5": {
       "requirements": [
-        "RF_05",
-        "RF_06",
-        "RF_07"
+        "RF_13",
+        "RF_10"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/driver-settlement-export.ts",
+        "src/lib/driver-settlement-export.test.ts",
+        "src/lib/order-export.ts",
+        "src/components/operations-app.tsx"
       ],
       "testWritten": true,
       "done": true
     },
     "T6": {
       "requirements": [
-        "RF_08",
-        "RF_09"
+        "RF_07",
+        "RNF_02"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/firebase/state-store.ts",
+        "src/lib/spec-019-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T7": {
       "requirements": [
-        "RF_13",
-        "RF_14",
-        "RF_15",
-        "RF_16"
+        "RF_05",
+        "RF_06"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/lib/firebase/state-store.ts",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-019-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T8": {
       "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04",
         "RF_05",
-        "RF_06",
-        "RF_07",
-        "RF_08",
-        "RF_09",
-        "RF_10",
-        "RF_11",
-        "RF_12",
-        "RF_15",
-        "RF_16",
-        "RNF_01",
-        "RF_17",
-        "RF_18"
+        "RF_08"
       ],
       "files": [
-        "functions/src/shopify.ts"
+        "src/components/operations-app.tsx",
+        "src/lib/firebase/state-store.ts",
+        "src/lib/spec-019-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
@@ -124,136 +110,74 @@
     "T9": {
       "requirements": [
         "RF_01",
-        "RF_02",
-        "RF_03",
         "RF_04",
-        "RF_05",
-        "RF_06",
-        "RF_07",
-        "RF_08",
-        "RF_09",
         "RF_10",
-        "RF_11",
-        "RF_12",
-        "RF_15",
-        "RF_16",
-        "RNF_01",
-        "RF_17",
-        "RF_18"
+        "RNF_03"
       ],
       "files": [
-        "functions/src/index.ts"
+        "src/components/operations-app.tsx",
+        "src/lib/spec-019-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T10": {
       "requirements": [
-        "RF_10",
-        "RF_12",
-        "RNF_01",
-        "RF_18"
+        "RF_11",
+        "RF_12"
       ],
       "files": [
-        "functions/src/store-webhook.ts",
-        "functions/src/onstock-webhook.ts",
-        "functions/src/contact-form.ts"
+        "src/components/operations-app.tsx",
+        "src/lib/spec-019-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T11": {
       "requirements": [
-        "RF_13",
-        "RF_14"
+        "RNF_01",
+        "RNF_04"
       ],
       "files": [
-        "functions/src/shopify.ts",
-        "functions/src/import-run-summary.ts",
-        "src/lib/import-run-summary.test.ts",
-        "firestore.rules"
+        "scripts/verify-019.js",
+        "docs/rendimiento.md",
+        ".sdd/evidence/019/t11-produccion.txt"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "Reabierta por la auditoria (2026-09-19) y cerrada con scripts/verify-019-session.js: sesion real de lider logistico (cuenta desechable, borrada) leyendo de la PANTALLA, y medicion A/B intercalada contra un worktree del commit anterior."
     },
     "T12": {
       "requirements": [
-        "RF_13",
-        "RF_17",
-        "RF_18",
-        "RF_19",
-        "RNF_01",
-        "RNF_02",
-        "RNF_03"
+        "RF_08",
+        "RF_11"
       ],
       "files": [
-        "src/lib/spec-017-guards.test.ts"
+        "src/lib/driver-settlement-export.ts",
+        "src/lib/driver-settlement-export.test.ts",
+        "src/components/operations-app.tsx"
       ],
       "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "skippedByBudget se produce y nadie lo lee: el caso limite 'el detalle queda incompleto a proposito' es hoy inobservable."
     },
     "T13": {
       "requirements": [
-        "RF_01",
-        "RF_10",
-        "RNF_02"
-      ],
-      "files": [
-        ".sdd/evidence/017/mutacion-rf01.txt",
-        ".sdd/evidence/017/mutacion-rf10.txt",
-        "functions/src/order-import-merge.ts",
-        "functions/src/shopify.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T14": {
-      "requirements": [
+        "RF_06",
+        "RF_07",
         "RNF_03"
       ],
       "files": [
-        "docs/constitution.md"
+        "src/lib/read-each-by-id.ts",
+        "src/lib/read-each-by-id.test.ts",
+        "src/lib/firebase/state-store.ts",
+        "src/lib/spec-019-guards.test.ts",
+        "docs/design-system.md",
+        "specs/019_el_corte_muestra_lo_que_cobra.md"
       ],
       "testWritten": true,
-      "done": true
-    },
-    "T15": {
-      "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_04",
-        "RF_05",
-        "RF_09",
-        "RF_15",
-        "RF_16"
-      ],
-      "files": [
-        "scripts/verify-017.js"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T16": {
-      "requirements": [
-        "RF_17"
-      ],
-      "files": [
-        "functions/src/orders.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T17": {
-      "requirements": [
-        "RF_19"
-      ],
-      "files": [
-        "functions/src/manual-edit-backfill.ts",
-        "src/lib/manual-edit-backfill.test.ts",
-        "scripts/backfill-manual-edit-stamp.js"
-      ],
-      "testWritten": true,
-      "done": true
+      "done": true,
+      "note": "Segunda auditoria (2026-09-19): DoD 5 sin prueba de comportamiento (el bucle de uno en uno no se ejecuta en la suite), el filtro anti-duplicado de pinOrders sin ninguna asercion, y text-mint sin ratio de contraste verificado."
     }
   },
   "testCommand": "npm test",
@@ -397,6 +321,13 @@
       "rf26": "2026-09-17: storeApi desplegada; indice y resumen traen avisos con el cambio (probado en produccion)",
       "rnf04": "2026-09-17: cumplido tras T18 (movil 991/1.015 ms, escritorio 1.023/894 ms vs 989/975 ms antes)",
       "released": "2026-09-17: PR #1 unido a main (tras PR #2, que puso main al dia con 48 commits)"
+    },
+    "019": {
+      "file": "specs/019_el_corte_muestra_lo_que_cobra.md",
+      "status": "verificada",
+      "approved": "2026-09-19",
+      "verify": "2026-09-19 OK: 3 recorridos (HU_01, HU_02, HU_03) con traza, 0 errores de consola inesperados, 0 peticiones 4xx/5xx inesperadas",
+      "audit": "DoD 10/11 — solo falta la firma del responsable"
     }
   },
   "archivedTasks": {
@@ -2160,5 +2091,7 @@
       }
     }
   },
-  "activeTask": null
+  "activeTask": null,
+  "plan": "specs/019_plan.md",
+  "tasksFile": "specs/019_tasks.md"
 }

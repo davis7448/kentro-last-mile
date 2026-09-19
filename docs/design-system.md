@@ -48,7 +48,8 @@ Tema **oscuro único**. Los valores viven en `:root` y en `tailwind.config.ts`.
 | `--muted` / `text-ink-60` | `#9aa5b3` | texto secundario | 6.1:1 sobre panel |
 | `--acid` / `bg-acid` | `#c6f24e` | acción y éxito | 12.2:1 sobre panel |
 | `--deep` / `text-deep` | `#10140c` | tinta **sobre** ácido | 13.9:1 |
-| `--danger` / `text-rust` | `#ff8b7c` | dinero debido, error | — |
+| `--danger` / `text-rust` | `#ff8b7c` | dinero debido, error | 7.4:1 sobre panel |
+| `--ok` / `text-mint` | `#c6f24e` oscuro · `#1c6340` claro | dinero **a favor**, saldo saldado | 12.9:1 sobre panel · 11.5:1 sobre field · 7.2:1 en tema claro |
 | `text-info` | `#7cc4ff` | informativo | — |
 
 **Reglas de color que no se negocian:**
@@ -57,7 +58,10 @@ Tema **oscuro único**. Los valores viven en `:root` y en `tailwind.config.ts`.
    da 13.9:1, con blanco 1.7:1 — ilegible. Se encontraron 4 sitios con blanco sobre ácido,
    incluido el botón de subir evidencia.
 2. El ácido es **exclusivo de lo accionable** y de **una** cifra destacada por pantalla. Si hay
-   dos cifras en ácido, ninguna destaca.
+   dos cifras en ácido, ninguna destaca. La regla es sobre el **relleno** (`bg-acid`): `text-mint`
+   comparte tono con el ácido en el tema oscuro pero es un token semántico distinto —dinero a favor
+   de quien mira— y no compite por el foco porque nunca llena una superficie. Medido para la spec
+   019, donde lo usan hasta 16 filas del detalle de un corte.
 3. Ningún gris por debajo de `#9aa5b3` para texto. El sistema anterior usaba
    `rgba(0,0,0,.5)` (3.95:1) para rotular los indicadores: fallaba WCAG AA y era invisible al sol.
 

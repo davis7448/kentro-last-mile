@@ -1,0 +1,21 @@
+# Spec 019 — DoD 10 / RNF_01: A/B intercalado (2026-09-19T19:29:35.316Z)
+  despues http://localhost:3019 · antes http://localhost:3020 · lider driver-1778271901513 · 5 pares por viewport
+  Se cronometra desde pulsar "Entrar" hasta que la vista del lider muestra su cifra de cabecera.
+
+- movil 390x844: antes 692 ms · despues 736 ms · +6.4 %
+    antes:   645, 692, 659, 708, 765 ms
+    despues: 682, 643, 936, 737, 736 ms
+    rescates por id antes del primer pintado: 0
+- escritorio 1280x800: antes 650 ms · despues 676 ms · +4.0 %
+    antes:   698, 650, 718, 625, 643 ms
+    despues: 1299, 901, 676, 621, 638 ms
+    rescates por id antes del primer pintado: 0
+
+DENTRO DEL MARGEN: ninguna mediana se pasa del +/-10 % y el primer pintado no dispara rescates.
+
+# RNF_04 — el objetivo de navegadores no se toco
+  package.json browserslist: ["chrome 87","edge 88","firefox 78","safari 14","ios_saf 14","opera 73"]
+  git diff package.json: sin cambios
+  Comprobacion del bundle compilado (14 chunks de .next/static/chunks): `grep -o 'static{'` = 0
+  (un `class static block` en el runtime es un error de SINTAXIS en iOS 14: el navegador descarta el
+   bundle entero y la app no pinta nada. Ver la seccion "Navegadores" de CLAUDE.md.)

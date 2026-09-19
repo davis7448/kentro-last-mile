@@ -79,6 +79,57 @@ wallet se sigue suscribiendo sin recorte, así que la semilla está completa.
 Comprobado forzando una ventana de un día: sin el rescate el saldo caía de $1.233.349 a $97.629,
 **$1.135.720 menos y sin un solo aviso**. Con el rescate, la cifra exacta.
 
+**2.b. Esa siembra cubre solo la mitad del problema (spec 019, 19-09-2026).** `selectUnsettledWalletEntries`
+devuelve los asientos **sin** `settlementId`, así que los pedidos que ya entraron en un corte nunca se
+pedían — y son justo los que pinta el detalle de un corte. Resultado medido sobre
+`stl-1789686589616-driver-driver-1778271901513`: cabecera $14.167.490, filas visibles $8.205.000, **66
+filas en $0 por $6.082.490**. No es un error de dinero (la cabecera sale del corte guardado), pero el
+domiciliario cuadró contra la pantalla y ofreció pagar dos veces $533.400 que ya había pagado.
+
+El rescate tiene ahora **dos vías**, y una guarda (`spec-019-guards.test.ts`) se pone roja si alguien
+vuelve a dejar una sola:
+
+| Vía | Qué siembra | Cuándo |
+|---|---|---|
+| Asientos sin liquidar | "Pendiente por entregar" | al emitir estado, automático |
+| `onControls.pinOrders` | el detalle de un corte | al EXPANDIR ese corte, bajo demanda |
+
+**Por qué bajo demanda y no al montar:** las cifras de cabecera (`incompleteSettlementsCop`,
+`pendingBalanceCop`) salen de `settlement.cashPendingCop`, **nunca** de `orders[]`. Rescatar al entrar
+gastaría lecturas sin mover un solo número, y los seis cortes de la página serían hasta 1.110 lecturas
+contra un tope de 800. La guarda lo fija (`no pide los pedidos de la pagina entera`).
+
+### Primer pintado del líder logístico (spec 019, RNF_01)
+
+Tiempo desde pulsar "Entrar" hasta que la vista del líder muestra su cifra de cabecera. Guion:
+`VERIFY_BASE_URL=<después> VERIFY_BASE_URL_B=<antes> PERF_RUNS=5 node scripts/verify-019-session.js ab`
+— Playwright Chromium en el VPS, contexto nuevo por carga (en frío), cuenta desechable con los
+reclamos del líder, y **cargas A/B intercaladas**: el "antes" es un `git worktree` en el commit previo
+servido en otro puerto. Umbral de la spec: ±10 %.
+
+| Momento | Móvil 390×844 | Escritorio 1280×800 |
+|---|---:|---:|
+| Antes (HEAD 9514966) | 692 ms | 650 ms |
+| Después (spec 019) | 736 ms (+6,4 %) | 676 ms (+4,0 %) |
+| Repetición, tanda anterior | 703 ms (+3,7 %) | 679 ms (+4,8 %) |
+
+**Rescates por id disparados antes del primer pintado: 0** en las cuatro tandas. Es lo que RNF_01
+protege: la cabecera se pinta con lo que ya hay y el detalle se completa al expandir un corte.
+
+**Medir en tandas separadas no vale aquí.** El primer intento midió "antes" y "después" seguidos y dio
+**+17,6 % en móvil**; repetido, **+16,4 % en escritorio** y 0 % en móvil. La varianza de una máquina
+compartida es mayor que el efecto a medir, así que una tanda contra otra mide ruido. Intercalando carga
+a carga, la deriva cae sobre las dos ramas por igual. Con más de 5 pares seguidos, Firebase Auth empieza
+a rechazar las entradas: 5 es la cadencia probada.
+
+**El tope pasó a ser acumulado por carga de página.** Antes `.slice(0, MAX_PINNED_ORDERS)` se aplicaba
+por llamada, así que N llamadas podían fijar N × 800. Ahora se consume contra `pinnedRequested.size` y
+es compartido por las dos vías; `pinOrders` devuelve `skippedByBudget` para que la pantalla pueda decir
+que el detalle quedó incompleto **a propósito** en vez de presentar una suma parcial como buena.
+
+**`getDocumentsOneByOne` va en tandas de 30.** El llamante de antes pasaba un puñado de ids; el detalle
+de un corte puede pedir 185, y 185 `getDoc` simultáneos desde un móvil era territorio no medido.
+
 ## Trampas comprobadas
 
 **Leer por id: de uno en uno para driver y messenger, por lotes solo para el admin.** Probado con
