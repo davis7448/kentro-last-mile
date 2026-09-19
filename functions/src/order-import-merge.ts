@@ -19,6 +19,8 @@
  */
 
 /** Las cinco fases que deciden que se conserva. Salen del estado guardado y del sello de edicion. */
+import { checkOrderTotalCop } from "./order-amount";
+
 export type OrderPhase = "new" | "unconfirmed" | "edited" | "open" | "closed";
 
 /**
@@ -122,6 +124,12 @@ export type MergeResult = {
   phase: OrderPhase;
   /** Solo lo que DE VERDAD se iba a pisar y se conservo (RF_14): valor entrante != guardado. */
   preserved: PreservedGroup[];
+  /**
+   * Spec 022: el importe entrante, cuando esta fuera de lo posible. El pedido SE ESCRIBE igual —un
+   * webhook no teclea, y rechazarlo repetiria el incidente que dejo la plataforma cuatro dias sin
+   * pedidos—, pero queda marcado para poder contarlo en el resumen de la corrida.
+   */
+  amountOutOfRange?: number;
 };
 
 /** Que hacer con un grupo de campos en una fase dada. */
@@ -277,6 +285,15 @@ function wouldOverwrite(incomingValue: unknown, existingValue: unknown): boolean
  * @param incoming El candidato que la via construye, con sus valores de creacion intactos.
  * @param existing Los hechos del pedido guardado, SIEMPRE de `existingFactsFrom`. `null` = no existe.
  */
+/**
+ * El importe entrante si no es posible, `undefined` si lo es. Solo MARCA: la decision de que hacer
+ * con el es de quien escribe, y hoy es "escribirlo y contarlo" (spec 022, RF_06).
+ */
+function outOfRangeAmount(doc: Record<string, unknown>): number | undefined {
+  const check = checkOrderTotalCop(doc.totalCop);
+  return check.ok ? undefined : (typeof doc.totalCop === "number" ? doc.totalCop : undefined);
+}
+
 export function mergeImportedOrder(input: {
   incoming: Record<string, unknown>;
   existing: ExistingOrderFacts | null;
@@ -288,7 +305,13 @@ export function mergeImportedOrder(input: {
   // Salida temprana literal: la creacion no puede cambiar (RF_10). Un pedido nuevo se escribe
   // entero, `driverId: null` incluido — sin ese campo no lo encuentra el pozo del lider.
   if (phase === "new" || !existing) {
-    return { doc: stripUndefined({ ...incoming, updatedAt: now }), clear: [], phase: "new", preserved: [] };
+    return {
+      doc: stripUndefined({ ...incoming, updatedAt: now }),
+      clear: [],
+      phase: "new",
+      preserved: [],
+      amountOutOfRange: outOfRangeAmount(incoming)
+    };
   }
 
   const doc: Record<string, unknown> = { ...incoming };
@@ -327,7 +350,7 @@ export function mergeImportedOrder(input: {
   }
 
   doc.updatedAt = now;
-  return { doc: stripUndefined(doc), clear, phase, preserved: [...preserved] };
+  return { doc: stripUndefined(doc), clear, phase, preserved: [...preserved], amountOutOfRange: outOfRangeAmount(doc) };
 }
 
 /**

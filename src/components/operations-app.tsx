@@ -1,34 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Bike,
-  Boxes,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  CreditCard,
-  ExternalLink,
-  FileDown,
-  History,
-  Image as ImageIcon,
-  LogOut,
-  MapPin,
-  PackageCheck,
-  Phone,
-  Printer,
-  QrCode,
-  Route,
-  Settings,
-  ShieldCheck,
-  Store,
-  Truck,
-  Users,
-  Wallet,
-  Wrench,
-  X
-} from "lucide-react";
+import { AlertTriangle, Bike, Boxes, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, CreditCard, ExternalLink, FileDown, History, Image as ImageIcon, LogOut, MapPin, PackageCheck, Phone, Printer, QrCode, Route, Settings, ShieldCheck, Store, Truck, Users, Wallet, Wrench, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { renderCode128Svg } from "@/lib/barcode";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
@@ -84,6 +56,7 @@ import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import type { FirestoreStateControls, PinOrdersResult } from "@/lib/firebase/state-store";
+import { CONFIRM_ORDER_TOTAL_COP, MAX_ORDER_TOTAL_COP, checkOrderTotalCop, formatAmountCop, needsAmountConfirmation } from "@/lib/order-amount";
 import { NO_AMOUNT_LABEL, UNAVAILABLE_ORDER_LABEL, buildDriverSettlementDetailGroups, settlementDetailNotice, settlementStatusLabel, buildDriverSettlementExportRows, driverSettlementExportColumns, flattenDriverSettlementDetail, formatDetailCop } from "@/lib/driver-settlement-export";
 import type { DriverSettlementDetailGroup } from "@/lib/driver-settlement-export";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
@@ -5801,12 +5774,16 @@ function ManualOrderPanel({
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "prepaid">("cod");
   const [fulfillmentMode, setFulfillmentMode] = useState<"seller_pickup" | "warehouse">("seller_pickup");
   const [totalCop, setTotalCop] = useState("");
+  // Spec 022: un importe alto no se bloquea, se pregunta. El que costo la spec eran dos sets de
+  // tornillos por $11.770.047.900, pero una venta cara de verdad tiene que poder entrar.
+  const [amountConfirmed, setAmountConfirmed] = useState(false);
   const [lines, setLines] = useState<ManualOrderLineDraft[]>([emptyManualLine("line-0")]);
   const [addressRisk, setAddressRisk] = useState<"accepted" | "review">("accepted");
   const [message, setMessage] = useState<string | null>(null);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const lineKeySeq = useRef(1);
   const productListId = useId();
+  const amountNoticeId = useId();
 
   useEffect(() => {
     if (lockedSellerId && sellerId !== lockedSellerId) setSellerId(lockedSellerId);
@@ -5883,6 +5860,15 @@ function ManualOrderPanel({
     return quantity > free ? [`${item.name}: stock libre ${free}, pediras ${quantity}. El pedido se crea igual.`] : [];
   });
 
+  // El aviso del importe se calcula al escribir, no al enviar: la spec 022 pide que la tienda lo vea
+  // junto al campo y no despues de gastar un viaje al servidor.
+  const parsedAmount = Number(totalCop.replace(/[^\d]/g, ""));
+  const amountIssue = totalCop.trim() === "" ? null : (() => {
+    const check = checkOrderTotalCop(parsedAmount);
+    return check.ok ? null : check.message;
+  })();
+  const amountNeedsConfirmation = needsAmountConfirmation(parsedAmount);
+
   return (
     <Card>
       <h2 className="mb-3 font-bold">Crear pedido</h2>
@@ -5896,8 +5882,13 @@ function ManualOrderPanel({
               setMessage("Crea primero un vendedor.");
               return;
             }
-            if (!amount || amount <= 0) {
-              setMessage("El valor del pedido debe ser mayor a cero.");
+            const amountCheck = checkOrderTotalCop(amount);
+            if (!amountCheck.ok) {
+              setMessage(amountCheck.message);
+              return;
+            }
+            if (needsAmountConfirmation(amount) && !amountConfirmed) {
+              setMessage(`Confirma el valor: ${formatAmountCop(amount)} es mucho mas de lo habitual. Marca la casilla si es correcto.`);
               return;
             }
             if (duplicateSellerReference) {
@@ -5946,6 +5937,7 @@ function ManualOrderPanel({
               setDeliveryNotes("");
               setZoneId("");
               setTotalCop("");
+              setAmountConfirmed(false);
               resetLines();
               setAddressRisk("accepted");
               setMessage("Pedido creado.");
@@ -6018,7 +6010,45 @@ function ManualOrderPanel({
             <option value="warehouse">Bodega</option>
           </select>
         </div>
-        <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
+        <div className="grid gap-1.5">
+          <input
+            className={`focus-ring min-h-11 rounded-full border px-3 py-2 text-sm ${amountIssue ? "border-rust" : "border-white/10"}`}
+            placeholder="Valor COP"
+            inputMode="numeric"
+            value={totalCop}
+            onChange={(event) => {
+              setTotalCop(event.target.value);
+              setAmountConfirmed(false);
+            }}
+            aria-invalid={Boolean(amountIssue)}
+            aria-describedby={amountIssue || amountNeedsConfirmation ? amountNoticeId : undefined}
+            required
+          />
+          {amountIssue && (
+            <p className="flex items-start gap-1.5 text-[11px] font-semibold text-rust" id={amountNoticeId} role="status" aria-live="polite">
+              <AlertTriangle className="mt-px shrink-0" size={12} />
+              <span>{amountIssue}</span>
+            </p>
+          )}
+          {!amountIssue && amountNeedsConfirmation && (
+            <div className="grid gap-1.5" id={amountNoticeId}>
+              <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+                <span className="font-semibold text-fg">{formatAmountCop(parsedAmount)}</span> es mucho mas de lo habitual:
+                casi todos los pedidos van por debajo de {formatAmountCop(CONFIRM_ORDER_TOTAL_COP)}. Revisa si sobran digitos.
+              </p>
+              {/* Pildora en vez de casilla: el objetivo del corazon es de 44 px (spec 013, RF_04). */}
+              <button
+                type="button"
+                className={`focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${amountConfirmed ? "border-mint/40 bg-panel text-mint" : "border-white/10 bg-panel text-fg"}`}
+                aria-pressed={amountConfirmed}
+                onClick={() => setAmountConfirmed((current) => !current)}
+              >
+                {amountConfirmed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                {amountConfirmed ? "Valor confirmado" : "Confirmo que el valor es correcto"}
+              </button>
+            </div>
+          )}
+        </div>
         <div className="grid gap-2 rounded-2xl border border-white/10 p-2">
           <p className="text-xs font-semibold text-ink-60">Productos</p>
           <datalist id={productListId}>

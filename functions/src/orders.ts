@@ -28,6 +28,7 @@ import {
 } from "./settlement-math";
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { CLOSED_STATUSES, MANUAL_EDIT_STAMP } from "./order-import-merge";
+import { checkOrderTotalCop } from "./order-amount";
 import { operationalDataBlockMessage } from "./community-access";
 import {
   buildWalletEntries,
@@ -46,6 +47,17 @@ const optionalText = z.preprocess((value) => {
   return value;
 }, z.string().trim().min(1).optional());
 
+/**
+ * El importe tecleado de un pedido, spec 022. Un `z.number().positive()` dejaba pasar
+ * $11.770.047.900 —dos sets de tornillos— y ese pedido quedo contra entrega y listo para asignar.
+ * La regla vive en `order-amount.ts` y la usan las TRES callables que aceptan un importe tecleado:
+ * crear a mano, editar un importado y ajustar lo que se cobra en la calle.
+ */
+const orderTotalCopSchema = z.number().superRefine((value, ctx) => {
+  const check = checkOrderTotalCop(value);
+  if (!check.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: check.message });
+});
+
 const manualOrderLineSchema = z.object({
   productName: optionalText,
   sku: optionalText,
@@ -63,7 +75,7 @@ const manualOrderSchema = z.object({
   zoneId: optionalText,
   paymentMethod: z.enum(["cod", "prepaid"]),
   fulfillmentMode: z.enum(["seller_pickup", "warehouse"]),
-  totalCop: z.number().positive("El valor del pedido debe ser mayor a cero."),
+  totalCop: orderTotalCopSchema,
   productId: optionalText,
   // productName/sku/quantity planos se conservan por compatibilidad: un navegador con el
   // bundle viejo en cache sigue enviandolos y normalizeOrderLines los convierte en una linea.
@@ -178,7 +190,7 @@ const updateImportedOrderSchema = z.object({
   zoneId: optionalString,
   paymentMethod: z.enum(["cod", "prepaid"]),
   fulfillmentMode: z.enum(["seller_pickup", "warehouse"]),
-  totalCop: z.number().positive(),
+  totalCop: orderTotalCopSchema,
   productId: optionalString,
   productName: optionalString,
   sku: optionalString,
@@ -187,7 +199,7 @@ const updateImportedOrderSchema = z.object({
 
 const updateOrderAdjustmentsSchema = z.object({
   orderId: z.string().min(1),
-  totalCop: z.number().positive(),
+  totalCop: orderTotalCopSchema,
   productId: optionalString,
   productName: optionalString,
   sku: optionalString,

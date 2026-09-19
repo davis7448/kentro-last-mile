@@ -399,3 +399,53 @@ describe("lo conservado que se reporta (RF_14)", () => {
     expect(segunda.preserved).toEqual(primera.preserved);
   });
 });
+
+/**
+ * Spec 022 — T4: una via automatica con un importe imposible NO pierde el pedido.
+ *
+ * El tope de la spec 022 es para los dedos: crear a mano, editar, ajustar el recaudo. Un webhook no
+ * teclea. Rechazar ahi seria repetir el incidente de septiembre de 2026, cuando un webhook que
+ * fallaba en silencio dejo la plataforma cuatro dias sin pedidos. El pedido entra y queda MARCADO.
+ */
+describe("spec 022 · T4 · el importe fuera de tope se marca, no se rechaza (RF_06, RNF_03)", () => {
+  const incoming = (totalCop: number) => ({
+    id: "ord-1",
+    trackingCode: "KNT-009999",
+    sellerId: "seller-1",
+    totalCop,
+    status: "imported",
+    paymentMethod: "cod",
+    driverId: null
+  });
+
+  it("RF_06 · un pedido nuevo con importe imposible se escribe igual", () => {
+    const merged = mergeImportedOrder({
+      incoming: incoming(11770047900),
+      existing: null,
+      now: "2026-09-19T12:00:00.000Z"
+    });
+
+    expect(merged.doc.totalCop).toBe(11770047900);
+    expect(merged.phase).toBe("new");
+  });
+
+  it("RNF_03 · y queda marcado con su importe, para poder contarlo", () => {
+    const merged = mergeImportedOrder({
+      incoming: incoming(11770047900),
+      existing: null,
+      now: "2026-09-19T12:00:00.000Z"
+    });
+
+    expect(merged.amountOutOfRange).toBe(11770047900);
+  });
+
+  it("un importe normal no se marca", () => {
+    const merged = mergeImportedOrder({
+      incoming: incoming(89900),
+      existing: null,
+      now: "2026-09-19T12:00:00.000Z"
+    });
+
+    expect(merged.amountOutOfRange).toBeUndefined();
+  });
+});
