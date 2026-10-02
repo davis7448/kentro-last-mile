@@ -141,7 +141,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: `cash-overdue-notice.test.ts`: umbral, una vez, agrupacion, sin lider, truncado; un
     informe con `nettedRows` de 90 dias y $500.000 no produce candidatos; constructores sin `undefined`.
 
-- [ ] **T11: Canal de aviso por webhook**
+- [x] **T11: Canal de aviso por webhook**
   * Requisitos cubiertos: RF_05
   * Archivos: functions/src/ops-notify.ts, src/lib/ops-notify.test.ts
   * Accion: `isOpsChannelConfigured`, `sendOpsNotice(text, { url, fetchImpl, timeoutMs })`.
