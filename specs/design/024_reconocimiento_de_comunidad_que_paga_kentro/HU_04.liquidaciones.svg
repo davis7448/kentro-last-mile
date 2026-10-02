@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1080" viewBox="0 0 375 1080" role="img" aria-labelledby="t">
+  <title id="t">HU_04 movil: comunidades pendientes de girar con cashback y reconocimiento separados, estado vacio y corte cerrado con desglose</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.info{fill:#7cc4ff}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="1080" fill="#0e1116"/>
+
+  <!-- Tarjeta: comunidades por girar (pestana Por pagar) -->
+  <rect x="16" y="16" width="343" height="560" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="48" font-size="15" class="b">Comunidades pendientes de girar</text>
+  <text x="32" y="68" class="m">Cashback y reconocimiento causados y</text>
+  <text x="32" y="84" class="m">todavia sin cortar.</text>
+  <text x="343" y="84" text-anchor="end" font-size="14" class="b tab mint">$80.000</text>
+
+  <rect x="28" y="100" width="319" height="212" rx="16" fill="#212832"/>
+  <text x="40" y="126" font-size="14" class="b">ADMA LABORATORIO</text>
+  <text x="40" y="144" class="m">Lab Admin · 49 pedidos · 49 movimientos</text>
+  <text x="40" y="172" class="m">Cashback</text><text x="335" y="172" text-anchor="end" font-size="13" class="sb tab">$16.000</text>
+  <text x="40" y="196" class="m">Reconocimiento de Kentro</text><text x="335" y="196" text-anchor="end" font-size="13" class="sb tab">$41.000</text>
+  <line x1="40" y1="210" x2="335" y2="210" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="40" y="234" font-size="13" class="sb">A girar</text><text x="335" y="234" text-anchor="end" font-size="15" class="b tab mint">$57.000</text>
+  <rect x="40" y="252" width="295" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="279" text-anchor="middle" font-size="13" class="b deep">Girar a ADMA LABORATORIO</text>
+
+  <rect x="28" y="324" width="319" height="212" rx="16" fill="#212832"/>
+  <text x="40" y="350" font-size="14" class="b">ADMA</text>
+  <text x="40" y="368" class="m">ADMA COMERCIAL · 23 pedidos · 23 movimientos</text>
+  <text x="40" y="396" class="m">Cashback</text><text x="335" y="396" text-anchor="end" font-size="13" class="sb tab">$0</text>
+  <text x="40" y="420" class="m">Reconocimiento de Kentro</text><text x="335" y="420" text-anchor="end" font-size="13" class="sb tab">$23.000</text>
+  <line x1="40" y1="434" x2="335" y2="434" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="40" y="458" font-size="13" class="sb">A girar</text><text x="335" y="458" text-anchor="end" font-size="15" class="b tab mint">$23.000</text>
+  <rect x="40" y="476" width="295" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="503" text-anchor="middle" font-size="13" class="b deep">Girar a ADMA</text>
+  <text x="32" y="558" class="m">Un concepto en $0 se muestra en $0 dentro de</text>
+  <text x="32" y="572" class="m" font-size="11">una comunidad que tiene el otro; nunca se funden.</text>
+
+  <!-- Estado vacio -->
+  <text x="16" y="610" class="b info">Vacio</text>
+  <rect x="16" y="620" width="343" height="92" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="650" font-size="15" class="b">Comunidades pendientes de girar</text>
+  <text x="32" y="676" class="m">Ninguna comunidad tiene cashback ni</text>
+  <text x="32" y="692" class="m">reconocimiento pendiente en este rango.</text>
+
+  <!-- Pestana Cortes cerrados: el corte manual -->
+  <text x="16" y="746" class="b info">Cortes cerrados · corte registrado por el relleno</text>
+  <rect x="16" y="756" width="343" height="208" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="786" font-size="14" class="b">ADMA · Lider de comunidad</text>
+  <rect x="279" y="772" width="64" height="24" rx="12" fill="#c6f24e" fill-opacity="0.12"/>
+  <text x="311" y="789" text-anchor="middle" font-size="11" class="b mint">Pagado</text>
+  <text x="32" y="808" class="m tab">Pagado el 30/09/2026 · 144 movimientos</text>
+  <text x="32" y="836" class="m">Cashback</text><text x="343" y="836" text-anchor="end" font-size="13" class="sb tab">$0</text>
+  <text x="32" y="860" class="m">Reconocimiento de Kentro</text><text x="343" y="860" text-anchor="end" font-size="13" class="sb tab">$144.000</text>
+  <line x1="32" y1="874" x2="343" y2="874" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="32" y="898" font-size="13" class="sb">Neto</text><text x="343" y="898" text-anchor="end" font-size="14" class="b tab">$144.000</text>
+  <text x="32" y="924" class="m">Nota: Liquidacion manual 29/09, hoja ADMA</text>
+  <text x="32" y="944" font-size="11" class="m">Cortes anteriores a la 024: todo cuenta como cashback.</text>
+
+  <!-- Exito del giro -->
+  <text x="16" y="998" class="b info">Exito</text>
+  <rect x="16" y="1008" width="343" height="56" rx="16" fill="#c6f24e" fill-opacity="0.10"/>
+  <text x="28" y="1032" class="sb">Girado a ADMA LABORATORIO: <tspan class="tab">$57.000</tspan></text>
+  <text x="28" y="1050" class="m tab">cashback $16.000 · reconocimiento $41.000</text>
+</svg>

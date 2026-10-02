@@ -1,0 +1,13 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 1280, "height": 1000 },
+  "expect": [
+    { "role": "button", "name": "Editar reconocimiento" },
+    { "role": "button", "name": "Guardar reconocimiento" },
+    { "role": "alert", "name": "No se pudo guardar" },
+    { "role": "heading", "name": "Previsualizacion" },
+    { "role": "status", "name": "Listo" },
+    { "role": "button", "name": "Volver a la comunidad" }
+  ]
+}

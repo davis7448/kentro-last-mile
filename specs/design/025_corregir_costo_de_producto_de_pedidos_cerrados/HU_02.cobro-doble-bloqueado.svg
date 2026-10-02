@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812" role="img" aria-label="Movil: vista previa con un pedido bloqueado por posible cobro doble y el aviso de cobro doble evitado en KNT-004603">
+<title>HU_02 - Vista previa con cobro doble bloqueado (movil 375)</title>
+<defs>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:18px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.info{fill:#7cc4ff}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ln{stroke:#ffffff;stroke-opacity:.06;stroke-width:1}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<!-- En movil el dialogo ocupa la pantalla -->
+<rect width="375" height="812" fill="#191e25"/>
+<text x="16" y="42" class="h">Corregir costo de producto</text>
+<circle cx="337" cy="36" r="22" class="ol"/>
+<path d="M330 29 l14 14 M344 29 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="64" class="xs m">Bella Mujer · Tentacion · todo el historico</text>
+<rect x="16" y="76" width="140" height="44" rx="22" class="ol"/><text x="86" y="103" class="c s sb">Editar seleccion</text>
+
+<!-- Resumen 2x2: el dinero a media pantalla -->
+<rect x="16" y="132" width="343" height="108" rx="16" fill="#212832"/>
+<line x1="187" y1="144" x2="187" y2="228" class="ln"/>
+<line x1="28" y1="186" x2="347" y2="186" class="ln"/>
+<g class="num">
+<text x="30" y="156" class="xxs m">Se le cobra a Bella Mujer</text>
+<text x="30" y="177" class="b rust" font-size="17">-$105.000</text>
+<text x="201" y="156" class="xxs m">Se corrigen</text>
+<text x="201" y="177" class="b" font-size="17">3 pedidos</text>
+<text x="30" y="208" class="xxs m">Sin movimiento</text>
+<text x="30" y="227" class="b" font-size="15">2</text>
+<text x="201" y="208" class="xxs m">Bloqueados</text>
+<text x="201" y="227" class="b rust" font-size="15">1</text>
+</g>
+
+<!-- Bloqueo -->
+<rect x="16" y="254" width="343" height="270" rx="16" fill="#ff8b7c" fill-opacity=".06" stroke="#ff8b7c" stroke-opacity=".3"/>
+<text x="32" y="280" class="b rust" font-size="14">No se puede aplicar: 1 pedido bloqueado</text>
+<text x="32" y="304" class="s b">KNT-004618 · posible cobro doble</text>
+<text x="32" y="328" class="xs fg2">Le elegiste la ficha Tentacion a la linea 1,</text>
+<text x="32" y="346" class="xs fg2">pero el pedido ya tiene -$35.000 cobrados</text>
+<text x="32" y="364" class="xs fg2">con la ficha Tentacion Pack, que hoy ninguna</text>
+<text x="32" y="382" class="xs fg2">linea empareja. Seguramente es la misma</text>
+<text x="32" y="400" class="xs fg2">linea, ya cobrada.</text>
+<rect x="32" y="414" width="311" height="44" rx="22" fill="#ffffff" fill-opacity=".06" stroke="#ffffff" stroke-opacity=".14"/>
+<text x="187" y="441" class="c s sb">Excluir KNT-004618</text>
+<rect x="32" y="466" width="311" height="44" rx="22" class="ol"/>
+<text x="187" y="493" class="c s sb">Quitar la ficha elegida</text>
+
+<!-- Cobro doble evitado (aviso, no bloquea) -->
+<rect x="16" y="536" width="343" height="144" rx="16" fill="#7cc4ff" fill-opacity=".06" stroke="#7cc4ff" stroke-opacity=".28"/>
+<circle cx="40" cy="558" r="9" fill="none" stroke="#7cc4ff" stroke-width="2"/>
+<path d="M36 558 l3 3 l5 -6" fill="none" stroke="#7cc4ff" stroke-width="2"/>
+<text x="56" y="563" class="b info" font-size="15">Cobro doble evitado: KNT-004603</text>
+<text x="32" y="588" class="xs fg2">Ya tiene -$35.000 cobrados con la ficha</text>
+<text x="32" y="606" class="xs fg2">Tentacion. Hoy su linea, con el paquete en</text>
+<text x="32" y="624" class="xs fg2">el nombre, no empareja; pero lo cobrado</text>
+<text x="32" y="642" class="xs fg2">manda y no se toca.</text>
+<rect x="32" y="654" width="110" height="18" rx="9" fill="#212832"/><text x="87" y="667" class="c xxs sb m">Sin movimiento</text>
+
+<!-- Primera tarjeta de pedido -->
+<rect x="16" y="690" width="343" height="40" rx="14" fill="#212832"/>
+<text x="32" y="715" class="s sb">KNT-004590 · Tentacion · 1 ud</text>
+<text x="343" y="715" class="r s b rust num">-$35.000</text>
+
+<!-- Pie fijo -->
+<rect x="0" y="738" width="375" height="74" fill="#191e25"/>
+<line x1="0" y1="738" x2="375" y2="738" class="ln"/>
+<text x="16" y="756" class="xxs rust sb">Resuelve el bloqueo para poder aplicar</text>
+<rect x="16" y="762" width="343" height="44" rx="22" fill="#212832"/>
+<text x="187" y="789" class="c s sb m">Aplicar correccion</text>
+</svg>

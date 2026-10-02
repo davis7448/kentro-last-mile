@@ -1,0 +1,18 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Elegir ficha para la linea" },
+    { "role": "heading", "name": "Elegir ficha para la linea" },
+    { "role": "searchbox", "name": "Buscar ficha" },
+    { "role": "radiogroup", "name": "Fichas de Bella Mujer" },
+    { "role": "radio", "name": "Kit Cuidado Completo" },
+    { "role": "radio", "name": "Kit Cuidado Basico" },
+    { "role": "checkbox", "name": "Aplicar a las lineas con el mismo nombre en otros pedidos" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Usar esta ficha" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

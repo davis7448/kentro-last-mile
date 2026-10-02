@@ -1,0 +1,12 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 1280, "height": 1000 },
+  "expect": [
+    { "role": "status", "name": "Cargando las cifras de tu comunidad..." },
+    { "role": "button", "name": "Reintentar" },
+    { "role": "heading", "name": "Tu cashback" },
+    { "role": "heading", "name": "Reconocimiento de Kentro" },
+    { "role": "button", "name": "Que es el reconocimiento" }
+  ]
+}

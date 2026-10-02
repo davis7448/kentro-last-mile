@@ -1,0 +1,18 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 1060 },
+  "expect": [
+    { "role": "dialog", "name": "Poner al dia: ADMA" },
+    { "role": "button", "name": "Cerrar" },
+    { "role": "button", "name": "Cambiar" },
+    { "role": "heading", "name": "Previsualizacion" },
+    { "role": "alert", "name": "No se escribira nada" },
+    { "role": "list", "name": "Los 151 pedidos" },
+    { "role": "button", "name": "Pagina anterior" },
+    { "role": "button", "name": "Pagina siguiente" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Reconocer pedidos" }
+  ],
+  "threshold": { "missing": 0 }
+}

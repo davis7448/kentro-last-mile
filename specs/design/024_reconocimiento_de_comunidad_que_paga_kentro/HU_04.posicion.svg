@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1180" viewBox="0 0 375 1180" role="img" aria-labelledby="t">
+  <title id="t">HU_04 movil: Liquidaciones, posicion de la plataforma con el reconocimiento a comunidades restado de la utilidad</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.s70{fill:#cbd3dc}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="1180" fill="#0e1116"/>
+  <text x="16" y="42" font-size="26" class="xb" letter-spacing="-0.9">Liquidaciones</text>
+
+  <!-- Heroe: la unica cifra en acido -->
+  <rect x="16" y="64" width="343" height="88" rx="24" fill="#c6f24e"/>
+  <text x="34" y="96" class="sb deep" fill-opacity="0.7">Pendiente total por conciliar</text>
+  <text x="34" y="132" font-size="30" class="xb deep tab">$8.412.300</text>
+
+  <!-- Franja de KPI -->
+  <rect x="16" y="168" width="343" height="216" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <line x1="187.5" y1="168" x2="187.5" y2="384" stroke="#ffffff" stroke-opacity="0.06"/>
+  <line x1="16" y1="240" x2="359" y2="240" stroke="#ffffff" stroke-opacity="0.06"/>
+  <line x1="16" y1="312" x2="359" y2="312" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="30" y="192" font-size="11" class="m">Tiendas por pagar</text><text x="30" y="220" font-size="18" class="b tab">$5.120.400</text>
+  <text x="200" y="192" font-size="11" class="m">Proveedores</text><text x="200" y="220" font-size="18" class="b tab">$2.410.900</text>
+  <text x="30" y="264" font-size="11" class="m">Comunidades</text><text x="30" y="290" font-size="18" class="b tab">$80.000</text>
+  <text x="30" y="304" font-size="10" class="m tab">cashback 16.000 · reconoc. 64.000</text>
+  <text x="200" y="264" font-size="11" class="m">Domiciliarios deben</text><text x="200" y="278" font-size="11" class="m">entregar</text><text x="200" y="302" font-size="18" class="b tab rust">$801.000</text>
+  <text x="30" y="336" font-size="11" class="m">Bloqueado por COD</text><text x="30" y="364" font-size="18" class="b tab">$0</text>
+
+  <!-- Pestanas -->
+  <rect x="16" y="400" width="104" height="44" rx="22" fill="#c6f24e"/><text x="68" y="427" text-anchor="middle" font-size="13" class="sb deep">Por pagar</text>
+  <rect x="128" y="400" width="134" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.10"/><text x="195" y="427" text-anchor="middle" font-size="13" class="sb m">Cortes cerrados</text>
+  <rect x="16" y="452" width="180" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.10"/><text x="106" y="479" text-anchor="middle" font-size="13" class="sb m">Resumen del periodo</text>
+
+  <!-- Panel plegable abierto: posicion -->
+  <rect x="16" y="512" width="343" height="652" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="542" font-size="15" class="b">Posicion de la plataforma</text>
+  <text x="32" y="560" class="m">Caja, activos, pasivos y utilidad acumulada</text>
+  <polyline points="331,544 337,538 343,544" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round"/>
+  <text x="32" y="588" class="m">Lo cobrado a tiendas menos lo pagado a</text>
+  <text x="32" y="604" class="m">domiciliarios y lo reconocido a comunidades.</text>
+
+  <rect x="28" y="620" width="319" height="132" rx="16" fill="#212832"/>
+  <text x="40" y="644" class="sb m">Caja y por cobrar</text>
+  <text x="40" y="666" font-size="13" class="s70">Caja actual: <tspan class="b tab" fill="#f4f6f8">$23.912.400</tspan></text>
+  <text x="40" y="686" font-size="11" class="m">recibido del domiciliario $108.486.400 ·</text>
+  <text x="40" y="701" font-size="11" class="m">pagado a tiendas $84.070.000 ·</text>
+  <text x="40" y="716" font-size="11" class="m">pagado a comunidades <tspan class="tab" fill="#f4f6f8">$504.000</tspan></text>
+  <text x="40" y="740" font-size="13" class="s70">Por cobrar al domiciliario: <tspan class="b tab" fill="#f4f6f8">$801.000</tspan></text>
+
+  <rect x="28" y="764" width="319" height="122" rx="16" fill="#212832"/>
+  <text x="40" y="788" class="sb m">Obligaciones</text>
+  <text x="40" y="810" font-size="13" class="s70">Por pagar a tiendas: <tspan class="b tab" fill="#f4f6f8">$5.120.400</tspan></text>
+  <text x="40" y="832" font-size="13" class="s70">Retenido para proveedores: <tspan class="b tab" fill="#f4f6f8">$2.410.900</tspan></text>
+  <text x="40" y="854" font-size="13" class="s70">Reconocimiento por pagar a</text>
+  <text x="40" y="872" font-size="13" class="s70">comunidades: <tspan class="b tab" fill="#f4f6f8">$64.000</tspan></text>
+
+  <rect x="28" y="898" width="319" height="250" rx="16" fill="#212832"/>
+  <text x="40" y="922" class="sb m">Utilidad</text>
+  <text x="40" y="946" font-size="13" class="s70">Cobros a tiendas</text><text x="335" y="946" text-anchor="end" font-size="13" class="b tab">$58.940.000</text>
+  <text x="40" y="970" font-size="13" class="s70">Pago a domiciliarios</text><text x="335" y="970" text-anchor="end" font-size="13" class="b tab">−$41.210.000</text>
+  <text x="40" y="994" font-size="13" class="s70">Reconocido a comunidades</text><text x="335" y="994" text-anchor="end" font-size="13" class="b tab">−$568.000</text>
+  <text x="40" y="1012" font-size="11" class="m">pagado $504.000 · por pagar $64.000</text>
+  <line x1="40" y1="1026" x2="335" y2="1026" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="40" y="1052" font-size="14" class="b mint">Utilidad acumulada</text><text x="335" y="1052" text-anchor="end" font-size="14" class="b tab mint">$17.162.000</text>
+  <text x="40" y="1084" font-size="13" class="b mint">Activos − obligaciones</text><text x="335" y="1084" text-anchor="end" font-size="13" class="b tab mint">$17.118.100</text>
+  <text x="40" y="1106" font-size="11" class="m">deberia parecerse a la utilidad; la</text>
+  <text x="40" y="1121" font-size="11" class="m">diferencia son ajustes y correcciones</text>
+</svg>

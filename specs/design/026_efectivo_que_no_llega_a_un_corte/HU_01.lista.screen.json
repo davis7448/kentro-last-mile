@@ -1,0 +1,17 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Liquidaciones" },
+    { "role": "tablist", "name": "Secciones de liquidaciones" },
+    { "role": "tab", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Efectivo sin llegar" },
+    { "role": "button", "name": "Actualizar" },
+    { "role": "button", "name": "Plazo y aviso" },
+    { "role": "region", "name": "Resumen del efectivo sin llegar" },
+    { "role": "combobox", "name": "Lider" },
+    { "role": "list", "name": "Efectivo sin llegar por lider" }
+  ],
+  "threshold": { "missing": 0 }
+}

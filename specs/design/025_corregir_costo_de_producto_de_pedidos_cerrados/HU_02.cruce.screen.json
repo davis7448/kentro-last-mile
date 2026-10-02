@@ -1,0 +1,20 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Registrar cruce" },
+    { "role": "heading", "name": "Registrar cruce" },
+    { "role": "combobox", "name": "Tienda" },
+    { "role": "combobox", "name": "Proveedor que asume" },
+    { "role": "textbox", "name": "Concepto" },
+    { "role": "textbox", "name": "Importe de KNT-004480" },
+    { "role": "button", "name": "Quitar KNT-004480" },
+    { "role": "button", "name": "Agregar pedido" },
+    { "role": "textbox", "name": "Motivo (queda en la auditoria)" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Previsualizar cruce" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

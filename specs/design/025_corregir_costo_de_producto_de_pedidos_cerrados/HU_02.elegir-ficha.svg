@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812" role="img" aria-label="Movil: elegir a mano la ficha de una linea cuyo nombre no empareja">
+<title>HU_02 - Elegir ficha para la linea (movil 375)</title>
+<defs>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:18px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.info{fill:#7cc4ff}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<rect width="375" height="812" fill="#191e25"/>
+<text x="16" y="42" class="h">Elegir ficha para la linea</text>
+<circle cx="337" cy="36" r="22" class="ol"/>
+<path d="M330 29 l14 14 M344 29 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="66" class="xs m">KNT-004590 · linea 1 de 2 · 1 ud</text>
+
+<!-- Linea tal como vino de la tienda -->
+<rect x="16" y="80" width="343" height="64" rx="16" fill="#212832"/>
+<text x="32" y="104" class="xxs m">Nombre en el pedido (no empareja ninguna ficha)</text>
+<text x="32" y="128" class="s sb">Kit Cuidado Completo - Promo Sep BM</text>
+
+<!-- Buscar -->
+<rect x="16" y="158" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity=".1"/>
+<circle cx="40" cy="179" r="6" fill="none" stroke="#9aa5b3" stroke-width="2"/><path d="M44 184 l5 5" stroke="#9aa5b3" stroke-width="2"/>
+<text x="58" y="185" class="s">kit</text>
+
+<text x="16" y="230" class="xs sb m">Fichas de Bella Mujer</text>
+<rect x="16" y="240" width="343" height="60" rx="16" fill="#c6f24e" fill-opacity=".05" stroke="#c6f24e" stroke-opacity=".4"/>
+<circle cx="40" cy="270" r="9" fill="none" stroke="#c6f24e" stroke-width="2"/><circle cx="40" cy="270" r="4.5" fill="#c6f24e"/>
+<text x="60" y="266" class="sb">Kit Cuidado Completo</text>
+<text x="60" y="286" class="xs m">ADMA LABORATORIO · SKU BM-KIT-C</text>
+<text x="343" y="266" class="r s sb num">$50.000</text>
+
+<rect x="16" y="308" width="343" height="60" rx="16" fill="none" stroke="#ffffff" stroke-opacity=".1"/>
+<circle cx="40" cy="338" r="9" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="60" y="334" class="sb">Kit Cuidado Basico</text>
+<text x="60" y="354" class="xs m">ADMA LABORATORIO · SKU BM-KIT-B</text>
+<text x="343" y="334" class="r s sb num">$32.000</text>
+
+<rect x="16" y="376" width="343" height="60" rx="16" fill="none" stroke="#ffffff" stroke-opacity=".06"/>
+<circle cx="40" cy="406" r="9" fill="none" stroke="#9aa5b3" stroke-opacity=".4" stroke-width="2"/>
+<text x="60" y="402" class="sb m">Kit Amor en Doble</text>
+<text x="60" y="422" class="xs m">Sin costo: ponselo antes de usarla</text>
+
+<!-- Alcance -->
+<rect x="16" y="452" width="18" height="18" rx="5" fill="#c6f24e"/><path d="M19 461 l4 4 l8 -9" fill="none" stroke="#10140c" stroke-width="2.2"/>
+<text x="44" y="466" class="s sb">Aplicar a las lineas con el mismo</text>
+<text x="44" y="484" class="s sb">nombre en otros pedidos</text>
+<text x="44" y="504" class="xs m">4 lineas mas en KNT-004601, 004611, 004622</text>
+<text x="44" y="520" class="xs m">y 004630.</text>
+
+<rect x="16" y="540" width="343" height="92" rx="16" fill="#7cc4ff" fill-opacity=".06" stroke="#7cc4ff" stroke-opacity=".25"/>
+<text x="32" y="564" class="xs b info">Solo vale para esta correccion</text>
+<text x="32" y="584" class="xs fg2">El cierre sigue emparejando por SKU y nombre.</text>
+<text x="32" y="602" class="xs fg2">Si el pedido ya tiene costo con otra ficha, la</text>
+<text x="32" y="620" class="xs fg2">vista previa lo bloquea para no cobrar dos veces.</text>
+
+<rect x="0" y="738" width="375" height="74" fill="#191e25"/>
+<line x1="0" y1="738" x2="375" y2="738" stroke="#ffffff" stroke-opacity=".06"/>
+<rect x="16" y="754" width="120" height="44" rx="22" class="ol"/><text x="76" y="781" class="c s sb">Cancelar</text>
+<rect x="144" y="754" width="215" height="44" rx="22" fill="#c6f24e"/><text x="251" y="781" class="c s b deep">Usar esta ficha</text>
+</svg>

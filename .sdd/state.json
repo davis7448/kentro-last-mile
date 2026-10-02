@@ -1,71 +1,27 @@
 {
   "version": 1,
-  "phase": "release",
+  "phase": "implement",
   "activeSpec": {
-    "file": "specs/022_ningun_pedido_vale_mil_millones.md",
+    "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
   },
+  "ui": {
+    "exposesUi": true,
+    "by": "codex@local@srv995537",
+    "at": "2026-10-02T15:12:13Z"
+  },
   "tasks": {
-    "T1": {
-      "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04"
-      ],
-      "files": [
-        "functions/src/order-amount.ts",
-        "functions/src/order-amount.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T2": {
-      "requirements": [
-        "RF_01",
-        "RF_03"
-      ],
-      "files": [
-        "functions/src/orders.ts",
-        "src/lib/spec-022-guards.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T3": {
-      "requirements": [
-        "RF_05"
-      ],
-      "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/spec-022-guards.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T4": {
-      "requirements": [
-        "RF_06",
-        "RNF_03"
-      ],
-      "files": [
-        "functions/src/order-import-merge.ts",
-        "functions/src/order-import-merge.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T5": {
-      "requirements": [
-        "RNF_02"
-      ],
-      "files": [
-        "scripts/verify-022.js",
-        ".sdd/evidence/022/barrido.txt"
-      ],
-      "testWritten": true,
-      "done": true
-    }
+    "T1": { "requirements": ["RNF_02"], "files": ["functions/src/driver-receivable.ts", "functions/src/platform-position.ts", "src/lib/driver-receivable.test.ts"], "testWritten": false, "done": false },
+    "T2": { "requirements": ["RF_04"], "files": ["functions/src/cash-outstanding-schemas.ts", "src/lib/cash-outstanding-schemas.test.ts"], "testWritten": false, "done": false },
+    "T3": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_07"], "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": false, "done": false },
+    "T4": { "requirements": ["RF_06", "RF_08", "RNF_02"], "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": false, "done": false },
+    "T5": { "requirements": ["RF_05"], "files": ["functions/src/cash-overdue-notice.ts", "src/lib/cash-overdue-notice.test.ts"], "testWritten": false, "done": false },
+    "T6": { "requirements": ["RF_05"], "files": ["functions/src/ops-notify.ts", "src/lib/ops-notify.test.ts"], "testWritten": false, "done": false },
+    "T7": { "requirements": ["RF_04", "RF_05", "RF_06", "RF_07", "RNF_01"], "files": ["functions/src/cash-outstanding-api.ts", "functions/src/index.ts", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
+    "T8": { "requirements": ["RF_02", "RF_03", "RF_06"], "files": ["src/lib/firebase/auth.ts", "src/lib/types.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts"], "testWritten": false, "done": false },
+    "T9": { "requirements": ["RF_02", "RF_03", "RF_04", "RF_08"], "files": ["src/components/cash-outstanding-admin.tsx", "src/components/operations-app.tsx", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
+    "T10": { "requirements": ["RF_06"], "files": ["src/components/cash-outstanding-leader.tsx", "src/components/operations-app.tsx", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
+    "T11": { "requirements": ["RNF_01", "RNF_02", "RF_07"], "files": ["scripts/verify-026.js", "docs/rendimiento.md", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false }
   },
   "testCommand": "npm test",
   "deployUrl": "https://kentro-last-mile.web.app",
@@ -245,9 +201,89 @@
       "approved": "2026-09-19",
       "note": "functions + hosting desplegados el 2026-09-19; comprobado contra produccion: la callable rechaza $11.770.047.900 con HTTP 400 y el formulario avisa antes de enviar.",
       "deployed": "2026-09-19"
+    },
+    "024": {
+      "file": "specs/024_reconocimiento_de_comunidad_que_paga_kentro.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "liquidaciones de ADMA y ADMA LABORATORIO del 2026-09-29/30"
+    },
+    "025": {
+      "file": "specs/025_corregir_costo_de_producto_de_pedidos_cerrados.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "correcciones de costo de producto a mano del 2026-09-30"
+    },
+    "026": {
+      "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "producto de LAB sin poder pagarse por efectivo con el domiciliario (2026-09-30)"
     }
   },
   "archivedTasks": {
+    "022": {
+      "T1": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03",
+          "RF_04"
+        ],
+        "files": [
+          "functions/src/order-amount.ts",
+          "functions/src/order-amount.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_01",
+          "RF_03"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "src/lib/spec-022-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_05"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-022-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_06",
+          "RNF_03"
+        ],
+        "files": [
+          "functions/src/order-import-merge.ts",
+          "functions/src/order-import-merge.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RNF_02"
+        ],
+        "files": [
+          "scripts/verify-022.js",
+          ".sdd/evidence/022/barrido.txt"
+        ],
+        "testWritten": true,
+        "done": true
+      }
+    },
     "002": {
       "T1": {
         "requirements": [
@@ -2183,7 +2219,7 @@
       }
     }
   },
-  "activeTask": null,
-  "plan": "specs/022_plan.md",
-  "tasksFile": "specs/022_tasks.md"
+  "activeTask": "T1",
+  "plan": "specs/026_plan.md",
+  "tasksFile": "specs/026_tasks.md"
 }

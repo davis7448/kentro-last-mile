@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-label="Dialogo Corregir costo de producto, fase 1: tienda, productos, rango de cierre y motivo">
+<title>HU_02 - Corrector, fase 1 (escritorio)</title>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#000" flood-opacity=".45"/></filter>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:20px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<!-- Fondo: la pestana Costo de producto, atenuada -->
+<rect width="1280" height="800" fill="#0e1116"/>
+<rect x="0" y="0" width="84" height="800" fill="#191e25"/>
+<text x="116" y="58" font-size="30" font-weight="800">Liquidaciones</text>
+<rect x="116" y="316" width="1132" height="300" rx="24" fill="#191e25"/>
+<rect width="1280" height="800" fill="#000000" fill-opacity=".55"/>
+
+<!-- Dialogo -->
+<rect x="320" y="20" width="640" height="760" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06" filter="url(#sh)"/>
+<text x="348" y="60" class="h">Corregir costo de producto</text>
+<text x="348" y="84" class="s m">Pedidos ya entregados. Se cobra solo la diferencia con el costo que tiene</text>
+<text x="348" y="102" class="s m">hoy la ficha, con la misma regla del cierre.</text>
+<circle cx="920" cy="56" r="22" class="ol"/>
+<path d="M913 49 l14 14 M927 49 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+
+<rect x="348" y="120" width="584" height="580" rx="16" fill="#212832"/>
+
+<!-- Tienda -->
+<text x="368" y="146" class="xs sb m">Tienda</text>
+<rect x="368" y="154" width="544" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="390" y="181" class="s">Nambu</text>
+<path d="M886 173 l6 6 l6 -6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+
+<!-- Productos -->
+<text x="368" y="226" class="xs sb m">Productos a corregir</text>
+<text x="912" y="226" class="xs m r">2 marcados · maximo 20</text>
+
+<rect x="368" y="236" width="544" height="48" rx="16" fill="#c6f24e" fill-opacity=".05" stroke="#c6f24e" stroke-opacity=".4"/>
+<rect x="384" y="251" width="18" height="18" rx="5" fill="#c6f24e"/><path d="M387 260 l4 4 l8 -9" fill="none" stroke="#10140c" stroke-width="2.2"/>
+<text x="414" y="265" class="sb">Lung Cleansing</text>
+<text x="560" y="265" class="xs m">ADMA LABORATORIO · SKU NB-LUNG</text>
+<text x="896" y="265" class="r num sb">$25.000 c/u</text>
+
+<rect x="368" y="292" width="544" height="48" rx="16" fill="#c6f24e" fill-opacity=".05" stroke="#c6f24e" stroke-opacity=".4"/>
+<rect x="384" y="307" width="18" height="18" rx="5" fill="#c6f24e"/><path d="M387 316 l4 4 l8 -9" fill="none" stroke="#10140c" stroke-width="2.2"/>
+<text x="414" y="321" class="sb">Chest Relief</text>
+<text x="560" y="321" class="xs m">ADMA LABORATORIO · SKU NB-CHEST</text>
+<text x="896" y="321" class="r num sb">$24.000 c/u</text>
+
+<rect x="368" y="348" width="544" height="48" rx="16" fill="none" stroke="#ffffff" stroke-opacity=".1"/>
+<rect x="384" y="363" width="18" height="18" rx="5" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+<text x="414" y="377" class="sb">Detox Tea</text>
+<text x="560" y="377" class="xs m">ADMA LABORATORIO · por nombre</text>
+<text x="896" y="377" class="r num sb">$18.000 c/u</text>
+
+<rect x="368" y="404" width="544" height="48" rx="16" fill="none" stroke="#ffffff" stroke-opacity=".06"/>
+<rect x="384" y="419" width="18" height="18" rx="5" fill="#191e25" stroke="#9aa5b3" stroke-opacity=".4" stroke-width="1.5"/>
+<text x="414" y="433" class="sb m">Muestra gratis Nambu</text>
+<text x="896" y="433" class="r xs m">$0 a proposito: no se corrige</text>
+
+<text x="368" y="476" class="xs m">Solo se tocan los productos marcados: el resto del pedido no se re-precia. Un producto</text>
+<text x="368" y="492" class="xs m">sin costo en la ficha no se puede marcar; ponle costo primero desde Inventario.</text>
+
+<!-- Rango -->
+<text x="368" y="520" class="xs sb m">Cerrados desde</text>
+<rect x="368" y="528" width="262" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="390" y="555" class="s num">01/09/2026</text>
+<text x="650" y="520" class="xs sb m">Cerrados hasta</text>
+<rect x="650" y="528" width="262" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="672" y="555" class="s num">30/09/2026</text>
+<text x="368" y="590" class="xxs m">Opcional. Vacio = todo el historico de la tienda.</text>
+
+<!-- Motivo -->
+<text x="368" y="616" class="xs sb m">Motivo de la correccion (queda en la auditoria)</text>
+<rect x="368" y="624" width="544" height="62" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="384" y="648" class="s">Nambu no tenia fichas al cerrar estos pedidos. Liquidacion</text>
+<text x="384" y="668" class="s">de ADMA LABORATORIO del 30 sep.</text>
+
+<!-- Acciones -->
+<rect x="660" y="716" width="110" height="44" rx="22" class="ol"/><text x="715" y="743" class="c s sb">Cancelar</text>
+<rect x="778" y="716" width="154" height="44" rx="22" fill="#c6f24e"/><text x="855" y="743" class="c s b deep">Previsualizar cambios</text>
+</svg>

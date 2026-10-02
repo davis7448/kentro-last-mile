@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_01 - Efectivo sin llegar, pestana de Liquidaciones (admin, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.14"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+    <clipPath id="tabsclip"><rect x="0" y="108" width="375" height="60"/></clipPath>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="30" cy="160" r="190" fill="url(#ga)"/>
+  <circle cx="360" cy="460" r="200" fill="url(#gb)"/>
+
+  <!-- Barra superior -->
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">AD</text>
+
+  <text x="16" y="96" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Liquidaciones</text>
+
+  <!-- Pestanas (se desplazan en horizontal) -->
+  <g clip-path="url(#tabsclip)">
+    <rect x="12" y="112" width="440" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+    <rect x="16" y="116" width="96" height="44" rx="22" fill="none"/>
+    <text x="64" y="143" text-anchor="middle" font-size="14" font-weight="600" fill="#cbd3dc">Por pagar</text>
+    <rect x="116" y="116" width="164" height="44" rx="22" fill="#f4f6f8"/>
+    <text x="198" y="143" text-anchor="middle" font-size="14" font-weight="700" fill="#0e1116">Efectivo sin llegar</text>
+    <circle cx="270" cy="124" r="0" fill="none"/>
+    <text x="294" y="143" font-size="14" font-weight="600" fill="#cbd3dc">Cortes cerrados</text>
+  </g>
+
+  <!-- Encabezado de la pestana -->
+  <text x="16" y="198" font-size="20" font-weight="700" fill="#f4f6f8">Efectivo sin llegar</text>
+  <text x="16" y="220" font-size="13" fill="#9aa5b3">Contraentregas entregadas que Kentro aun no</text>
+  <text x="16" y="238" font-size="13" fill="#9aa5b3">recibe en un corte · calculado hoy 10:42</text>
+  <rect x="16" y="252" width="122" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <path d="M38 268 a8 8 0 1 0 8 -1" fill="none" stroke="#f4f6f8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M43 263 l4 4 l-5 2" fill="none" stroke="#f4f6f8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="58" y="279" font-size="14" font-weight="600" fill="#f4f6f8">Actualizar</text>
+  <rect x="146" y="252" width="132" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="212" y="279" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Plazo y aviso</text>
+
+  <!-- Franja de cifras -->
+  <rect x="16" y="312" width="343" height="132" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <line x1="187.5" y1="328" x2="187.5" y2="392" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="32" y="338" font-size="12" fill="#9aa5b3">Sin llegar</text>
+  <text x="32" y="366" class="n" font-size="21" font-weight="800" fill="#f4f6f8" letter-spacing="-0.5">$14.557.721</text>
+  <text x="32" y="386" font-size="12" fill="#9aa5b3">153 pedidos</text>
+  <text x="203" y="338" font-size="12" fill="#9aa5b3">Vencido, mas de 7 dias</text>
+  <text x="203" y="366" class="n" font-size="21" font-weight="800" fill="#ff8b7c" letter-spacing="-0.5">$2.954.111</text>
+  <text x="203" y="386" font-size="12" fill="#9aa5b3">34 pedidos</text>
+  <line x1="32" y1="404" x2="343" y2="404" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="428" font-size="12" fill="#cbd3dc">84 fuera de todo corte · 69 en corte pendiente</text>
+
+  <!-- Filtro por lider -->
+  <text x="16" y="468" font-size="12" font-weight="600" fill="#cbd3dc">Lider</text>
+  <rect x="16" y="476" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="36" y="503" font-size="14" fill="#f4f6f8">Todos los lideres</text>
+  <path d="M331 494 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Grupo por lider: el de mayor importe vencido primero -->
+  <rect x="16" y="536" width="343" height="300" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="564" font-size="16" font-weight="700" fill="#f4f6f8">Jhon Fredy Ruiz</text>
+  <text x="343" y="564" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$2.884.300</text>
+  <text x="32" y="584" font-size="12" fill="#9aa5b3">31 pedidos · desde el 1 jul</text>
+  <text x="343" y="584" text-anchor="end" class="n" font-size="12" font-weight="600" fill="#ff8b7c">26 vencidos · $2.401.140</text>
+  <line x1="32" y1="598" x2="343" y2="598" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Fila 1 -->
+  <text x="32" y="622" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-003921</text>
+  <text x="343" y="622" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$89.900</text>
+  <text x="32" y="641" font-size="12" fill="#9aa5b3">DANDA · Kevin Rios · 1 jul</text>
+  <rect x="32" y="651" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+  <text x="65" y="667" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">93 dias</text>
+  <rect x="104" y="651" width="134" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+  <text x="171" y="667" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+  <path d="M335 660 l-5 5 l5 5" transform="rotate(-90 335 665)" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="32" y1="688" x2="343" y2="688" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Fila 2 -->
+  <text x="32" y="712" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-004118</text>
+  <text x="343" y="712" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$129.000</text>
+  <text x="32" y="731" font-size="12" fill="#9aa5b3">Bella Mujer · Kevin Rios · 9 jul</text>
+  <rect x="32" y="741" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+
+  <!-- Navegacion inferior del admin -->
+  <rect x="0" y="748" width="375" height="64" fill="#141920"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="10" text-anchor="middle">
+    <rect x="21" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="31" y="796" fill="#9aa5b3">Operacion</text>
+    <rect x="84" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="94" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="146" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="156" y="796" fill="#9aa5b3">Inventario</text>
+    <rect x="209" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="219" y="796" fill="#9aa5b3">Tiendas</text>
+    <rect x="271" y="758" width="20" height="20" rx="6" fill="#c6f24e"/>
+    <text x="281" y="796" fill="#f4f6f8" font-weight="700">Cortes</text>
+    <rect x="334" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="344" y="796" fill="#9aa5b3">Ajustes</text>
+  </g>
+</svg>

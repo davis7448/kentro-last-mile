@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1500" viewBox="0 0 375 1500" role="img" aria-labelledby="t">
+  <title id="t">HU_01 movil: ficha de comunidad ADMA con el reconocimiento de Kentro abierto para editar</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.s70{fill:#cbd3dc}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.acid{fill:#c6f24e}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="1500" fill="#0e1116"/>
+
+  <!-- Cabecera -->
+  <text x="16" y="42" font-size="26" class="xb" letter-spacing="-0.9">Ajustes</text>
+  <circle cx="341" cy="34" r="18" fill="#212832" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="341" y="38" text-anchor="middle" class="sb">AD</text>
+
+  <!-- Panel plegable Comunidades (abierto) -->
+  <rect x="16" y="72" width="343" height="1336" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="102" font-size="16" class="b">Comunidades</text>
+  <text x="32" y="122" class="m">2 con enlace propio</text>
+  <polyline points="331,104 337,98 343,104" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Tarjeta de la comunidad ADMA -->
+  <rect x="28" y="140" width="319" height="1196" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="40" y="166" font-size="15" class="b">ADMA</text>
+  <text x="335" y="166" text-anchor="end" font-size="11" class="m">/registro/adma</text>
+  <text x="40" y="188" class="m">ADMA COMERCIAL · 9 tiendas · enlace activo</text>
+  <text x="40" y="204" class="m">lider activo</text>
+  <text x="40" y="228" class="m">Entrega <tspan class="tab sb" fill="#f4f6f8">$12.000</tspan> (base)</text>
+  <text x="40" y="246" class="m">Fallido <tspan class="tab sb" fill="#f4f6f8">$12.000</tspan> (base)</text>
+  <text x="40" y="264" class="m">Manejo <tspan class="tab sb" fill="#f4f6f8">$2.000</tspan> (base)</text>
+  <text x="40" y="286" class="m">Cashback causado <tspan class="tab sb" fill="#f4f6f8">$0</tspan> · pagado <tspan class="tab sb" fill="#f4f6f8">$0</tspan></text>
+
+  <!-- Resumen del reconocimiento (solo existe si la comunidad tiene valor) -->
+  <rect x="40" y="300" width="295" height="94" rx="16" fill="#212832"/>
+  <text x="52" y="324" font-size="13" class="sb">Reconocimiento de Kentro</text>
+  <text x="323" y="324" text-anchor="end" font-size="13" class="b tab">$1.000/pedido</text>
+  <text x="52" y="344" class="m">Causado <tspan class="tab sb" fill="#f4f6f8">$167.000</tspan> · pagado <tspan class="tab sb" fill="#f4f6f8">$144.000</tspan></text>
+  <text x="52" y="362" class="m">Lo paga Kentro: la tienda no paga mas.</text>
+  <text x="52" y="380" class="m">No causa: ADMA COMERCIAL</text>
+
+  <!-- Acciones de la tarjeta -->
+  <rect x="40" y="408" width="128" height="44" rx="22" fill="#212832"/>
+  <text x="104" y="434" text-anchor="middle" class="sb">Revocar enlace</text>
+  <rect x="176" y="408" width="140" height="44" rx="22" fill="#212832"/>
+  <text x="246" y="434" text-anchor="middle" class="sb">Desactivar lider</text>
+  <rect x="40" y="460" width="184" height="44" rx="22" fill="#212832"/>
+  <text x="132" y="486" text-anchor="middle" class="sb rust">Contener enlace filtrado</text>
+  <rect x="40" y="512" width="184" height="44" rx="22" fill="#212832" stroke="#c6f24e" stroke-opacity="0.45"/>
+  <text x="124" y="538" text-anchor="middle" class="sb">Editar reconocimiento</text>
+  <polyline points="204,537 209,532 214,537" fill="none" stroke="#f4f6f8" stroke-width="1.6" stroke-linecap="round"/>
+
+  <!-- Editor del reconocimiento -->
+  <rect x="40" y="570" width="295" height="694" rx="16" fill="#212832"/>
+  <text x="52" y="598" font-size="14" class="b">Reconocimiento por pedido</text>
+  <text x="52" y="620" class="m">Kentro le reconoce este valor a la</text>
+  <text x="52" y="636" class="m">comunidad por cada pedido entregado o</text>
+  <text x="52" y="652" class="m">fallido con flete cobrado. La tienda sigue</text>
+  <text x="52" y="668" class="m">pagando lo mismo. Un cambio vale para lo</text>
+  <text x="52" y="684" class="m">que se cierre despues: no recalcula nada.</text>
+
+  <text x="52" y="714" class="sb m">Valor por pedido (COP)</text>
+  <rect x="52" y="722" width="271" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="70" y="749" font-size="15" class="tab">$ 1.000</text>
+  <text x="52" y="784" font-size="11" class="m">Entero, entre $1 y $12.000 por pedido.</text>
+
+  <text x="52" y="814" class="sb m">Tiendas que no causan reconocimiento</text>
+  <rect x="52" y="834" width="22" height="22" rx="7" fill="#c6f24e"/>
+  <polyline points="57,845 61.5,850 69,840" fill="none" stroke="#10140c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="84" y="850" font-size="13">ADMA COMERCIAL</text>
+  <text x="323" y="850" text-anchor="end" font-size="11" class="m">tienda del lider</text>
+  <line x1="52" y1="868" x2="323" y2="868" stroke="#ffffff" stroke-opacity="0.06"/>
+  <rect x="53" y="879" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+  <text x="84" y="894" font-size="13">Casa Nativa</text>
+  <line x1="52" y1="912" x2="323" y2="912" stroke="#ffffff" stroke-opacity="0.06"/>
+  <rect x="53" y="923" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+  <text x="84" y="938" font-size="13">Glowy Skin</text>
+  <line x1="52" y1="956" x2="323" y2="956" stroke="#ffffff" stroke-opacity="0.06"/>
+  <rect x="53" y="967" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+  <text x="84" y="982" font-size="13">Vitta Natural</text>
+  <rect x="52" y="1004" width="150" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="127" y="1030" text-anchor="middle" class="sb">Ver las 9 tiendas</text>
+
+  <rect x="52" y="1064" width="271" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="1091" text-anchor="middle" font-size="13" class="b deep">Guardar reconocimiento</text>
+  <rect x="52" y="1116" width="271" height="44" rx="22" fill="#191e25" stroke="#ff8b7c" stroke-opacity="0.3"/>
+  <text x="187.5" y="1143" text-anchor="middle" font-size="13" class="sb rust">Quitar reconocimiento</text>
+
+  <line x1="52" y1="1176" x2="323" y2="1176" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="52" y="1200" font-size="13" class="sb">Historial de cambios (2)</text>
+  <polyline points="311,1198 317,1192 323,1198" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round"/>
+  <text x="52" y="1222" class="tab">02/10/2026 09:14 · exclusiones</text>
+  <text x="52" y="1238" font-size="11" class="m">+ ADMA COMERCIAL · admin@kentro.co</text>
+  <text x="52" y="1256" class="tab">02/10/2026 09:10 · sin valor → $1.000</text>
+
+  <!-- Entrada al relleno -->
+  <rect x="40" y="1278" width="295" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="187.5" y="1305" text-anchor="middle" font-size="13" class="sb">Poner al dia pedidos cerrados</text>
+
+  <!-- Siguiente comunidad, asomando -->
+  <rect x="28" y="1350" width="319" height="48" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="40" y="1380" font-size="15" class="b">ADMA LABORATORIO</text>
+
+  <!-- Barra inferior (zona del pulgar) -->
+  <rect x="0" y="1420" width="375" height="80" fill="#191e25"/>
+  <line x1="0" y1="1420" x2="375" y2="1420" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="10" text-anchor="middle">
+    <text x="31" y="1462" class="m">Operacion</text>
+    <text x="93" y="1462" class="m">Wallet</text>
+    <text x="155" y="1462" class="m">Inventario</text>
+    <text x="217" y="1462" class="m">Tiendas</text>
+    <text x="279" y="1462" class="m">Cortes</text>
+  </g>
+  <rect x="314" y="1442" width="58" height="30" rx="15" fill="#c6f24e"/>
+  <text x="343" y="1462" text-anchor="middle" font-size="10" class="b deep">Ajustes</text>
+</svg>

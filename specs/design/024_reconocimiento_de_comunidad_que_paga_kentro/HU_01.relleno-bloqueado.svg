@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1060" viewBox="0 0 375 1060" role="img" aria-labelledby="t">
+  <title id="t">HU_01 movil: la previsualizacion no cuadra con lo pagado a mano y el relleno queda bloqueado</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="1060" fill="#191e25"/>
+
+  <text x="16" y="42" font-size="19" class="b" letter-spacing="-0.4">Poner al dia: ADMA</text>
+  <circle cx="337" cy="36" r="22" fill="#212832"/>
+  <path d="M330 29 L344 43 M344 29 L330 43" stroke="#f4f6f8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="0" y1="68" x2="375" y2="68" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Resumen plegado de lo pedido (ya rellenado arriba, se pliega al previsualizar) -->
+  <rect x="16" y="84" width="343" height="64" rx="16" fill="#212832"/>
+  <text x="28" y="110" font-size="13" class="sb">27/04/2026 – 29/09/2026 · pago a mano</text>
+  <text x="28" y="130" class="m">Esperado: <tspan class="tab" fill="#f4f6f8">144</tspan> pedidos · <tspan class="tab" fill="#f4f6f8">$144.000</tspan> el 30/09/2026</text>
+  <text x="347" y="110" text-anchor="end" font-size="12" class="sb">Cambiar</text>
+
+  <!-- Previsualizacion bloqueada -->
+  <rect x="16" y="164" width="343" height="676" rx="16" fill="#212832"/>
+  <text x="28" y="194" font-size="15" class="b">Previsualizacion</text>
+  <rect x="235" y="177" width="112" height="26" rx="13" fill="#ff8b7c" fill-opacity="0.12"/>
+  <circle cx="248" cy="190" r="3.5" fill="#ff8b7c"/>
+  <text x="257" y="194" font-size="11" class="b rust">No cuadra</text>
+
+  <rect x="28" y="214" width="319" height="132" rx="12" fill="#ff8b7c" fill-opacity="0.10" stroke="#ff8b7c" stroke-opacity="0.25"/>
+  <text x="40" y="238" font-size="13" class="b rust">No se escribira nada</text>
+  <text x="40" y="260">Esperabas <tspan class="tab b">144</tspan> pedidos y <tspan class="tab b">$144.000</tspan>.</text>
+  <text x="40" y="278">El calculo da <tspan class="tab b">151</tspan> pedidos y <tspan class="tab b">$151.000</tspan>.</text>
+  <text x="40" y="302" class="m">Sobran 7. Revisa el rango o las tiendas</text>
+  <text x="40" y="318" class="m">excluidas; la lista de abajo sirve para</text>
+  <text x="40" y="334" class="m">cuadrar contra la hoja.</text>
+
+  <text x="28" y="372" class="m">Pedidos a reconocer</text>
+  <text x="28" y="400" font-size="24" class="b tab">151</text>
+  <text x="196" y="372" class="m">Total</text>
+  <text x="196" y="400" font-size="24" class="b tab">$151.000</text>
+  <line x1="28" y1="420" x2="347" y2="420" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <text x="28" y="446" font-size="13" class="sb">Los 151 pedidos</text>
+  <text x="347" y="446" text-anchor="end" class="m">por fecha de cierre</text>
+  <!-- tarjetas por fila, no tabla -->
+  <g>
+    <rect x="28" y="458" width="319" height="58" rx="12" fill="#191e25"/>
+    <text x="40" y="482" font-size="13" class="sb tab">KNT-004871</text><text x="335" y="482" text-anchor="end" font-size="13" class="sb tab">$1.000</text>
+    <text x="40" y="502" class="m">Casa Nativa · entregado · 29/09/2026</text>
+    <rect x="28" y="524" width="319" height="58" rx="12" fill="#191e25"/>
+    <text x="40" y="548" font-size="13" class="sb tab">KNT-004866</text><text x="335" y="548" text-anchor="end" font-size="13" class="sb tab">$1.000</text>
+    <text x="40" y="568" class="m">Glowy Skin · fallido cobrado · 29/09/2026</text>
+    <rect x="28" y="590" width="319" height="58" rx="12" fill="#191e25"/>
+    <text x="40" y="614" font-size="13" class="sb tab">KNT-004859</text><text x="335" y="614" text-anchor="end" font-size="13" class="sb tab">$1.000</text>
+    <text x="40" y="634" class="m">Vitta Natural · entregado · 28/09/2026</text>
+    <rect x="28" y="656" width="319" height="58" rx="12" fill="#191e25"/>
+    <text x="40" y="680" font-size="13" class="sb tab">KNT-004851</text><text x="335" y="680" text-anchor="end" font-size="13" class="sb tab">$1.000</text>
+    <text x="40" y="700" class="m">Casa Nativa · entregado · 28/09/2026</text>
+  </g>
+  <!-- paginacion -->
+  <rect x="28" y="730" width="44" height="44" rx="22" fill="#191e25"/>
+  <polyline points="54,744 46,752 54,760" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round"/>
+  <text x="187.5" y="757" text-anchor="middle" class="m tab">Pagina 1 de 26</text>
+  <rect x="303" y="730" width="44" height="44" rx="22" fill="#191e25"/>
+  <polyline points="321,744 329,752 321,760" fill="none" stroke="#f4f6f8" stroke-width="2" stroke-linecap="round"/>
+  <text x="28" y="812" class="m">Omitidos: excluida 54 · no cobrable 18 ·</text>
+  <text x="28" y="828" class="m">pendiente de revision 2 · ya reconocidos 0</text>
+
+  <!-- Pie fijo: la confirmacion existe pero esta deshabilitada -->
+  <line x1="0" y1="880" x2="375" y2="880" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="16" y="910" class="m">Para seguir, corrige el rango, las</text>
+  <text x="16" y="926" class="m">exclusiones o lo esperado y previsualiza otra vez.</text>
+  <rect x="16" y="944" width="343" height="44" rx="22" fill="#212832"/>
+  <text x="187.5" y="971" text-anchor="middle" font-size="13" class="sb">Cancelar</text>
+  <rect x="16" y="996" width="343" height="52" rx="26" fill="#212832"/>
+  <text x="187.5" y="1027" text-anchor="middle" font-size="14" class="b m">Reconocer pedidos</text>
+</svg>

@@ -1,0 +1,15 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "tab", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Efectivo sin llegar" },
+    { "role": "region", "name": "Documentos ilegibles" },
+    { "role": "heading", "name": "Cifras incompletas" },
+    { "role": "button", "name": "Ver documentos ilegibles" },
+    { "role": "region", "name": "Resumen del efectivo sin llegar" },
+    { "role": "combobox", "name": "Lider" }
+  ],
+  "threshold": { "missing": 0 }
+}

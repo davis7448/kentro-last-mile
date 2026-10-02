@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-label="Liquidaciones, pestana Costo de producto: productos a 0 pesos con pedidos entregados de la tienda Nambu">
+<title>HU_01 - Costo de producto (escritorio)</title>
+<defs>
+<radialGradient id="ga"><stop offset="0" stop-color="#c6f24e" stop-opacity=".16"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+<radialGradient id="gb"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".14"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+<radialGradient id="gc"><stop offset="0" stop-color="#ff8b7c" stop-opacity=".12"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+<filter id="sh" x="-5%" y="-10%" width="110%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".3"/></filter>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.t30{font-size:30px;font-weight:800;letter-spacing:-1px}
+.h2{font-size:18px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.info{fill:#7cc4ff}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ln{stroke:#ffffff;stroke-opacity:.06;stroke-width:1}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<rect width="1280" height="800" fill="#0e1116"/>
+<circle cx="1100" cy="120" r="320" fill="url(#ga)"/>
+<circle cx="300" cy="700" r="360" fill="url(#gb)"/>
+<circle cx="1180" cy="720" r="260" fill="url(#gc)"/>
+
+<!-- Riel -->
+<rect x="0" y="0" width="84" height="800" fill="#191e25"/>
+<circle cx="42" cy="44" r="20" fill="#c6f24e"/><text x="42" y="50" class="c deep b" font-size="16">K</text>
+<g>
+<circle cx="42" cy="140" r="18" fill="#212832"/><rect x="35" y="133" width="14" height="14" rx="4" class="ol"/><text x="42" y="174" class="c xxs m">Operacion</text>
+<circle cx="42" cy="210" r="18" fill="#212832"/><rect x="35" y="203" width="14" height="14" rx="4" class="ol"/><text x="42" y="244" class="c xxs m">Wallet</text>
+<circle cx="42" cy="280" r="18" fill="#212832"/><rect x="35" y="273" width="14" height="14" rx="4" class="ol"/><text x="42" y="314" class="c xxs m">Inventario</text>
+<circle cx="42" cy="350" r="18" fill="#212832"/><rect x="35" y="343" width="14" height="14" rx="4" class="ol"/><text x="42" y="384" class="c xxs m">Tiendas</text>
+<circle cx="42" cy="420" r="18" fill="#c6f24e"/><rect x="35" y="413" width="14" height="14" rx="4" fill="none" stroke="#10140c"/><text x="42" y="454" class="c xxs b">Cortes</text>
+<circle cx="42" cy="490" r="18" fill="#212832"/><rect x="35" y="483" width="14" height="14" rx="4" class="ol"/><text x="42" y="524" class="c xxs m">Ajustes</text>
+</g>
+
+<!-- Cabecera -->
+<text x="116" y="58" class="t30">Liquidaciones</text>
+<text x="116" y="82" class="s m">Que pagar hoy, que se cerro y que se descontó de producto</text>
+
+<!-- Cabecera compartida de Liquidaciones (sin cambios) -->
+<rect x="116" y="100" width="280" height="76" rx="24" fill="#c6f24e" fill-opacity=".86" stroke="#ffffff" stroke-opacity=".32"/>
+<text x="136" y="128" class="xs deep sb">Total por pagar</text>
+<text x="136" y="160" class="deep b num" font-size="26">$12.480.300</text>
+<rect x="408" y="100" width="840" height="76" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06"/>
+<g class="num">
+<text x="428" y="128" class="xxs m">Tiendas por pagar</text><text x="428" y="154" class="b" font-size="17">$8.902.100</text>
+<line x1="576" y1="112" x2="576" y2="164" class="ln"/>
+<text x="596" y="128" class="xxs m">Proveedores</text><text x="596" y="154" class="b" font-size="17">$2.310.000</text>
+<line x1="744" y1="112" x2="744" y2="164" class="ln"/>
+<text x="764" y="128" class="xxs m">Cashback lideres</text><text x="764" y="154" class="b" font-size="17">$412.000</text>
+<line x1="912" y1="112" x2="912" y2="164" class="ln"/>
+<text x="932" y="128" class="xxs m">Domiciliarios deben entregar</text><text x="932" y="154" class="b rust" font-size="17">$856.200</text>
+<line x1="1080" y1="112" x2="1080" y2="164" class="ln"/>
+<text x="1100" y="128" class="xxs m">Bloqueado por COD</text><text x="1100" y="154" class="b" font-size="17">$0</text>
+</g>
+
+<!-- Pestanas -->
+<g>
+<rect x="116" y="196" width="104" height="40" rx="20" class="ol"/><text x="168" y="221" class="c s sb m">Por pagar</text>
+<rect x="228" y="196" width="148" height="40" rx="20" class="ol"/><text x="302" y="221" class="c s sb m">Cortes cerrados</text>
+<rect x="384" y="196" width="178" height="40" rx="20" class="ol"/><text x="473" y="221" class="c s sb m">Resumen del periodo</text>
+<rect x="570" y="196" width="168" height="40" rx="20" fill="#c6f24e"/><text x="654" y="221" class="c s sb deep">Costo de producto</text>
+</g>
+
+<!-- Barra de la pestana -->
+<text x="116" y="270" class="xs sb m">Tienda</text>
+<rect x="166" y="252" width="300" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="188" y="279" class="s">Nambu</text>
+<path d="M444 270 l6 6 l6 -6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="484" y="279" class="xs m">Calculado en servidor sobre todo el historico de la tienda</text>
+
+<rect x="976" y="252" width="140" height="44" rx="22" fill="#ffffff" fill-opacity=".06" stroke="#ffffff" stroke-opacity=".14"/>
+<text x="1046" y="279" class="c s sb">Registrar cruce</text>
+<rect x="1128" y="252" width="120" height="44" rx="22" fill="#c6f24e"/>
+<text x="1188" y="279" class="c s b deep">Corregir costo</text>
+
+<!-- Panel de huecos -->
+<rect x="116" y="316" width="1132" height="300" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06" filter="url(#sh)"/>
+<text x="140" y="350" class="h2">Productos a $0 con pedidos entregados</text>
+<rect x="490" y="334" width="30" height="22" rx="11" fill="#ff8b7c" fill-opacity=".14"/><text x="505" y="350" class="c xs b rust">3</text>
+<text x="140" y="374" class="xs m">Fichas activas de Nambu sin costo que ya tienen pedidos cerrados. Su costo no se desconto al cerrar: revisalo antes de liquidar.</text>
+
+<g class="xs m sb">
+<text x="140" y="410">Producto</text>
+<text x="390" y="410">Proveedor</text>
+<text x="560" y="410">Ficha</text>
+<text x="800" y="410" class="r">Entregados</text>
+<text x="930" y="410" class="r">Sin costo cobrado</text>
+<text x="960" y="410">Ultimo cierre</text>
+</g>
+<line x1="140" y1="422" x2="1224" y2="422" class="ln"/>
+
+<!-- fila 1 -->
+<text x="140" y="448" class="sb">Lung Cleansing</text>
+<text x="140" y="466" class="xs m">SKU NB-LUNG</text>
+<text x="390" y="456" class="s">ADMA LABORATORIO</text>
+<rect x="560" y="440" width="164" height="24" rx="12" fill="#ff8b7c" fill-opacity=".12"/><text x="642" y="456" class="c xs sb rust">Sin costo configurado</text>
+<text x="800" y="456" class="r num">14</text>
+<text x="930" y="456" class="r num b rust">14</text>
+<text x="960" y="456" class="s fg2">28 sep</text>
+<rect x="1060" y="434" width="118" height="36" rx="18" class="ol"/><text x="1119" y="457" class="c s sb">Poner costo</text>
+<circle cx="1206" cy="452" r="18" class="ol"/><text x="1206" y="457" class="c b m">...</text>
+<line x1="140" y1="482" x2="1224" y2="482" class="ln"/>
+
+<!-- fila 2 -->
+<text x="140" y="508" class="sb">Chest Relief</text>
+<text x="140" y="526" class="xs m">SKU NB-CHEST</text>
+<text x="390" y="516" class="s">ADMA LABORATORIO</text>
+<rect x="560" y="500" width="164" height="24" rx="12" fill="#ff8b7c" fill-opacity=".12"/><text x="642" y="516" class="c xs sb rust">Sin costo configurado</text>
+<text x="800" y="516" class="r num">23</text>
+<text x="930" y="516" class="r num b rust">23</text>
+<text x="960" y="516" class="s fg2">29 sep</text>
+<rect x="1060" y="494" width="118" height="36" rx="18" class="ol"/><text x="1119" y="517" class="c s sb">Poner costo</text>
+<circle cx="1206" cy="512" r="18" class="ol"/><text x="1206" y="517" class="c b m">...</text>
+<line x1="140" y1="542" x2="1224" y2="542" class="ln"/>
+
+<!-- fila 3 -->
+<text x="140" y="568" class="sb">Detox Tea</text>
+<text x="140" y="586" class="xs m">sin SKU, empareja por nombre</text>
+<text x="390" y="576" class="s">ADMA LABORATORIO</text>
+<rect x="560" y="560" width="120" height="24" rx="12" fill="#212832"/><text x="620" y="576" class="c xs sb fg2">Costo en $0</text>
+<text x="800" y="576" class="r num">2</text>
+<text x="930" y="576" class="r num b rust">1</text>
+<text x="960" y="576" class="s fg2">19 sep</text>
+<rect x="1060" y="554" width="118" height="36" rx="18" class="ol"/><text x="1119" y="577" class="c s sb">Poner costo</text>
+<circle cx="1206" cy="572" r="18" class="ol"/><text x="1206" y="577" class="c b m">...</text>
+
+<!-- Grupos plegados -->
+<rect x="116" y="632" width="1132" height="60" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06"/>
+<path d="M142 656 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="162" y="658" class="s b">A $0 a proposito o pagados por fuera</text>
+<text x="162" y="676" class="xs m">1 producto (Muestra gratis Nambu). No se corrige: esta marcado como $0 intencional.</text>
+
+<rect x="116" y="704" width="1132" height="60" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06"/>
+<path d="M142 728 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="162" y="730" class="s b">Correcciones aplicadas</text>
+<text x="162" y="748" class="xs m">2 en Nambu, la ultima el 02 oct. Desde aqui se revierten.</text>
+</svg>

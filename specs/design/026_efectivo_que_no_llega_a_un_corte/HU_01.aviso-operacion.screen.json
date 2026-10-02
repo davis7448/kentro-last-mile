@@ -1,0 +1,12 @@
+{
+  "story": "HU_01",
+  "route": "/",
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Operacion" },
+    { "role": "region", "name": "Efectivo vencido" },
+    { "role": "heading", "name": "Efectivo vencido" },
+    { "role": "button", "name": "Ver efectivo sin llegar" }
+  ],
+  "threshold": { "missing": 0 }
+}

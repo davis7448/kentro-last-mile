@@ -1,0 +1,15 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 1080 },
+  "expect": [
+    { "role": "heading", "name": "Comunidades pendientes de girar" },
+    { "role": "heading", "name": "ADMA LABORATORIO" },
+    { "role": "term", "name": "Cashback" },
+    { "role": "term", "name": "Reconocimiento de Kentro" },
+    { "role": "button", "name": "Girar a ADMA LABORATORIO" },
+    { "role": "button", "name": "Girar a ADMA" },
+    { "role": "status", "name": "Girado a ADMA LABORATORIO: $57.000" }
+  ],
+  "threshold": { "missing": 1 }
+}

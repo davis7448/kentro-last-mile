@@ -1,0 +1,19 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 1280, "height": 800 },
+  "expect": [
+    { "role": "dialog", "name": "Corregir costo de producto" },
+    { "role": "heading", "name": "Corregir costo de producto" },
+    { "role": "combobox", "name": "Tienda" },
+    { "role": "group", "name": "Productos a corregir" },
+    { "role": "checkbox", "name": "Lung Cleansing" },
+    { "role": "checkbox", "name": "Chest Relief" },
+    { "role": "checkbox", "name": "Detox Tea" },
+    { "role": "textbox", "name": "Motivo de la correccion (queda en la auditoria)" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Previsualizar cambios" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_01 - Aviso de efectivo vencido en Operacion (admin, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.14"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.10"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="30" cy="140" r="190" fill="url(#ga)"/>
+  <circle cx="360" cy="420" r="200" fill="url(#gb)"/>
+  <circle cx="120" cy="720" r="180" fill="url(#gc)"/>
+
+  <!-- Barra superior -->
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">AD</text>
+
+  <!-- Titulo -->
+  <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Operacion</text>
+  <text x="16" y="122" font-size="13" fill="#9aa5b3">Administrador · jueves 2 de octubre</text>
+
+  <!-- NUEVO: tarjeta de efectivo vencido (region "Efectivo vencido") -->
+  <rect x="16" y="142" width="343" height="236" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <circle cx="48" cy="176" r="18" fill="#ff8b7c" fill-opacity="0.14"/>
+  <text x="48" y="182" text-anchor="middle" font-size="17" font-weight="800" fill="#ff8b7c">!</text>
+  <text x="76" y="172" font-size="16" font-weight="700" fill="#f4f6f8">Efectivo vencido</text>
+  <text x="76" y="190" font-size="12" fill="#9aa5b3">Contraentregas con mas de 7 dias sin corte</text>
+  <text x="32" y="238" class="n" font-size="32" font-weight="800" fill="#ff8b7c" letter-spacing="-1">$2.954.111</text>
+  <text x="32" y="262" font-size="14" fill="#cbd3dc">34 pedidos sin llegar a un corte</text>
+  <text x="32" y="284" font-size="13" fill="#9aa5b3">26 de Jhon Fredy Ruiz</text>
+  <text x="32" y="302" font-size="13" fill="#9aa5b3">El mas antiguo lleva 93 dias</text>
+  <rect x="32" y="318" width="311" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="345" text-anchor="middle" font-size="15" font-weight="700" fill="#10140c">Ver efectivo sin llegar</text>
+
+  <!-- Contenido actual de Operacion, sin cambios (marcador) -->
+  <rect x="16" y="394" width="343" height="150" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <text x="187.5" y="464" text-anchor="middle" font-size="13" fill="#9aa5b3">Indicadores actuales de Operacion</text>
+  <text x="187.5" y="484" text-anchor="middle" font-size="13" fill="#9aa5b3">(sin cambios)</text>
+  <rect x="16" y="560" width="343" height="172" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <text x="187.5" y="650" text-anchor="middle" font-size="13" fill="#9aa5b3">Pedidos de hoy (sin cambios)</text>
+
+  <!-- Navegacion inferior del admin -->
+  <rect x="0" y="748" width="375" height="64" fill="#141920"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="10" text-anchor="middle">
+    <rect x="21" y="758" width="20" height="20" rx="6" fill="#c6f24e"/>
+    <text x="31" y="796" fill="#f4f6f8" font-weight="700">Operacion</text>
+    <rect x="84" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="94" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="146" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="156" y="796" fill="#9aa5b3">Inventario</text>
+    <rect x="209" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="219" y="796" fill="#9aa5b3">Tiendas</text>
+    <rect x="271" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="281" y="796" fill="#9aa5b3">Cortes</text>
+    <rect x="334" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
+    <text x="344" y="796" fill="#9aa5b3">Ajustes</text>
+  </g>
+</svg>
