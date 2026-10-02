@@ -1,5 +1,5 @@
 Spec 026 · T18 · compare contra produccion (SOLO LECTURA)
-Generado: 2026-10-02T21:26:59.317Z  ·  comando: node scripts/verify-026.js compare
+Generado: 2026-10-02T21:36:09.455Z  ·  comando: node scripts/verify-026.js compare
 Fuente: local (functions/lib compilado + ADC, solo lectura)
 Lecturas: walletEntries 13891, settlements 75 (posicion); pedidos del universo 3373
 Linea base: t1-linea-base-ids.json (generada 2026-10-02T16:49:33.210Z; rows 133, coveredByNetting 37, over30Days 24)
@@ -13,7 +13,7 @@ VEREDICTO: PASA
   unexplainedCop: 0
   Causas (suma por tipo):
     outside_orders_outside_universe: $-72.000 (1 partidas)
-    settlement_cash_pending_stale: $-79.900 (1 partidas)
+    settlement_later_correction: $-79.900 (1 partidas)
     settlement_orders_received: $290.477.909 (42 partidas)
     settlement_orders_outside_universe: $-749.500 (31 partidas)
     settlement_cash_received: $-292.713.222 (42 partidas)
@@ -24,8 +24,7 @@ VEREDICTO: PASA
   unreadableEntryIds: 0
 
 2. Cortes con pendiente guardado viejo o ausente (se reportan, NO fallan)
-  stale (settlement_cash_pending_stale): 1; total $-79.900
-    stl-1780062400588-driver-driver-1778271901513: $-79.900
+  stale (settlement_cash_pending_stale): 0; total $0
   missing (settlement_cash_pending_missing): 0; total $0
 
 3. Lista actual

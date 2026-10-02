@@ -307,6 +307,12 @@
       "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"],
       "testWritten": true,
       "done": true
+    },
+    "T26": {
+      "requirements": ["RNF_02"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx"],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

@@ -331,6 +331,21 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     corte B): A sin `settlement_cash_pending_stale`, `unexplainedCop === 0`; las propiedades de T9 siguen verdes;
     `node scripts/verify-026.js compare` contra produccion: PASA con 0 cortes stale.
 
+- [x] **T26: "Cortes para revisar" solo con alarmas reales (decidido por el responsable 2026-10-02)**
+  * Requisitos cubiertos: RNF_02
+  * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx
+  * Contexto: tras T25 queda `stl-1780062400588-…` (mayo) con −$79.900: el corte dejo fuera KNT-000056, que luego se
+    corrigio a fallido; el domiciliario no debe nada. Recalcular cortes viejos desde los asientos no reconstruye lo que el
+    corte cobro ese dia cuando hay correcciones.
+  * Accion: la diferencia `G − R` de un corte se reparte en dos causas con importe, para que la identidad siga exacta:
+    `settlement_cash_pending_stale` = solo la parte en que el corte NO cuadra consigo mismo
+    (`cashPendingCop` guardado ≠ max(0, `cashExpectedCop` − recibido)); el resto es una causa nueva
+    `settlement_later_correction` (explicada, no "para revisar"). `staleSettlementsCop` y la lista "Cortes para revisar"
+    solo cuentan la primera. `missing` no cambia. Rotulo de la causa nueva en el modelo de vista.
+  * Verificacion: casos T25 y el de mayo → 0 stale, la diferencia en `settlement_later_correction`; un corte con
+    `cashPendingCop` guardado que no cuadra con sus propios esperado/recibido → stale; propiedades T9 verdes;
+    `compare` contra produccion: PASA con 0 cortes para revisar.
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |

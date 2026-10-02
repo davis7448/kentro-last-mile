@@ -21,7 +21,6 @@ import type {
   CashOutstandingRow,
   CashSettlementLocation,
   PositionReconciliation,
-  ReconciliationCause,
 } from "../../functions/src/cash-outstanding";
 import { getFirebaseCashOutstanding, updateFirebaseCashAlertSettings } from "@/lib/firebase/auth";
 import { createCashOutstandingSummaryCache, reloadAfterCashAlertSave } from "@/lib/cash-outstanding-loads";
@@ -30,6 +29,8 @@ import {
   buildCashOutstandingView,
   cashLocationLabel,
   formatBogotaDay,
+  reconciliationCauseLabel,
+  splitReconciliationCauses,
   supplierPendingLine,
   type CashOutstandingView,
   type CashOutstandingViewGroup,
@@ -801,29 +802,6 @@ function SupplierWithheldCard({ report, viewport }: { report: CashOutstandingRep
 // Cuadre con la posicion (decision 3)
 // ---------------------------------------------------------------------------------------------------
 
-const CAUSE_LABEL: Record<ReconciliationCause, string> = {
-  outside_orders_outside_universe: "Por cobrar de pedidos que no estan en la lista",
-  outside_unreadable_orders: "Pedidos ilegibles",
-  outside_order_total_without_cod: "Sin asientos de recaudo; se usa el total del pedido",
-  outside_negative_net: "Pedidos cuyo pago supera el recaudo",
-  outside_aggregate_clamp: "Saldo agregado negativo llevado a cero",
-  settlement_cash_pending_stale: "Corte con pendiente guardado desactualizado",
-  settlement_cash_pending_missing: "Corte sin pendiente guardado",
-  settlement_orders_received: "Pedidos del corte ya recibidos",
-  settlement_orders_covered_by_netting: "Pedidos cubiertos por compensacion",
-  settlement_orders_outside_universe: "Pedidos del corte que no estan en la lista",
-  settlement_unreadable_orders: "Pedidos ilegibles del corte",
-  settlement_orders_attributed_elsewhere: "Pedidos atribuidos a otro corte",
-  settlement_order_total_without_cod: "Pedidos del corte sin asientos de recaudo",
-  settlement_negative_net: "Pedidos del corte cuyo pago supera el recaudo",
-  settlement_expected_clamp: "Efectivo esperado del corte llevado a cero",
-  settlement_excess_received: "Efectivo recibido de mas en el corte",
-  settlement_cash_received: "Efectivo ya recibido en el corte",
-  settlement_allocation_over_expected: "Reparto por encima de lo esperado",
-};
-
-// Se listan aparte: un pendiente guardado viejo o ausente es para revisar, no hace fallar el cuadre.
-const REVIEW_CAUSES = new Set<ReconciliationCause>(["settlement_cash_pending_stale", "settlement_cash_pending_missing"]);
 const MAX_REFS = 8;
 
 function ReconciliationDisclosure({ reconciliation, trackingById }: { reconciliation: PositionReconciliation; trackingById: Map<string, string> }) {
@@ -833,8 +811,8 @@ function ReconciliationDisclosure({ reconciliation, trackingById }: { reconcilia
   const open = openOverride ?? !isBalanced;
   const summaryId = useId();
   const panelId = useId();
-  const causes = reconciliation.causes.filter((item) => !REVIEW_CAUSES.has(item.cause));
-  const review = reconciliation.causes.filter((item) => REVIEW_CAUSES.has(item.cause));
+  // Rotulos y reparto en el modelo de vista (T26): una correccion posterior va con las explicadas.
+  const { explained: causes, review } = splitReconciliationCauses(reconciliation);
   return (
     <section className="grid min-w-0 gap-2 rounded-3xl border border-white/[0.06] bg-panel p-3 sm:p-4">
       <button
@@ -891,7 +869,7 @@ function CauseItem({ item, trackingById }: { item: PositionReconciliation["cause
   return (
     <li className="grid min-w-0 gap-0.5 rounded-2xl bg-field px-3 py-2 text-sm">
       <span className="flex min-w-0 items-start justify-between gap-3">
-        <span className="min-w-0 text-ink-70">{CAUSE_LABEL[item.cause]}</span>
+        <span className="min-w-0 text-ink-70">{reconciliationCauseLabel(item.cause)}</span>
         <span className="tabular shrink-0 font-semibold">{formatCop(item.amountCop)}</span>
       </span>
       {(item.settlementId || item.orderIds.length > 0) && (

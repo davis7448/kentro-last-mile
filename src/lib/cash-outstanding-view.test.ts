@@ -871,3 +871,100 @@ describe("T24 · el aviso de la tarjeta dice hacia donde puede estar mal la cifr
     },
   );
 });
+
+// ---------------------------------------------------------------------------------------------------
+// T26
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * T26 (2026-10-02): los rotulos de las causas del cuadre y el reparto entre "explicadas" y "Cortes para
+ * revisar" pasan al modelo de vista. Contrato:
+ *
+ *   reconciliationCauseLabel(cause: ReconciliationCause): string
+ *   splitReconciliationCauses(reconciliation) -> { explained: causes[], review: causes[] }
+ *     review = solo settlement_cash_pending_stale y settlement_cash_pending_missing (orden de entrada);
+ *     explained = todas las demas, incluida settlement_later_correction.
+ */
+type T26Cause = PositionReconciliation["causes"][number];
+type T26ViewModule = {
+  reconciliationCauseLabel?: (cause: string) => string;
+  splitReconciliationCauses?: (reconciliation: PositionReconciliation) => { explained: T26Cause[]; review: T26Cause[] };
+};
+
+async function t26View() {
+  const view = (await loadView()) as unknown as T26ViewModule;
+  if (typeof view.reconciliationCauseLabel !== "function") {
+    throw new Error("T26: falta `export function reconciliationCauseLabel(cause)` en src/lib/cash-outstanding-view.ts");
+  }
+  if (typeof view.splitReconciliationCauses !== "function") {
+    throw new Error("T26: falta `export function splitReconciliationCauses(reconciliation)` en src/lib/cash-outstanding-view.ts");
+  }
+  return { label: view.reconciliationCauseLabel, split: view.splitReconciliationCauses };
+}
+
+const T26_ALL_CAUSES = [
+  "outside_orders_outside_universe",
+  "outside_unreadable_orders",
+  "outside_order_total_without_cod",
+  "outside_negative_net",
+  "outside_aggregate_clamp",
+  "settlement_cash_pending_stale",
+  "settlement_cash_pending_missing",
+  "settlement_later_correction",
+  "settlement_orders_received",
+  "settlement_orders_covered_by_netting",
+  "settlement_orders_outside_universe",
+  "settlement_unreadable_orders",
+  "settlement_orders_attributed_elsewhere",
+  "settlement_order_total_without_cod",
+  "settlement_negative_net",
+  "settlement_expected_clamp",
+  "settlement_excess_received",
+  "settlement_cash_received",
+  "settlement_allocation_over_expected",
+];
+
+describe("T26 · rotulo de la causa nueva y 'Cortes para revisar' solo con alarmas reales (RNF_02)", () => {
+  it("settlement_later_correction tiene rotulo propio: 'Correccion posterior'", async () => {
+    const { label } = await t26View();
+    expect(label("settlement_later_correction")).toMatch(/correcci[oó]n posterior/i);
+  });
+
+  it("todas las causas tienen rotulo no vacio y distinto (ninguna se pinta con su clave)", async () => {
+    const { label } = await t26View();
+    const labels = T26_ALL_CAUSES.map((cause) => label(cause));
+    for (const [index, text] of labels.entries()) {
+      expect({ cause: T26_ALL_CAUSES[index], ok: typeof text === "string" && text.length > 0 && text !== T26_ALL_CAUSES[index] }).toEqual({
+        cause: T26_ALL_CAUSES[index],
+        ok: true,
+      });
+    }
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("los rotulos existentes no cambian (stale y missing)", async () => {
+    const { label } = await t26View();
+    expect(label("settlement_cash_pending_stale")).toBe("Corte con pendiente guardado desactualizado");
+    expect(label("settlement_cash_pending_missing")).toBe("Corte sin pendiente guardado");
+  });
+
+  it("la lista de cortes para revisar solo incluye stale y missing; la correccion posterior va con las explicadas", async () => {
+    const { split } = await t26View();
+    const stale: T26Cause = { cause: "settlement_cash_pending_stale", amountCop: -15_000, orderIds: [], settlementId: "s-stale" };
+    const missing: T26Cause = { cause: "settlement_cash_pending_missing", amountCop: -45_000, orderIds: [], settlementId: "s-missing" };
+    const later = { cause: "settlement_later_correction", amountCop: -79_900, orderIds: [], settlementId: "stl-1780062400588-driver" } as unknown as T26Cause;
+    const netting: T26Cause = { cause: "settlement_orders_covered_by_netting", amountCop: 45_000, orderIds: ["n"], settlementId: "s-net" };
+    const outside: T26Cause = { cause: "outside_negative_net", amountCop: -6_999, orderIds: ["one"] };
+    const { explained, review } = split({ ...RECONCILIATION, causes: [later, stale, netting, missing, outside] });
+    expect(review).toEqual([stale, missing]);
+    expect(explained).toEqual([later, netting, outside]);
+  });
+
+  it("solo correcciones posteriores → ningun corte para revisar", async () => {
+    const { split } = await t26View();
+    const later = { cause: "settlement_later_correction", amountCop: -79_900, orderIds: [], settlementId: "stl-1780062400588-driver" } as unknown as T26Cause;
+    const { explained, review } = split({ ...RECONCILIATION, causes: [later] });
+    expect(review).toEqual([]);
+    expect(explained).toEqual([later]);
+  });
+});

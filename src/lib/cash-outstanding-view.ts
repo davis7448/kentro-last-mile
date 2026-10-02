@@ -12,6 +12,7 @@ import type {
   CashOutstandingRow,
   CashRowSettlement,
   PositionReconciliation,
+  ReconciliationCause,
 } from "../../functions/src/cash-outstanding";
 import { formatCop } from "./finance";
 
@@ -463,5 +464,51 @@ export function supplierPendingLine(report: CashOutstandingReport, supplierId: s
   return {
     amountCop: supplier.amountCop,
     text: `No se puede pagar todavia: ${formatCop(supplier.amountCop)} (${detail})`,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Cuadre con la posicion (decision 3; T26)
+// ---------------------------------------------------------------------------------------------------
+
+type ReconciliationCauseItem = PositionReconciliation["causes"][number];
+
+const CAUSE_LABEL: Record<ReconciliationCause, string> = {
+  outside_orders_outside_universe: "Por cobrar de pedidos que no estan en la lista",
+  outside_unreadable_orders: "Pedidos ilegibles",
+  outside_order_total_without_cod: "Sin asientos de recaudo; se usa el total del pedido",
+  outside_negative_net: "Pedidos cuyo pago supera el recaudo",
+  outside_aggregate_clamp: "Saldo agregado negativo llevado a cero",
+  settlement_cash_pending_stale: "Corte con pendiente guardado desactualizado",
+  settlement_cash_pending_missing: "Corte sin pendiente guardado",
+  settlement_later_correction: "Correccion posterior al corte",
+  settlement_orders_received: "Pedidos del corte ya recibidos",
+  settlement_orders_covered_by_netting: "Pedidos cubiertos por compensacion",
+  settlement_orders_outside_universe: "Pedidos del corte que no estan en la lista",
+  settlement_unreadable_orders: "Pedidos ilegibles del corte",
+  settlement_orders_attributed_elsewhere: "Pedidos atribuidos a otro corte",
+  settlement_order_total_without_cod: "Pedidos del corte sin asientos de recaudo",
+  settlement_negative_net: "Pedidos del corte cuyo pago supera el recaudo",
+  settlement_expected_clamp: "Efectivo esperado del corte llevado a cero",
+  settlement_excess_received: "Efectivo recibido de mas en el corte",
+  settlement_cash_received: "Efectivo ya recibido en el corte",
+  settlement_allocation_over_expected: "Reparto por encima de lo esperado",
+};
+
+// Se listan aparte: solo un corte que no cuadra consigo mismo o sin pendiente guardado es para revisar.
+// Una correccion posterior se explica con las demas (T26); ninguna de las dos hace fallar el cuadre.
+const REVIEW_CAUSES = new Set<ReconciliationCause>(["settlement_cash_pending_stale", "settlement_cash_pending_missing"]);
+
+export function reconciliationCauseLabel(cause: ReconciliationCause): string {
+  return CAUSE_LABEL[cause];
+}
+
+export function splitReconciliationCauses(reconciliation: PositionReconciliation): {
+  explained: ReconciliationCauseItem[];
+  review: ReconciliationCauseItem[];
+} {
+  return {
+    explained: reconciliation.causes.filter((item) => !REVIEW_CAUSES.has(item.cause)),
+    review: reconciliation.causes.filter((item) => REVIEW_CAUSES.has(item.cause)),
   };
 }

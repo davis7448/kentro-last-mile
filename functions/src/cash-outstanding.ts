@@ -131,6 +131,7 @@ export type ReconciliationCause =
   | "outside_aggregate_clamp"
   | "settlement_cash_pending_stale"
   | "settlement_cash_pending_missing"
+  | "settlement_later_correction"
   | "settlement_orders_received"
   | "settlement_orders_covered_by_netting"
   | "settlement_orders_outside_universe"
@@ -526,7 +527,8 @@ function causeCollector() {
  *
  * Fuera de corte: `Σ_U(cod - pago) - T - N + K` (no listados por razon, filas sin asiento COD, netos
  * negativos topados a 0 en la fila, tope a 0 del agregado). Por corte: `G - R` (pendiente guardado
- * contra recalculado: `stale` si el campo existe y difiere, `missing` si falta), los pedidos no
+ * contra recalculado: si el campo existe y difiere, `stale` por lo que el corte no cuadra consigo
+ * mismo y `later_correction` por el resto, T26; `missing` si falta), los pedidos no
  * atribuidos por razon, y los terminos de las filas atribuidas, del tope del esperado, del excedente y
  * de lo recibido. Lo que ninguna razon explica va a `unexplainedCop` con su id: es la UNICA condicion de
  * fallo; `stale` y `missing` se reportan, no fallan.
@@ -652,7 +654,14 @@ export function reconcileWithPlatformPosition(
     if (settlement.cashPendingCop === undefined) {
       add("settlement_cash_pending_missing", storedPendingCop - recalculatedPendingCop, [], settlement.id);
     } else if (storedPendingCop !== recalculatedPendingCop) {
-      add("settlement_cash_pending_stale", storedPendingCop - recalculatedPendingCop, [], settlement.id);
+      // T26 (RNF_02): solo es "para revisar" la parte en que el corte no cuadra consigo mismo (pendiente
+      // guardado frente a su propio esperado menos lo recibido). El resto de G - R lo produjo una correccion
+      // posterior de los asientos (el corte cobro bien ese dia): se explica, no se alarma.
+      const storedExpectedCop = Math.round(Number(settlement.cashExpectedCop) || 0);
+      const staleCop = storedPendingCop - Math.max(0, storedExpectedCop - receivedCop);
+      const laterCorrectionCop = storedPendingCop - recalculatedPendingCop - staleCop;
+      if (staleCop !== 0) add("settlement_cash_pending_stale", staleCop, [], settlement.id);
+      if (laterCorrectionCop !== 0) add("settlement_later_correction", laterCorrectionCop, [], settlement.id);
     }
 
     let settlementNetCop = 0;
