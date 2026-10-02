@@ -1,20 +1,5 @@
 {
   "spec": "specs/026_efectivo_que_no_llega_a_un_corte.md",
-  "round": 3,
-  "findings": [
-    {
-      "id": "R3-RF_03-1",
-      "requirement": "RF_03",
-      "round": 3,
-      "title": "La tarjeta de efectivo vencido dice que con cifras incompletas el total 'puede ser mayor', y un corte ilegible lo infla",
-      "file": "src/components/cash-outstanding-admin.tsx",
-      "line": 157,
-      "why": "Con datos incompletos, el texto de la tarjeta de Operación está fijo: 'faltan documentos por leer; la cifra puede ser mayor'. Pero si el documento ilegible es un corte de domiciliario, `parseDriverSettlements` lo deja fuera de `settlements`. Entonces `buildCodReceivedSet` no ve sus pedidos cubiertos, esos pedidos entran en `rows` y, pasado el plazo, se marcan `isOverdue` y suman al total vencido. En ese caso el total queda inflado, no corto. El modelo de vista ya reconoce este caso: `buildIncomplete` pone `settlementWarning` y la pestaña avisa de que 'un corte ilegible puede dejar en la lista pedidos que ya estan cubiertos'. La tarjeta no usa nada de eso y además afirma lo contrario. T22 se limitó a impedir que se mostrara 'al dia' y no corrigió la dirección del aviso.",
-      "failureScenario": "Un corte pagado de un líder no pasa la validación Zod (por ejemplo, un campo con un tipo inesperado). Sus 10 pedidos, entregados hace 20 días y ya cubiertos, salen en `rows` con `isOverdue: true`. La tarjeta de Operación muestra, por ejemplo, $900.000 de efectivo vencido de más, con el aviso 'la cifra puede ser mayor'. El admin persigue al líder por un dinero que ya entregó y no le queda ninguna pista de que la cifra está inflada.",
-      "verdict": {
-        "isReal": true,
-        "reason": "No se pudo refutar: el código confirma el escenario. En functions/src/cash-outstanding-api.ts:165, `parseDriverSettlements` aparta los cortes que no pasan Zod y los pone en `unreadableSettlementIds`. Por eso `buildCodReceivedSet(settlements)` no ve los pedidos de ese corte como recibidos. En functions/src/cash-outstanding.ts, `buildCashOutstandingReport` los vuelve a meter en las filas mediante `isListedCandidate(order, scope, received)`. El corte ilegible tampoco está en `settlementsByOrder`, así que `location` no puede ser `covered_by_netting`, e `isOverdue` sale `ageDays > overdueDays`. En src/lib/cash-outstanding-view.ts, `buildCard` suma `collectedCop` de esas filas vencidas, así que el total queda inflado. `isIncomplete` es solo un booleano, y la tarjeta (src/components/cash-outstanding-admin.tsx:155-157) muestra siempre el texto fijo \"faltan documentos por leer; la cifra puede ser mayor\". No mira `unreadableSettlementIds`. En cambio, `buildIncomplete` de la pestaña sí distingue ese caso (`settlementWarning`) y avisa de que \"un corte ilegible puede dejar en la lista pedidos que ya estan cubiertos\". La tarjeta de Operación dice lo contrario: que la cifra puede quedarse corta, cuando en realidad puede quedar inflada. Esto contradice RF_03, que exige mostrar el total vencido sin contar lo que ya está cubierto, y no deja al admin ninguna pista de que el total está inflado."
-      }
-    }
-  ]
+  "round": 4,
+  "findings": []
 }
