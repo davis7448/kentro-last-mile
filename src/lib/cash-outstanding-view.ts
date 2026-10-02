@@ -399,8 +399,13 @@ export function buildCashOutstandingView(report: CashOutstandingReport, options:
 export function supplierPendingLine(report: CashOutstandingReport, supplierId: string): { amountCop: number; text: string } | null {
   const supplier = report.bySupplier.find((item) => item.supplierId === supplierId);
   if (!supplier || supplier.amountCop <= 0) return null;
+  // R1-RF_08-1: `amountCop` ya incluye el producto de los compensados; se dice cuanto para que cuadre.
+  const detail =
+    supplier.nettedAmountCop > 0
+      ? `efectivo sin llegar; incluye ${formatCop(supplier.nettedAmountCop)} de pedidos cubiertos por compensacion`
+      : "efectivo sin llegar";
   return {
     amountCop: supplier.amountCop,
-    text: `No se puede pagar todavia: ${formatCop(supplier.amountCop)} (efectivo sin llegar)`,
+    text: `No se puede pagar todavia: ${formatCop(supplier.amountCop)} (${detail})`,
   };
 }

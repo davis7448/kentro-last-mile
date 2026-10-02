@@ -510,8 +510,9 @@ describe("T14 · linea de proveedor en Por pagar (RF_08, README decision 8)", ()
     makeReport({
       rows: [makeRow({ orderId: "r1" })],
       bySupplier: [
-        { supplierId: "adma-lab", supplierName: "ADMA LABORATORIO", amountCop: 1_094_350, overdueAmountCop: 200_000 },
-        { supplierId: "zero", supplierName: "Sin nada", amountCop: 0, overdueAmountCop: 0 },
+        // T21: `nettedAmountCop` es parte del contrato de bySupplier; 0 = sin compensados, el texto no cambia.
+        { supplierId: "adma-lab", supplierName: "ADMA LABORATORIO", amountCop: 1_094_350, overdueAmountCop: 200_000, nettedAmountCop: 0 },
+        { supplierId: "zero", supplierName: "Sin nada", amountCop: 0, overdueAmountCop: 0, nettedAmountCop: 0 },
       ],
     });
 
@@ -526,6 +527,42 @@ describe("T14 · linea de proveedor en Por pagar (RF_08, README decision 8)", ()
     const { supplierPendingLine } = await loadView();
     expect(supplierPendingLine(report(), "otro")).toBeNull();
     expect(supplierPendingLine(report(), "zero")).toBeNull();
+  });
+});
+
+describe("T21 · la linea de proveedor incluye el producto de los compensados (R1-RF_08-1, RF_08, RF_09)", () => {
+  // `amountCop` ya incluye los compensados (el servidor no los paga); `nettedAmountCop` es esa parte.
+  const report = () =>
+    makeReport({
+      rows: [makeRow({ orderId: "r1" })],
+      bySupplier: [
+        { supplierId: "adma-lab", supplierName: "ADMA LABORATORIO", amountCop: 1_246_347, overdueAmountCop: 200_000, nettedAmountCop: 1_151_997 },
+        { supplierId: "solo-netted", supplierName: "Solo compensados", amountCop: 42_000, overdueAmountCop: 0, nettedAmountCop: 42_000 },
+        { supplierId: "sin-netted", supplierName: "Sin compensados", amountCop: 94_350, overdueAmountCop: 0, nettedAmountCop: 0 },
+      ],
+    });
+
+  it("con compensados: 'No se puede pagar todavia: $X' con X que los incluye, y 'incluye $Y de pedidos cubiertos por compensacion'", async () => {
+    const { supplierPendingLine } = await loadView();
+    const line = supplierPendingLine(report(), "adma-lab");
+    expect(line?.amountCop).toBe(1_246_347);
+    expect(line?.text).toMatch(/^No se puede pagar todavia: \$\s?1\.246\.347\b/);
+    expect(line?.text).toMatch(/incluye \$\s?1\.151\.997 de pedidos cubiertos por compensacion/);
+  });
+
+  it("proveedor solo con compensados: tiene linea por el total compensado", async () => {
+    const { supplierPendingLine } = await loadView();
+    const line = supplierPendingLine(report(), "solo-netted");
+    expect(line?.amountCop).toBe(42_000);
+    expect(line?.text).toMatch(/^No se puede pagar todavia: \$\s?42\.000\b/);
+    expect(line?.text).toMatch(/incluye \$\s?42\.000 de pedidos cubiertos por compensacion/);
+  });
+
+  it("sin compensados (nettedAmountCop 0): el texto queda como hoy, sin mencion de compensacion", async () => {
+    const { supplierPendingLine } = await loadView();
+    const line = supplierPendingLine(report(), "sin-netted");
+    expect(line?.text).toMatch(/^No se puede pagar todavia: \$\s?94\.350 \(efectivo sin llegar\)$/);
+    expect(line?.text).not.toMatch(/compensacion/);
   });
 });
 

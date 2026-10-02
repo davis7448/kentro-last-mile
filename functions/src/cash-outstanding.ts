@@ -184,8 +184,12 @@ export type CashOutstandingReport = {
   nettedRows: CashOutstandingRow[];
   /** Solo `rows`; orden `overdueCop` desc (empate: `outstandingCop`, id). */
   byLeader: CashOutstandingGroup[];
-  /** Solo `rows`; `[]` para el lider. */
-  bySupplier: Array<SupplierWithheld & { overdueAmountCop: number }>;
+  /**
+   * `rows` + `nettedRows`: el corte de proveedor no paga el producto de un compensado (RF_09 no cambia la
+   * regla de RF_01). `nettedAmountCop` = la parte de compensados (0 si no hay); `overdueAmountCop` = solo
+   * vencidas de `rows`. Orden `amountCop` desc. `[]` para el lider.
+   */
+  bySupplier: SupplierGroup[];
   totals: CashOutstandingTotals;
   reconciliation: PositionReconciliation | null;
   isIncomplete: boolean;
@@ -374,25 +378,33 @@ function withheldCostsByOrder(entries: WalletEntryDoc[]): Map<string, WalletEntr
   return byOrder;
 }
 
-type SupplierGroup = SupplierWithheld & { overdueAmountCop: number };
+export type SupplierGroup = SupplierWithheld & { overdueAmountCop: number; nettedAmountCop: number };
 
-/** RF_08: solo `rows` (lo compensado no se debe). Orden `amountCop` desc, estable. */
-function groupBySupplier(rows: CashOutstandingRow[]): SupplierGroup[] {
+/**
+ * RF_08 + RF_09 (R1-RF_08-1): suma `rows` y `nettedRows`. El efectivo de un compensado no se le debe al
+ * lider, pero el corte de proveedor tampoco paga su producto, asi que sigue sin poder pagarse. Solo `rows`
+ * vence. Orden `amountCop` desc, estable.
+ */
+function groupBySupplier(rows: CashOutstandingRow[], nettedRows: CashOutstandingRow[]): SupplierGroup[] {
   const bySupplier = new Map<string, SupplierGroup>();
-  for (const row of rows) {
+  const addRow = (row: CashOutstandingRow, isNetted: boolean): void => {
     for (const item of row.supplierWithheld) {
       const current = bySupplier.get(item.supplierId) ?? {
         supplierId: item.supplierId,
         supplierName: item.supplierName,
         amountCop: 0,
-        overdueAmountCop: 0
+        overdueAmountCop: 0,
+        nettedAmountCop: 0
       };
       current.amountCop += item.amountCop;
-      if (row.isOverdue) current.overdueAmountCop += item.amountCop;
+      if (isNetted) current.nettedAmountCop += item.amountCop;
+      else if (row.isOverdue) current.overdueAmountCop += item.amountCop;
       if (item.supplierName) current.supplierName = item.supplierName;
       bySupplier.set(item.supplierId, current);
     }
-  }
+  };
+  for (const row of rows) addRow(row, false);
+  for (const row of nettedRows) addRow(row, true);
   return [...bySupplier.values()].sort((left, right) => right.amountCop - left.amountCop);
 }
 
@@ -709,7 +721,7 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
         location,
         settlements: rowSettlements,
         attributedSettlementId,
-        // Tambien en nettedRows, informativo: bySupplier solo suma rows.
+        // Tambien en nettedRows: bySupplier suma ambos (nettedAmountCop separa la parte compensada).
         supplierWithheld: groupWithheldBySupplier(withheldCosts.get(order.id) ?? [])
       };
     });
@@ -729,7 +741,7 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
     rows,
     nettedRows,
     byLeader: groupByLeader(rows),
-    bySupplier: isAdmin ? groupBySupplier(rows) : [],
+    bySupplier: isAdmin ? groupBySupplier(rows, nettedRows) : [],
     totals: computeTotals(rows, nettedRows),
     // Solo con asientos completos: con `targeted` la posicion no se puede reconstruir (plan 4.3).
     reconciliation:

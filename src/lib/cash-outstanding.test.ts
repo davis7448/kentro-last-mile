@@ -1155,7 +1155,7 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
       );
       expect(report.rows[0].supplierWithheld).toEqual([{ supplierId: "(sin proveedor)", supplierName: "(sin proveedor)", amountCop: 8_000 }]);
       expect(report.bySupplier).toEqual([
-        { supplierId: "(sin proveedor)", supplierName: "(sin proveedor)", amountCop: 8_000, overdueAmountCop: 8_000 }
+        { supplierId: "(sin proveedor)", supplierName: "(sin proveedor)", amountCop: 8_000, overdueAmountCop: 8_000, nettedAmountCop: 0 }
       ]);
     });
 
@@ -1188,12 +1188,16 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
         })
       );
       expect(report.bySupplier).toEqual([
-        { supplierId: "sup-b", supplierName: "Proveedor B", amountCop: 20_000, overdueAmountCop: 20_000 },
-        { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 10_000, overdueAmountCop: 4_000 }
+        { supplierId: "sup-b", supplierName: "Proveedor B", amountCop: 20_000, overdueAmountCop: 20_000, nettedAmountCop: 0 },
+        { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 10_000, overdueAmountCop: 4_000, nettedAmountCop: 0 }
       ]);
     });
 
-    it("RF_09: el product_cost de un compensado no suma a bySupplier", async () => {
+    // 2026-10-02 · R1-RF_08-1 (.sdd/findings.json), tarea T21: esta prueba afirmaba lo CONTRARIO ("el
+    // product_cost de un compensado no suma a bySupplier"). RF_09 no cambia la regla de RF_01, asi que el corte
+    // de proveedor del servidor (functions/src/orders.ts, isSellerEntryEligible + buildCodReceivedSet) tampoco
+    // paga el producto de un pedido compensado: "No se puede pagar todavia" tiene que incluirlo.
+    it("RF_09: el product_cost de un compensado SI suma a bySupplier.amountCop y a nettedAmountCop, no a overdueAmountCop", async () => {
       const { buildCashOutstandingReport } = await loadCore();
       const live = aged("o-live", 10);
       const netted = aged("o-net", 90);
@@ -1206,7 +1210,9 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
         })
       );
       expect(rowIds(report.nettedRows)).toEqual(["o-net"]);
-      expect(report.bySupplier).toEqual([{ supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 3_000, overdueAmountCop: 3_000 }]);
+      expect(report.bySupplier).toEqual([
+        { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 53_000, overdueAmountCop: 3_000, nettedAmountCop: 50_000 }
+      ]);
     });
   });
 
@@ -1240,6 +1246,116 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
       expect(report.bySupplier).toEqual([]);
       expect(report.rows.every((row) => row.supplierWithheld.length === 0)).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// T21 · el producto de los compensados tampoco se puede pagar al proveedor (R1-RF_08-1)
+// ---------------------------------------------------------------------------------------------------
+
+describe("T21 · bySupplier incluye el producto retenido de los compensados (R1-RF_08-1, RF_08, RF_09)", () => {
+  it("proveedor solo con compensados: aparece con amountCop = nettedAmountCop y overdueAmountCop 0", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const n1 = aged("o-n1", 90);
+    const n2 = aged("o-n2", 60);
+    const report = buildCashOutstandingReport(
+      input({
+        orders: [n1.order, n2.order],
+        receivableEntries: [...n1.entries, ...n2.entries],
+        settlements: [settledNetting("s-n1", "o-n1"), settledNetting("s-n2", "o-n2")],
+        productCostEntries: [productCost("o-n1", 30_000, SUP_A), productCost("o-n2", 12_000, SUP_A)]
+      })
+    );
+    expect(report.rows).toEqual([]);
+    expect(rowIds(report.nettedRows)).toEqual(["o-n1", "o-n2"]);
+    expect(report.bySupplier).toEqual([
+      { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 42_000, overdueAmountCop: 0, nettedAmountCop: 42_000 }
+    ]);
+  });
+
+  it("mezcla: amountCop = rows + compensados, nettedAmountCop solo compensados, overdueAmountCop solo vencidas de rows", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const overdue = aged("o-old", 15); // rows, vencida
+    const fresh = aged("o-new", 2); // rows, sin vencer
+    const netted = aged("o-net", 90); // compensado: 90 dias, pero no vence
+    const report = buildCashOutstandingReport(
+      input({
+        orders: [overdue.order, fresh.order, netted.order],
+        receivableEntries: [...overdue.entries, ...fresh.entries, ...netted.entries],
+        settlements: [settledNetting("s-net", "o-net")],
+        productCostEntries: [
+          productCost("o-old", 4_000, SUP_A),
+          productCost("o-new", 6_000, SUP_A),
+          productCost("o-net", 7_000, SUP_A),
+          productCost("o-net", 1_500, SUP_B)
+        ]
+      })
+    );
+    expect(report.bySupplier.find((item) => item.supplierId === "sup-a")).toEqual({
+      supplierId: "sup-a",
+      supplierName: "Proveedor A",
+      amountCop: 17_000,
+      overdueAmountCop: 4_000,
+      nettedAmountCop: 7_000
+    });
+    expect(report.bySupplier.find((item) => item.supplierId === "sup-b")).toEqual({
+      supplierId: "sup-b",
+      supplierName: "Proveedor B",
+      amountCop: 1_500,
+      overdueAmountCop: 0,
+      nettedAmountCop: 1_500
+    });
+  });
+
+  it("el product_cost de un compensado ya liquidado al proveedor (supplierSettlementId) no suma", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const netted = aged("o-net", 90);
+    const report = buildCashOutstandingReport(
+      input({
+        orders: [netted.order],
+        receivableEntries: netted.entries,
+        settlements: [settledNetting("s-net", "o-net")],
+        productCostEntries: [productCost("o-net", 9_000, SUP_A, { supplierSettlementId: "sup-set-1" }), productCost("o-net", 2_000, SUP_A)]
+      })
+    );
+    expect(report.bySupplier).toEqual([
+      { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 2_000, overdueAmountCop: 0, nettedAmountCop: 2_000 }
+    ]);
+  });
+
+  it("el lider sigue con bySupplier [] aunque tenga compensados con product_cost", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const mine = aged("l-mine", 10);
+    const netted = aged("l-net", 90);
+    const report = buildCashOutstandingReport(
+      input({
+        orders: [mine.order, netted.order],
+        receivableEntries: [...mine.entries, ...netted.entries],
+        settlements: [settledNetting("s-net", "l-net")],
+        productCostEntries: [productCost("l-mine", 9_000, SUP_A), productCost("l-net", 40_000, SUP_A)],
+        scope: { kind: "leader", driverId: "leader-1" }
+      })
+    );
+    expect(rowIds(report.nettedRows)).toEqual(["l-net"]);
+    expect(report.bySupplier).toEqual([]);
+  });
+
+  it("orden por amountCop desc contando los compensados (un proveedor solo compensado puede ir primero)", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const live = aged("o-live", 10);
+    const netted = aged("o-net", 90);
+    const report = buildCashOutstandingReport(
+      input({
+        orders: [live.order, netted.order],
+        receivableEntries: [...live.entries, ...netted.entries],
+        settlements: [settledNetting("s-net", "o-net")],
+        productCostEntries: [productCost("o-live", 10_000, SUP_A), productCost("o-net", 25_000, SUP_B)]
+      })
+    );
+    expect(report.bySupplier.map((item) => [item.supplierId, item.amountCop])).toEqual([
+      ["sup-b", 25_000],
+      ["sup-a", 10_000]
+    ]);
   });
 });
 

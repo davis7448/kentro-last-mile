@@ -267,7 +267,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: pruebas por host (discord, hooks.slack.com, chat.googleapis.com, otro) que fijan el cuerpo exacto
     y que ninguna lleva campos de mas.
 
-- [ ] **T21: "No se puede pagar todavia" incluye el producto de los compensados (R1-RF_08-1)**
+- [x] **T21: "No se puede pagar todavia" incluye el producto de los compensados (R1-RF_08-1)**
   * Requisitos cubiertos: RF_08, RF_09
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts
   * Accion: RF_09 no cambia la regla de RF_01, asi que el corte de proveedor tampoco paga el producto de un pedido
