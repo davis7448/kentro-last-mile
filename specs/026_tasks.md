@@ -50,7 +50,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Nucleo puro
 
-- [ ] **T3: Extraer la formula de "por cobrar al domiciliario" y la clave de proveedor**
+- [x] **T3: Extraer la formula de "por cobrar al domiciliario" y la clave de proveedor**
   * Requisitos cubiertos: RNF_02, RF_08
   * Archivos: functions/src/driver-receivable.ts, functions/src/supplier-withheld.ts, functions/src/platform-position.ts, src/lib/driver-receivable.test.ts
   * Accion: `computeDriverReceivable` y predicados (`cashPendingCop` ausente = 0, como hoy);
