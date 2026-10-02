@@ -149,7 +149,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Servidor
 
-- [ ] **T12: Alcance, cargador y callable `getCashOutstanding`**
+- [x] **T12: Alcance, cargador y callable `getCashOutstanding`**
   * Requisitos cubiertos: RF_06, RF_07, RNF_01, RNF_02
   * Archivos: functions/src/cash-outstanding-schemas.ts, functions/src/cash-outstanding-api.ts, functions/src/index.ts, src/lib/spec-026-guards.test.ts
   * Accion: `resolveCashOutstandingScope` (`token.driverId`); `loadCashOutstandingInput` (plan 4.3);

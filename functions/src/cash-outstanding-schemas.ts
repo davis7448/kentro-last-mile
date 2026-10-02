@@ -217,3 +217,54 @@ export function buildCashAlertAuditDoc(input: CashAlertAuditDocInput) {
     createdAt: input.now
   });
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Alcance por rol (RF_06, plan 2.7)
+// ---------------------------------------------------------------------------------------------------
+
+/** Mismo tipo que `CashOutstandingScope` del nucleo; se repite aqui para no importar el nucleo. */
+export type CashOutstandingScope = { kind: "admin"; includeReconciliation: boolean } | { kind: "leader"; driverId: string };
+
+export type CashOutstandingCoverage = "full" | "targeted";
+
+/** Lo que trae `request.auth`, sin depender del SDK de functions. */
+export type CashOutstandingAuth = { uid?: string; token?: Record<string, unknown> } | null | undefined;
+
+export type CashOutstandingScopeResolution =
+  | { ok: true; scope: CashOutstandingScope; coverage: CashOutstandingCoverage }
+  | { ok: false; code: "permission-denied" | "invalid-argument"; message: string };
+
+const SCOPE_DENIED = "Tu usuario no puede consultar el efectivo pendiente.";
+
+/**
+ * Decide el alcance de `getCashOutstanding` sin lanzar nunca (el callable traduce el codigo a
+ * `HttpsError`). Primero el rol, despues la entrada: un rol sin permiso no se entera de si su entrada
+ * era valida. El lider sale del claim `token.driverId`, nunca de `data` (el esquema es `.strict()`), y
+ * siempre recibe el resumen: la conciliacion es solo del admin.
+ */
+export function resolveCashOutstandingScope(auth: CashOutstandingAuth, data: unknown): CashOutstandingScopeResolution {
+  const token = auth && typeof auth.token === "object" && auth.token !== null ? auth.token : undefined;
+  const role = token?.role;
+  const driverClaim = token?.driverId;
+  const isAdmin = role === "admin";
+  const isLeader = role === "driver" && typeof driverClaim === "string" && driverClaim !== "";
+  if (!isAdmin && !isLeader) {
+    return { ok: false, code: "permission-denied", message: SCOPE_DENIED };
+  }
+
+  // Un httpsCallable sin argumentos manda null, y el esquema estricto rechaza null.
+  const parsed = cashOutstandingInputSchema.safeParse(data === null || data === undefined ? {} : data);
+  if (!parsed.success) {
+    return { ok: false, code: "invalid-argument", message: "Entrada invalida: solo se admite includeReconciliation (si/no)." };
+  }
+
+  if (isAdmin) {
+    const includeReconciliation = parsed.data.includeReconciliation;
+    return {
+      ok: true,
+      scope: { kind: "admin", includeReconciliation },
+      coverage: includeReconciliation ? "full" : "targeted"
+    };
+  }
+  return { ok: true, scope: { kind: "leader", driverId: driverClaim as string }, coverage: "targeted" };
+}

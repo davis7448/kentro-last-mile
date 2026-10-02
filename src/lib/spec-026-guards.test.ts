@@ -283,3 +283,328 @@ describe("T6 · RF_01: la regla de recibido no se copia", () => {
     expect(findReceivedRuleCopies(`const location = "covered_by_netting";`)).toEqual([]);
   });
 });
+
+describe("T12 · alcance, cargador y callable", () => {
+  /*
+   * T12 (plan 2.1, 2.7, 4.3; RF_06, RF_07, RNF_01, RNF_02).
+   *
+   * Contrato de `resolveCashOutstandingScope(auth, data)` en `functions/src/cash-outstanding-schemas.ts`
+   * (puro: no lanza, devuelve un resultado que el callable traduce a `HttpsError`):
+   *
+   *   auth: { uid?: string; token?: Record<string, unknown> } | null | undefined   (request.auth)
+   *   data: unknown                                                              (request.data, crudo)
+   *   -> { ok: true; scope: CashOutstandingScope; coverage: "full" | "targeted" }
+   *    | { ok: false; code: "permission-denied" | "invalid-argument"; message: string }
+   *
+   * - Primero el rol, despues la entrada: un rol sin permiso es `permission-denied` aunque la entrada
+   *   tambien sea invalida.
+   * - `data` null/undefined se normaliza a `{}` ANTES de `cashOutstandingInputSchema` (que es `.strict()`
+   *   y rechaza `null`): un `httpsCallable` sin argumentos manda `null`.
+   * - admin -> `{ kind: "admin", includeReconciliation }`; `coverage: "full"` solo si includeReconciliation.
+   * - driver con `token.driverId` string no vacio -> `{ kind: "leader", driverId }`, SIEMPRE `targeted`
+   *   aunque pida conciliacion (resumen, no se le deniega).
+   * - driver sin claim, seller, seller_logistics, messenger, sin sesion -> `permission-denied`.
+   * - entrada que no cumple el esquema (p. ej. `driverId` en `data`) -> `invalid-argument`.
+   */
+  type Scope = { kind: "admin"; includeReconciliation: boolean } | { kind: "leader"; driverId: string };
+  type ScopeResolution =
+    | { ok: true; scope: Scope; coverage: "full" | "targeted" }
+    | { ok: false; code: "permission-denied" | "invalid-argument"; message: string };
+  type ScopeAuth = { uid?: string; token?: Record<string, unknown> } | null | undefined;
+  type Resolver = (auth: ScopeAuth, data: unknown) => ScopeResolution;
+
+  const SCHEMAS = "functions/src/cash-outstanding-schemas.ts";
+  const API = "functions/src/cash-outstanding-api.ts";
+  const INDEX = "functions/src/index.ts";
+  const SCRIPT = "scripts/verify-026.js";
+
+  async function resolver(): Promise<Resolver> {
+    const mod = (await import("../../functions/src/cash-outstanding-schemas")) as unknown as Record<string, unknown>;
+    const fn = mod.resolveCashOutstandingScope;
+    if (typeof fn !== "function") throw new Error("resolveCashOutstandingScope no esta exportada en cash-outstanding-schemas.ts");
+    return fn as Resolver;
+  }
+
+  const admin = { uid: "u-admin", token: { role: "admin" } };
+  const leader = { uid: "u-lider", token: { role: "driver", driverId: "driver-1" } };
+
+  describe("resolveCashOutstandingScope (puro)", () => {
+    it("se exporta desde cash-outstanding-schemas.ts", async () => {
+      expect(typeof (await resolver())).toBe("function");
+    });
+
+    it("admin sin conciliacion: resumen, targeted", async () => {
+      expect((await resolver())(admin, { includeReconciliation: false })).toEqual({
+        ok: true,
+        scope: { kind: "admin", includeReconciliation: false },
+        coverage: "targeted",
+      });
+    });
+
+    it("admin con conciliacion: full", async () => {
+      expect((await resolver())(admin, { includeReconciliation: true })).toEqual({
+        ok: true,
+        scope: { kind: "admin", includeReconciliation: true },
+        coverage: "full",
+      });
+    });
+
+    it.each([
+      ["{}", {}],
+      ["null", null],
+      ["undefined", undefined],
+    ])("admin con data %s: se normaliza a {} y queda en resumen", async (_label, data) => {
+      expect((await resolver())(admin, data)).toEqual({
+        ok: true,
+        scope: { kind: "admin", includeReconciliation: false },
+        coverage: "targeted",
+      });
+    });
+
+    it("lider con claim driverId: alcance de su id, resumen", async () => {
+      expect((await resolver())(leader, {})).toEqual({
+        ok: true,
+        scope: { kind: "leader", driverId: "driver-1" },
+        coverage: "targeted",
+      });
+    });
+
+    it("lider que pide conciliacion recibe resumen (no se deniega, no se le da full)", async () => {
+      const result = (await resolver())(leader, { includeReconciliation: true });
+      expect(result).toEqual({ ok: true, scope: { kind: "leader", driverId: "driver-1" }, coverage: "targeted" });
+    });
+
+    it("lider con data null: resumen", async () => {
+      expect((await resolver())(leader, null)).toEqual({
+        ok: true,
+        scope: { kind: "leader", driverId: "driver-1" },
+        coverage: "targeted",
+      });
+    });
+
+    it.each([
+      ["driver sin claim", { uid: "u", token: { role: "driver" } }],
+      ["driver con claim vacio", { uid: "u", token: { role: "driver", driverId: "" } }],
+      ["driver con claim no string", { uid: "u", token: { role: "driver", driverId: 42 } }],
+      ["seller", { uid: "u", token: { role: "seller", sellerId: "s-1" } }],
+      ["seller_logistics", { uid: "u", token: { role: "seller_logistics", sellerId: "s-1" } }],
+      ["messenger aunque traiga driverId", { uid: "u", token: { role: "messenger", driverId: "driver-1" } }],
+      ["sin rol", { uid: "u", token: {} }],
+      ["sin token", { uid: "u" }],
+      ["sin sesion (null)", null],
+      ["sin sesion (undefined)", undefined],
+    ])("%s -> permission-denied", async (_label, auth) => {
+      const result = (await resolver())(auth as ScopeAuth, {});
+      expect(result.ok).toBe(false);
+      expect(result.ok ? null : result.code).toBe("permission-denied");
+    });
+
+    it("el rol se decide antes que la entrada: seller con entrada invalida -> permission-denied", async () => {
+      const result = (await resolver())({ uid: "u", token: { role: "seller" } }, { driverId: "driver-1" });
+      expect(result.ok ? null : result.code).toBe("permission-denied");
+    });
+
+    it("el lider no puede pedir el alcance de otro: driverId en data -> invalid-argument (.strict)", async () => {
+      const result = (await resolver())(leader, { driverId: "driver-otro" });
+      expect(result.ok ? null : result.code).toBe("invalid-argument");
+    });
+
+    it("admin con includeReconciliation no booleano -> invalid-argument", async () => {
+      const result = (await resolver())(admin, { includeReconciliation: "si" });
+      expect(result.ok ? null : result.code).toBe("invalid-argument");
+    });
+
+    it("admin con data que no es objeto -> invalid-argument", async () => {
+      const result = (await resolver())(admin, "todo");
+      expect(result.ok ? null : result.code).toBe("invalid-argument");
+    });
+
+    it("no lanza nunca (devuelve resultado)", async () => {
+      const resolve = await resolver();
+      expect(() => resolve(undefined, undefined)).not.toThrow();
+      expect(() => resolve(admin, Symbol("x"))).not.toThrow();
+    });
+  });
+
+  describe("guardas de fuente del cargador y del callable", () => {
+    const api = () => (existsSync(absolute(API)) ? sourceWithoutComments(API) : "");
+
+    /** Cuerpo de `[export] [async] function <name>(` hasta el primer `\n}\n`. */
+    function functionBody(source: string, name: string): string {
+      const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+      if (start < 0) return "";
+      const end = source.indexOf("\n}\n", start);
+      return end < 0 ? source.slice(start) : source.slice(start, end + 2);
+    }
+
+    /** Cuerpo de `export const <name> = onCall(` hasta el primer `\n});\n`. */
+    function callableBody(source: string, name: string): string {
+      const start = source.search(new RegExp(`^export\\s+const\\s+${name}\\s*=\\s*onCall\\(`, "m"));
+      if (start < 0) return "";
+      const end = source.indexOf("\n});\n", start);
+      return end < 0 ? source.slice(start) : source.slice(start, end + 4);
+    }
+
+    /** `where("campo", "op", <valor>)` normalizado: literales de cadena y arrays de cadenas se conservan; el resto es `*`. */
+    function whereShapes(source: string): Set<string> {
+      const shapes = new Set<string>();
+      for (const match of source.matchAll(/\.where\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*,\s*([^)]*?)\)/g)) {
+        const raw = match[3].trim();
+        let value = "*";
+        if (/^["'][^"']*["']$/.test(raw)) value = raw.slice(1, -1);
+        else if (/^\[\s*(["'][^"']*["']\s*,?\s*)+\]$/.test(raw)) {
+          value = JSON.stringify([...raw.matchAll(/["']([^"']*)["']/g)].map((item) => item[1]));
+        }
+        shapes.add(`${match[1]} ${match[2]} ${value}`);
+      }
+      return shapes;
+    }
+
+    function loaderOfQueryCheck(): string {
+      const script = sourceWithoutComments(SCRIPT);
+      const helpers = script.slice(script.indexOf("const QC_ORDER_FIELDS"), script.indexOf("async function loadLikeTheLoader"));
+      return `${helpers}\n${functionBody(script, "loadLikeTheLoader")}`;
+    }
+
+    function orderFieldsOfQueryCheck(): string[] {
+      const line = sourceWithoutComments(SCRIPT).match(/const QC_ORDER_FIELDS\s*=\s*\[([^\]]*)\]/)?.[1] ?? "";
+      return [...line.matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+    }
+
+    it("cash-outstanding-api.ts existe", () => {
+      expect(existsSync(absolute(API))).toBe(true);
+    });
+
+    it("index.ts exporta getCashOutstanding desde ./cash-outstanding-api", () => {
+      const index = sourceWithoutComments(INDEX);
+      expect(index).toMatch(/export\s*\{[^}]*\bgetCashOutstanding\b[^}]*\}\s*from\s*["']\.\/cash-outstanding-api["']/);
+    });
+
+    it("getCashOutstanding es un onCall v2 exportado", () => {
+      expect(api()).toMatch(/import\s*\{[^}]*\bonCall\b[^}]*\}\s*from\s*["']firebase-functions\/v2\/https["']/);
+      expect(callableBody(api(), "getCashOutstanding")).not.toBe("");
+    });
+
+    it("loadCashOutstandingInput existe en el api", () => {
+      expect(functionBody(api(), "loadCashOutstandingInput")).not.toBe("");
+    });
+
+    it("el callable resuelve el alcance con resolveCashOutstandingScope(request.auth, request.data) y traduce el codigo a HttpsError", () => {
+      const body = callableBody(api(), "getCashOutstanding");
+      expect(api()).toMatch(/import\s*\{[^}]*\bresolveCashOutstandingScope\b[^}]*\}\s*from\s*["']\.\/cash-outstanding-schemas["']/);
+      expect(body).toMatch(/resolveCashOutstandingScope\(\s*request\.auth\s*,\s*request\.data\s*\)/);
+      expect(body).toMatch(/new\s+HttpsError\(/);
+    });
+
+    it("el alcance sale SOLO del resolvedor: el callable no lee token.driverId ni parsea la entrada por su cuenta", () => {
+      const body = callableBody(api(), "getCashOutstanding");
+      expect(body).not.toBe("");
+      expect(body).not.toMatch(/token\.driverId|token\[["']driverId["']\]/);
+      expect(body).not.toMatch(/cashOutstandingInputSchema/);
+      expect(body).not.toMatch(/request\.data\??\.(includeReconciliation|driverId)/);
+    });
+
+    it("el informe sale de buildCashOutstandingReport importado de ./cash-outstanding", () => {
+      expect(api()).toMatch(/import\s*\{[^}]*\bbuildCashOutstandingReport\b[^}]*\}\s*from\s*["']\.\/cash-outstanding["']/);
+      expect(api().replace(/import\s*\{[^}]*\}\s*from\s*["'][^"']+["'];?/g, "")).toMatch(/\bbuildCashOutstandingReport\s*\(/);
+    });
+
+    it("no copia la regla: no define buildCodReceivedSet/isSellerEntryEligible/buildCashOutstandingReport y, si usa la regla, la importa de ./seller-ledger", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      expect(source).not.toMatch(/function\s+(buildCodReceivedSet|codPartialReceivedCop|isSellerEntryEligible|buildCashOutstandingReport|isDriverSettlementCashSettled)\b/);
+      if (/\bbuildCodReceivedSet\b/.test(source)) {
+        expect(source).toMatch(/import\s*\{[^}]*\bbuildCodReceivedSet\b[^}]*\}\s*from\s*["']\.\/seller-ledger["']/);
+      }
+    });
+
+    it.each(["parseCashOutstandingOrders", "parseDriverSettlements", "parseWalletEntries", "readCashAlertSettings"])(
+      "el cargador pasa lo leido por %s (Zod; lo ilegible por id, no 0 en silencio)",
+      (parser) => {
+        expect(api()).toMatch(new RegExp(`import\\s*\\{[^}]*\\b${parser}\\b[^}]*\\}\\s*from\\s*["']\\./cash-outstanding-schemas["']`));
+        expect(functionBody(api(), "loadCashOutstandingInput")).toMatch(new RegExp(`\\b${parser}\\(`));
+      }
+    );
+
+    it("el cargador entrega al nucleo unreadableOrderIds, unreadableSettlementIds y unreadableEntryIds", () => {
+      const loader = functionBody(api(), "loadCashOutstandingInput");
+      expect(loader).toMatch(/unreadableOrderIds/);
+      expect(loader).toMatch(/unreadableSettlementIds/);
+      expect(loader).toMatch(/unreadableEntryIds/);
+    });
+
+    it("RF_07: sin ventana de fecha ni limit (sin .limit, orderBy, startAt/After, endAt/Before ni where de fecha)", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      expect(source).not.toMatch(/\.limit\(|\.limitToLast\(|\.orderBy\(|\.startAt\(|\.startAfter\(|\.endAt\(|\.endBefore\(|\.offset\(/);
+      expect(source).not.toMatch(/\.where\(\s*["'](createdAt|updatedAt|closedAt|deliveredAt|date)["']/);
+      expect(source).not.toMatch(/getWindowedOrders|orderTargets/);
+    });
+
+    it("las consultas del cargador son las mismas que query-check ejecuto en produccion (en ambos sentidos)", () => {
+      const fromApi = whereShapes(api());
+      const fromScript = whereShapes(loaderOfQueryCheck());
+      expect(fromScript.size).toBeGreaterThan(0);
+      expect([...fromApi].filter((shape) => !fromScript.has(shape)).sort()).toEqual([]);
+      expect([...fromScript].filter((shape) => !fromApi.has(shape)).sort()).toEqual([]);
+    });
+
+    it("los pedidos se leen con select de los mismos campos que query-check", () => {
+      const source = api();
+      expect(source).toMatch(/\.select\(/);
+      const fields = orderFieldsOfQueryCheck();
+      expect(fields.length).toBeGreaterThan(0);
+      expect(fields.filter((field) => !new RegExp(`["']${field}["']`).test(source))).toEqual([]);
+    });
+
+    it.each(["sellers", "drivers", "messengers", "suppliers"])("los nombres de %s se leen con select(\"name\")", (collection) => {
+      expect(api()).toMatch(new RegExp(`collection\\(\\s*["']${collection}["']\\s*\\)\\s*\\.select\\(\\s*["']name["']\\s*\\)`));
+    });
+
+    it("lee los ajustes de settings/cashAlerts", () => {
+      expect(api()).toMatch(/collection\(\s*["']settings["']\s*\)\s*\.doc\(\s*["']cashAlerts["']\s*\)|doc\(\s*["']settings\/cashAlerts["']\s*\)/);
+    });
+
+    it("los lotes de orderId in son de 30 (limite de Firestore, igual que query-check)", () => {
+      expect(api()).toMatch(/\b30\b/);
+    });
+
+    it("el modo con conciliacion (coverage full) solo se alcanza por el resolvedor: ningun 'full' literal fuera del tipo", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      const fullLiterals = source.split("\n").filter((line) => /["']full["']/.test(line));
+      expect(fullLiterals.filter((line) => !/===?\s*["']full["']|["']full["']\s*===?|["']full["']\s*\|/.test(line))).toEqual([]);
+      expect(source).not.toMatch(/includeReconciliation\s*:\s*true/);
+    });
+
+    it("el secreto del canal es OPS_NOTICE_WEBHOOK_URL y el callable lo declara en secrets", () => {
+      expect(api()).toMatch(/defineSecret\(\s*["']OPS_NOTICE_WEBHOOK_URL["']\s*\)/);
+      expect(callableBody(api(), "getCashOutstanding")).toMatch(/onCall\(\s*\{[^}]*\bsecrets\s*:/);
+    });
+
+    it("la URL del canal no se devuelve: todo .value() del secreto va dentro de isOpsChannelConfigured(...)", () => {
+      const source = api();
+      expect(source).toMatch(/import\s*\{[^}]*\bisOpsChannelConfigured\b[^}]*\}\s*from\s*["']\.\/ops-notify["']/);
+      const valueCalls = (source.match(/\.value\(\)/g) ?? []).length;
+      const wrapped = (source.match(/isOpsChannelConfigured\(\s*[\w$.]+\.value\(\)\s*\)/g) ?? []).length;
+      expect(valueCalls).toBeGreaterThan(0);
+      expect(valueCalls).toBe(wrapped);
+    });
+
+    it("getCashOutstanding y el cargador no escriben (si algun dia escriben, por stripUndefined)", () => {
+      const reading = `${callableBody(api(), "getCashOutstanding")}\n${functionBody(api(), "loadCashOutstandingInput")}`;
+      expect(reading.trim()).not.toBe("");
+      // Solo escrituras de Firestore: `Map.set`/`Set.add` del cargador no cuentan.
+      const writes = reading.match(/\b(?:doc|collection)\([^)]*\)\s*\.(?:set|update|create|add|delete)\(|\.(?:batch|bulkWriter|runTransaction)\(/g) ?? [];
+      if (writes.length > 0) expect(reading).toMatch(/stripUndefined\(|build\w+Doc\(/);
+      expect(writes).toEqual([]);
+    });
+
+    it("RNF_01: el api no importa el SDK de cliente ni codigo de src/", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      expect(source).not.toMatch(/from\s*["']firebase\/(firestore|app|auth)["']/);
+      expect(source).not.toMatch(/from\s*["'](\.\.\/)+src\//);
+    });
+  });
+});
