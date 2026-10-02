@@ -162,3 +162,124 @@ describe("T14 · cache de la carga compartida", () => {
     expect(source).toMatch(/httpsCallable\(\s*\w+\s*,\s*["']updateCashAlertSettings["']\s*\)/);
   });
 });
+
+describe("T16 · recarga tras guardar ajustes", () => {
+  /*
+   * Contrato T16 (plan 2.1 "Guardar Plazo y aviso"; README decision 9):
+   *   reloadAfterCashAlertSave(
+   *     { isTabOpen: boolean },
+   *     { fetchReport: FetchCashOutstandingReport, cache: CashOutstandingSummaryCache, uid: string }
+   *   ): Promise<CashOutstandingReport>
+   *
+   *   - Pestana abierta: UNA llamada fetchReport({ includeReconciliation: true }), cache.prime(uid, informe)
+   *     y devuelve ese informe. No llama a cache.get.
+   *   - Pestana cerrada: cache.get({ uid, refresh: true }) y devuelve lo que resuelva. No llama a
+   *     fetchReport directamente (la cache usa su propia llamada, siempre resumen) ni a prime.
+   *   - El error se propaga (rechaza) y, con la pestana abierta, no se hace prime de nada.
+   */
+  type CacheCall = { method: "get"; input: { uid: string; refresh?: boolean } } | { method: "prime"; uid: string; report: CashOutstandingReport } | { method: "clear" };
+
+  /** Cache espia: registra cada llamada; `get` devuelve `getResult` (o rechaza con `getError`). */
+  function spyCache(options: { getResult?: CashOutstandingReport; getError?: Error } = {}) {
+    const calls: CacheCall[] = [];
+    const cache = {
+      get(input: { uid: string; refresh?: boolean }) {
+        calls.push({ method: "get", input });
+        if (options.getError) return Promise.reject(options.getError);
+        return Promise.resolve(options.getResult ?? fakeReport("from-cache"));
+      },
+      prime(uid: string, report: CashOutstandingReport) {
+        calls.push({ method: "prime", uid, report });
+      },
+      clear() {
+        calls.push({ method: "clear" });
+      },
+    };
+    return { calls, cache };
+  }
+
+  it("exporta reloadAfterCashAlertSave", async () => {
+    const loads = await loadLoads();
+    expect(typeof (loads as Record<string, unknown>).reloadAfterCashAlertSave).toBe("function");
+  });
+
+  it("pestana abierta -> fetchReport({ includeReconciliation: true }) una vez", async () => {
+    const { reloadAfterCashAlertSave } = await loadLoads();
+    const { calls, fetchReport } = fakeFetch();
+    const { cache } = spyCache();
+
+    await reloadAfterCashAlertSave({ isTabOpen: true }, { fetchReport, cache, uid: "admin-1" });
+
+    expect(calls).toEqual([{ includeReconciliation: true }]);
+  });
+
+  it("pestana abierta -> prime(uid, informe) con el informe recibido, sin cache.get", async () => {
+    const { reloadAfterCashAlertSave } = await loadLoads();
+    const { fetchReport } = fakeFetch();
+    const { calls, cache } = spyCache();
+
+    const report = await reloadAfterCashAlertSave({ isTabOpen: true }, { fetchReport, cache, uid: "admin-1" });
+
+    expect(report.generatedAt).toBe("call-1");
+    expect(calls).toEqual([{ method: "prime", uid: "admin-1", report }]);
+  });
+
+  it("pestana abierta con la cache real: el get siguiente devuelve la carga con conciliacion sin llamar", async () => {
+    const { createCashOutstandingSummaryCache, reloadAfterCashAlertSave } = await loadLoads();
+    const summary = fakeFetch();
+    const cache = createCashOutstandingSummaryCache(summary.fetchReport);
+    await cache.get({ uid: "admin-1" });
+    const tab = fakeFetch();
+
+    const report = await reloadAfterCashAlertSave({ isTabOpen: true }, { fetchReport: tab.fetchReport, cache, uid: "admin-1" });
+    const shared = await cache.get({ uid: "admin-1" });
+
+    expect(shared).toBe(report);
+    expect(summary.calls).toHaveLength(1);
+  });
+
+  it("pestana cerrada -> cache.get({ uid, refresh: true }) y devuelve su resultado", async () => {
+    const { reloadAfterCashAlertSave } = await loadLoads();
+    const { calls: fetchCalls, fetchReport } = fakeFetch();
+    const refreshed = fakeReport("refreshed");
+    const { calls, cache } = spyCache({ getResult: refreshed });
+
+    const report = await reloadAfterCashAlertSave({ isTabOpen: false }, { fetchReport, cache, uid: "admin-1" });
+
+    expect(report).toBe(refreshed);
+    expect(calls).toEqual([{ method: "get", input: { uid: "admin-1", refresh: true } }]);
+    expect(fetchCalls).toEqual([]);
+  });
+
+  it("pestana cerrada con la cache real: una llamada nueva, resumen, que queda como compartida", async () => {
+    const { createCashOutstandingSummaryCache, reloadAfterCashAlertSave } = await loadLoads();
+    const summary = fakeFetch();
+    const cache = createCashOutstandingSummaryCache(summary.fetchReport);
+    await cache.get({ uid: "admin-1" });
+
+    const report = await reloadAfterCashAlertSave({ isTabOpen: false }, { fetchReport: summary.fetchReport, cache, uid: "admin-1" });
+
+    expect(summary.calls).toEqual([{ includeReconciliation: false }, { includeReconciliation: false }]);
+    expect(report.generatedAt).toBe("call-2");
+    expect(await cache.get({ uid: "admin-1" })).toBe(report);
+  });
+
+  it("pestana abierta: el error de fetchReport se propaga y no hay prime", async () => {
+    const { reloadAfterCashAlertSave } = await loadLoads();
+    const fetchReport = async (_input: FetchInput): Promise<CashOutstandingReport> => {
+      throw new Error("internal");
+    };
+    const { calls, cache } = spyCache();
+
+    await expect(reloadAfterCashAlertSave({ isTabOpen: true }, { fetchReport, cache, uid: "admin-1" })).rejects.toThrow("internal");
+    expect(calls).toEqual([]);
+  });
+
+  it("pestana cerrada: el error de cache.get se propaga", async () => {
+    const { reloadAfterCashAlertSave } = await loadLoads();
+    const { fetchReport } = fakeFetch();
+    const { cache } = spyCache({ getError: new Error("unavailable") });
+
+    await expect(reloadAfterCashAlertSave({ isTabOpen: false }, { fetchReport, cache, uid: "admin-1" })).rejects.toThrow("unavailable");
+  });
+});

@@ -48,3 +48,18 @@ export function createCashOutstandingSummaryCache(fetchReport: FetchCashOutstand
     },
   };
 }
+
+/**
+ * Recarga tras guardar "Plazo y aviso" (README decision 9). Con la pestana abierta se recalcula con
+ * conciliacion y esa carga pasa a ser la compartida; si no, se refresca la carga resumen de la cache.
+ * Un error se propaga: con la pestana abierta no se deja como compartido nada a medias.
+ */
+export async function reloadAfterCashAlertSave(
+  { isTabOpen }: { isTabOpen: boolean },
+  { fetchReport, cache, uid }: { fetchReport: FetchCashOutstandingReport; cache: CashOutstandingSummaryCache; uid: string }
+): Promise<CashOutstandingReport> {
+  if (!isTabOpen) return cache.get({ uid, refresh: true });
+  const report = await fetchReport({ includeReconciliation: true });
+  cache.prime(uid, report);
+  return report;
+}

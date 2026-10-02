@@ -205,7 +205,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     "Cubierto por compensacion" y "el lider con mas efectivo vencido"); `npm run lint`. **E2E de HU_01 en
     `/sdd-verify`.**
 
-- [ ] **T16: Admin — "Plazo y aviso", recarga y proveedor en Por pagar**
+- [x] **T16: Admin — "Plazo y aviso", recarga y proveedor en Por pagar**
   * Requisitos cubiertos: RF_04, RF_08, RNF_01
   * Archivos: src/lib/cash-outstanding-loads.ts, src/lib/cash-outstanding-loads.test.ts, src/components/cash-outstanding-admin.tsx, src/components/operations-app.tsx, src/lib/spec-026-guards.test.ts
   * Accion: `reloadAfterCashAlertSave({ isTabOpen }, { fetchReport, cache, uid })`; dialogo segun

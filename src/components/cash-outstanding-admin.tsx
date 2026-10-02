@@ -13,22 +13,24 @@
  * cuadre). Aqui no se suma ni se recalcula nada: el componente solo elige que mostrar. El filtro
  * "Lider" cambia estado y el modelo de vista filtra sobre la misma carga, sin otra llamada.
  */
-import { AlertTriangle, Check, ChevronRight, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, RefreshCw, SlidersHorizontal, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
+  CashAlertSettings,
   CashOutstandingReport,
   CashOutstandingRow,
   CashSettlementLocation,
   PositionReconciliation,
   ReconciliationCause,
 } from "../../functions/src/cash-outstanding";
-import { getFirebaseCashOutstanding } from "@/lib/firebase/auth";
-import { createCashOutstandingSummaryCache } from "@/lib/cash-outstanding-loads";
+import { getFirebaseCashOutstanding, updateFirebaseCashAlertSettings } from "@/lib/firebase/auth";
+import { createCashOutstandingSummaryCache, reloadAfterCashAlertSave } from "@/lib/cash-outstanding-loads";
 import {
   NO_LEADER_FILTER,
   buildCashOutstandingView,
   cashLocationLabel,
   formatBogotaDay,
+  supplierPendingLine,
   type CashOutstandingView,
   type CashOutstandingViewGroup,
   type CashOutstandingViewNetted,
@@ -176,6 +178,8 @@ type TabLoad =
 export function CashOutstandingTab({ uid }: { uid: string }) {
   const [load, setLoad] = useState<TabLoad>({ status: "loading", report: null });
   const [leaderFilter, setLeaderFilter] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
   const viewport = useCashViewport();
   const requestRef = useRef(0);
   const aliveRef = useRef(true);
@@ -242,9 +246,37 @@ export function CashOutstandingTab({ uid }: { uid: string }) {
               Actualizar
             </button>
           )}
-          {/* T16: aqui va el boton "Plazo y aviso" con su dialogo. */}
+          <button
+            ref={settingsTriggerRef}
+            className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 text-sm font-semibold hover:bg-field disabled:cursor-not-allowed disabled:opacity-50"
+            type="button"
+            disabled={!report}
+            aria-haspopup="dialog"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Plazo y aviso
+          </button>
         </div>
       </div>
+
+      {settingsOpen && report && (
+        <CashAlertSettingsDialog
+          uid={uid}
+          settings={report.settings}
+          channelConfigured={report.channelConfigured}
+          isTabOpen
+          onSaved={(saved) => {
+            // La carga con conciliacion recien pedida manda: invalida cualquier "Actualizar" en vuelo.
+            requestRef.current += 1;
+            if (aliveRef.current) setLoad({ status: "ready", report: saved });
+          }}
+          onClose={() => {
+            setSettingsOpen(false);
+            settingsTriggerRef.current?.focus();
+          }}
+        />
+      )}
 
       {isLoading && (
         <div className="grid gap-3" role="status" aria-label="Calculando el efectivo sin llegar">
@@ -313,6 +345,250 @@ export function CashOutstandingTab({ uid }: { uid: string }) {
       )}
     </section>
   );
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Dialogo "Plazo y aviso" (RF_04; decision 9; pantalla HU_01.plazo)
+// ---------------------------------------------------------------------------------------------------
+
+type SettingsSave = { status: "idle" } | { status: "saving" } | { status: "saved" } | { status: "error"; message: string };
+
+export function CashAlertSettingsDialog({
+  uid,
+  settings,
+  channelConfigured,
+  isTabOpen,
+  onSaved,
+  onClose,
+}: {
+  uid: string;
+  /** Valores iniciales: los que trae la carga (`report.settings`). */
+  settings: CashAlertSettings;
+  channelConfigured: boolean | null;
+  isTabOpen: boolean;
+  onSaved: (report: CashOutstandingReport) => void;
+  onClose: () => void;
+}) {
+  const [overdueDaysText, setOverdueDaysText] = useState(String(settings.overdueDays));
+  const [notifyMinCopText, setNotifyMinCopText] = useState(String(settings.notifyMinCop));
+  const [save, setSave] = useState<SettingsSave>({ status: "idle" });
+  const [showErrors, setShowErrors] = useState(false);
+  const titleId = useId();
+  const daysHintId = useId();
+  const daysErrorId = useId();
+  const copHintId = useId();
+  const copErrorId = useId();
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const aliveRef = useRef(true);
+  // El padre pasa `onClose` en linea: por ref, para no reenganchar el teclado (ni robar el foco) en cada render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    firstFieldRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      aliveRef.current = false;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  // Los dos campos son enteros: el callable rechaza decimales y aqui se avisa antes de enviar.
+  const overdueDays = overdueDaysText.trim() === "" ? Number.NaN : Number(overdueDaysText);
+  const notifyMinCop = notifyMinCopText.trim() === "" ? Number.NaN : Number(notifyMinCopText);
+  const daysError = Number.isInteger(overdueDays) && overdueDays >= 1 && overdueDays <= 120 ? null : "Escribe un numero entero de dias entre 1 y 120.";
+  const copError = Number.isInteger(notifyMinCop) && notifyMinCop >= 0 ? null : "Escribe un monto entero en pesos, 0 o mas.";
+  const isSaving = save.status === "saving";
+
+  const submit = async () => {
+    setShowErrors(true);
+    if (daysError || copError || isSaving) return;
+    setSave({ status: "saving" });
+    try {
+      await updateFirebaseCashAlertSettings({ overdueDays, notifyMinCop });
+    } catch (error) {
+      if (aliveRef.current) setSave({ status: "error", message: `No se pudo guardar. ${describeError(error).message}` });
+      return;
+    }
+    try {
+      // Recalcula con el plazo nuevo: con la pestana abierta, con conciliacion y como carga compartida.
+      const report = await reloadAfterCashAlertSave({ isTabOpen }, { fetchReport: getFirebaseCashOutstanding, cache: cashOutstandingCache, uid });
+      onSaved(report);
+      if (aliveRef.current) setSave({ status: "saved" });
+    } catch (error) {
+      if (aliveRef.current) setSave({ status: "error", message: `Guardado, pero no se pudo recalcular. ${describeError(error).message}` });
+    }
+  };
+
+  const isDaysInvalid = showErrors && daysError !== null;
+  const isCopInvalid = showErrors && copError !== null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="grid max-h-[90vh] w-full gap-4 overflow-y-auto rounded-t-3xl border border-white/[0.06] bg-panel p-5 shadow-xl shadow-black/30 sm:max-w-md sm:rounded-3xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 id={titleId} className="text-lg font-bold">Plazo y aviso</h2>
+          <button
+            className="focus-ring inline-flex items-center justify-center rounded-full border border-white/10 px-3 hover:bg-field"
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+
+        <form
+          className="grid gap-4"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div className="grid gap-1">
+            <label className="text-xs font-semibold text-ink-60" htmlFor={`${titleId}-days`}>
+              Plazo en dias
+            </label>
+            <input
+              ref={firstFieldRef}
+              id={`${titleId}-days`}
+              className="focus-ring h-11 w-full rounded-full border border-white/10 bg-field px-4 text-sm text-fg"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={120}
+              step={1}
+              value={overdueDaysText}
+              aria-invalid={isDaysInvalid}
+              aria-describedby={isDaysInvalid ? `${daysHintId} ${daysErrorId}` : daysHintId}
+              onChange={(event) => {
+                setOverdueDaysText(event.target.value);
+                if (save.status !== "saving") setSave({ status: "idle" });
+              }}
+            />
+            <p id={daysHintId} className="text-xs text-ink-60">
+              Una contraentrega vence si pasan estos dias sin que un corte cubra su efectivo. Entre 1 y 120.
+            </p>
+            {isDaysInvalid && (
+              <p id={daysErrorId} className="text-xs font-semibold text-rust">
+                {daysError}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-xs font-semibold text-ink-60" htmlFor={`${titleId}-cop`}>
+              Avisar desde, en pesos
+            </label>
+            <input
+              id={`${titleId}-cop`}
+              className="focus-ring h-11 w-full rounded-full border border-white/10 bg-field px-4 text-sm text-fg"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              value={notifyMinCopText}
+              aria-invalid={isCopInvalid}
+              aria-describedby={isCopInvalid ? `${copHintId} ${copErrorId}` : copHintId}
+              onChange={(event) => {
+                setNotifyMinCopText(event.target.value);
+                if (save.status !== "saving") setSave({ status: "idle" });
+              }}
+            />
+            <p id={copHintId} className="text-xs text-ink-60">
+              Los montos menores se ven en la lista, pero no generan aviso.
+            </p>
+            {isCopInvalid && (
+              <p id={copErrorId} className="text-xs font-semibold text-rust">
+                {copError}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-1 rounded-2xl bg-field px-4 py-3">
+            {channelConfigured === true ? (
+              <p className="text-sm font-semibold text-fg">Canal de aviso configurado</p>
+            ) : (
+              <p className="text-sm font-semibold text-fg">Sin canal: el aviso solo se ve en la app</p>
+            )}
+            <p className="text-xs text-ink-60">Sale cada dia a las 8:00, una vez por pedido.</p>
+          </div>
+
+          <div role="status" aria-live="polite" className="text-sm">
+            {save.status === "saved" && (
+              <span className="inline-flex items-center gap-2 font-semibold text-fg">
+                <Check size={16} aria-hidden="true" className="text-acid" />
+                Guardado
+              </span>
+            )}
+          </div>
+          {save.status === "error" && (
+            <p role="alert" className="text-sm text-rust">
+              {save.message}
+            </p>
+          )}
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button className="focus-ring rounded-full border border-white/10 px-5 text-sm font-semibold hover:bg-field" type="button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button
+              className="focus-ring rounded-full bg-acid px-5 text-sm font-semibold text-deep disabled:cursor-not-allowed disabled:opacity-50"
+              type="submit"
+              disabled={isSaving}
+            >
+              {isSaving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Linea de proveedor en "Por pagar" (decision 8): lee la carga resumen compartida, no pide otra
+// ---------------------------------------------------------------------------------------------------
+
+export function CashOutstandingSupplierPendingLine({ uid, supplierId }: { uid: string; supplierId: string }) {
+  const [report, setReport] = useState<CashOutstandingReport | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    cashOutstandingCache.get({ uid }).then(
+      (loaded) => {
+        if (isActive) setReport(loaded);
+      },
+      () => {
+        // Sin carga no se pinta la linea: es informativa y la pestana muestra su propio error.
+        if (isActive) setReport(null);
+      }
+    );
+    return () => {
+      isActive = false;
+    };
+  }, [uid]);
+
+  const line = report ? supplierPendingLine(report, supplierId) : null;
+  if (!line) return null;
+  return <p className="tabular mt-1 text-xs font-normal text-rust">{line.text}</p>;
 }
 
 function CashOutstandingBody({

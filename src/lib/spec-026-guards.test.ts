@@ -1457,3 +1457,279 @@ describe("T15 · interfaz del admin: lista y tarjeta", () => {
     });
   });
 });
+
+describe("T16 · interfaz del admin: plazo y proveedor", () => {
+  /*
+   * T16 (RF_04, RF_08, RNF_01; README decisiones 8, 9 y 11; pantalla HU_01.plazo; spec seccion 9).
+   *
+   * Guardas de fuente (sin render de componentes en el repo). El E2E con HU_01.plazo es de /sdd-verify.
+   * La recarga tras guardar se prueba de verdad en `cash-outstanding-loads.test.ts` (bloque T16).
+   *
+   * Contrato que fija este bloque:
+   *  - `src/lib/cash-outstanding-loads.ts` exporta `reloadAfterCashAlertSave` y sigue sin Firestore ni
+   *    materia prima del calculo (RNF_01).
+   *  - `src/components/cash-outstanding-admin.tsx` exporta:
+   *      `CashAlertSettingsDialog`: dialogo "Plazo y aviso" (role="dialog", aria-modal, aria-labelledby;
+   *        Escape cierra; hoja inferior en movil y modal en escritorio). Campos numericos "Plazo en dias"
+   *        (min 1, max 120) y "Avisar desde, en pesos" (min 0), enteros (`Number.isInteger`), con
+   *        `aria-invalid`. Guarda con `updateFirebaseCashAlertSettings({ overdueDays, notifyMinCop })` y
+   *        DESPUES `reloadAfterCashAlertSave({ isTabOpen ... }, { fetchReport: getFirebaseCashOutstanding,
+   *        cache: <la cache del modulo>, uid })`. Anuncia "Guardado"; un error se pinta (role="alert").
+   *        Muestra el canal: `channelConfigured` -> "Canal de aviso configurado" / "Sin canal: el aviso
+   *        solo se ve en la app". Conserva "una vez por pedido" (spec seccion 9). No escribe `settings`.
+   *      `CashOutstandingSupplierPendingLine({ uid, supplierId })`: lee la carga resumen compartida con
+   *        `.get({ uid })` (sin refresh ni conciliacion) y pinta `supplierPendingLine(report, supplierId)`.
+   *  - `CashOutstandingTab` tiene el boton "Plazo y aviso" y monta `<CashAlertSettingsDialog`.
+   *  - `operations-app.tsx` importa `CashOutstandingSupplierPendingLine` de `./cash-outstanding-admin` y lo
+   *    monta SOLO en `SupplierLiquidationTable` (Por pagar) con `supplierId={row.supplierId}`; no monta el
+   *    dialogo; `buildCodReceivedSet` sigue con 3 apariciones.
+   */
+  const ADMIN = "src/components/cash-outstanding-admin.tsx";
+  const LOADS = "src/lib/cash-outstanding-loads.ts";
+  const APP = "src/components/operations-app.tsx";
+  // Mismo valor que congelo T15 (medido el 2026-10-02): la linea de proveedor no recalcula nada.
+  const FROZEN_COD_RECEIVED_COUNT = 3;
+
+  const admin = () => (existsSync(absolute(ADMIN)) ? sourceWithoutComments(ADMIN) : "");
+  const app = () => sourceWithoutComments(APP);
+  const flat = (text: string) => text.replace(/\s+/g, " ");
+
+  /** Cuerpo de una funcion de nivel superior: hasta la siguiente declaracion de nivel superior. */
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  function count(source: string, token: string): number {
+    return source.split(token).length - 1;
+  }
+
+  const dialog = () => topLevelBody(admin(), "CashAlertSettingsDialog");
+  const supplierLine = () => topLevelBody(admin(), "CashOutstandingSupplierPendingLine");
+  const moduleCacheName = () => admin().match(/^(?:export\s+)?const\s+(\w+)\s*=\s*createCashOutstandingSummaryCache\(/m)?.[1] ?? "<sin cache>";
+
+  describe("recarga tras guardar (cash-outstanding-loads.ts)", () => {
+    it("exporta reloadAfterCashAlertSave como funcion", () => {
+      expect(sourceWithoutComments(LOADS)).toMatch(/export\s+(?:async\s+)?function\s+reloadAfterCashAlertSave\s*\(/);
+    });
+
+    it("RNF_01: cash-outstanding-loads.ts no lee Firestore ni usa la materia prima del calculo", () => {
+      const FORBIDDEN = [
+        /\bbuildCodReceivedSet\b/,
+        /\bisSellerEntryEligible\b/,
+        /\bcomputeDriverCashSummary\b/,
+        /\bbuildWalletEntries\b/,
+        /\bwalletEntries\b/,
+        /\bstate\.settlements\b/,
+        /\bstate\.orders\b/,
+        /["']firebase\//,
+        /\bcollection\(/,
+        /\bonSnapshot\(/,
+        /\bgetDocs\(/,
+      ];
+      const source = sourceWithoutComments(LOADS);
+      expect(FORBIDDEN.filter((pattern) => pattern.test(source)).map(String)).toEqual([]);
+    });
+  });
+
+  describe("dialogo \"Plazo y aviso\" (HU_01.plazo, decision 9)", () => {
+    it("exporta CashAlertSettingsDialog", () => {
+      expect(admin()).toMatch(/export\s+function\s+CashAlertSettingsDialog\s*\(/);
+    });
+
+    it("es un dialogo modal con nombre: role=\"dialog\", aria-modal y aria-labelledby", () => {
+      const body = dialog();
+      expect(body).toMatch(/role=["']dialog["']/);
+      expect(body).toMatch(/aria-modal=(?:["']true["']|\{\s*true\s*\})/);
+      expect(body).toMatch(/aria-labelledby=/);
+    });
+
+    it("Escape cierra", () => {
+      expect(dialog()).toMatch(/["']Escape["']/);
+    });
+
+    it("hoja inferior en movil y modal centrado en escritorio", () => {
+      const body = dialog();
+      expect(body).toMatch(/\bitems-end\b/);
+      expect(body).toMatch(/\b(?:sm|md):items-center\b/);
+    });
+
+    it.each(["Plazo y aviso", "Plazo en dias", "Avisar desde, en pesos", "Cancelar", "Guardar", "Guardado"])(
+      "contiene \"%s\"",
+      (text) => {
+        expect(dialog()).toContain(text);
+      }
+    );
+
+    it("boton Cerrar con nombre accesible", () => {
+      expect(dialog()).toMatch(/aria-label=(?:"Cerrar"|\{\s*["']Cerrar["']\s*\})/);
+    });
+
+    it("conserva el texto visible \"una vez por pedido\" (spec seccion 9; plan 2.4)", () => {
+      expect(dialog()).toMatch(/una vez por pedido/);
+    });
+
+    it("muestra si hay canal: lee channelConfigured y pinta los dos textos", () => {
+      const body = dialog();
+      expect(body).toMatch(/\bchannelConfigured\b/);
+      expect(body).toContain("Canal de aviso configurado");
+      expect(body).toContain("Sin canal: el aviso solo se ve en la app");
+    });
+
+    it("plazo: input numerico entre 1 y 120", () => {
+      const body = flat(dialog());
+      expect(body).toMatch(/type=["']number["']/);
+      expect(body).toMatch(/min=(?:\{\s*1\s*\}|["']1["'])/);
+      expect(body).toMatch(/max=(?:\{\s*120\s*\}|["']120["'])/);
+    });
+
+    it("umbral: input numerico con minimo 0", () => {
+      expect(flat(dialog())).toMatch(/min=(?:\{\s*0\s*\}|["']0["'])/);
+    });
+
+    it("valida enteros (Number.isInteger) y marca el campo con aria-invalid", () => {
+      const body = dialog();
+      expect(body).toMatch(/Number\.isInteger\(/);
+      expect(body).toMatch(/aria-invalid=/);
+    });
+
+    it("pinta el error (role=\"alert\")", () => {
+      expect(dialog()).toMatch(/role=["']alert["']/);
+    });
+
+    it("guarda con updateFirebaseCashAlertSettings, importado de firebase/auth, con los DOS campos", () => {
+      expect(admin()).toMatch(/import\s*\{[^}]*\bupdateFirebaseCashAlertSettings\b[^}]*\}\s*from\s*["'][^"']*firebase\/auth["']/);
+      const body = flat(dialog());
+      const call = body.match(/updateFirebaseCashAlertSettings\(\s*\{([^}]*)\}\s*\)/)?.[1] ?? "";
+      expect(call, "falta updateFirebaseCashAlertSettings({ ... })").not.toBe("");
+      expect(call).toMatch(/\boverdueDays\b/);
+      expect(call).toMatch(/\bnotifyMinCop\b/);
+    });
+
+    it("tras guardar llama a reloadAfterCashAlertSave (importado de cash-outstanding-loads)", () => {
+      expect(admin()).toMatch(/import\s*\{[^}]*\breloadAfterCashAlertSave\b[^}]*\}\s*from\s*["'][^"']*cash-outstanding-loads["']/);
+      const body = dialog();
+      const save = body.indexOf("updateFirebaseCashAlertSettings(");
+      const reload = body.indexOf("reloadAfterCashAlertSave(");
+      expect(reload, "el dialogo no llama a reloadAfterCashAlertSave").toBeGreaterThanOrEqual(0);
+      expect(reload, "la recarga va despues de guardar").toBeGreaterThan(save);
+    });
+
+    it("la recarga recibe isTabOpen, la cache del modulo, getFirebaseCashOutstanding y el uid", () => {
+      const body = flat(dialog());
+      const at = body.indexOf("reloadAfterCashAlertSave(");
+      const args = at < 0 ? "" : body.slice(at, at + 400);
+      expect(args).toMatch(/\bisTabOpen\b/);
+      expect(args).toMatch(new RegExp(`\\bcache:\\s*${moduleCacheName()}\\b`));
+      expect(args).toMatch(/\bfetchReport:\s*getFirebaseCashOutstanding\b/);
+      expect(args).toMatch(/\buid\b/);
+    });
+
+    it("el dialogo no pide la carga por su cuenta ni toca la cache directamente", () => {
+      const body = dialog();
+      expect(body).not.toMatch(/\bgetFirebaseCashOutstanding\s*\(/);
+      expect(body).not.toMatch(/\.prime\(|\.get\(\s*\{/);
+      expect(body).not.toMatch(/includeReconciliation/);
+    });
+
+    it("no escribe settings directamente (solo por el callable)", () => {
+      const source = admin();
+      expect(source).not.toMatch(/\b(?:setDoc|updateDoc|addDoc|writeBatch|runTransaction)\s*\(/);
+      expect(source).not.toMatch(/["']settings\/cashAlerts["']|["']cashAlerts["']/);
+      expect(source).not.toMatch(/["']firebase\/firestore["']/);
+    });
+
+    it("includeReconciliation: true sigue apareciendo una sola vez en el archivo (decision 11)", () => {
+      expect(count(flat(admin()), "includeReconciliation: true")).toBe(1);
+    });
+
+    it("la pestana tiene el boton \"Plazo y aviso\" y monta el dialogo", () => {
+      const tab = topLevelBody(admin(), "CashOutstandingTab");
+      expect(tab).toMatch(/<button\b[\s\S]*?Plazo y aviso[\s\S]*?<\/button>/);
+      expect(tab).toMatch(/<CashAlertSettingsDialog\b/);
+    });
+
+    it("todo <input> del archivo tiene objetivo tactil >= 44px (min-h-11, h-11 o focus-ring)", () => {
+      const source = admin();
+      const inputs = [...source.matchAll(/<input\b/g)];
+      expect(inputs.length, "el dialogo no tiene inputs").toBeGreaterThanOrEqual(2);
+      const short = inputs
+        .map((match) => {
+          const start = match.index ?? 0;
+          const close = source.indexOf("/>", start);
+          const tag = source.slice(start, close < 0 ? start + 800 : close);
+          return { line: source.slice(0, start).split("\n").length, tag };
+        })
+        .filter(({ tag }) => !/\bfocus-ring\b|\bmin-h-11\b|\bmin-h-\[44px\]|\bh-11\b|\bmin-h-12\b|\bh-12\b/.test(tag))
+        .map(({ line }) => `linea ${line}`);
+      expect(short).toEqual([]);
+    });
+
+    it("sin colores literales en el archivo", () => {
+      const source = admin();
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
+      expect(source).not.toMatch(/\[(?:#|rgb|hsl)/);
+    });
+  });
+
+  describe("linea de proveedor en Por pagar (decision 8, carga resumen compartida)", () => {
+    it("exporta CashOutstandingSupplierPendingLine", () => {
+      expect(admin()).toMatch(/export\s+function\s+CashOutstandingSupplierPendingLine\s*\(/);
+    });
+
+    it("usa supplierPendingLine del modelo de vista", () => {
+      expect(admin()).toMatch(/import\s*\{[^}]*\bsupplierPendingLine\b[^}]*\}\s*from\s*["'][^"']*cash-outstanding-view["']/);
+      expect(supplierLine()).toMatch(/\bsupplierPendingLine\(/);
+    });
+
+    it("lee la carga compartida del modulo con .get({ uid }) sin refresh", () => {
+      const body = flat(supplierLine());
+      expect(body).toMatch(new RegExp(`\\b${moduleCacheName()}\\.get\\(\\s*\\{[^}]*\\buid\\b`));
+      expect(body).not.toMatch(/\brefresh\b/);
+    });
+
+    it("no es una carga nueva: ni conciliacion, ni callable, ni prime", () => {
+      const body = supplierLine();
+      expect(body).not.toBe("");
+      expect(body).not.toMatch(/includeReconciliation/);
+      expect(body).not.toMatch(/\bgetFirebaseCashOutstanding\b/);
+      expect(body).not.toMatch(/\.prime\(/);
+      expect(body).not.toMatch(/\breloadAfterCashAlertSave\b/);
+    });
+  });
+
+  describe("montaje en operations-app.tsx", () => {
+    it("importa CashOutstandingSupplierPendingLine de ./cash-outstanding-admin", () => {
+      const imports = [...app().matchAll(/import\s*\{([^}]*)\}\s*from\s*["']\.\/cash-outstanding-admin["']/g)].map((m) => m[1]).join(",");
+      expect(imports).toMatch(/\bCashOutstandingSupplierPendingLine\b/);
+    });
+
+    it("la linea se monta en la tarjeta de proveedor de Por pagar con supplierId={row.supplierId}", () => {
+      const table = flat(topLevelBody(app(), "SupplierLiquidationTable"));
+      expect(table).toMatch(/<CashOutstandingSupplierPendingLine\b[^>]*\bsupplierId=\{\s*row\.supplierId\s*\}/);
+      expect(table).toMatch(/<CashOutstandingSupplierPendingLine\b[^>]*\buid=\{/);
+    });
+
+    it("solo se monta ahi (una aparicion en operations-app)", () => {
+      expect(count(app(), "<CashOutstandingSupplierPendingLine")).toBe(1);
+    });
+
+    it("operations-app no monta el dialogo ni recalcula la linea por su cuenta", () => {
+      const source = app();
+      expect(source).not.toMatch(/<CashAlertSettingsDialog\b/);
+      expect(source).not.toMatch(/\bsupplierPendingLine\b/);
+      expect(source).not.toMatch(/\breloadAfterCashAlertSave\b/);
+      expect(source).not.toMatch(/\bupdateFirebaseCashAlertSettings\b/);
+      expect(source).not.toMatch(/\bgetFirebaseCashOutstanding\b/);
+    });
+
+    it(`buildCodReceivedSet sigue con ${FROZEN_COD_RECEIVED_COUNT} apariciones (congelado)`, () => {
+      const raw = readFileSync(absolute(APP), "utf8");
+      expect(raw.match(/\bbuildCodReceivedSet\b/g)?.length ?? 0).toBe(FROZEN_COD_RECEIVED_COUNT);
+    });
+  });
+});

@@ -3,7 +3,7 @@
 import { AlertTriangle, Bike, Boxes, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, CreditCard, ExternalLink, FileDown, History, Image as ImageIcon, LogOut, MapPin, PackageCheck, Phone, Printer, QrCode, Route, Settings, ShieldCheck, Store, Truck, Users, Wallet, Wrench, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { renderCode128Svg } from "@/lib/barcode";
-import { CashOutstandingOverdueCard, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
+import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
 import type { OrderPeriodStats } from "@/lib/firebase/auth";
 import {
@@ -8509,7 +8509,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
             onClose={(row, chargeGmf) => setPayTarget({ row, chargeGmf: chargeGmf ?? !row.paysInCash })}
             onAbono={(row) => setAbonoTarget({ sellerId: row.id, sellerName: row.name, receivableCop: row.receivableCop })}
           />
-          <SupplierLiquidationTable rows={supplierRows} busyId={busyId} onClose={(row) => setPaySupplierTarget(row)} />
+          <SupplierLiquidationTable uid={uid} rows={supplierRows} busyId={busyId} onClose={(row) => setPaySupplierTarget(row)} />
           <CommunityLeaderLiquidationTable
             rows={communityLeaderRows}
             totalCop={totalCommunityLeaderPayable}
@@ -9753,10 +9753,12 @@ function CommunityLeaderLiquidationTable({
 }
 
 function SupplierLiquidationTable({
+  uid,
   rows,
   busyId,
   onClose
 }: {
+  uid: string;
   rows: SupplierLiquidationRow[];
   busyId: string | null;
   onClose: (row: SupplierLiquidationRow, chargeGmf?: boolean) => void;
@@ -9806,7 +9808,10 @@ function SupplierLiquidationTable({
                 return (
                   <Fragment key={row.supplierId}>
                     <tr className="border-b border-white/5 last:border-0">
-                      <td className="py-3 pr-3 font-semibold">{row.supplierName}</td>
+                      <td className="py-3 pr-3 font-semibold">
+                        {row.supplierName}
+                        <CashOutstandingSupplierPendingLine uid={uid} supplierId={row.supplierId} />
+                      </td>
                       <td className="py-3 pr-3">{row.sellers.length > 0 ? row.sellers.join(", ") : "-"}</td>
                       <td className="py-3 pr-3">{row.orders}</td>
                       <td className="py-3 pr-3">{row.walletEntryIds.length}</td>
