@@ -279,6 +279,28 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     contraria (suma a `amountCop` y a `nettedAmountCop`, no a `overdueAmountCop`); prueba de la linea con y sin
     compensados.
 
+## Correcciones de la revision adversarial (ronda 2, 2026-10-02)
+
+- [ ] **T22: La tarjeta de Operacion dice "cifras incompletas" (R2-RF_03-1)**
+  * Requisitos cubiertos: RF_03
+  * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
+  * Accion: `buildCard` lee `report.isIncomplete`: expone `isIncomplete` y, con datos incompletos, nunca da
+    `isAllClear` ni "Efectivo vencido: $0 · al dia"; la tarjeta pinta "Cifras incompletas" y lleva a la pestaña
+    (design-system: "si una cifra sale de datos incompletos, dilo o no la muestres").
+  * Verificacion: prueba de vista (vencido legible 0 + un ilegible → sin "al dia", con aviso; vencido > 0 +
+    ilegible → cifra con aviso); guarda textual del componente (bloque T22).
+
+- [ ] **T23: Lo retenido a proveedores se ve aunque todo este compensado (R2-RF_08-1)**
+  * Requisitos cubiertos: RF_08, RF_09
+  * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
+  * Accion: la tarjeta "Producto retenido a proveedores" se muestra si `bySupplier` no esta vacio, haya o no
+    `rows`. El texto "Las tiendas y los proveedores pueden cobrar todo lo entregado" solo sale si no hay
+    `rows`, ni retenido a proveedores, ni compensados; con solo compensados el vacio lo dice ("todo lo que
+    falta esta cubierto por compensacion") y no promete que el proveedor pueda cobrar. La decision vive en el
+    modelo de vista (p.ej. `view.emptyState`, `view.showSupplierWithheld`), no en el componente.
+  * Verificacion: pruebas de vista (rows vacio + compensados con producto → tarjeta de proveedor visible y
+    sin "pueden cobrar todo"; todo vacio → texto de hoy); guarda textual del componente (bloque T23).
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |
