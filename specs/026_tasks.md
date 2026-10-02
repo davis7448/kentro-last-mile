@@ -133,7 +133,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Aviso
 
-- [ ] **T10: Composicion del aviso y sus documentos**
+- [x] **T10: Composicion del aviso y sus documentos**
   * Requisitos cubiertos: RF_05, RF_09
   * Archivos: functions/src/cash-overdue-notice.ts, src/lib/cash-overdue-notice.test.ts
   * Accion: `selectNoticeCandidates` (solo `rows`), `composeOverdueNotice` (por lider, sin datos del
