@@ -218,7 +218,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     no escribe `settings`; RNF_01 sobre `cash-outstanding-loads.ts`; conteo congelado; `lint`. **E2E con
     `HU_01.plazo` en `/sdd-verify`.**
 
-- [ ] **T17: Interfaz del lider y cierre de las guardas**
+- [x] **T17: Interfaz del lider y cierre de las guardas**
   * Requisitos cubiertos: RF_06, RF_09, RF_01, RNF_01
   * Archivos: src/components/cash-outstanding-leader.tsx, src/components/operations-app.tsx, src/lib/spec-026-guards.test.ts
   * Accion: panel "Efectivo sin llegar a Kentro" segun `HU_02.finanzas`, `HU_02.al-dia`, `HU_02.error`

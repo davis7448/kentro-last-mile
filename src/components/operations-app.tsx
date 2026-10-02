@@ -4,6 +4,7 @@ import { AlertTriangle, Bike, Boxes, Check, CheckCircle2, ChevronLeft, ChevronRi
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { renderCode128Svg } from "@/lib/barcode";
 import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
+import { CashOutstandingLeaderPanel } from "./cash-outstanding-leader";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
 import type { OrderPeriodStats } from "@/lib/firebase/auth";
 import {
@@ -12084,6 +12085,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
       {view === "finance" && (
       <section id="finanzas" className="scroll-mt-32 grid gap-3">
         <SectionHeader title="Resumen financiero" description="Saldo total abierto, abonos y cortes del domiciliario." />
+        <CashOutstandingLeaderPanel />
         <DriverFinancialSummaryPanel summary={financialSummary} onPinSettlementOrders={onPinSettlementOrders} />
         <DashboardWalletCard state={state} ownerType="driver" ownerId={driver.id} title="Wallet del lider logistico" collapsible />
       </section>

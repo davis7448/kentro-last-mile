@@ -199,11 +199,8 @@ describe("T6 · RF_01: la regla de recibido no se copia", () => {
     "functions/src/cash-overdue-notice.ts",
     "src/lib/cash-outstanding-view.ts",
   ] as const;
-  const PENDING_UNTIL_LATER_TASKS = new Set<string>([
-    "functions/src/cash-outstanding-api.ts", // T12
-    "functions/src/cash-overdue-notice.ts", // T10
-    "src/lib/cash-outstanding-view.ts", // T14
-  ]);
+  // T10, T12 y T14 ya crearon los tres que faltaban; T17 exige en su bloque que existan los cuatro.
+  const PENDING_UNTIL_LATER_TASKS = new Set<string>([]);
   const FORBIDDEN = ["cashAllocations", "covered"] as const;
 
   function stripComments(text: string): string {
@@ -1731,5 +1728,343 @@ describe("T16 · interfaz del admin: plazo y proveedor", () => {
       const raw = readFileSync(absolute(APP), "utf8");
       expect(raw.match(/\bbuildCodReceivedSet\b/g)?.length ?? 0).toBe(FROZEN_COD_RECEIVED_COUNT);
     });
+  });
+});
+
+describe("T17 · interfaz del lider", () => {
+  /*
+   * T17 (RF_06, RF_09, RF_01, RNF_01; README decisiones 10, 11 y 12; pantallas HU_02.finanzas,
+   * HU_02.al-dia, HU_02.error).
+   *
+   * Guardas de fuente (no hay render de componentes en el repo); el E2E de HU_02 es de /sdd-verify.
+   *
+   * Contrato que fija este bloque:
+   *  - `src/components/cash-outstanding-leader.tsx` exporta `CashOutstandingLeaderPanel` (sin props
+   *    obligatorias: el callable resuelve al lider por `token.driverId`).
+   *  - Pinta desde `buildCashOutstandingView(..., { role: "leader", ... })`; la cifra es `outstandingCop`
+   *    (neta del pago), no el recaudo.
+   *  - Pide con `getFirebaseCashOutstanding()` SIN argumentos (nunca conciliacion), desde un `useEffect` al
+   *    montarse y desde "Actualizar" / "Reintentar". Nada a nivel de modulo: no hay cache compartida ni
+   *    carga al arrancar la app; el panel solo existe dentro de Finanzas.
+   *  - Region y h2 "Efectivo sin llegar a Kentro"; botones de 56px (`min-h-14`/`h-14`) por densidad de calle.
+   *  - `operations-app.tsx` lo monta SOLO en `DriverView`, dentro de `view === "finance"`, antes de
+   *    `DriverFinancialSummaryPanel`; "Pendiente por entregar" de Operacion se conserva (P6: complementa).
+   */
+  const LEADER = "src/components/cash-outstanding-leader.tsx";
+  const VIEW = "src/lib/cash-outstanding-view.ts";
+  const APP = "src/components/operations-app.tsx";
+  // Medido el 2026-10-02 (mismo valor que fijaron T15 y T16): `grep -c` = 3.
+  const FROZEN_COD_RECEIVED_COUNT = 3;
+
+  const leader = () => (existsSync(absolute(LEADER)) ? sourceWithoutComments(LEADER) : "");
+  const app = () => sourceWithoutComments(APP);
+  const flat = (text: string) => text.replace(/\s+/g, " ");
+  /** Lo que se pinta: componente + modelo de vista (rotulos de lider y "Cifras incompletas" viven en este). */
+  const painted = () => `${leader()}\n${sourceWithoutComments(VIEW)}`;
+
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  /** Contenido entre llaves o parentesis equilibrados desde `source[open]`. */
+  function balanced(source: string, open: number): string {
+    const opener = source[open];
+    const closer = opener === "(" ? ")" : "}";
+    let depth = 0;
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === opener) depth += 1;
+      if (source[index] === closer) {
+        depth -= 1;
+        if (depth === 0) return source.slice(open + 1, index);
+      }
+    }
+    return source.slice(open + 1);
+  }
+
+  function count(source: string, token: string): number {
+    return source.split(token).length - 1;
+  }
+
+  /** El bloque `{view === "finance" && ( ... )}` de DriverView. */
+  function driverFinanceBlock(): string {
+    const body = topLevelBody(app(), "DriverView");
+    const at = body.search(/view\s*===\s*["']finance["']\s*&&\s*\(/);
+    if (at < 0) return "";
+    return balanced(body, body.indexOf("(", body.indexOf("&&", at)));
+  }
+
+  /** Tag de apertura + contenido de cada `<button>`, con su linea. */
+  function buttons(source: string): Array<{ line: number; tag: string }> {
+    return [...source.matchAll(/<button\b/g)].map((match) => {
+      const start = match.index ?? 0;
+      const close = source.indexOf("</button>", start);
+      return { line: source.slice(0, start).split("\n").length, tag: source.slice(start, close < 0 ? start + 800 : Math.min(close, start + 800)) };
+    });
+  }
+
+  describe("el componente", () => {
+    it("existe", () => {
+      expect(existsSync(absolute(LEADER))).toBe(true);
+    });
+
+    it("exporta CashOutstandingLeaderPanel", () => {
+      expect(leader()).toMatch(/export\s+(?:function\s+CashOutstandingLeaderPanel\b|const\s+CashOutstandingLeaderPanel\b)/);
+    });
+
+    it("pinta desde buildCashOutstandingView con role \"leader\" (y nunca \"admin\")", () => {
+      expect(leader()).toMatch(/import\s*\{[^}]*\bbuildCashOutstandingView\b[^}]*\}\s*from\s*["'][^"']*cash-outstanding-view["']/);
+      const calls = [...leader().matchAll(/\bbuildCashOutstandingView\s*\(/g)].map((m) => flat(balanced(leader(), (m.index ?? 0) + m[0].length - 1)));
+      expect(calls.length).toBeGreaterThan(0);
+      for (const args of calls) expect(args).toMatch(/\brole:\s*["']leader["']/);
+      expect(leader()).not.toMatch(/\brole:\s*["']admin["']/);
+    });
+
+    it("la cifra del panel es outstandingCop (neta del pago), formateada con formatCop", () => {
+      expect(leader()).toMatch(/\boutstandingCop\b/);
+      expect(leader()).toMatch(/\bformatCop\s*\(/);
+    });
+
+    it("al lider no se le pinta nada de proveedor ni de cuadre (decision 8)", () => {
+      expect(leader()).not.toMatch(/\bbySupplier\b|\bsupplierWithheld\b|\breconciliation\b|Producto retenido|Cuadre con la posicion/);
+    });
+  });
+
+  describe("carga: al abrir Finanzas y con Actualizar, sin conciliacion (decision 11)", () => {
+    it("importa getFirebaseCashOutstanding de firebase/auth", () => {
+      expect(leader()).toMatch(/import\s*\{[^}]*\bgetFirebaseCashOutstanding\b[^}]*\}\s*from\s*["'][^"']*firebase\/auth["']/);
+    });
+
+    it("lo llama sin argumentos: getFirebaseCashOutstanding()", () => {
+      expect(leader()).toMatch(/\bgetFirebaseCashOutstanding\(\s*\)/);
+      const calls = [...leader().matchAll(/\bgetFirebaseCashOutstanding\(([^)]*)\)/g)].map((m) => m[1].trim());
+      expect(calls.filter((args) => args !== "")).toEqual([]);
+    });
+
+    it("nunca menciona includeReconciliation", () => {
+      expect(leader()).not.toMatch(/includeReconciliation/);
+    });
+
+    it("no usa la cache compartida del admin (la suya se pide al abrir Finanzas)", () => {
+      expect(leader()).not.toMatch(/\bcreateCashOutstandingSummaryCache\b|\.prime\(/);
+    });
+
+    it("carga en un useEffect del componente, no a nivel de modulo", () => {
+      expect(leader()).toMatch(/\buseEffect\s*\(/);
+      const moduleLevel = leader()
+        .split("\n")
+        .filter((line) => /^(?:export\s+)?(?:const|let|var|void|await)\b[^=]*=?.*\bgetFirebaseCashOutstanding\s*\(/.test(line) || /^(?:void\s+)?getFirebaseCashOutstanding\s*\(/.test(line));
+      expect(moduleLevel).toEqual([]);
+    });
+
+    it("\"Actualizar\" y \"Reintentar\" son botones con onClick", () => {
+      const all = buttons(leader());
+      const refresh = all.find(({ tag }) => /aria-label=(?:"Actualizar"|\{\s*["']Actualizar["']\s*\})|>\s*Actualizar\s*$/m.test(tag) || /Actualizar/.test(tag));
+      const retry = all.find(({ tag }) => /Reintentar/.test(tag));
+      expect(refresh?.tag ?? "", "falta el boton Actualizar").toMatch(/onClick=\{/);
+      expect(retry?.tag ?? "", "falta el boton Reintentar").toMatch(/onClick=\{/);
+    });
+  });
+
+  describe("RNF_01 · no recalcula ni baja historico", () => {
+    const FORBIDDEN = [
+      /\bbuildCodReceivedSet\b/,
+      /\bisSellerEntryEligible\b/,
+      /\bcomputeDriverCashSummary\b/,
+      /\bcalculateDriverFinancialSummary\b/,
+      /\bbuildWalletEntries\b/,
+      /\bwalletEntries\b/,
+      /\bcashAllocations\b/,
+      /\bstate\.settlements\b/,
+      /\bstate\.orders\b/,
+      /["']firebase\/firestore["']/,
+      /\bcollection\(/,
+      /\bonSnapshot\(/,
+      /\bgetDocs\(/,
+      /\bgetDoc\(/,
+    ];
+
+    it("cash-outstanding-leader.tsx no usa la materia prima del calculo ni lee Firestore", () => {
+      expect(existsSync(absolute(LEADER)), `${LEADER} no existe`).toBe(true);
+      const source = leader();
+      expect(FORBIDDEN.filter((pattern) => pattern.test(source)).map(String)).toEqual([]);
+    });
+
+    it(`operations-app.tsx: buildCodReceivedSet sigue con ${FROZEN_COD_RECEIVED_COUNT} apariciones (congelado)`, () => {
+      const raw = readFileSync(absolute(APP), "utf8");
+      expect(raw.match(/\bbuildCodReceivedSet\b/g)?.length ?? 0).toBe(FROZEN_COD_RECEIVED_COUNT);
+    });
+  });
+
+  describe("montaje en operations-app.tsx (solo Finanzas del lider; complementa, no sustituye)", () => {
+    it("importa CashOutstandingLeaderPanel de ./cash-outstanding-leader", () => {
+      const imports = [...app().matchAll(/import\s*\{([^}]*)\}\s*from\s*["']\.\/cash-outstanding-leader["']/g)].map((m) => m[1]).join(",");
+      expect(imports).toMatch(/\bCashOutstandingLeaderPanel\b/);
+    });
+
+    it("se monta una sola vez en operations-app", () => {
+      expect(count(app(), "<CashOutstandingLeaderPanel")).toBe(1);
+    });
+
+    it("se monta dentro de {view === \"finance\" && (...)} de DriverView", () => {
+      expect(driverFinanceBlock()).toMatch(/<CashOutstandingLeaderPanel\b/);
+    });
+
+    it("va al inicio de Finanzas: antes de DriverFinancialSummaryPanel, que se conserva", () => {
+      const block = driverFinanceBlock();
+      const panel = block.indexOf("<CashOutstandingLeaderPanel");
+      const summary = block.indexOf("<DriverFinancialSummaryPanel");
+      expect(summary, "DriverFinancialSummaryPanel desaparecio de Finanzas").toBeGreaterThanOrEqual(0);
+      expect(panel).toBeGreaterThanOrEqual(0);
+      expect(panel).toBeLessThan(summary);
+    });
+
+    it("\"Pendiente por entregar\" sigue en Operacion de DriverView con financialSummary.pendingBalanceCop (P6)", () => {
+      const body = topLevelBody(app(), "DriverView");
+      expect(body).toContain("Pendiente por entregar");
+      expect(body).toMatch(/formatCop\(\s*financialSummary\.pendingBalanceCop\s*\)/);
+    });
+
+    it("DriverView no llama hooks despues del return anticipado (if (!driver))", () => {
+      const body = topLevelBody(app(), "DriverView");
+      const early = body.search(/if\s*\(\s*!driver\s*\)\s*\{/);
+      expect(early).toBeGreaterThanOrEqual(0);
+      const after = body.slice(early);
+      expect(after.match(/\buse(?:State|Effect|Memo|Callback|Ref|Reducer|LayoutEffect|Context)\s*\(/g) ?? []).toEqual([]);
+    });
+
+    it("operations-app no llama al callable por su cuenta (lo hace el componente)", () => {
+      expect(app()).not.toMatch(/\bgetFirebaseCashOutstanding\b/);
+    });
+  });
+
+  describe("textos y nombres accesibles del diseno (HU_02.*)", () => {
+    it.each([
+      "Efectivo sin llegar a Kentro",
+      "Kentro tiene todo tu efectivo",
+      "Ninguna entrega tuya espera su corte.",
+      "No se pudo cargar",
+      "Revisa la conexion y vuelve a intentarlo.",
+      "No mostramos una cifra a medias.",
+      "Reintentar",
+      "Actualizar",
+      "Que incluye esta cifra",
+      "Ver pedidos cubiertos",
+      "Por entregar en",
+      "llevan mas de",
+      "Tu pago por entrega ya esta descontado",
+      "pedidos cubiertos en cortes ya saldados: no debes nada por ellos.",
+      "Del mas antiguo al mas reciente",
+      "Entregado el",
+      "Calculando el efectivo sin llegar",
+      "calculado hoy",
+      "Pendiente por entregar",
+    ])("el componente contiene \"%s\"", (text) => {
+      expect(flat(leader())).toContain(text);
+    });
+
+    it("la nota final le dice que avise al administrador con la guia (decision 10)", () => {
+      expect(leader()).toMatch(/avisa al administrador/i);
+      expect(leader()).toMatch(/\bguia\b/i);
+    });
+
+    it.each(["Cifras incompletas", "Hay datos que no se pudieron leer", "No esta en ningun corte", "pagado con faltante", "Cubierto en el corte del"])(
+      "lo pintado (componente + modelo de vista) contiene \"%s\"",
+      (text) => {
+        expect(painted()).toContain(text);
+      }
+    );
+
+    it.each(["Efectivo sin llegar a Kentro", "Pedidos con efectivo sin llegar", "Actualizar", "Que incluye esta cifra"])(
+      "aria-label=\"%s\" (region, lista y botones de icono del screen.json)",
+      (name) => {
+        expect(leader()).toMatch(new RegExp(`aria-label=(?:"${name}"|\\{\\s*["']${name}["']\\s*\\})`));
+      }
+    );
+
+    it("el titulo del panel es un h2 \"Efectivo sin llegar a Kentro\"", () => {
+      expect(flat(leader())).toMatch(/<h2\b[^>]*>\s*Efectivo sin llegar a Kentro\s*<\/h2>/);
+    });
+
+    it("la region es un <section> con aria-label", () => {
+      expect(leader()).toMatch(/<section\b[^>]*aria-label=(?:"Efectivo sin llegar a Kentro"|\{\s*["']Efectivo sin llegar a Kentro["']\s*\})/);
+    });
+
+    it("la lista de pedidos es un <ul> u <ol> con aria-label \"Pedidos con efectivo sin llegar\"", () => {
+      expect(leader()).toMatch(/<(?:ul|ol)\b[^>]*aria-label=(?:"Pedidos con efectivo sin llegar"|\{\s*["']Pedidos con efectivo sin llegar["']\s*\})/);
+    });
+
+    it("role=\"status\" (cargando) y role=\"alert\" nombrado \"No se pudo cargar\" (error)", () => {
+      expect(leader()).toMatch(/role=["']status["']/);
+      expect(leader()).toMatch(/role=["']alert["'][^>]*(?:aria-label=(?:"No se pudo cargar"|\{\s*["']No se pudo cargar["']\s*\})|aria-labelledby=)|(?:aria-label=(?:"No se pudo cargar"|\{\s*["']No se pudo cargar["']\s*\})|aria-labelledby=)[^>]*role=["']alert["']/);
+    });
+
+    it("\"Ver pedidos cubiertos\" es una divulgacion con aria-expanded y nombre fijo", () => {
+      const disclosure = buttons(leader()).find(({ tag }) => /Ver pedidos cubiertos/.test(tag));
+      expect(disclosure?.tag ?? "", "falta el boton Ver pedidos cubiertos").toMatch(/aria-expanded=/);
+    });
+  });
+
+  describe("sistema de diseno: densidad de calle (README decision 10)", () => {
+    it("sin colores literales (hex, rgb, hsl ni clases arbitrarias de color)", () => {
+      expect(existsSync(absolute(LEADER)), `${LEADER} no existe`).toBe(true);
+      const source = leader();
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
+      expect(source).not.toMatch(/\[(?:#|rgb|hsl)/);
+    });
+
+    it("todo <button> mide >= 56px (min-h-14, h-14 o min-h-[56px])", () => {
+      const all = buttons(leader());
+      expect(all.length).toBeGreaterThan(0);
+      const short = all.filter(({ tag }) => !/\bmin-h-14\b|\bh-14\b|\bmin-h-\[56px\]/.test(tag)).map(({ line }) => `linea ${line}`);
+      expect(short).toEqual([]);
+    });
+
+    it("se queda en tema oscuro: no envuelve en .theme-light (eso es solo del mensajero)", () => {
+      expect(leader()).not.toMatch(/theme-light/);
+    });
+  });
+});
+
+describe("T17 · RF_01: la guarda anti-copia mira los cuatro archivos", () => {
+  /*
+   * Cierre de la guarda de T6 (plan 2.2): la lista fija de cuatro archivos ya no admite pendientes.
+   * Los cuatro existen y ninguno contiene la materia prima de la regla de recibido.
+   */
+  const WATCHED = [
+    "functions/src/cash-outstanding.ts",
+    "functions/src/cash-outstanding-api.ts",
+    "functions/src/cash-overdue-notice.ts",
+    "src/lib/cash-outstanding-view.ts",
+  ] as const;
+
+  function copies(file: string): string[] {
+    const found: string[] = [];
+    sourceWithoutComments(file)
+      .split("\n")
+      .forEach((line, index) => {
+        for (const token of ["cashAllocations", "covered"]) {
+          if (new RegExp(`\\b${token}\\b`).test(line)) found.push(`${token} (linea ${index + 1})`);
+        }
+      });
+    return found;
+  }
+
+  it.each(WATCHED)("%s existe", (file) => {
+    expect(existsSync(absolute(file))).toBe(true);
+  });
+
+  it.each(WATCHED)("%s: sin copia de la regla de recibido", (file) => {
+    expect(copies(file)).toEqual([]);
+  });
+
+  it("la guarda de T6 ya no tiene archivos pendientes (lista fija cerrada)", () => {
+    const guard = readFileSync(absolute("src/lib/spec-026-guards.test.ts"), "utf8");
+    const pending = guard.match(/const\s+PENDING_UNTIL_LATER_TASKS\s*=\s*new\s+Set<string>\(\[([\s\S]*?)\]\)/)?.[1] ?? "missing";
+    expect(pending.replace(/\/\/.*$/gm, "").trim()).toBe("");
   });
 });
