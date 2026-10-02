@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T13",
+  "activeTask": "T14",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
@@ -184,8 +184,8 @@
         "functions/src/index.ts",
         "src/lib/spec-026-guards.test.ts"
       ],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     },
     "T14": {
       "requirements": [

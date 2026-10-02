@@ -582,11 +582,16 @@ describe("T12 · alcance, cargador y callable", () => {
       expect(callableBody(api(), "getCashOutstanding")).toMatch(/onCall\(\s*\{[^}]*\bsecrets\s*:/);
     });
 
-    it("la URL del canal no se devuelve: todo .value() del secreto va dentro de isOpsChannelConfigured(...)", () => {
+    // Cambio T13 (2026-10-02, opcion (a) del coordinador): antes contaba los `.value()` de TODO el archivo;
+    // `notifyOverdueCash` (T13) necesita la url real para enviar. La intencion de esta guarda es que
+    // `getCashOutstanding` no devuelva la url, asi que cuenta solo dentro de su cuerpo. La programada
+    // tiene su guarda equivalente en el bloque T13.
+    it("la URL del canal no se devuelve: todo .value() del secreto en getCashOutstanding va dentro de isOpsChannelConfigured(...)", () => {
       const source = api();
       expect(source).toMatch(/import\s*\{[^}]*\bisOpsChannelConfigured\b[^}]*\}\s*from\s*["']\.\/ops-notify["']/);
-      const valueCalls = (source.match(/\.value\(\)/g) ?? []).length;
-      const wrapped = (source.match(/isOpsChannelConfigured\(\s*[\w$.]+\.value\(\)\s*\)/g) ?? []).length;
+      const body = callableBody(source, "getCashOutstanding");
+      const valueCalls = (body.match(/\.value\(\)/g) ?? []).length;
+      const wrapped = (body.match(/isOpsChannelConfigured\(\s*[\w$.]+\.value\(\)\s*\)/g) ?? []).length;
       expect(valueCalls).toBeGreaterThan(0);
       expect(valueCalls).toBe(wrapped);
     });
@@ -605,6 +610,586 @@ describe("T12 · alcance, cargador y callable", () => {
       expect(source).not.toBe("");
       expect(source).not.toMatch(/from\s*["']firebase\/(firestore|app|auth)["']/);
       expect(source).not.toMatch(/from\s*["'](\.\.\/)+src\//);
+    });
+  });
+});
+
+describe("T13 · escrituras sin undefined y aviso tras envio", () => {
+  /*
+   * T13 (plan 2.4, 2.6, 2.8, 8; spec RF_04, RF_05 y seccion 9). Archivos: `functions/src/cash-outstanding-api.ts`
+   * y `functions/src/index.ts`.
+   *
+   * Contrato (exportado de `cash-outstanding-api.ts`):
+   *
+   * 1. `resolveCashAlertSettingsUpdate(auth, data)` — PURO, no lanza:
+   *      -> { ok: true; settings: { overdueDays; notifyMinCop } }
+   *       | { ok: false; code: "permission-denied" | "invalid-argument"; message: string }
+   *    Primero el rol (solo `token.role === "admin"`), despues la entrada con `cashAlertSettingsSchema`.
+   *    Los DOS campos son obligatorios: el esquema tiene defectos, y un `{ overdueDays }` suelto pisaria
+   *    en silencio el umbral configurado con el defecto. `null`/`undefined`/`{}` -> invalid-argument.
+   *
+   * 2. `runOverdueNotice(deps)` — la orquestacion de la programada, con la E/S inyectada:
+   *      deps = {
+   *        runId: string; now: string;
+   *        channelUrl: string | undefined | null;                       // el secreto, tal cual
+   *        loadReport(): Promise<{ rows; nettedRows; settings; isIncomplete }>;   // modo resumen
+   *        loadNotifiedOrderIds(orderIds: string[]): Promise<ReadonlySet<string>>; // cashOverdueNotices
+   *        send(text: string, url: string): Promise<OpsNoticeResult>;   // prod: sendOpsNotice
+   *        markNotified(docs: CashOverdueNoticeDoc[]): Promise<void>;   // cashOverdueNotices/{orderId}
+   *        writeRun(doc: CashOverdueRunDoc): Promise<void>;             // cashOverdueRuns/{runId}
+   *      }
+   *      -> Promise<CashOverdueRunDoc>   (el mismo documento que se paso a writeRun)
+   *    - candidatas = selectNoticeCandidates({ rows, settings }, notificados): nunca `nettedRows`;
+   *    - sin canal (isOpsChannelConfigured(channelUrl) falso) -> no envia, no marca, run
+   *      `skipped_no_channel` con los ids que se habrian avisado;
+   *    - con canal y sin candidatas -> `nothing_to_send`, no envia;
+   *    - UN envio con composeOverdueNotice(candidatas, { isIncomplete, now }).text;
+   *    - envio ok -> marca TODAS las candidatas (aunque el texto se recorte) con exactamente
+   *      buildNoticeDocs({ candidates, runId, now }), y despues escribe el run `sent`;
+   *    - envio fallido -> no marca, run `send_failed` (httpStatus si http_error; `error` con el motivo);
+   *    - marcado que lanza -> run `mark_failed` con el mensaje en `error`, y la promesa RESUELVE;
+   *    - todo run sale de buildRunDoc (sin undefined) y nunca contiene la url del canal.
+   *
+   * 3. `updateCashAlertSettings` (onCall) y `notifyOverdueCash` (onSchedule 08:00 America/Bogota,
+   *    secrets [OPS_NOTICE_WEBHOOK_URL]) exportados desde index.ts.
+   *
+   * Nota de acoplamiento: la guarda de T12 exige que todo `.where(` del api coincida con query-check y que
+   * todo `.value()` del secreto vaya envuelto en isOpsChannelConfigured. Leer las marcas por id
+   * (`db.getAll`), no por `where`.
+   */
+  const API = "functions/src/cash-outstanding-api.ts";
+  const INDEX = "functions/src/index.ts";
+
+  type Settings = { overdueDays: number; notifyMinCop: number };
+  type Resolution =
+    | { ok: true; settings: Settings }
+    | { ok: false; code: "permission-denied" | "invalid-argument"; message: string };
+  type Auth = { uid?: string; token?: Record<string, unknown> } | null | undefined;
+  type SendResult =
+    | { ok: true; httpStatus: number }
+    | { ok: false; reason: "no_channel" }
+    | { ok: false; reason: "http_error"; httpStatus: number }
+    | { ok: false; reason: "network_error"; error: string }
+    | { ok: false; reason: "timeout"; error: string };
+  type Row = import("../../functions/src/cash-outstanding").CashOutstandingRow;
+  type NoticeDoc = { id: string; data: Record<string, unknown> };
+  type RunDoc = { id: string; status: string; orderIds: string[]; truncated: boolean; error?: string; httpStatus?: number } & Record<string, unknown>;
+  type Deps = {
+    runId: string;
+    now: string;
+    channelUrl: string | undefined | null;
+    loadReport: () => Promise<{ rows: Row[]; nettedRows: Row[]; settings: Settings; isIncomplete: boolean }>;
+    loadNotifiedOrderIds: (orderIds: string[]) => Promise<ReadonlySet<string>>;
+    send: (text: string, url: string) => Promise<SendResult>;
+    markNotified: (docs: NoticeDoc[]) => Promise<void>;
+    writeRun: (doc: RunDoc) => Promise<void>;
+  };
+
+  async function apiModule(): Promise<Record<string, unknown>> {
+    return (await import("../../functions/src/cash-outstanding-api")) as unknown as Record<string, unknown>;
+  }
+
+  async function resolveUpdate(): Promise<(auth: Auth, data: unknown) => Resolution> {
+    const fn = (await apiModule()).resolveCashAlertSettingsUpdate;
+    if (typeof fn !== "function") throw new Error("resolveCashAlertSettingsUpdate no esta exportada en cash-outstanding-api.ts");
+    return fn as (auth: Auth, data: unknown) => Resolution;
+  }
+
+  async function runner(): Promise<(deps: Deps) => Promise<RunDoc>> {
+    const fn = (await apiModule()).runOverdueNotice;
+    if (typeof fn !== "function") throw new Error("runOverdueNotice no esta exportada en cash-outstanding-api.ts");
+    return fn as (deps: Deps) => Promise<RunDoc>;
+  }
+
+  const admin = { uid: "u-admin", token: { role: "admin" } };
+
+  describe("resolveCashAlertSettingsUpdate (puro): solo admin, entrada completa y validada", () => {
+    it("admin con plazo y umbral validos -> ok con esos ajustes", async () => {
+      const resolve = await resolveUpdate();
+      expect(resolve(admin, { overdueDays: 10, notifyMinCop: 50_000 })).toEqual({ ok: true, settings: { overdueDays: 10, notifyMinCop: 50_000 } });
+    });
+
+    it("umbral 0 es valido (avisar todo lo vencido)", async () => {
+      const resolve = await resolveUpdate();
+      expect(resolve(admin, { overdueDays: 7, notifyMinCop: 0 })).toEqual({ ok: true, settings: { overdueDays: 7, notifyMinCop: 0 } });
+    });
+
+    it.each([
+      ["lider", { uid: "u-l", token: { role: "driver", driverId: "driver-1" } }],
+      ["tienda", { uid: "u-s", token: { role: "seller" } }],
+      ["logistico de tienda", { uid: "u-sl", token: { role: "seller_logistics" } }],
+      ["mensajero", { uid: "u-m", token: { role: "messenger" } }],
+      ["sin rol", { uid: "u-x", token: {} }],
+      ["sin sesion", null]
+    ])("%s -> permission-denied", async (_label, auth) => {
+      const resolve = await resolveUpdate();
+      const result = resolve(auth as Auth, { overdueDays: 10, notifyMinCop: 50_000 });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe("permission-denied");
+    });
+
+    it("un rol sin permiso es permission-denied aunque la entrada tambien sea invalida (primero el rol)", async () => {
+      const resolve = await resolveUpdate();
+      const result = resolve({ uid: "u-s", token: { role: "seller" } }, { overdueDays: "x" });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe("permission-denied");
+    });
+
+    it.each([
+      ["plazo 0", { overdueDays: 0, notifyMinCop: 20_000 }],
+      ["plazo fraccionario", { overdueDays: 7.5, notifyMinCop: 20_000 }],
+      ["plazo como texto", { overdueDays: "7", notifyMinCop: 20_000 }],
+      ["umbral negativo", { overdueDays: 7, notifyMinCop: -1 }],
+      ["clave de mas", { overdueDays: 7, notifyMinCop: 20_000, driverId: "driver-1" }],
+      ["falta el umbral (no se pisa con el defecto)", { overdueDays: 10 }],
+      ["falta el plazo (no se pisa con el defecto)", { notifyMinCop: 50_000 }],
+      ["objeto vacio", {}],
+      ["null", null],
+      ["undefined", undefined]
+    ])("admin con %s -> invalid-argument", async (_label, data) => {
+      const resolve = await resolveUpdate();
+      const result = resolve(admin, data);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe("invalid-argument");
+    });
+  });
+
+  describe("runOverdueNotice (orquestacion con E/S inyectada)", () => {
+    const NOW = "2026-10-02T13:00:00.000Z";
+    const RUN_ID = "run-2026-10-02";
+    const URL = "https://hooks.example.test/webhook/SECRET-TOKEN-123";
+    const SETTINGS = { overdueDays: 7, notifyMinCop: 20_000 };
+
+    function row(orderId: string, overrides: Partial<Row> = {}): Row {
+      return {
+        orderId,
+        trackingCode: `KNT-${orderId}`,
+        sellerId: "seller-1",
+        sellerName: "Tienda Uno",
+        leaderId: "leader-1",
+        leaderName: "Lider Uno",
+        messengerId: "messenger-1",
+        messengerName: "Mensajero Uno",
+        deliveredAt: "2026-09-10T15:00:00.000Z",
+        deliveredAtSource: "closedAt",
+        ageDays: 22,
+        isOverdue: true,
+        collectedCop: 95_000,
+        collectedSource: "wallet",
+        driverPayCop: 9_000,
+        expectedCashCop: 86_000,
+        receivedCop: 0,
+        outstandingCop: 86_000,
+        location: "outside_settlement",
+        settlements: [],
+        attributedSettlementId: null,
+        supplierWithheld: [],
+        ...overrides
+      } as Row;
+    }
+
+    type Harness = Deps & { calls: string[]; sent: Array<{ text: string; url: string }>; marked: NoticeDoc[][]; runs: RunDoc[]; notifiedAsked: string[][] };
+
+    function harness(options: {
+      rows?: Row[];
+      nettedRows?: Row[];
+      isIncomplete?: boolean;
+      notified?: string[];
+      channelUrl?: string | null;
+      sendResult?: SendResult;
+      markError?: Error;
+    }): Harness {
+      const calls: string[] = [];
+      const sent: Array<{ text: string; url: string }> = [];
+      const marked: NoticeDoc[][] = [];
+      const runs: RunDoc[] = [];
+      const notifiedAsked: string[][] = [];
+      return {
+        calls,
+        sent,
+        marked,
+        runs,
+        notifiedAsked,
+        runId: RUN_ID,
+        now: NOW,
+        channelUrl: options.channelUrl === undefined ? URL : options.channelUrl,
+        loadReport: async () => {
+          calls.push("loadReport");
+          return { rows: options.rows ?? [], nettedRows: options.nettedRows ?? [], settings: SETTINGS, isIncomplete: options.isIncomplete ?? false };
+        },
+        loadNotifiedOrderIds: async (orderIds) => {
+          calls.push("loadNotified");
+          notifiedAsked.push([...orderIds]);
+          return new Set(options.notified ?? []);
+        },
+        send: async (text, url) => {
+          calls.push("send");
+          sent.push({ text, url });
+          return options.sendResult ?? { ok: true, httpStatus: 204 };
+        },
+        markNotified: async (docs) => {
+          calls.push("mark");
+          if (options.markError) throw options.markError;
+          marked.push(docs);
+        },
+        writeRun: async (doc) => {
+          calls.push("run");
+          runs.push(doc);
+        }
+      };
+    }
+
+    function undefinedPaths(value: unknown, path = "$"): string[] {
+      if (value === undefined) return [path];
+      if (value === null || typeof value !== "object") return [];
+      if (Array.isArray(value)) return value.flatMap((item, index) => undefinedPaths(item, `${path}[${index}]`));
+      return Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => undefinedPaths(item, `${path}.${key}`));
+    }
+
+    const notice = () => import("../../functions/src/cash-overdue-notice");
+
+    it("envio ok: un solo mensaje con el texto de composeOverdueNotice, a la url del canal", async () => {
+      const run = await runner();
+      const { composeOverdueNotice, selectNoticeCandidates } = await notice();
+      const rows = [row("a"), row("b", { leaderId: "leader-2", leaderName: "Lider Dos", deliveredAt: "2026-09-01T15:00:00.000Z" })];
+      const h = harness({ rows, isIncomplete: true });
+      await run(h);
+      const candidates = selectNoticeCandidates({ rows, settings: SETTINGS }, new Set());
+      expect(h.sent).toHaveLength(1);
+      expect(h.sent[0].url).toBe(URL);
+      expect(h.sent[0].text).toBe(composeOverdueNotice(candidates, { isIncomplete: true, now: NOW })?.text);
+    });
+
+    it("envio ok: marca con exactamente buildNoticeDocs de las candidatas y DESPUES del envio; el run va al final", async () => {
+      const run = await runner();
+      const { buildNoticeDocs, selectNoticeCandidates } = await notice();
+      const rows = [row("a"), row("b")];
+      const h = harness({ rows });
+      await run(h);
+      const candidates = selectNoticeCandidates({ rows, settings: SETTINGS }, new Set());
+      expect(h.marked).toEqual([buildNoticeDocs({ candidates, runId: RUN_ID, now: NOW })]);
+      expect(h.calls.filter((call) => call === "send" || call === "mark" || call === "run")).toEqual(["send", "mark", "run"]);
+    });
+
+    it("envio ok: el run es `sent`, sale de buildRunDoc, se devuelve y no lleva undefined", async () => {
+      const run = await runner();
+      const { composeOverdueNotice, selectNoticeCandidates } = await notice();
+      const rows = [row("a"), row("b", { leaderId: "leader-2", outstandingCop: 40_000 })];
+      const h = harness({ rows });
+      const result = await run(h);
+      const candidates = selectNoticeCandidates({ rows, settings: SETTINGS }, new Set());
+      const composed = composeOverdueNotice(candidates, { isIncomplete: false, now: NOW });
+      expect(h.runs).toHaveLength(1);
+      expect(result).toEqual(h.runs[0]);
+      expect(h.runs[0]).toMatchObject({
+        id: RUN_ID,
+        createdAt: NOW,
+        status: "sent",
+        channelConfigured: true,
+        isIncomplete: false,
+        orderIds: candidates.map((item) => item.orderId),
+        orderCount: 2,
+        leaderCount: composed?.groups.length,
+        totalCop: composed?.totalCop,
+        truncated: false
+      });
+      expect(undefinedPaths(h.runs[0])).toEqual([]);
+    });
+
+    it("texto recortado: marca TODAS las candidatas, no solo las que caben en el mensaje (primera corrida con todo el atraso)", async () => {
+      const run = await runner();
+      const rows = Array.from({ length: 200 }, (_, index) =>
+        row(`o${String(index).padStart(3, "0")}`, { ageDays: 8 + index, leaderId: `leader-${index % 7}`, deliveredAt: `2026-0${1 + (index % 8)}-1${index % 10}T15:00:00.000Z` })
+      );
+      const h = harness({ rows });
+      const result = await run(h);
+      expect(h.sent).toHaveLength(1);
+      expect(h.sent[0].text.length).toBeLessThanOrEqual(2_000);
+      expect(result.truncated).toBe(true);
+      expect(h.marked).toHaveLength(1);
+      expect(h.marked[0].map((doc) => doc.id).sort()).toEqual(rows.map((item) => item.orderId).sort());
+      expect(result.orderIds).toHaveLength(200);
+    });
+
+    it("excluye los ya avisados en cashOverdueNotices: ni se envian ni se vuelven a marcar", async () => {
+      const run = await runner();
+      const h = harness({ rows: [row("a"), row("ya-avisado")], notified: ["ya-avisado"] });
+      const result = await run(h);
+      expect(h.marked.flat().map((doc) => doc.id)).toEqual(["a"]);
+      expect(result.orderIds).toEqual(["a"]);
+      expect(h.sent[0].text).not.toContain("KNT-ya-avisado");
+    });
+
+    it("todos ya avisados -> nothing_to_send, sin envio ni marca", async () => {
+      const run = await runner();
+      const h = harness({ rows: [row("a")], notified: ["a"] });
+      const result = await run(h);
+      expect(h.sent).toEqual([]);
+      expect(h.marked).toEqual([]);
+      expect(result.status).toBe("nothing_to_send");
+      expect(h.runs.map((doc) => doc.status)).toEqual(["nothing_to_send"]);
+    });
+
+    it("RF_09: los cubiertos por compensacion (nettedRows) nunca se envian ni se marcan, aunque esten vencidos y sobre el umbral", async () => {
+      const run = await runner();
+      const netted = row("compensado", { location: "covered_by_netting", ageDays: 90, outstandingCop: 500_000 });
+      const h = harness({ rows: [row("a")], nettedRows: [netted] });
+      const result = await run(h);
+      expect(h.sent[0].text).not.toContain("KNT-compensado");
+      expect(h.marked.flat().map((doc) => doc.id)).toEqual(["a"]);
+      expect(result.orderIds).toEqual(["a"]);
+    });
+
+    it("solo nettedRows y nada en rows -> nothing_to_send", async () => {
+      const run = await runner();
+      const h = harness({ rows: [], nettedRows: [row("compensado", { location: "covered_by_netting" })] });
+      const result = await run(h);
+      expect(h.sent).toEqual([]);
+      expect(result.status).toBe("nothing_to_send");
+    });
+
+    it("bajo el umbral o no vencido no es candidato", async () => {
+      const run = await runner();
+      const h = harness({ rows: [row("debajo", { outstandingCop: 19_999 }), row("reciente", { isOverdue: false, ageDays: 3 }), row("justo", { outstandingCop: 20_000 })] });
+      const result = await run(h);
+      expect(result.orderIds).toEqual(["justo"]);
+    });
+
+    it.each([
+      ["sin secreto", undefined as unknown as null],
+      ["vacio", ""],
+      ["espacios", "   "],
+      ["none", "none"],
+      ["null", null]
+    ])("sin canal (%s) -> skipped_no_channel: no envia y NO marca, pero deja el run con lo que se habria avisado", async (_label, channelUrl) => {
+      const run = await runner();
+      const h = harness({ rows: [row("a"), row("b")], channelUrl: channelUrl ?? null });
+      const result = await run(h);
+      expect(h.sent).toEqual([]);
+      expect(h.marked).toEqual([]);
+      expect(h.calls).not.toContain("mark");
+      expect(result.status).toBe("skipped_no_channel");
+      expect(result.channelConfigured).toBe(false);
+      expect([...result.orderIds].sort()).toEqual(["a", "b"]);
+      expect(h.runs).toHaveLength(1);
+    });
+
+    it("envio fallido por http -> send_failed con httpStatus, sin marcar", async () => {
+      const run = await runner();
+      const h = harness({ rows: [row("a")], sendResult: { ok: false, reason: "http_error", httpStatus: 500 } });
+      const result = await run(h);
+      expect(h.calls).not.toContain("mark");
+      expect(result.status).toBe("send_failed");
+      expect(result.httpStatus).toBe(500);
+      expect(h.runs.map((doc) => doc.status)).toEqual(["send_failed"]);
+    });
+
+    it.each([
+      ["network_error", { ok: false, reason: "network_error", error: "fetch failed" } as SendResult],
+      ["timeout", { ok: false, reason: "timeout", error: "sin respuesta en 10000 ms" } as SendResult]
+    ])("envio fallido por %s -> send_failed con el motivo en error, sin marcar", async (reason, sendResult) => {
+      const run = await runner();
+      const h = harness({ rows: [row("a")], sendResult });
+      const result = await run(h);
+      expect(h.calls).not.toContain("mark");
+      expect(result.status).toBe("send_failed");
+      expect(result.error).toContain(reason);
+      expect(undefinedPaths(result)).toEqual([]);
+    });
+
+    it("al menos una vez: si el marcado falla, run mark_failed con el error y la promesa resuelve (se repetira)", async () => {
+      const run = await runner();
+      const h = harness({ rows: [row("a")], markError: new Error("DEADLINE_EXCEEDED al escribir marcas") });
+      const result = await run(h);
+      expect(h.sent).toHaveLength(1);
+      expect(result.status).toBe("mark_failed");
+      expect(result.error).toContain("DEADLINE_EXCEEDED");
+      expect(result.orderIds).toEqual(["a"]);
+      expect(h.runs.map((doc) => doc.status)).toEqual(["mark_failed"]);
+    });
+
+    it("ningun run contiene la url del canal (lleva el token en la ruta)", async () => {
+      const run = await runner();
+      const outcomes: SendResult[] = [
+        { ok: true, httpStatus: 200 },
+        { ok: false, reason: "http_error", httpStatus: 403 },
+        { ok: false, reason: "network_error", error: "fetch failed" },
+        { ok: false, reason: "timeout", error: "timeout" }
+      ];
+      for (const sendResult of outcomes) {
+        const h = harness({ rows: [row("a")], sendResult });
+        await run(h);
+        expect(JSON.stringify(h.runs)).not.toContain("SECRET-TOKEN-123");
+        expect(JSON.stringify(h.runs)).not.toContain("hooks.example.test");
+      }
+    });
+  });
+
+  describe("guardas de fuente", () => {
+    const api = () => (existsSync(absolute(API)) ? sourceWithoutComments(API) : "");
+
+    function functionBody(source: string, name: string): string {
+      const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+      if (start < 0) return "";
+      const end = source.indexOf("\n}\n", start);
+      return end < 0 ? source.slice(start) : source.slice(start, end + 2);
+    }
+
+    /** `export const <name> = <factory>(` hasta el primer `\n});\n` o `\n);\n`. */
+    function exportedCall(source: string, name: string, factory: string): string {
+      const start = source.search(new RegExp(`^export\\s+const\\s+${name}\\s*=\\s*${factory}\\(`, "m"));
+      if (start < 0) return "";
+      const rest = source.slice(start);
+      const ends = [rest.indexOf("\n});\n"), rest.indexOf("\n);\n")].filter((index) => index >= 0);
+      return ends.length === 0 ? rest : rest.slice(0, Math.min(...ends) + 4);
+    }
+
+    const callable = () => exportedCall(api(), "updateCashAlertSettings", "onCall");
+    const scheduled = () => exportedCall(api(), "notifyOverdueCash", "onSchedule");
+    const importsFrom = (name: string, from: string) =>
+      new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["']${from.replace(/[./]/g, "\\$&")}["']`);
+
+    it("index.ts exporta updateCashAlertSettings y notifyOverdueCash desde ./cash-outstanding-api", () => {
+      const index = sourceWithoutComments(INDEX);
+      expect(index).toMatch(/export\s*\{[^}]*\bupdateCashAlertSettings\b[^}]*\}\s*from\s*["']\.\/cash-outstanding-api["']/);
+      expect(index).toMatch(/export\s*\{[^}]*\bnotifyOverdueCash\b[^}]*\}\s*from\s*["']\.\/cash-outstanding-api["']/);
+    });
+
+    it("updateCashAlertSettings es un onCall v2 exportado", () => {
+      expect(callable()).not.toBe("");
+    });
+
+    it("el permiso y la validacion salen de resolveCashAlertSettingsUpdate(request.auth, request.data), que usa cashAlertSettingsSchema", () => {
+      expect(callable()).toMatch(/resolveCashAlertSettingsUpdate\(\s*request\.auth\s*,\s*request\.data\s*\)/);
+      expect(callable()).toMatch(/new\s+HttpsError\(/);
+      expect(callable()).not.toMatch(/cashAlertSettingsSchema|request\.data\??\.(overdueDays|notifyMinCop)/);
+      expect(api()).toMatch(importsFrom("cashAlertSettingsSchema", "./cash-outstanding-schemas"));
+      expect(functionBody(api(), "resolveCashAlertSettingsUpdate")).toMatch(/cashAlertSettingsSchema/);
+      expect(functionBody(api(), "resolveCashAlertSettingsUpdate")).toMatch(/["']admin["']/);
+    });
+
+    it("escribe settings/cashAlerts con buildCashAlertSettingsDoc y la auditoria en auditEvents con buildCashAlertAuditDoc", () => {
+      const body = callable();
+      expect(api()).toMatch(importsFrom("buildCashAlertSettingsDoc", "./cash-outstanding-schemas"));
+      expect(api()).toMatch(importsFrom("buildCashAlertAuditDoc", "./cash-outstanding-schemas"));
+      expect(body).toMatch(/collection\(\s*["']settings["']\s*\)\s*\.doc\(\s*["']cashAlerts["']\s*\)|doc\(\s*["']settings\/cashAlerts["']\s*\)/);
+      expect(body).toMatch(/collection\(\s*["']auditEvents["']\s*\)/);
+      expect(body).toMatch(/buildCashAlertSettingsDoc\(/);
+      expect(body).toMatch(/buildCashAlertAuditDoc\(/);
+      expect(api()).not.toMatch(/auditLogs/);
+    });
+
+    it("ajuste y auditoria se escriben juntos (batch o transaccion), con el valor previo leido por readCashAlertSettings", () => {
+      const body = callable();
+      expect(body).toMatch(/\.batch\(\)|runTransaction\(/);
+      expect(body).toMatch(/readCashAlertSettings\(/);
+    });
+
+    it("el callable devuelve los ajustes guardados ({ settings })", () => {
+      expect(callable()).toMatch(/return\s*\{\s*settings\b/);
+    });
+
+    it("notifyOverdueCash es un onSchedule v2 diario a las 08:00 en America/Bogota", () => {
+      expect(api()).toMatch(importsFrom("onSchedule", "firebase-functions/v2/scheduler"));
+      const body = scheduled();
+      expect(body).not.toBe("");
+      expect(body).toMatch(/schedule\s*:\s*["'](every day 08:00|0 8 \* \* \*)["']/);
+      expect(body).toMatch(/timeZone\s*:\s*["']America\/Bogota["']/);
+    });
+
+    it("notifyOverdueCash declara el secreto del canal en secrets", () => {
+      const secretVar = api().match(/const\s+(\w+)\s*=\s*defineSecret\(\s*["']OPS_NOTICE_WEBHOOK_URL["']\s*\)/)?.[1] ?? "";
+      expect(secretVar).not.toBe("");
+      expect(scheduled()).toMatch(new RegExp(`secrets\\s*:\\s*\\[[^\\]]*\\b${secretVar}\\b`));
+    });
+
+    it("la programada delega en runOverdueNotice y envia con sendOpsNotice", () => {
+      expect(scheduled()).toMatch(/runOverdueNotice\(/);
+      expect(api()).toMatch(importsFrom("sendOpsNotice", "./ops-notify"));
+      expect(scheduled()).toMatch(/sendOpsNotice\(/);
+    });
+
+    it("modo resumen, sin conciliacion: alcance admin con includeReconciliation false y cobertura targeted", () => {
+      const body = scheduled();
+      expect(body).toMatch(/loadCashOutstandingInput\(/);
+      expect(body).toMatch(/buildCashOutstandingReport\(/);
+      expect(body).toMatch(/kind\s*:\s*["']admin["']/);
+      expect(body).toMatch(/includeReconciliation\s*:\s*false/);
+      expect(body).toMatch(/coverage\s*:\s*["']targeted["']/);
+      expect(body).not.toMatch(/includeReconciliation\s*:\s*true|["']full["']|with_reconciliation/);
+    });
+
+    it("las marcas viven en cashOverdueNotices y las corridas en cashOverdueRuns", () => {
+      expect(scheduled()).toMatch(/collection\(\s*["']cashOverdueNotices["']\s*\)/);
+      expect(scheduled()).toMatch(/collection\(\s*["']cashOverdueRuns["']\s*\)/);
+    });
+
+    it("candidatas solo de rows: el api no lee nettedRows y usa selectNoticeCandidates/composeOverdueNotice/buildNoticeDocs/buildRunDoc", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      expect(source).not.toMatch(/\bnettedRows\b/);
+      for (const name of ["selectNoticeCandidates", "composeOverdueNotice", "buildNoticeDocs", "buildRunDoc"]) {
+        expect(source).toMatch(importsFrom(name, "./cash-overdue-notice"));
+        expect(functionBody(source, "runOverdueNotice")).toMatch(new RegExp(`\\b${name}\\(`));
+      }
+    });
+
+    it("marca tras .ok: en runOverdueNotice el primer markNotified( va despues de comprobar .ok", () => {
+      const body = functionBody(api(), "runOverdueNotice");
+      const okAt = body.search(/\.ok\b/);
+      const markAt = body.search(/\bmarkNotified\(/);
+      expect(okAt).toBeGreaterThanOrEqual(0);
+      expect(markAt).toBeGreaterThan(okAt);
+    });
+
+    it("ninguna escritura de Firestore del api lleva un objeto literal: todo pasa por build*Doc/stripUndefined", () => {
+      const source = api();
+      expect(source).not.toBe("");
+      // `ref.set({...})`, `batch.set(ref, {...})`, `.update({...})`, `.create({...})`, `.add({...})`.
+      const literalWrites = source.match(/\.(?:set|update|create|add)\(\s*(?:[\w$.()"'`/-]+\s*,\s*)?\{/g) ?? [];
+      expect(literalWrites).toEqual([]);
+      expect(`${callable()}\n${scheduled()}\n${functionBody(source, "runOverdueNotice")}`).toMatch(/build\w+Doc\(|stripUndefined\(/);
+    });
+
+    it("sin catch vacio ni errores tragados en silencio", () => {
+      const source = api();
+      expect(scheduled()).not.toBe("");
+      expect(callable()).not.toBe("");
+      expect(source).not.toMatch(/catch\s*(\([^)]*\))?\s*\{\s*\}/);
+      expect(source).not.toMatch(/\.catch\(\s*\(\s*\w*\s*\)\s*=>\s*(\{\s*\}|undefined|null|void 0)\s*\)/);
+    });
+
+    it("la url del secreto en notifyOverdueCash solo va como channelUrl/argumento a runOverdueNotice/sendOpsNotice: nunca a un return ni a un doc", () => {
+      const source = api();
+      const body = scheduled();
+      expect(body).not.toBe("");
+      const secretVar = source.match(/const\s+(\w+)\s*=\s*defineSecret\(\s*["']OPS_NOTICE_WEBHOOK_URL["']\s*\)/)?.[1] ?? "";
+      expect(secretVar).not.toBe("");
+      const valueCall = new RegExp(`\\b${secretVar}\\.value\\(\\)`, "g");
+      // Cada `.value()` del secreto, en una de estas formas exactas y en ningun otro sitio.
+      const allowed = new RegExp(
+        `channelUrl\\s*:\\s*${secretVar}\\.value\\(\\)|sendOpsNotice\\([^;]*?\\b${secretVar}\\.value\\(\\)|runOverdueNotice\\([^;]*?\\b${secretVar}\\.value\\(\\)`,
+        "g"
+      );
+      const total = (body.match(valueCall) ?? []).length;
+      const permitted = (body.match(allowed) ?? []).length;
+      expect(total).toBeGreaterThan(0);
+      expect(permitted).toBe(total);
+      expect(body).not.toMatch(new RegExp(`return[^;]*\\b${secretVar}\\.value\\(\\)`));
+      expect(body).not.toMatch(new RegExp(`\\.(?:set|update|create|add)\\([^;]*\\b${secretVar}\\.value\\(\\)`));
+      expect(body).not.toMatch(new RegExp(`console\\.\\w+\\([^;]*\\b${secretVar}\\.value\\(\\)`));
+      // Fuera de las dos funciones exportadas no se lee el secreto.
+      const outside = source.replace(body, "").replace(callableBody(source), "");
+      expect((outside.match(valueCall) ?? []).length).toBe(0);
+    });
+
+    function callableBody(source: string): string {
+      return exportedCall(source, "getCashOutstanding", "onCall");
+    }
+
+    it("las marcas se leen por id (getAll), no por where: la forma de consultas de T12 no cambia", () => {
+      expect(scheduled()).toMatch(/\.getAll\(/);
+      expect(scheduled()).not.toMatch(/\.where\(/);
     });
   });
 });

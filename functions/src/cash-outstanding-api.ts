@@ -21,19 +21,34 @@
 import { getFirestore, type Firestore, type Query } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { buildCashOutstandingReport, type CashOutstandingInput, type CashOutstandingOrder } from "./cash-outstanding";
 import {
+  buildCashAlertAuditDoc,
+  buildCashAlertSettingsDoc,
+  cashAlertSettingsSchema,
   parseCashOutstandingOrders,
   parseDriverSettlements,
   parseWalletEntries,
   readCashAlertSettings,
   resolveCashOutstandingScope,
+  type CashAlertSettings,
+  type CashOutstandingAuth,
   type CashOutstandingCoverage,
   type CashOutstandingOrder as ParsedCashOutstandingOrder,
   type CashOutstandingScope
 } from "./cash-outstanding-schemas";
+import {
+  buildNoticeDocs,
+  buildRunDoc,
+  composeOverdueNotice,
+  selectNoticeCandidates,
+  type CashOverdueNoticeDoc,
+  type CashOverdueRunDoc,
+  type NoticeReportInput
+} from "./cash-overdue-notice";
 import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
-import { isOpsChannelConfigured } from "./ops-notify";
+import { isOpsChannelConfigured, sendOpsNotice, type OpsNoticeResult } from "./ops-notify";
 import { buildCodReceivedSet } from "./seller-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
@@ -228,3 +243,202 @@ export const getCashOutstanding = onCall({ memory: "512MiB", secrets: [opsNotice
     throw new HttpsError("internal", "No se pudo calcular el efectivo pendiente.");
   }
 });
+
+// ---------------------------------------------------------------------------------------------------
+// T13 — ajustes de alerta (RF_04) y aviso diario de efectivo vencido (RF_05)
+// ---------------------------------------------------------------------------------------------------
+
+export type CashAlertSettingsUpdateResolution =
+  | { ok: true; settings: CashAlertSettings }
+  | { ok: false; code: "permission-denied" | "invalid-argument"; message: string };
+
+const SETTINGS_DENIED = "Solo un administrador puede cambiar los ajustes de alerta de efectivo.";
+const SETTINGS_INVALID = "Entrada invalida: se requieren overdueDays (entero de 1 a 120) y notifyMinCop (entero >= 0).";
+
+/**
+ * Permiso y validacion de `updateCashAlertSettings`, sin lanzar nunca. Primero el rol, despues la
+ * entrada. Los dos campos son obligatorios aunque el esquema tenga defectos: un `{ overdueDays }`
+ * suelto pisaria en silencio el umbral configurado con el defecto.
+ */
+export function resolveCashAlertSettingsUpdate(auth: CashOutstandingAuth, data: unknown): CashAlertSettingsUpdateResolution {
+  const token = auth && typeof auth.token === "object" && auth.token !== null ? auth.token : undefined;
+  if (token?.role !== "admin") {
+    return { ok: false, code: "permission-denied", message: SETTINGS_DENIED };
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data) || !("overdueDays" in data) || !("notifyMinCop" in data)) {
+    return { ok: false, code: "invalid-argument", message: SETTINGS_INVALID };
+  }
+  const parsed = cashAlertSettingsSchema.safeParse(data);
+  if (!parsed.success) {
+    return { ok: false, code: "invalid-argument", message: SETTINGS_INVALID };
+  }
+  return { ok: true, settings: { overdueDays: parsed.data.overdueDays, notifyMinCop: parsed.data.notifyMinCop } };
+}
+
+export const updateCashAlertSettings = onCall(async (request) => {
+  const resolution = resolveCashAlertSettingsUpdate(request.auth, request.data);
+  if (!resolution.ok) {
+    throw new HttpsError(resolution.code, resolution.message);
+  }
+  const { settings } = resolution;
+  const db = getFirestore();
+  const now = new Date().toISOString();
+  const settingsRef = db.collection("settings").doc("cashAlerts");
+
+  try {
+    const previousSnap = await settingsRef.get();
+    const previousRead = readCashAlertSettings(previousSnap.exists ? previousSnap.data() : undefined);
+    // Un documento ilegible no tiene un "antes" fiable: la auditoria lo deja en null.
+    const previous = previousSnap.exists && !previousRead.settingsInvalid ? previousRead.settings : null;
+    const auditRef = db.collection("auditEvents").doc();
+    const role = request.auth?.token.role;
+    const actorRole = typeof role === "string" ? role : undefined;
+
+    const batch = db.batch();
+    batch.set(settingsRef, buildCashAlertSettingsDoc({ settings, actorId: request.auth?.uid, now }));
+    batch.set(auditRef, buildCashAlertAuditDoc({ id: auditRef.id, actorId: request.auth?.uid, actorRole, previous, next: settings, now }));
+    await batch.commit();
+  } catch (error) {
+    console.error("[updateCashAlertSettings]", error);
+    throw new HttpsError("internal", "No se pudieron guardar los ajustes de alerta.");
+  }
+  return { settings };
+});
+
+export interface OverdueNoticeReport extends NoticeReportInput {
+  isIncomplete: boolean;
+}
+
+export interface RunOverdueNoticeDeps {
+  runId: string;
+  now: string;
+  /** El secreto tal cual; nunca se copia a ningun documento. */
+  channelUrl: string | undefined | null;
+  loadReport(): Promise<OverdueNoticeReport>;
+  loadNotifiedOrderIds(orderIds: string[]): Promise<ReadonlySet<string>>;
+  send(text: string, url: string): Promise<OpsNoticeResult>;
+  markNotified(docs: CashOverdueNoticeDoc[]): Promise<void>;
+  writeRun(doc: CashOverdueRunDoc): Promise<void>;
+}
+
+function describeSendFailure(result: Exclude<OpsNoticeResult, { ok: true }>): string {
+  if (result.reason === "network_error" || result.reason === "timeout") return `${result.reason}: ${result.error}`;
+  return result.reason;
+}
+
+function describeThrown(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name;
+  return String(error);
+}
+
+/**
+ * Orquestacion del aviso diario con la E/S inyectada. Candidatas solo de `rows` (los compensados van
+ * aparte y nunca se avisan). Se marca DESPUES de un envio correcto, y se marcan todas las candidatas
+ * aunque el texto se recorte: "al menos una vez" (si el marcado falla, se repetira en la siguiente corrida).
+ */
+export async function runOverdueNotice(deps: RunOverdueNoticeDeps): Promise<CashOverdueRunDoc> {
+  const report = await deps.loadReport();
+  const reportInput: NoticeReportInput = { rows: report.rows, settings: report.settings };
+  const eligibleIds = selectNoticeCandidates(reportInput, new Set<string>()).map((row) => row.orderId);
+  const notified = await deps.loadNotifiedOrderIds(eligibleIds);
+  const candidates = selectNoticeCandidates(reportInput, notified);
+  const composed = composeOverdueNotice(candidates, { isIncomplete: report.isIncomplete, now: deps.now });
+  const channelConfigured = isOpsChannelConfigured(deps.channelUrl);
+
+  const runBase = {
+    runId: deps.runId,
+    now: deps.now,
+    channelConfigured,
+    isIncomplete: report.isIncomplete,
+    orderIds: candidates.map((row) => row.orderId),
+    leaderCount: composed?.groups.length ?? 0,
+    totalCop: composed?.totalCop ?? 0,
+    truncated: composed?.truncated ?? false
+  };
+  const finish = async (run: CashOverdueRunDoc): Promise<CashOverdueRunDoc> => {
+    await deps.writeRun(run);
+    return run;
+  };
+
+  if (!channelConfigured) {
+    return finish(buildRunDoc({ ...runBase, status: "skipped_no_channel" }));
+  }
+  if (!composed) {
+    return finish(buildRunDoc({ ...runBase, status: "nothing_to_send" }));
+  }
+
+  const result = await deps.send(composed.text, deps.channelUrl as string);
+  if (!result.ok) {
+    return finish(
+      buildRunDoc({
+        ...runBase,
+        status: "send_failed",
+        error: describeSendFailure(result),
+        httpStatus: result.reason === "http_error" ? result.httpStatus : undefined
+      })
+    );
+  }
+
+  try {
+    await deps.markNotified(buildNoticeDocs({ candidates, runId: deps.runId, now: deps.now }));
+  } catch (error) {
+    console.error("[runOverdueNotice] marcado fallido tras envio", error);
+    return finish(buildRunDoc({ ...runBase, status: "mark_failed", error: describeThrown(error) }));
+  }
+  return finish(buildRunDoc({ ...runBase, status: "sent" }));
+}
+
+/** Lecturas por id con `getAll` y escrituras por lote: holgados bajo los limites de Firestore. */
+const NOTICE_READ_BATCH = 300;
+const NOTICE_WRITE_BATCH = 400;
+
+export const notifyOverdueCash = onSchedule(
+  { schedule: "every day 08:00", timeZone: "America/Bogota", secrets: [opsNoticeWebhookUrl], memory: "512MiB", timeoutSeconds: 300 },
+  async () => {
+    const db = getFirestore();
+    const now = new Date().toISOString();
+    const notices = db.collection("cashOverdueNotices");
+
+    try {
+      const run = await runOverdueNotice({
+        runId: now.replace(/[:.]/g, "-"),
+        now,
+        channelUrl: opsNoticeWebhookUrl.value(),
+        loadReport: async () => {
+          const input = await loadCashOutstandingInput(db, {
+            scope: { kind: "admin", includeReconciliation: false },
+            coverage: "targeted",
+            channelConfigured: null,
+            now
+          });
+          return buildCashOutstandingReport(input);
+        },
+        loadNotifiedOrderIds: async (orderIds) => {
+          const notified = new Set<string>();
+          for (const ids of inBatches(orderIds, NOTICE_READ_BATCH)) {
+            const snaps = await db.getAll(...ids.map((id) => notices.doc(id)));
+            for (const snap of snaps) {
+              if (snap.exists) notified.add(snap.id);
+            }
+          }
+          return notified;
+        },
+        send: (text, url) => sendOpsNotice(text, { url }),
+        markNotified: async (docs) => {
+          for (const chunk of inBatches(docs, NOTICE_WRITE_BATCH)) {
+            const batch = db.batch();
+            for (const doc of chunk) batch.set(notices.doc(doc.id), doc.data);
+            await batch.commit();
+          }
+        },
+        writeRun: async (doc) => {
+          await db.collection("cashOverdueRuns").doc(doc.id).set(doc);
+        }
+      });
+      console.log(`[notifyOverdueCash] ${run.status}: ${run.orderCount} pedidos`);
+    } catch (error) {
+      console.error("[notifyOverdueCash]", error);
+      throw error;
+    }
+  }
+);

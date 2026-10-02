@@ -160,7 +160,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     `full` con los predicados; iguales a `query-check`; asientos por `parseWalletEntries`; URL no devuelta;
     `tsc` en `functions/`.
 
-- [ ] **T13: Ajustes y aviso programado**
+- [x] **T13: Ajustes y aviso programado**
   * Requisitos cubiertos: RF_04, RF_05
   * Archivos: functions/src/cash-outstanding-api.ts, functions/src/index.ts, src/lib/spec-026-guards.test.ts
   * Accion: `updateCashAlertSettings`; `notifyOverdueCash` (plan 2.4), candidatas solo de `rows`.
