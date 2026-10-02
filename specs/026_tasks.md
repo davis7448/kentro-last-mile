@@ -246,7 +246,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Correcciones de la revision adversarial (ronda 1, 2026-10-02)
 
-- [ ] **T19: La tarjeta y los grupos miden el vencido en la misma base (R1-RF_03-1)**
+- [x] **T19: La tarjeta y los grupos miden el vencido en la misma base (R1-RF_03-1)**
   * Requisitos cubiertos: RF_03
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx
   * Accion: la spec fija que el admin ve **recaudo bruto** (seccion 9, P1). Hoy el total de la tarjeta suma

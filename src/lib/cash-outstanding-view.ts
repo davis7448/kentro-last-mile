@@ -54,7 +54,10 @@ export interface CashOutstandingViewGroup {
   collectedCop: number;
   outstandingCop: number;
   overdueCount: number;
+  /** NETO vencido (como lo da el servidor). */
   overdueCop: number;
+  /** BRUTO vencido: lo que se pinta al admin (spec 026 seccion 9 P1) y la clave de orden de los grupos. */
+  overdueCollectedCop: number;
   pageSize: number;
   visibleRows: CashOutstandingViewRow[];
   remainingCount: number;
@@ -227,21 +230,44 @@ function paginate(rows: CashOutstandingRow[], pageSize: number, role: CashViewRo
   };
 }
 
+function compareLeaderIds(left: string | null, right: string | null): number {
+  const leftKey = left ?? "";
+  const rightKey = right ?? "";
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+/**
+ * Orden de la vista: vencido BRUTO desc, luego recaudo desc, luego id ("Sin lider" como cadena vacia).
+ * El servidor ordena `byLeader` por el NETO; la vista pinta el bruto (seccion 9 P1), asi que reordena
+ * aqui para que el lider de la tarjeta y el primer grupo desplegado sean el de mayor cifra pintada
+ * (R1-RF_03-1).
+ */
+function byOverdueCollected(groups: CashOutstandingGroup[]): CashOutstandingGroup[] {
+  return [...groups].sort(
+    (left, right) =>
+      right.overdueCollectedCop - left.overdueCollectedCop ||
+      right.collectedCop - left.collectedCop ||
+      compareLeaderIds(left.leaderId, right.leaderId)
+  );
+}
+
 function buildCard(report: CashOutstandingReport): CashOutstandingCard {
   // La tarjeta no depende del filtro: siempre la flota entera, y nunca los compensados (no estan en `rows`).
   const overdueRows = report.rows.filter((row) => row.isOverdue);
   const overdueCop = sumOf(overdueRows, (row) => row.collectedCop);
   const overdueCount = overdueRows.length;
   const isAllClear = overdueCop <= 0;
-  const first: CashOutstandingGroup | undefined = report.byLeader[0];
+  const first: CashOutstandingGroup | undefined = byOverdueCollected(report.byLeader)[0];
+  const firstName = first ? (first.leaderId === null ? NO_LEADER_TITLE : (first.leaderName ?? first.leaderId)) : "";
   const topLeader: CashOutstandingCardLeader | null =
-    !isAllClear && first && first.overdueCop > 0
+    !isAllClear && first && first.overdueCollectedCop > 0
       ? {
           leaderId: first.leaderId,
-          leaderName: first.leaderId === null ? NO_LEADER_TITLE : (first.leaderName ?? first.leaderId),
-          overdueCop: first.overdueCop,
+          leaderName: firstName,
+          // Bruto, igual que el total de la tarjeta: las dos cifras se leen juntas.
+          overdueCop: first.overdueCollectedCop,
           overdueCount: first.overdueCount,
-          text: `${first.leaderId === null ? NO_LEADER_TITLE : (first.leaderName ?? first.leaderId)}, ${formatCop(first.overdueCop)} en ${pluralOrders(first.overdueCount)}`,
+          text: `${firstName}, ${formatCop(first.overdueCollectedCop)} en ${pluralOrders(first.overdueCount)}`,
         }
       : null;
   const nettedCount = report.nettedRows.length;
@@ -283,12 +309,13 @@ function buildGroups(report: CashOutstandingReport, rows: CashOutstandingRow[], 
     rowsByLeader.set(row.leaderId, list);
   }
   let expandedTaken = false;
-  // El orden es el del informe (`overdueCop` desc); los grupos sin filas tras el filtro desaparecen.
-  return report.byLeader
+  // Orden por vencido BRUTO (`byOverdueCollected`), no el del informe; los grupos sin filas tras el
+  // filtro desaparecen. Solo el primero con vencidos, en este orden, va desplegado.
+  return byOverdueCollected(report.byLeader)
     .filter((group) => rowsByLeader.has(group.leaderId))
     .map((group) => {
       const groupRows = rowsByLeader.get(group.leaderId) ?? [];
-      const isFirstWithOverdue = !expandedTaken && group.overdueCop > 0;
+      const isFirstWithOverdue = !expandedTaken && group.overdueCollectedCop > 0;
       if (isFirstWithOverdue) expandedTaken = true;
       const isNoLeader = group.leaderId === null;
       return {
@@ -301,6 +328,7 @@ function buildGroups(report: CashOutstandingReport, rows: CashOutstandingRow[], 
         outstandingCop: group.outstandingCop,
         overdueCount: group.overdueCount,
         overdueCop: group.overdueCop,
+        overdueCollectedCop: group.overdueCollectedCop,
         ...paginate(groupRows, options.pageSize, options.role),
       };
     });

@@ -970,6 +970,8 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
           outstandingCop: 135_000,
           overdueCount: 2,
           overdueCop: 90_000,
+          // T19 (R1-RF_03-1): el bruto vencido junto al neto; sin el, este `toEqual` no ve la forma real.
+          overdueCollectedCop: 100_000,
           oldestDeliveredAt: daysAgo(20)
         }
       ]);
@@ -2066,5 +2068,96 @@ describe("T9 · conciliacion por causas sin residuo (RNF_02, RF_09)", () => {
       }
       expect(removals).toBeGreaterThanOrEqual(100);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// T19
+// ---------------------------------------------------------------------------------------------------
+
+describe("T19 · vencido bruto por grupo y en totales (R1-RF_03-1, spec 9 P1)", () => {
+  type GroupT19 = { leaderId: string | null; overdueCop: number; overdueCollectedCop?: number };
+  type TotalsT19 = { overdueCop: number; overdueCollectedCop?: number };
+
+  /** Vencido de leader-1 con recaudo `collected` y pago al domiciliario `pay`. */
+  function agedWithPay(id: string, days: number, collected: number, pay: number, overrides: Partial<OrderFixture> = {}) {
+    const at = daysAgo(days);
+    return {
+      order: order(id, { closedAt: at, updatedAt: at, ...overrides }),
+      entries: [codEntry(id, collected), payEntry(id, pay)]
+    };
+  }
+
+  /**
+   * leader-1: un vencido de $100.000 con pago $7.000 (neto $93.000), un vencido pagado con faltante
+   * (recaudo $50.000, pago $5.000, recibido $10.000 → neto $35.000), uno sin vencer y uno compensado.
+   */
+  function scenario() {
+    const withPay = agedWithPay("t19-pay", 10, 100_000, 7_000);
+    const short = aged("t19-short", 20);
+    const fresh = aged("t19-fresh", 2);
+    const netted = aged("t19-net", 60);
+    return {
+      orders: [withPay, short, fresh, netted].map((item) => item.order),
+      receivableEntries: [withPay, short, fresh, netted].flatMap((item) => item.entries),
+      settlements: [paidShort("s19-short", "t19-short"), settledNetting("s19-net", "t19-net")]
+    };
+  }
+
+  it("precondicion del escenario: netos de las vencidas $93.000 y $35.000", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const report = buildCashOutstandingReport(input(scenario()));
+    const overdue = Object.fromEntries(report.rows.filter((row) => row.isOverdue).map((row) => [row.orderId, [row.collectedCop, row.outstandingCop]]));
+    expect(overdue).toEqual({ "t19-pay": [100_000, 93_000], "t19-short": [50_000, 35_000] });
+  });
+
+  it("cada grupo de byLeader trae overdueCollectedCop = Σ collectedCop de sus vencidas", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const report = buildCashOutstandingReport(input(scenario()));
+    const [group] = report.byLeader as GroupT19[];
+    expect(group.overdueCollectedCop).toBe(150_000);
+  });
+
+  it("el grupo conserva overdueCop neto = Σ outstandingCop de sus vencidas", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const report = buildCashOutstandingReport(input(scenario()));
+    const [group] = report.byLeader as GroupT19[];
+    expect(group.overdueCop).toBe(128_000);
+  });
+
+  it("totals trae overdueCollectedCop = Σ collectedCop de las vencidas de rows (sin compensados)", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const report = buildCashOutstandingReport(input(scenario()));
+    expect((report.totals as TotalsT19).overdueCollectedCop).toBe(150_000);
+  });
+
+  it("totals conserva overdueCop neto", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const report = buildCashOutstandingReport(input(scenario()));
+    expect(report.totals.overdueCop).toBe(128_000);
+  });
+
+  it("varios lideres: Σ overdueCollectedCop de los grupos = totals.overdueCollectedCop", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const base = scenario();
+    const other = agedWithPay("t19-b", 15, 80_000, 0, { driverId: "leader-2" });
+    const orphan = aged("t19-orphan", 12, { driverId: null, messengerId: null });
+    const report = buildCashOutstandingReport(
+      input({
+        ...base,
+        orders: [...base.orders, other.order, orphan.order],
+        receivableEntries: [...base.receivableEntries, ...other.entries, ...orphan.entries]
+      })
+    );
+    const byLeader = Object.fromEntries((report.byLeader as GroupT19[]).map((group) => [String(group.leaderId), group.overdueCollectedCop]));
+    expect(byLeader).toEqual({ "leader-1": 150_000, "leader-2": 80_000, null: 50_000 });
+    expect((report.totals as TotalsT19).overdueCollectedCop).toBe(280_000);
+  });
+
+  it("un grupo sin vencidos trae overdueCollectedCop 0", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const fresh = aged("t19-only-fresh", 2);
+    const report = buildCashOutstandingReport(input({ orders: [fresh.order], receivableEntries: fresh.entries }));
+    expect((report.byLeader as GroupT19[])[0].overdueCollectedCop).toBe(0);
   });
 });

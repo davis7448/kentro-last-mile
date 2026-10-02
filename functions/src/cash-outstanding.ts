@@ -116,7 +116,10 @@ export type CashOutstandingGroup = {
   collectedCop: number;
   outstandingCop: number;
   overdueCount: number;
+  /** NETO vencido: Σ `outstandingCop` de las vencidas. Es la clave de orden de `byLeader`. */
   overdueCop: number;
+  /** BRUTO vencido: Σ `collectedCop` de las vencidas (spec 026 seccion 9 P1: el admin ve recaudo bruto). */
+  overdueCollectedCop: number;
   oldestDeliveredAt: string;
 };
 
@@ -160,7 +163,10 @@ export type CashOutstandingTotals = {
   inOpenSettlementCop: number;
   paidShortCop: number;
   overdueCount: number;
+  /** NETO vencido: Σ `outstandingCop` de las vencidas de `rows`. */
   overdueCop: number;
+  /** BRUTO vencido: Σ `collectedCop` de las vencidas de `rows` (los compensados no cuentan). */
+  overdueCollectedCop: number;
   nettedCount: number;
   nettedCollectedCop: number;
   nettedSettlementCount: number;
@@ -341,6 +347,7 @@ function emptyTotals(): CashOutstandingTotals {
     paidShortCop: 0,
     overdueCount: 0,
     overdueCop: 0,
+    overdueCollectedCop: 0,
     nettedCount: 0,
     nettedCollectedCop: 0,
     nettedSettlementCount: 0
@@ -408,6 +415,7 @@ function groupByLeader(rows: CashOutstandingRow[]): CashOutstandingGroup[] {
       outstandingCop: 0,
       overdueCount: 0,
       overdueCop: 0,
+      overdueCollectedCop: 0,
       oldestDeliveredAt: row.deliveredAt
     };
     current.orderCount += 1;
@@ -416,6 +424,7 @@ function groupByLeader(rows: CashOutstandingRow[]): CashOutstandingGroup[] {
     if (row.isOverdue) {
       current.overdueCount += 1;
       current.overdueCop += row.outstandingCop;
+      current.overdueCollectedCop += row.collectedCop;
     }
     if (row.deliveredAt < current.oldestDeliveredAt) current.oldestDeliveredAt = row.deliveredAt;
     byLeader.set(row.leaderId, current);
@@ -441,6 +450,7 @@ function computeTotals(rows: CashOutstandingRow[], nettedRows: CashOutstandingRo
     if (row.isOverdue) {
       totals.overdueCount += 1;
       totals.overdueCop += row.outstandingCop;
+      totals.overdueCollectedCop += row.collectedCop;
     }
   }
   const nettedSettlementIds = new Set<string>();

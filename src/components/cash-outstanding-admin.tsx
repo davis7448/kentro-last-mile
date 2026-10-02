@@ -1027,7 +1027,7 @@ function GroupHeader({ group, isOpen, onToggle }: { group: CashOutstandingViewGr
           <span className="tabular block text-sm font-bold">{formatCop(group.collectedCop)}</span>
           {group.overdueCount > 0 ? (
             <span className="tabular block text-xs text-rust">
-              {pluralize(group.overdueCount, "vencido", "vencidos")} · {formatCop(group.overdueCop)}
+              {pluralize(group.overdueCount, "vencido", "vencidos")} · {formatCop(group.overdueCollectedCop)}
             </span>
           ) : (
             <span className="block text-xs text-ink-60">{isNoLeader ? "sin vencidos" : group.note}</span>

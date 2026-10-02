@@ -63,9 +63,18 @@ function makeRow(over: Partial<CashOutstandingRow> & { orderId: string }): CashO
   };
 }
 
-/** Grupos por lider como los arma el servidor: `overdueCop` desc (empate `outstandingCop` desc, id). */
+/**
+ * Grupos por lider como los arma el servidor (`groupByLeader` de functions/src/cash-outstanding.ts):
+ * `overdueCop` es el NETO vencido (Σ outstandingCop de las vencidas) y `overdueCollectedCop` el BRUTO
+ * (Σ collectedCop de las vencidas, T19). Orden: `overdueCop` desc (empate `outstandingCop` desc, id).
+ * T19 corrigio este ayudante: antes sumaba `collectedCop` en `overdueCop`, que no es lo que hace el
+ * servidor, y por eso las pruebas no veian que la tarjeta mezclaba bruto y neto (R1-RF_03-1).
+ */
+/** `CashOutstandingGroup` con el campo que anade T19 (se tipa aparte mientras el servidor no lo tenga). */
+type GroupT19 = CashOutstandingGroup & { overdueCollectedCop: number };
+
 function groupsOf(rows: CashOutstandingRow[]): CashOutstandingGroup[] {
-  const map = new Map<string, CashOutstandingGroup>();
+  const map = new Map<string, GroupT19>();
   for (const row of rows) {
     const key = row.leaderId ?? "";
     const group = map.get(key) ?? {
@@ -76,14 +85,16 @@ function groupsOf(rows: CashOutstandingRow[]): CashOutstandingGroup[] {
       outstandingCop: 0,
       overdueCount: 0,
       overdueCop: 0,
+      overdueCollectedCop: 0,
       oldestDeliveredAt: row.deliveredAt,
-    };
+    } as GroupT19;
     group.orderCount += 1;
     group.collectedCop += row.collectedCop;
     group.outstandingCop += row.outstandingCop;
     if (row.isOverdue) {
       group.overdueCount += 1;
-      group.overdueCop += row.collectedCop;
+      group.overdueCop += row.outstandingCop;
+      group.overdueCollectedCop += row.collectedCop;
     }
     if (row.deliveredAt < group.oldestDeliveredAt) group.oldestDeliveredAt = row.deliveredAt;
     map.set(key, group);
@@ -114,11 +125,13 @@ function makeReport(over: Partial<CashOutstandingReport> & { rows: CashOutstandi
       inOpenSettlementCop: sum(rows.filter((row) => row.location === "in_settlement_open"), (row) => row.collectedCop),
       paidShortCop: sum(rows.filter((row) => row.location === "settlement_paid_short"), (row) => row.collectedCop),
       overdueCount: rows.filter((row) => row.isOverdue).length,
-      overdueCop: sum(rows.filter((row) => row.isOverdue), (row) => row.collectedCop),
+      // Como `computeTotals` del servidor: neto en `overdueCop`, bruto en `overdueCollectedCop` (T19).
+      overdueCop: sum(rows.filter((row) => row.isOverdue), (row) => row.outstandingCop),
+      overdueCollectedCop: sum(rows.filter((row) => row.isOverdue), (row) => row.collectedCop),
       nettedCount: nettedRows.length,
       nettedCollectedCop: sum(nettedRows, (row) => row.collectedCop),
       nettedSettlementCount: new Set(nettedRows.map((row) => row.attributedSettlementId)).size,
-    },
+    } as CashOutstandingReport["totals"],
     reconciliation: null,
     isIncomplete: false,
     unreadableOrderIds: [],
@@ -513,5 +526,82 @@ describe("T14 · linea de proveedor en Por pagar (RF_08, README decision 8)", ()
     const { supplierPendingLine } = await loadView();
     expect(supplierPendingLine(report(), "otro")).toBeNull();
     expect(supplierPendingLine(report(), "zero")).toBeNull();
+  });
+});
+
+describe("T19 · la tarjeta y los grupos miden el vencido en bruto (R1-RF_03-1, spec 9 P1)", () => {
+  type ViewGroupT19 = { leaderId: string | null; overdueCollectedCop?: number };
+
+  /** Un lider, un pedido vencido: recaudo $100.000, pago al domiciliario $7.000 (neto $93.000). */
+  function oneLeaderWithPay(): CashOutstandingReport {
+    return makeReport({
+      rows: [
+        makeRow({ orderId: "p1", leaderId: "A", leaderName: "Ana", collectedCop: 100_000, driverPayCop: 7_000, expectedCashCop: 93_000, outstandingCop: 93_000 }),
+      ],
+    });
+  }
+
+  /**
+   * Ana: recaudo $100.000, pago $30.000 -> neto $70.000. Beto: recaudo $80.000, sin pago -> neto $80.000.
+   * Por neto (orden del servidor) va primero Beto; por bruto, Ana.
+   */
+  function grossAndNetDisagree(): CashOutstandingReport {
+    return makeReport({
+      rows: [
+        makeRow({ orderId: "a1", leaderId: "A", leaderName: "Ana", collectedCop: 100_000, driverPayCop: 30_000, expectedCashCop: 70_000, outstandingCop: 70_000 }),
+        makeRow({ orderId: "b1", leaderId: "B", leaderName: "Beto", collectedCop: 80_000, driverPayCop: 0, expectedCashCop: 80_000, outstandingCop: 80_000 }),
+      ],
+    });
+  }
+
+  it("el ayudante arma los grupos como el servidor: overdueCop neto y overdueCollectedCop bruto", () => {
+    const [group] = oneLeaderWithPay().byLeader as GroupT19[];
+    expect({ overdueCop: group.overdueCop, overdueCollectedCop: group.overdueCollectedCop }).toEqual({ overdueCop: 93_000, overdueCollectedCop: 100_000 });
+  });
+
+  it("recaudo $100.000 y pago $7.000: el total de la tarjeta es el bruto, $100.000", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(oneLeaderWithPay(), { viewport: "mobile", role: "admin" });
+    expect(view.card.overdueCop).toBe(100_000);
+  });
+
+  it("recaudo $100.000 y pago $7.000: la linea del lider dice la misma cifra que el total", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(oneLeaderWithPay(), { viewport: "mobile", role: "admin" });
+    expect(view.card.topLeader?.overdueCop).toBe(view.card.overdueCop);
+  });
+
+  it("recaudo $100.000 y pago $7.000: el texto de la linea pinta $100.000, no $93.000", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(oneLeaderWithPay(), { viewport: "mobile", role: "admin" });
+    expect(view.card.topLeader?.text).toMatch(/^Ana, \$\s?100\.000 en 1 pedido$/);
+  });
+
+  it("dos lideres con orden distinto por bruto y por neto: topLeader es el de mayor bruto", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const report = grossAndNetDisagree();
+    expect(report.byLeader[0].leaderId).toBe("B"); // precondicion: el servidor ordena por neto
+    const view = buildCashOutstandingView(report, { viewport: "mobile", role: "admin" });
+    expect(view.card.topLeader?.leaderId).toBe("A");
+  });
+
+  it("dos lideres: la linea del de mayor bruto pinta su bruto ($100.000)", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(grossAndNetDisagree(), { viewport: "mobile", role: "admin" });
+    expect(view.card.topLeader?.overdueCop).toBe(100_000);
+  });
+
+  it("cada grupo de la pestaña expone su vencido bruto en overdueCollectedCop", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(grossAndNetDisagree(), { viewport: "desktop", role: "admin" });
+    const gross = Object.fromEntries((view.groups as ViewGroupT19[]).map((group) => [group.leaderId, group.overdueCollectedCop]));
+    expect(gross).toEqual({ A: 100_000, B: 80_000 });
+  });
+
+  it("la franja (summary) y la suma en bruto de los grupos coinciden", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(grossAndNetDisagree(), { viewport: "desktop", role: "admin" });
+    const groupsGross = (view.groups as ViewGroupT19[]).reduce((total, group) => total + (group.overdueCollectedCop ?? Number.NaN), 0);
+    expect(groupsGross).toBe(view.summary.overdueCop);
   });
 });
