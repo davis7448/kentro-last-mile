@@ -15,12 +15,11 @@
  *   - T7: fecha de entrega, antiguedad, ubicacion, nombres y reparto `rows` / `nettedRows`.
  *   - T8: agrupaciones, totales y retenido por proveedor.
  *   - T9: conciliacion con la posicion de plataforma.
- * Mientras una tarea no llega, sus campos salen con valores neutros (vacios / cero / null).
  */
-import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
+import { computeDriverReceivable, isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
 import type { CashAlertSettings } from "./cash-outstanding-schemas";
 import { buildCodReceivedSet, codPartialReceivedCop } from "./seller-ledger";
-import { isDriverSettlementCashSettled } from "./settlement-math";
+import { computeDriverCashSummary, isDriverSettlementCashSettled, settlementCashReceivedCop } from "./settlement-math";
 import { groupWithheldBySupplier } from "./supplier-withheld";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
@@ -455,6 +454,198 @@ function computeTotals(rows: CashOutstandingRow[], nettedRows: CashOutstandingRo
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Conciliacion con la posicion de plataforma (plan 4.4, RNF_02)
+// ---------------------------------------------------------------------------------------------------
+
+type ReconciliationCauseItem = PositionReconciliation["causes"][number];
+
+/**
+ * Por que un pedido con asientos "por cobrar" no esta en `rows`. Se decide desde los DATOS (pedidos,
+ * cortes, ilegibles), nunca desde `rows`/`nettedRows`: si la lista pierde un pedido, ninguna razon lo
+ * absorbe y cae en `unexplained`. Precedencia: ilegible > fuera del universo > recibido > compensado.
+ */
+type UnlistedReason = "unreadable" | "outside_universe" | "received" | "covered_by_netting";
+
+/** Fuera de corte solo valen ilegible y fuera del universo: recibido y compensado los dice un corte. */
+const UNLISTED_OUTSIDE_CAUSE: Partial<Record<UnlistedReason, ReconciliationCause>> = {
+  unreadable: "outside_unreadable_orders",
+  outside_universe: "outside_orders_outside_universe"
+};
+
+const UNLISTED_SETTLEMENT_CAUSE: Record<UnlistedReason, ReconciliationCause> = {
+  unreadable: "settlement_unreadable_orders",
+  outside_universe: "settlement_orders_outside_universe",
+  received: "settlement_orders_received",
+  covered_by_netting: "settlement_orders_covered_by_netting"
+};
+
+/** Acumula causas con importe con signo, una por (causa, corte), en orden de aparicion. */
+function causeCollector() {
+  const causes: ReconciliationCauseItem[] = [];
+  const add = (cause: ReconciliationCause, amountCop: number, orderIds: string[], settlementId?: string): void => {
+    if (amountCop === 0 && orderIds.length === 0) return;
+    const existing = causes.find((item) => item.cause === cause && item.settlementId === settlementId);
+    if (existing) {
+      existing.amountCop += amountCop;
+      existing.orderIds.push(...orderIds);
+      return;
+    }
+    causes.push(
+      settlementId === undefined
+        ? { cause, amountCop, orderIds: [...orderIds] }
+        : { cause, amountCop, orderIds: [...orderIds], settlementId }
+    );
+  };
+  return { causes, add };
+}
+
+/**
+ * Descompone `deltaCop = posicion - lista` en causas con importe, sin residuo (plan 4.4).
+ *
+ * Fuera de corte: `Σ_U(cod - pago) - T - N + K` (no listados por razon, filas sin asiento COD, netos
+ * negativos topados a 0 en la fila, tope a 0 del agregado). Por corte: `G - R` (pendiente guardado
+ * contra recalculado: `stale` si el campo existe y difiere, `missing` si falta), los pedidos no
+ * atribuidos por razon, y los terminos de las filas atribuidas, del tope del esperado, del excedente y
+ * de lo recibido. Lo que ninguna razon explica va a `unexplainedCop` con su id: es la UNICA condicion de
+ * fallo; `stale` y `missing` se reportan, no fallan.
+ *
+ * Pura. `listed` solo aporta lo que la lista dice deber; la compensacion sale de los cortes, asi que
+ * quitar una fila de `nettedRows` no cambia nada.
+ */
+export function reconcileWithPlatformPosition(
+  input: CashOutstandingInput,
+  listed: { rows: CashOutstandingRow[]; nettedRows: CashOutstandingRow[] }
+): PositionReconciliation {
+  const driverSettlements = input.settlements.filter((settlement) => settlement.kind === "driver");
+  const received = buildCodReceivedSet(driverSettlements);
+  const universe = new Set(input.orders.map((order) => order.id));
+  const unreadable = new Set(input.unreadableOrderIds);
+  const settlementsOf = settlementsByOrder(driverSettlements);
+  const rowById = new Map(listed.rows.map((row) => [row.orderId, row] as const));
+
+  // Neto por pedido (cod - pago) con el mismo redondeo por asiento que la posicion; las claves son los
+  // pedidos con algun asiento "por cobrar".
+  const netByOrder = new Map<string, number>();
+  for (const [orderId, orderAmounts] of amountsByOrder(input.receivableEntries)) {
+    netByOrder.set(orderId, orderAmounts.codCop - orderAmounts.driverPayCop);
+  }
+  const netOf = (orderId: string): number => netByOrder.get(orderId) ?? 0;
+
+  const reasonOf = (orderId: string): UnlistedReason | null => {
+    if (unreadable.has(orderId)) return "unreadable";
+    if (!universe.has(orderId)) return "outside_universe";
+    if (received.has(orderId)) return "received";
+    // Desde los cortes (plan 2.9), no desde nettedRows: sin corte abierto y alguno saldado en total.
+    if (resolveLocation(settlementsOf.get(orderId) ?? []).location === "covered_by_netting") return "covered_by_netting";
+    return null;
+  };
+
+  const { causes, add } = causeCollector();
+  const unexplainedIds = new Set<string>();
+
+  const addUnlisted = (orderId: string, settlementId?: string): void => {
+    const reason = reasonOf(orderId);
+    const cause =
+      reason === null ? undefined : settlementId === undefined ? UNLISTED_OUTSIDE_CAUSE[reason] : UNLISTED_SETTLEMENT_CAUSE[reason];
+    if (cause === undefined) {
+      unexplainedIds.add(orderId);
+      return;
+    }
+    add(cause, netOf(orderId), [orderId], settlementId);
+  };
+
+  /** Lo que la fila dice deber frente a lo que la posicion cuenta por ese pedido. */
+  const addRowTerms = (row: CashOutstandingRow, settlementId?: string): void => {
+    const gapCop = netOf(row.orderId) - row.expectedCashCop;
+    if (gapCop !== 0) {
+      const inSettlement = settlementId !== undefined;
+      const cause: ReconciliationCause =
+        row.collectedSource === "order_total"
+          ? inSettlement
+            ? "settlement_order_total_without_cod"
+            : "outside_order_total_without_cod"
+          : inSettlement
+            ? "settlement_negative_net"
+            : "outside_negative_net";
+      add(cause, gapCop, [row.orderId], settlementId);
+    }
+    // Imputacion por encima del esperado actual (los asientos cambiaron tras el abono).
+    const overExpectedCop = Math.min(0, row.expectedCashCop - row.receivedCop);
+    if (overExpectedCop !== 0) add("settlement_allocation_over_expected", overExpectedCop, [row.orderId], settlementId);
+  };
+
+  // Fuera de todo corte de domiciliario.
+  let outsideNetCop = 0;
+  for (const orderId of netByOrder.keys()) {
+    if (settlementsOf.has(orderId)) continue;
+    outsideNetCop += netOf(orderId);
+    if (!rowById.has(orderId)) addUnlisted(orderId);
+  }
+  for (const row of listed.rows) {
+    if (!settlementsOf.has(row.orderId)) addRowTerms(row);
+  }
+  // La posicion topa a 0 el agregado de fuera de corte.
+  if (outsideNetCop < 0) add("outside_aggregate_clamp", -outsideNetCop, []);
+
+  // Por corte, con el pendiente recalculado sobre los mismos asientos.
+  const cashInputs = {
+    sellerEntries: input.receivableEntries.filter(isReceivableCodEntry),
+    driverEntries: input.receivableEntries.filter(isReceivableDriverPay),
+    orderMeta: new Map()
+  };
+  for (const settlement of driverSettlements) {
+    const receivedCop = settlementCashReceivedCop(settlement);
+    const summary = computeDriverCashSummary(cashInputs, settlement.orderIds ?? [], receivedCop);
+    const recalculatedPendingCop = Math.max(0, summary.expectedCop - receivedCop);
+    const storedPendingCop = Math.round(Number(settlement.cashPendingCop) || 0);
+    if (settlement.cashPendingCop === undefined) {
+      add("settlement_cash_pending_missing", storedPendingCop - recalculatedPendingCop, [], settlement.id);
+    } else if (storedPendingCop !== recalculatedPendingCop) {
+      add("settlement_cash_pending_stale", storedPendingCop - recalculatedPendingCop, [], settlement.id);
+    }
+
+    let settlementNetCop = 0;
+    let receivedOnRowsCop = 0;
+    for (const orderId of new Set(settlement.orderIds ?? [])) {
+      settlementNetCop += netOf(orderId);
+      const row = rowById.get(orderId);
+      if (row && row.attributedSettlementId === settlement.id) {
+        addRowTerms(row, settlement.id);
+        receivedOnRowsCop += row.receivedCop;
+      } else if (row) {
+        add("settlement_orders_attributed_elsewhere", netOf(orderId), [orderId], settlement.id);
+      } else {
+        addUnlisted(orderId, settlement.id);
+      }
+    }
+    const expectedClampCop = Math.max(0, -settlementNetCop);
+    if (expectedClampCop !== 0) add("settlement_expected_clamp", expectedClampCop, [], settlement.id);
+    const excessReceivedCop = Math.max(0, receivedCop - summary.expectedCop);
+    if (excessReceivedCop !== 0) add("settlement_excess_received", excessReceivedCop, [], settlement.id);
+    // Lo recibido que no esta imputado a filas atribuidas a este corte.
+    const unassignedReceivedCop = receivedCop - receivedOnRowsCop;
+    if (unassignedReceivedCop !== 0) add("settlement_cash_received", -unassignedReceivedCop, [], settlement.id);
+  }
+
+  const driverReceivableCop = computeDriverReceivable(input.receivableEntries, input.settlements).driverReceivableCop;
+  const listOutstandingCop = listed.rows.reduce((total, row) => total + row.outstandingCop, 0);
+  const deltaCop = driverReceivableCop - listOutstandingCop;
+  const sumOf = (cause: ReconciliationCause): number =>
+    causes.filter((item) => item.cause === cause).reduce((total, item) => total + item.amountCop, 0);
+
+  return {
+    driverReceivableCop,
+    listOutstandingCop,
+    deltaCop,
+    causes,
+    staleSettlementsCop: sumOf("settlement_cash_pending_stale"),
+    missingPendingSettlementsCop: sumOf("settlement_cash_pending_missing"),
+    unexplainedCop: deltaCop - causes.reduce((total, item) => total + item.amountCop, 0),
+    unexplainedOrderIds: [...unexplainedIds].sort()
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
 // Informe
 // ---------------------------------------------------------------------------------------------------
 
@@ -530,7 +721,11 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
     byLeader: groupByLeader(rows),
     bySupplier: isAdmin ? groupBySupplier(rows) : [],
     totals: computeTotals(rows, nettedRows),
-    reconciliation: null, // T9
+    // Solo con asientos completos: con `targeted` la posicion no se puede reconstruir (plan 4.3).
+    reconciliation:
+      input.scope.kind === "admin" && input.scope.includeReconciliation && input.coverage === "full"
+        ? reconcileWithPlatformPosition(input, { rows, nettedRows })
+        : null,
     isIncomplete,
     unreadableOrderIds: [...input.unreadableOrderIds],
     unreadableSettlementIds: [...input.unreadableSettlementIds],

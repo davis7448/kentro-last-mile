@@ -1240,3 +1240,831 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------------------------------
+// T9 · conciliacion por causas sin residuo (plan 4.4)
+// ---------------------------------------------------------------------------------------------------
+
+type T9Row = ReturnType<CashOutstandingModule["buildCashOutstandingReport"]>["rows"][number];
+type T9Reconciliation = import("../../functions/src/cash-outstanding").PositionReconciliation;
+type T9ReconcileFn = (input: ReportInput, listed: { rows: T9Row[]; nettedRows: T9Row[] }) => T9Reconciliation;
+type T9Entry = ReturnType<typeof codEntry> | ReturnType<typeof payEntry>;
+
+type T9Math = {
+  computeDriverCashSummary: typeof import("../../functions/src/settlement-math").computeDriverCashSummary;
+  computeDriverReceivable: typeof import("../../functions/src/driver-receivable").computeDriverReceivable;
+};
+
+async function t9LoadMath(): Promise<T9Math> {
+  const settlementMath = await import("../../functions/src/settlement-math");
+  const receivable = await import("../../functions/src/driver-receivable");
+  return {
+    computeDriverCashSummary: settlementMath.computeDriverCashSummary,
+    computeDriverReceivable: receivable.computeDriverReceivable
+  };
+}
+
+/**
+ * Contrato de T9: `cash-outstanding.ts` exporta la conciliacion como funcion pura que recibe la entrada
+ * y LAS FILAS de la lista. Asi una fila quitada (o perdida por un fallo de la lista) se ve en
+ * `unexplainedCop`: la clasificacion de cada pedido no se deduce de `rows`/`nettedRows`.
+ */
+function t9Reconcile(core: CashOutstandingModule): T9ReconcileFn {
+  const fn = (core as unknown as { reconcileWithPlatformPosition?: T9ReconcileFn }).reconcileWithPlatformPosition;
+  if (typeof fn !== "function") {
+    throw new Error("T9: falta `export function reconcileWithPlatformPosition(input, { rows, nettedRows })` en functions/src/cash-outstanding.ts");
+  }
+  return fn;
+}
+
+const T9_SCOPE = { kind: "admin" as const, includeReconciliation: true };
+
+type T9World = { orders: OrderFixture[]; entries: T9Entry[]; settlements: SettlementFixture[]; unreadable: string[] };
+
+function t9Input(world: T9World, overrides: Partial<ReportInput> = {}): ReportInput {
+  return input({
+    orders: world.orders,
+    receivableEntries: world.entries,
+    settlements: world.settlements,
+    unreadableOrderIds: world.unreadable,
+    scope: T9_SCOPE,
+    coverage: "full",
+    ...overrides
+  });
+}
+
+function t9Merge(...worlds: T9World[]): T9World {
+  return {
+    orders: worlds.flatMap((world) => world.orders),
+    entries: worlds.flatMap((world) => world.entries),
+    settlements: worlds.flatMap((world) => world.settlements),
+    unreadable: worlds.flatMap((world) => world.unreadable)
+  };
+}
+
+/** Entradas de un pedido: COD (si `codCop` no es null) y pago (si > 0). */
+function t9Entries(orderId: string, codCop: number | null, payCop: number): T9Entry[] {
+  const result: T9Entry[] = [];
+  if (codCop !== null) result.push(codEntry(orderId, codCop));
+  if (payCop > 0) result.push(payEntry(orderId, payCop));
+  return result;
+}
+
+type T9SettlementOptions = {
+  status: "pending" | "paid" | "reconciled";
+  orderIds: string[];
+  /** Efectivo recibido; "expected" = exactamente lo esperado recalculado. */
+  received: number | "expected";
+  /** "coherent" = pendiente recalculado; "absent" = sin el campo; numero = guardado tal cual. */
+  pending?: "coherent" | "absent" | number;
+  allocations?: boolean;
+  createdAt?: string;
+};
+
+/**
+ * Corte de domiciliario COHERENTE por construccion: esperado, asignaciones y pendiente salen de
+ * `computeDriverCashSummary` sobre los mismos asientos que recibe el informe.
+ */
+function t9Settlement(math: T9Math, id: string, entries: T9Entry[], options: T9SettlementOptions): SettlementFixture {
+  const cashInputs = {
+    sellerEntries: entries.filter((entry) => entry.ownerType === "seller"),
+    driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
+    orderMeta: new Map()
+  };
+  const expectedCop = math.computeDriverCashSummary(cashInputs as never, options.orderIds, 0).expectedCop;
+  const receivedCop = options.received === "expected" ? expectedCop : options.received;
+  const summary = math.computeDriverCashSummary(cashInputs as never, options.orderIds, receivedCop);
+  const recalculatedPending = Math.max(0, summary.expectedCop - receivedCop);
+  const built = settlement(id, {
+    status: options.status,
+    orderIds: options.orderIds,
+    createdAt: options.createdAt ?? "2026-09-29T10:00:00.000Z",
+    cashExpectedCop: summary.expectedCop,
+    cashReceivedCop: receivedCop,
+    cashPendingCop:
+      options.pending === undefined || options.pending === "coherent" ? recalculatedPending : options.pending === "absent" ? 0 : options.pending,
+    cashAllocations: summary.allocations
+  });
+  if (options.pending === "absent") delete built.cashPendingCop;
+  if (options.allocations === false) delete built.cashAllocations;
+  return built;
+}
+
+/** R_s del plan 4.4, recalculado aparte como oraculo: max(0, esperado - recibido). */
+function t9RecalculatedPending(math: T9Math, entries: T9Entry[], stored: SettlementFixture): number {
+  const cashInputs = {
+    sellerEntries: entries.filter((entry) => entry.ownerType === "seller"),
+    driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
+    orderMeta: new Map()
+  };
+  const expectedCop = math.computeDriverCashSummary(cashInputs as never, stored.orderIds, 0).expectedCop;
+  return Math.max(0, expectedCop - (stored.cashReceivedCop ?? 0));
+}
+
+const t9Sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+const t9CausesOf = (rec: T9Reconciliation, cause: string) => rec.causes.filter((item) => item.cause === cause);
+
+/**
+ * Identidad algebraica y anclas externas, comunes a todas las pruebas:
+ *  - driverReceivableCop = computeDriverReceivable (la MISMA formula que la posicion, T3);
+ *  - listOutstandingCop = suma de `rows[].outstandingCop` (nettedRows no suma: no falta dinero);
+ *  - deltaCop = driverReceivableCop - listOutstandingCop = Σ causes.amountCop + unexplainedCop;
+ *  - staleSettlementsCop / missingPendingSettlementsCop = Σ de las causas de su tipo (con signo).
+ */
+function t9ExpectIdentity(math: T9Math, data: ReportInput, rows: T9Row[], rec: T9Reconciliation) {
+  const position = math.computeDriverReceivable(data.receivableEntries, data.settlements);
+  expect(rec.driverReceivableCop, "driverReceivableCop = computeDriverReceivable").toBe(position.driverReceivableCop);
+  expect(rec.listOutstandingCop, "listOutstandingCop = Σ rows.outstandingCop").toBe(t9Sum(rows.map((row) => row.outstandingCop)));
+  expect(rec.deltaCop, "deltaCop = posicion - lista").toBe(rec.driverReceivableCop - rec.listOutstandingCop);
+  expect(rec.deltaCop, "deltaCop = Σ causas + unexplainedCop").toBe(t9Sum(rec.causes.map((item) => item.amountCop)) + rec.unexplainedCop);
+  expect(rec.staleSettlementsCop).toBe(t9Sum(t9CausesOf(rec, "settlement_cash_pending_stale").map((item) => item.amountCop)));
+  expect(rec.missingPendingSettlementsCop).toBe(t9Sum(t9CausesOf(rec, "settlement_cash_pending_missing").map((item) => item.amountCop)));
+}
+
+async function t9Run(world: T9World, overrides: Partial<ReportInput> = {}) {
+  const core = await loadCore();
+  const math = await t9LoadMath();
+  const data = t9Input(world, overrides);
+  const report = core.buildCashOutstandingReport(data);
+  expect(report.reconciliation, "admin + includeReconciliation + full debe traer reconciliation").not.toBeNull();
+  const rec = report.reconciliation!;
+  t9ExpectIdentity(math, data, report.rows, rec);
+  return { core, math, data, report, rec, reconcile: t9Reconcile(core) };
+}
+
+// --- Escenarios: cada uno produce UNA causa (prefijo para poder juntarlos sin chocar ids) ---------
+
+type T9Scenario = {
+  cause: string;
+  /** Importe con signo (aporte a deltaCop) cuando el plan lo fija sin ambiguedad; undefined = solo != 0. */
+  amountCop?: number;
+  settlementId?: (prefix: string) => string;
+  orderId?: (prefix: string) => string;
+  build: (math: T9Math, prefix: string) => T9World;
+};
+
+const T9_SCENARIOS: T9Scenario[] = [
+  {
+    cause: "outside_orders_outside_universe",
+    amountCop: 27_000,
+    orderId: (p) => `${p}ghost`,
+    build: (_math, p) => ({
+      orders: [order(`${p}o`)],
+      entries: [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}ghost`, 30_000, 3_000)],
+      settlements: [],
+      unreadable: []
+    })
+  },
+  {
+    // Un ilegible tampoco esta en input.orders: gana la razon especifica.
+    cause: "outside_unreadable_orders",
+    amountCop: 27_000,
+    orderId: (p) => `${p}bad`,
+    build: (_math, p) => ({
+      orders: [order(`${p}o`)],
+      entries: [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}bad`, 30_000, 3_000)],
+      settlements: [],
+      unreadable: [`${p}bad`]
+    })
+  },
+  {
+    cause: "outside_order_total_without_cod",
+    amountCop: -40_000,
+    orderId: (p) => `${p}t`,
+    build: (_math, p) => ({ orders: [order(`${p}t`, { totalCop: 40_000 })], entries: [], settlements: [], unreadable: [] })
+  },
+  {
+    // Linea base: pedido de $1 con pago mayor (esperado 0 en la lista, -6.999 en la posicion).
+    cause: "outside_negative_net",
+    amountCop: -6_999,
+    orderId: (p) => `${p}one`,
+    build: (_math, p) => ({
+      orders: [order(`${p}o`), order(`${p}one`)],
+      entries: [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}one`, 1, 7_000)],
+      settlements: [],
+      unreadable: []
+    })
+  },
+  {
+    // Solo el de $1 fuera de corte: la posicion topa el agregado a 0.
+    cause: "outside_aggregate_clamp",
+    amountCop: 6_999,
+    build: (_math, p) => ({ orders: [order(`${p}one`)], entries: t9Entries(`${p}one`, 1, 7_000), settlements: [], unreadable: [] })
+  },
+  {
+    // Linea base: corte conciliado con pendiente guardado 0 y recalculado 129.900.
+    cause: "settlement_cash_pending_stale",
+    amountCop: -129_900,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}a`, 50_000, 5_000), ...t9Entries(`${p}b`, 180_000, 5_100)];
+      const stale = t9Settlement(math, `${p}s`, entries, {
+        status: "reconciled",
+        orderIds: [`${p}a`, `${p}b`],
+        received: 90_000,
+        pending: 0
+      });
+      // Lo que se guardo al conciliar: esperado 90.000 recibido entero, `b` sin cubrir.
+      stale.cashExpectedCop = 90_000;
+      stale.cashAllocations = [
+        { orderId: `${p}a`, expectedCop: 45_000, receivedCop: 45_000, covered: true },
+        { orderId: `${p}b`, expectedCop: 45_000, receivedCop: 45_000, covered: false }
+      ];
+      return { orders: [order(`${p}a`), order(`${p}b`)], entries, settlements: [stale], unreadable: [] };
+    }
+  },
+  {
+    cause: "settlement_cash_pending_missing",
+    amountCop: -45_000,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = t9Entries(`${p}o`, 50_000, 5_000);
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}o`], received: 0, pending: "absent" })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    // Pagado sin asignaciones: recibido por la regla de la tienda.
+    cause: "settlement_orders_received",
+    amountCop: 45_000,
+    settlementId: (p) => `${p}s`,
+    orderId: (p) => `${p}o`,
+    build: (math, p) => {
+      const entries = t9Entries(`${p}o`, 50_000, 5_000);
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "paid", orderIds: [`${p}o`], received: "expected", allocations: false })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    // El tipo medido (29 cortes): conciliado, recibido = esperado, pendiente 0, una asignacion sin cubrir.
+    cause: "settlement_orders_covered_by_netting",
+    amountCop: 45_000,
+    settlementId: (p) => `${p}s`,
+    orderId: (p) => `${p}n`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}x`, 50_000, 5_000), ...t9Entries(`${p}n`, 50_000, 5_000)];
+      const netted = t9Settlement(math, `${p}s`, entries, { status: "reconciled", orderIds: [`${p}x`, `${p}n`], received: "expected" });
+      netted.cashAllocations = [
+        { orderId: `${p}x`, expectedCop: 45_000, receivedCop: 45_000, covered: true },
+        { orderId: `${p}n`, expectedCop: 45_000, receivedCop: 0, covered: false }
+      ];
+      return { orders: [order(`${p}x`), order(`${p}n`)], entries, settlements: [netted], unreadable: [] };
+    }
+  },
+  {
+    cause: "settlement_orders_outside_universe",
+    amountCop: 27_000,
+    settlementId: (p) => `${p}s`,
+    orderId: (p) => `${p}ghost`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}ghost`, 30_000, 3_000)];
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}o`, `${p}ghost`], received: 0 })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    cause: "settlement_unreadable_orders",
+    amountCop: 27_000,
+    settlementId: (p) => `${p}s`,
+    orderId: (p) => `${p}bad`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}bad`, 30_000, 3_000)];
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}o`, `${p}bad`], received: 0 })],
+        unreadable: [`${p}bad`]
+      };
+    }
+  },
+  {
+    // En un corte pagado con faltante (viejo) y en uno abierto (nuevo): la fila es del abierto.
+    cause: "settlement_orders_attributed_elsewhere",
+    amountCop: 45_000,
+    settlementId: (p) => `${p}s-old`,
+    orderId: (p) => `${p}o`,
+    build: (math, p) => {
+      const entries = t9Entries(`${p}o`, 50_000, 5_000);
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [
+          t9Settlement(math, `${p}s-old`, entries, { status: "paid", orderIds: [`${p}o`], received: 0, createdAt: "2026-09-20T10:00:00.000Z" }),
+          t9Settlement(math, `${p}s-new`, entries, { status: "pending", orderIds: [`${p}o`], received: 0, createdAt: "2026-09-30T10:00:00.000Z" })
+        ],
+        unreadable: []
+      };
+    }
+  },
+  {
+    cause: "settlement_order_total_without_cod",
+    amountCop: -40_000,
+    settlementId: (p) => `${p}s`,
+    orderId: (p) => `${p}t`,
+    build: (math, p) => ({
+      orders: [order(`${p}t`, { totalCop: 40_000 })],
+      entries: [],
+      settlements: [t9Settlement(math, `${p}s`, [], { status: "pending", orderIds: [`${p}t`], received: 0 })],
+      unreadable: []
+    })
+  },
+  {
+    cause: "settlement_negative_net",
+    amountCop: -6_999,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}o`, 50_000, 5_000), ...t9Entries(`${p}one`, 1, 7_000)];
+      return {
+        orders: [order(`${p}o`), order(`${p}one`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}o`, `${p}one`], received: 0 })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    cause: "settlement_expected_clamp",
+    amountCop: 6_999,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = t9Entries(`${p}one`, 1, 7_000);
+      return {
+        orders: [order(`${p}one`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}one`], received: 0 })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    cause: "settlement_excess_received",
+    amountCop: 5_000,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = t9Entries(`${p}o`, 50_000, 5_000);
+      return {
+        orders: [order(`${p}o`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "reconciled", orderIds: [`${p}o`], received: 50_000 })],
+        unreadable: []
+      };
+    }
+  },
+  {
+    // Corte abierto: `a-rec` cubierto con lo recibido, `b-open` en la lista entero.
+    cause: "settlement_cash_received",
+    amountCop: -45_000,
+    settlementId: (p) => `${p}s`,
+    build: (math, p) => {
+      const entries = [...t9Entries(`${p}a-rec`, 50_000, 5_000), ...t9Entries(`${p}b-open`, 50_000, 5_000)];
+      return {
+        orders: [order(`${p}a-rec`), order(`${p}b-open`)],
+        entries,
+        settlements: [t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}a-rec`, `${p}b-open`], received: 45_000 })],
+        unreadable: []
+      };
+    }
+  }
+];
+
+/** Asignacion guardada por encima del esperado actual (los asientos cambiaron tras el abono). */
+function t9AllocationOverExpected(math: T9Math, p: string): T9World {
+  const entries = t9Entries(`${p}o`, 50_000, 25_000);
+  const stored = t9Settlement(math, `${p}s`, entries, { status: "pending", orderIds: [`${p}o`], received: 30_000 });
+  stored.cashExpectedCop = 45_000;
+  stored.cashAllocations = [{ orderId: `${p}o`, expectedCop: 45_000, receivedCop: 30_000, covered: false }];
+  return { orders: [order(`${p}o`)], entries, settlements: [stored], unreadable: [] };
+}
+
+// --- Generador con semilla fija para la propiedad ------------------------------------------------
+
+function t9Mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+type T9PendingMode = "coherent" | "stale" | "absent";
+
+function t9RandomWorld(math: T9Math, rand: () => number, caseIndex: number, pendingModes: T9PendingMode[]): T9World {
+  const pick = <T,>(items: T[]): T => items[Math.floor(rand() * items.length)];
+  const p = `c${caseIndex}-`;
+  const orders: OrderFixture[] = [];
+  const entries: T9Entry[] = [];
+  const unreadable: string[] = [];
+  const ids: string[] = [];
+  const orderCount = 3 + Math.floor(rand() * 8);
+  for (let index = 0; index < orderCount; index += 1) {
+    const id = `${p}o${String(index).padStart(2, "0")}`;
+    ids.push(id);
+    const kind = rand();
+    if (kind < 0.1) {
+      // fuera del universo: asientos sin pedido en input.orders
+    } else if (kind < 0.18) {
+      unreadable.push(id);
+    } else {
+      orders.push(
+        order(id, {
+          status: pick(["delivered", "liquidated"]),
+          totalCop: pick([40_000, 80_000]),
+          driverId: pick(["leader-1", "leader-2", null])
+        })
+      );
+    }
+    if (rand() >= 0.1) {
+      const codCop = pick([1, 20_000, 50_000, 120_000]);
+      entries.push(codEntry(id, codCop));
+      if (rand() < 0.08) entries.push(codEntry(id, -codCop, "cod_remittance"));
+    }
+    const payCop = pick([0, 0, 3_000, 7_000, 25_000]);
+    if (payCop > 0) entries.push(payEntry(id, payCop));
+  }
+
+  const settlements: SettlementFixture[] = [];
+  const settlementCount = Math.floor(rand() * 4);
+  for (let index = 0; index < settlementCount; index += 1) {
+    const orderIds = ids.filter(() => rand() < 0.4);
+    if (orderIds.length === 0) continue;
+    const status = pick(["pending", "paid", "reconciled"] as const);
+    const coherent = t9Settlement(math, "probe", entries, { status, orderIds, received: 0 });
+    const expectedCop = coherent.cashExpectedCop ?? 0;
+    const received = pick([0, Math.floor(expectedCop * rand()), expectedCop, expectedCop + 5_000]);
+    const mode = pick(pendingModes);
+    const recalculated = Math.max(0, expectedCop - received);
+    const pending = mode === "coherent" ? "coherent" : mode === "absent" ? "absent" : recalculated + pick([-20_000, 5_000, 129_900]);
+    settlements.push(
+      t9Settlement(math, `${p}s${index}`, entries, {
+        status,
+        orderIds,
+        received,
+        pending: typeof pending === "number" ? (pending < 0 || pending === recalculated ? recalculated + 1_000 : pending) : pending,
+        allocations: rand() < 0.85,
+        createdAt: `2026-09-${String(10 + index).padStart(2, "0")}T10:00:00.000Z`
+      })
+    );
+  }
+  return { orders, entries, settlements, unreadable };
+}
+
+const T9_SEED = 26_009;
+const T9_CASES = 250;
+
+describe("T9 · conciliacion por causas sin residuo (RNF_02, RF_09)", () => {
+  describe("contrato y alcance: solo admin + includeReconciliation + coverage full", () => {
+    function smallWorld(): T9World {
+      return { orders: [order("g-o")], entries: t9Entries("g-o", 50_000, 5_000), settlements: [], unreadable: [] };
+    }
+
+    it("exporta reconcileWithPlatformPosition(input, { rows, nettedRows }) y el informe la usa tal cual", async () => {
+      const { report, rec, data, reconcile } = await t9Run(smallWorld());
+      expect(rec).toEqual(reconcile(data, { rows: report.rows, nettedRows: report.nettedRows }));
+    });
+
+    it("sin includeReconciliation → reconciliation null", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(t9Input(smallWorld(), { scope: { kind: "admin", includeReconciliation: false } }));
+      expect(report.reconciliation).toBeNull();
+    });
+
+    it("coverage targeted → reconciliation null (no hay asientos completos)", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(t9Input(smallWorld(), { coverage: "targeted" }));
+      expect(report.reconciliation).toBeNull();
+    });
+
+    it("alcance de lider → reconciliation null", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(t9Input(smallWorld(), { scope: { kind: "leader", driverId: "leader-1" } }));
+      expect(report.reconciliation).toBeNull();
+    });
+  });
+
+  describe("sin causas", () => {
+    it("filas fuera de corte y en un corte abierto sin recibido: deltaCop 0, ninguna causa con importe, unexplained 0", async () => {
+      const math = await t9LoadMath();
+      const openEntries = [...t9Entries("n-s1", 50_000, 5_000), ...t9Entries("n-s2", 30_000, 3_000)];
+      const world: T9World = {
+        orders: [order("n-out1"), order("n-out2"), order("n-s1"), order("n-s2")],
+        entries: [...t9Entries("n-out1", 50_000, 5_000), ...t9Entries("n-out2", 120_000, 0), ...openEntries],
+        settlements: [t9Settlement(math, "n-s", openEntries, { status: "pending", orderIds: ["n-s1", "n-s2"], received: 0 })],
+        unreadable: []
+      };
+      const { rec } = await t9Run(world);
+      expect(rec.deltaCop).toBe(0);
+      expect(rec.causes.filter((item) => item.amountCop !== 0)).toEqual([]);
+      expect(rec.unexplainedCop).toBe(0);
+      expect(rec.unexplainedOrderIds).toEqual([]);
+      expect(rec.staleSettlementsCop).toBe(0);
+      expect(rec.missingPendingSettlementsCop).toBe(0);
+    });
+  });
+
+  describe("cada causa sola explica su diferencia (unexplainedCop === 0)", () => {
+    it.each(T9_SCENARIOS.map((scenario) => [scenario.cause, scenario] as const))("%s", async (_name, scenario) => {
+      const math = await t9LoadMath();
+      const prefix = "one-";
+      const { rec } = await t9Run(scenario.build(math, prefix));
+      expect(rec.unexplainedCop).toBe(0);
+      expect(rec.unexplainedOrderIds).toEqual([]);
+      const matching = t9CausesOf(rec, scenario.cause).filter(
+        (item) => scenario.settlementId === undefined || item.settlementId === scenario.settlementId(prefix)
+      );
+      expect(matching.length, `falta la causa ${scenario.cause}`).toBeGreaterThan(0);
+      const amount = t9Sum(matching.map((item) => item.amountCop));
+      if (scenario.amountCop !== undefined) expect(amount).toBe(scenario.amountCop);
+      else expect(amount).not.toBe(0);
+      if (scenario.orderId) expect(matching.flatMap((item) => item.orderIds)).toContain(scenario.orderId(prefix));
+    });
+
+    it("asignacion guardada por encima del esperado actual: identidad exacta y unexplained 0", async () => {
+      const math = await t9LoadMath();
+      const { rec } = await t9Run(t9AllocationOverExpected(math, "q-"));
+      expect(rec.unexplainedCop).toBe(0);
+      expect(rec.unexplainedOrderIds).toEqual([]);
+    });
+
+    it("todas las causas juntas: unexplainedCop === 0 y la identidad se mantiene", async () => {
+      const math = await t9LoadMath();
+      const world = t9Merge(
+        ...T9_SCENARIOS.map((scenario, index) => scenario.build(math, `all${index}-`)),
+        t9AllocationOverExpected(math, "all-q-")
+      );
+      const { rec } = await t9Run(world);
+      expect(rec.unexplainedCop).toBe(0);
+      expect(rec.unexplainedOrderIds).toEqual([]);
+      // stale y missing se reportan por corte; distintos de 0 NO son residuo.
+      expect(rec.staleSettlementsCop).toBe(-129_900);
+      expect(rec.missingPendingSettlementsCop).toBe(-45_000);
+    });
+  });
+
+  describe("una fila perdida no la absorbe ninguna causa", () => {
+    it("fila con importe quitada de rows, FUERA de corte → unexplainedCop = su recaudo neto, con su id", async () => {
+      const world: T9World = {
+        orders: [order("r-a"), order("r-b")],
+        entries: [...t9Entries("r-a", 50_000, 5_000), ...t9Entries("r-b", 30_000, 3_000)],
+        settlements: [],
+        unreadable: []
+      };
+      const { report, data, reconcile, rec: full } = await t9Run(world);
+      expect(full.unexplainedCop).toBe(0);
+      const rows = report.rows.filter((row) => row.orderId !== "r-b");
+      const rec = reconcile(data, { rows, nettedRows: report.nettedRows });
+      expect(rec.unexplainedCop).not.toBe(0);
+      expect(rec.unexplainedCop).toBe(27_000);
+      expect(rec.unexplainedOrderIds).toEqual(["r-b"]);
+      t9ExpectIdentity(await t9LoadMath(), data, rows, rec);
+    });
+
+    it("fila con importe quitada de rows, EN un corte abierto → unexplainedCop = su esperado, con su id", async () => {
+      const math = await t9LoadMath();
+      const entries = [...t9Entries("r-c", 50_000, 5_000), ...t9Entries("r-d", 30_000, 3_000)];
+      const world: T9World = {
+        orders: [order("r-c"), order("r-d")],
+        entries,
+        settlements: [t9Settlement(math, "r-s", entries, { status: "pending", orderIds: ["r-c", "r-d"], received: 0 })],
+        unreadable: []
+      };
+      const { report, data, reconcile, rec: full } = await t9Run(world);
+      expect(full.unexplainedCop).toBe(0);
+      expect(report.rows.find((row) => row.orderId === "r-d")?.location).toBe("in_settlement_open");
+      const rows = report.rows.filter((row) => row.orderId !== "r-d");
+      const rec = reconcile(data, { rows, nettedRows: report.nettedRows });
+      expect(rec.unexplainedCop).not.toBe(0);
+      expect(rec.unexplainedCop).toBe(27_000);
+      expect(rec.unexplainedOrderIds).toEqual(["r-d"]);
+      t9ExpectIdentity(math, data, rows, rec);
+    });
+
+    it("fila quitada de nettedRows → la conciliacion no cambia (la compensacion sale de los cortes)", async () => {
+      const math = await t9LoadMath();
+      const scenario = T9_SCENARIOS.find((item) => item.cause === "settlement_orders_covered_by_netting")!;
+      const { report, data, reconcile, rec: full } = await t9Run(scenario.build(math, "rn-"));
+      expect(rowIds(report.nettedRows)).toEqual(["rn-n"]);
+      const rec = reconcile(data, { rows: report.rows, nettedRows: [] });
+      expect(rec).toEqual(full);
+    });
+  });
+
+  describe("cortes guardados: stale (campo presente y distinto) y missing (campo ausente)", () => {
+    it("corte con pendiente guardado distinto del recalculado → settlement_cash_pending_stale por corte (G - R)", async () => {
+      const math = await t9LoadMath();
+      const entries = t9Entries("st-o", 50_000, 5_000);
+      const world: T9World = {
+        orders: [order("st-o")],
+        entries,
+        settlements: [t9Settlement(math, "st-s", entries, { status: "pending", orderIds: ["st-o"], received: 0, pending: 50_000 })],
+        unreadable: []
+      };
+      const { rec } = await t9Run(world);
+      const stale = t9CausesOf(rec, "settlement_cash_pending_stale");
+      expect(stale.map((item) => [item.settlementId, item.amountCop])).toEqual([["st-s", 5_000]]);
+      expect(rec.staleSettlementsCop).toBe(5_000);
+      expect(t9CausesOf(rec, "settlement_cash_pending_missing")).toEqual([]);
+      expect(rec.unexplainedCop).toBe(0);
+    });
+
+    it("corte sin cashPendingCop → settlement_cash_pending_missing (y NO stale), unexplained 0", async () => {
+      const math = await t9LoadMath();
+      const scenario = T9_SCENARIOS.find((item) => item.cause === "settlement_cash_pending_missing")!;
+      const { rec } = await t9Run(scenario.build(math, "mi-"));
+      expect(t9CausesOf(rec, "settlement_cash_pending_missing").map((item) => [item.settlementId, item.amountCop])).toEqual([
+        ["mi-s", -45_000]
+      ]);
+      expect(rec.missingPendingSettlementsCop).toBe(-45_000);
+      expect(t9CausesOf(rec, "settlement_cash_pending_stale")).toEqual([]);
+      expect(rec.staleSettlementsCop).toBe(0);
+      expect(rec.unexplainedCop).toBe(0);
+    });
+
+    it("corte coherente (guardado = recalculado) no se reporta ni stale ni missing", async () => {
+      const math = await t9LoadMath();
+      const entries = t9Entries("co-o", 50_000, 5_000);
+      const world: T9World = {
+        orders: [order("co-o")],
+        entries,
+        settlements: [t9Settlement(math, "co-s", entries, { status: "pending", orderIds: ["co-o"], received: 10_000 })],
+        unreadable: []
+      };
+      const { rec } = await t9Run(world);
+      expect(t9CausesOf(rec, "settlement_cash_pending_stale")).toEqual([]);
+      expect(t9CausesOf(rec, "settlement_cash_pending_missing")).toEqual([]);
+      expect(rec.unexplainedCop).toBe(0);
+    });
+  });
+
+  describe("linea base 2026-10-02 (t1-linea-base.txt): cortes del tipo medido", () => {
+    /**
+     * Dos cortes conciliados con pendiente guardado $0 y recalculado $129.900 y $81.900 (seccion 6),
+     * cada uno con pedidos sin cubrir (compensacion, seccion 5) y uno de ellos con el pedido de $1 cuyo
+     * esperado es 0 (ord-knt-005242: sin asignacion, nunca `covered`). Mas filas fuera de corte.
+     */
+    function baselineWorld(math: T9Math): T9World {
+      const firstEntries = [...t9Entries("lb-a", 50_000, 5_000), ...t9Entries("lb-b", 180_000, 5_100)];
+      const first = t9Settlement(math, "stl-1786630129293-driver", firstEntries, {
+        status: "reconciled",
+        orderIds: ["lb-a", "lb-b"],
+        received: 90_000,
+        pending: 0
+      });
+      first.cashExpectedCop = 90_000;
+      first.cashAllocations = [
+        { orderId: "lb-a", expectedCop: 45_000, receivedCop: 45_000, covered: true },
+        { orderId: "lb-b", expectedCop: 45_000, receivedCop: 45_000, covered: false }
+      ];
+      const secondEntries = [...t9Entries("lb-c", 50_000, 5_000), ...t9Entries("lb-d", 133_899, 0), ...t9Entries("lb-one", 1, 7_000)];
+      const second = t9Settlement(math, "stl-1787066544779-driver", secondEntries, {
+        status: "reconciled",
+        orderIds: ["lb-c", "lb-d", "lb-one"],
+        received: 90_000,
+        pending: 0
+      });
+      second.cashExpectedCop = 90_000;
+      second.cashAllocations = [
+        { orderId: "lb-c", expectedCop: 45_000, receivedCop: 45_000, covered: true },
+        { orderId: "lb-d", expectedCop: 45_000, receivedCop: 45_000, covered: false }
+      ];
+      const outsideEntries = [...t9Entries("lb-out1", 120_000, 7_000), ...t9Entries("lb-out2", 50_000, 5_000)];
+      return {
+        orders: ["lb-a", "lb-b", "lb-c", "lb-d", "lb-one", "lb-out1", "lb-out2"].map((id) => order(id)),
+        entries: [...firstEntries, ...secondEntries, ...outsideEntries],
+        settlements: [first, second],
+        unreadable: []
+      };
+    }
+
+    it("los cortes viejos se reportan como stale ($-211.800 por corte) y la compensacion los explica: unexplained 0", async () => {
+      const math = await t9LoadMath();
+      const world = baselineWorld(math);
+      // Precondicion del fixture: el recalculado es el de la linea base.
+      expect(world.settlements.map((item) => t9RecalculatedPending(math, world.entries, item))).toEqual([129_900, 81_900]);
+      const { rec, report } = await t9Run(world);
+      expect(rowIds(report.nettedRows)).toEqual(["lb-b", "lb-d", "lb-one"]);
+      expect(rec.unexplainedCop).toBe(0);
+      expect(rec.unexplainedOrderIds).toEqual([]);
+      expect(
+        t9CausesOf(rec, "settlement_cash_pending_stale")
+          .map((item) => [item.settlementId, item.amountCop])
+          .sort()
+      ).toEqual([
+        ["stl-1786630129293-driver", -129_900],
+        ["stl-1787066544779-driver", -81_900]
+      ]);
+      expect(rec.staleSettlementsCop).toBe(-211_800);
+      expect(rec.missingPendingSettlementsCop).toBe(0);
+      const netting = t9CausesOf(rec, "settlement_orders_covered_by_netting");
+      expect(netting.map((item) => item.settlementId).sort()).toEqual(["stl-1786630129293-driver", "stl-1787066544779-driver"]);
+      expect(netting.flatMap((item) => item.orderIds).sort()).toEqual(["lb-b", "lb-d", "lb-one"]);
+    });
+
+    it("quitar de rows una fila fuera de corte en la linea base deja unexplainedCop != 0 con su id", async () => {
+      const math = await t9LoadMath();
+      const { report, data, reconcile } = await t9Run(baselineWorld(math));
+      const rows = report.rows.filter((row) => row.orderId !== "lb-out1");
+      const rec = reconcile(data, { rows, nettedRows: report.nettedRows });
+      expect(rec.unexplainedCop).toBe(113_000);
+      expect(rec.unexplainedOrderIds).toEqual(["lb-out1"]);
+    });
+  });
+
+  describe(`propiedad (semilla ${T9_SEED}, ${T9_CASES} casos)`, () => {
+    it("datos coherentes: deltaCop = Σ causas + unexplained y unexplainedCop === 0, sin stale ni missing", async () => {
+      const core = await loadCore();
+      const math = await t9LoadMath();
+      const rand = t9Mulberry32(T9_SEED);
+      for (let caseIndex = 0; caseIndex < T9_CASES; caseIndex += 1) {
+        const data = t9Input(t9RandomWorld(math, rand, caseIndex, ["coherent"]));
+        const report = core.buildCashOutstandingReport(data);
+        const rec = report.reconciliation;
+        expect(rec, `caso ${caseIndex}`).not.toBeNull();
+        t9ExpectIdentity(math, data, report.rows, rec!);
+        expect({ caseIndex, unexplainedCop: rec!.unexplainedCop, ids: rec!.unexplainedOrderIds }).toEqual({
+          caseIndex,
+          unexplainedCop: 0,
+          ids: []
+        });
+        expect(rec!.staleSettlementsCop).toBe(0);
+        expect(rec!.missingPendingSettlementsCop).toBe(0);
+      }
+    });
+
+    it("con cortes viejos o sin campo: unexplained sigue en 0 y stale/missing = Σ (guardado - recalculado) por su tipo", async () => {
+      const core = await loadCore();
+      const math = await t9LoadMath();
+      const rand = t9Mulberry32(T9_SEED + 1);
+      let staleSeen = 0;
+      let missingSeen = 0;
+      for (let caseIndex = 0; caseIndex < T9_CASES; caseIndex += 1) {
+        const world = t9RandomWorld(math, rand, caseIndex, ["coherent", "coherent", "stale", "absent"]);
+        const data = t9Input(world);
+        const report = core.buildCashOutstandingReport(data);
+        expect(report.reconciliation, `caso ${caseIndex}`).not.toBeNull();
+        const rec = report.reconciliation!;
+        t9ExpectIdentity(math, data, report.rows, rec);
+        let expectedStale = 0;
+        let expectedMissing = 0;
+        for (const item of world.settlements) {
+          const recalculated = t9RecalculatedPending(math, world.entries, item);
+          if (item.cashPendingCop === undefined) {
+            expectedMissing += 0 - recalculated;
+            missingSeen += 1;
+          } else if (item.cashPendingCop !== recalculated) {
+            expectedStale += item.cashPendingCop - recalculated;
+            staleSeen += 1;
+          }
+        }
+        expect({ caseIndex, unexplainedCop: rec.unexplainedCop }).toEqual({ caseIndex, unexplainedCop: 0 });
+        expect({ caseIndex, stale: rec.staleSettlementsCop, missing: rec.missingPendingSettlementsCop }).toEqual({
+          caseIndex,
+          stale: expectedStale,
+          missing: expectedMissing
+        });
+      }
+      expect(staleSeen).toBeGreaterThan(20);
+      expect(missingSeen).toBeGreaterThan(20);
+    });
+
+    it("quitar de rows cualquier fila con importe → unexplainedCop != 0 y su id en unexplainedOrderIds", async () => {
+      const core = await loadCore();
+      const math = await t9LoadMath();
+      const reconcile = t9Reconcile(core);
+      const rand = t9Mulberry32(T9_SEED + 2);
+      let removals = 0;
+      for (let caseIndex = 0; caseIndex < T9_CASES; caseIndex += 1) {
+        const data = t9Input(t9RandomWorld(math, rand, caseIndex, ["coherent"]));
+        const report = core.buildCashOutstandingReport(data);
+        const candidates = report.rows.filter((row) => row.collectedSource === "wallet" && row.collectedCop - row.driverPayCop > 0);
+        if (candidates.length === 0) continue;
+        const removed = candidates[Math.floor(rand() * candidates.length)];
+        const rows = report.rows.filter((row) => row.orderId !== removed.orderId);
+        const rec = reconcile(data, { rows, nettedRows: report.nettedRows });
+        removals += 1;
+        expect({ caseIndex, removed: removed.orderId, lost: rec.unexplainedCop !== 0 }).toEqual({
+          caseIndex,
+          removed: removed.orderId,
+          lost: true
+        });
+        expect(rec.unexplainedOrderIds).toContain(removed.orderId);
+        t9ExpectIdentity(math, data, rows, rec);
+      }
+      expect(removals).toBeGreaterThanOrEqual(100);
+    });
+  });
+});

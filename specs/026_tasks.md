@@ -117,7 +117,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     `bySupplier` y si a `nettedCount`/`nettedCollectedCop`; subtotales de ubicacion suman `outstandingCop`;
     orden de `byLeader` por importe vencido aunque otro lider tenga mas pedidos.
 
-- [ ] **T9: Conciliacion por causas sin residuo**
+- [x] **T9: Conciliacion por causas sin residuo**
   * Requisitos cubiertos: RNF_02, RF_09
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts
   * Accion: `reconciliation` (plan 4.4): razones independientes de las filas (incluida
