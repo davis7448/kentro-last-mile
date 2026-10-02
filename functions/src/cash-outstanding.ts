@@ -565,7 +565,8 @@ export function reconcileWithPlatformPosition(
   const { causes, add } = causeCollector();
   const unexplainedIds = new Set<string>();
 
-  const addUnlisted = (orderId: string, settlementId?: string): void => {
+  /** `netCop`: el neto del pedido en la vista del corte (T25); fuera de corte, el de todos sus asientos. */
+  const addUnlisted = (orderId: string, settlementId?: string, netCop: number = netOf(orderId)): void => {
     const reason = reasonOf(orderId);
     const cause =
       reason === null ? undefined : settlementId === undefined ? UNLISTED_OUTSIDE_CAUSE[reason] : UNLISTED_SETTLEMENT_CAUSE[reason];
@@ -573,12 +574,12 @@ export function reconcileWithPlatformPosition(
       unexplainedIds.add(orderId);
       return;
     }
-    add(cause, netOf(orderId), [orderId], settlementId);
+    add(cause, netCop, [orderId], settlementId);
   };
 
   /** Lo que la fila dice deber frente a lo que la posicion cuenta por ese pedido. */
-  const addRowTerms = (row: CashOutstandingRow, settlementId?: string): void => {
-    const gapCop = netOf(row.orderId) - row.expectedCashCop;
+  const addRowTerms = (row: CashOutstandingRow, settlementId?: string, netCop: number = netOf(row.orderId)): void => {
+    const gapCop = netCop - row.expectedCashCop;
     if (gapCop !== 0) {
       const inSettlement = settlementId !== undefined;
       const cause: ReconciliationCause =
@@ -609,13 +610,41 @@ export function reconcileWithPlatformPosition(
   // La posicion topa a 0 el agregado de fuera de corte.
   if (outsideNetCop < 0) add("outside_aggregate_clamp", -outsideNetCop, []);
 
-  // Por corte, con el pendiente recalculado sobre los mismos asientos.
-  const cashInputs = {
-    sellerEntries: input.receivableEntries.filter(isReceivableCodEntry),
-    driverEntries: input.receivableEntries.filter(isReceivableDriverPay),
-    orderMeta: new Map()
-  };
+  // Por corte, con el pendiente recalculado sobre los asientos que le pertenecen.
+  const entriesByOrder = new Map<string, WalletEntryDoc[]>();
+  for (const entry of input.receivableEntries) {
+    if (!entry.orderId) continue;
+    const list = entriesByOrder.get(entry.orderId) ?? [];
+    list.push(entry);
+    entriesByOrder.set(entry.orderId, list);
+  }
+
   for (const settlement of driverSettlements) {
+    // T25 (RNF_02): un pedido que tambien esta en un corte de domiciliario POSTERIOR solo aporta a este
+    // corte los asientos creados hasta su `createdAt`; lo escrito despues (p. ej. la correccion de fallido
+    // a entregado) le pertenece al corte que lo cobro. Recalcular con eso inflaria el esperado y marcaria
+    // "pendiente viejo" a un corte sano. Los pedidos que solo estan aqui usan todos sus asientos, como antes.
+    // La misma vista alimenta la descomposicion de abajo, para que la identidad siga exacta.
+    const laterOrderIds = new Set(
+      (settlement.orderIds ?? []).filter((orderId) =>
+        (settlementsOf.get(orderId) ?? []).some((other) => other.createdAt > settlement.createdAt)
+      )
+    );
+    const belongsHere = (entry: WalletEntryDoc): boolean =>
+      !entry.orderId || !laterOrderIds.has(entry.orderId) || !entry.createdAt || entry.createdAt <= settlement.createdAt;
+    const viewEntries = laterOrderIds.size === 0 ? input.receivableEntries : input.receivableEntries.filter(belongsHere);
+    const viewNetByOrder = new Map<string, number>();
+    for (const orderId of laterOrderIds) {
+      const orderAmounts = amountsByOrder((entriesByOrder.get(orderId) ?? []).filter(belongsHere)).get(orderId);
+      viewNetByOrder.set(orderId, orderAmounts ? orderAmounts.codCop - orderAmounts.driverPayCop : 0);
+    }
+    const netHere = (orderId: string): number => viewNetByOrder.get(orderId) ?? netOf(orderId);
+
+    const cashInputs = {
+      sellerEntries: viewEntries.filter(isReceivableCodEntry),
+      driverEntries: viewEntries.filter(isReceivableDriverPay),
+      orderMeta: new Map()
+    };
     const receivedCop = settlementCashReceivedCop(settlement);
     const summary = computeDriverCashSummary(cashInputs, settlement.orderIds ?? [], receivedCop);
     const recalculatedPendingCop = Math.max(0, summary.expectedCop - receivedCop);
@@ -629,15 +658,16 @@ export function reconcileWithPlatformPosition(
     let settlementNetCop = 0;
     let receivedOnRowsCop = 0;
     for (const orderId of new Set(settlement.orderIds ?? [])) {
-      settlementNetCop += netOf(orderId);
+      const orderNetCop = netHere(orderId);
+      settlementNetCop += orderNetCop;
       const row = rowById.get(orderId);
       if (row && row.attributedSettlementId === settlement.id) {
-        addRowTerms(row, settlement.id);
+        addRowTerms(row, settlement.id, orderNetCop);
         receivedOnRowsCop += row.receivedCop;
       } else if (row) {
-        add("settlement_orders_attributed_elsewhere", netOf(orderId), [orderId], settlement.id);
+        add("settlement_orders_attributed_elsewhere", orderNetCop, [orderId], settlement.id);
       } else {
-        addUnlisted(orderId, settlement.id);
+        addUnlisted(orderId, settlement.id, orderNetCop);
       }
     }
     const expectedClampCop = Math.max(0, -settlementNetCop);

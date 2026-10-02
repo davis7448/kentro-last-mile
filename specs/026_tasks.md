@@ -314,6 +314,23 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: pruebas de vista para corte ilegible / pedido ilegible / ambos; guarda: el componente no
     contiene "la cifra puede ser mayor" fijo y pinta `card.incompleteText`.
 
+## Correccion tras la verificacion (2026-10-02)
+
+- [x] **T25: Recalcular un corte solo con lo que le pertenece (falsa alarma "pendiente viejo")**
+  * Requisitos cubiertos: RNF_02
+  * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts
+  * Contexto medido en produccion: los dos cortes `stl-1786630129293-…` y `stl-1787066544779-…` salian
+    con pendiente viejo ($129.900 y $81.900). Causa: un pedido fallido en ese corte (KNT-003316, KNT-003387)
+    se corrigio a entregado DESPUES y su recaudo y su pago entraron y se cobraron en el corte posterior
+    `stl-1787516403972-…` (asignaciones cubiertas $121.900 y $73.900). El domiciliario no debe nada: recalcular
+    el corte viejo con asientos que le pertenecen al siguiente infla su "esperado".
+  * Accion: al recalcular el pendiente de un corte `s` (`R_s`) solo cuentan los asientos del pedido creados
+    hasta `s.createdAt` (o, si el asiento trae `settlementId` de domiciliario, solo los de `s`); lo posterior
+    pertenece al corte que lo cobro. La identidad de 4.4 sigue exacta (`unexplainedCop === 0`).
+  * Verificacion: prueba con el caso real (pedido fallido en el corte A, corregido a entregado y cobrado en el
+    corte B): A sin `settlement_cash_pending_stale`, `unexplainedCop === 0`; las propiedades de T9 siguen verdes;
+    `node scripts/verify-026.js compare` contra produccion: PASA con 0 cortes stale.
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |

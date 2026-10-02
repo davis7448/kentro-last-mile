@@ -301,6 +301,12 @@
       "files": ["src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx", "src/lib/spec-026-guards.test.ts"],
       "testWritten": true,
       "done": true
+    },
+    "T25": {
+      "requirements": ["RNF_02"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"],
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

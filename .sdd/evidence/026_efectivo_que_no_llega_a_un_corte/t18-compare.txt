@@ -1,32 +1,31 @@
 Spec 026 · T18 · compare contra produccion (SOLO LECTURA)
-Generado: 2026-10-02T19:05:33.893Z  ·  comando: node scripts/verify-026.js compare
+Generado: 2026-10-02T21:26:59.317Z  ·  comando: node scripts/verify-026.js compare
 Fuente: local (functions/lib compilado + ADC, solo lectura)
-Lecturas: walletEntries 13889, settlements 75 (posicion); pedidos del universo 3373
+Lecturas: walletEntries 13891, settlements 75 (posicion); pedidos del universo 3373
 Linea base: t1-linea-base-ids.json (generada 2026-10-02T16:49:33.210Z; rows 133, coveredByNetting 37, over30Days 24)
 
 VEREDICTO: PASA
 
 1. Regla de paso (DoD 4, plan 4.4)
-  driverReceivableCop posicion (computePlatformPosition / getPlatformPosition): $12.604.829 (12604829)
-  driverReceivableCop conciliacion: $12.604.829 (12604829) -> IGUAL
-  listOutstandingCop (lista): $12.668.829; deltaCop: $-64.000
+  driverReceivableCop posicion (computePlatformPosition / getPlatformPosition): $12.596.829 (12596829)
+  driverReceivableCop conciliacion: $12.596.829 (12596829) -> IGUAL
+  listOutstandingCop (lista): $12.668.829; deltaCop: $-72.000
   unexplainedCop: 0
   Causas (suma por tipo):
-    outside_orders_outside_universe: $-64.000 (1 partidas)
-    settlement_orders_received: $290.791.609 (42 partidas)
-    settlement_orders_outside_universe: $-1.171.000 (31 partidas)
+    outside_orders_outside_universe: $-72.000 (1 partidas)
+    settlement_cash_pending_stale: $-79.900 (1 partidas)
+    settlement_orders_received: $290.477.909 (42 partidas)
+    settlement_orders_outside_universe: $-749.500 (31 partidas)
     settlement_cash_received: $-292.713.222 (42 partidas)
-    settlement_excess_received: $441.502 (8 partidas)
+    settlement_excess_received: $201.802 (5 partidas)
     settlement_orders_covered_by_netting: $2.862.911 (29 partidas)
-    settlement_cash_pending_stale: $-211.800 (2 partidas)
   unreadableOrderIds: 0
   unreadableSettlementIds: 0
   unreadableEntryIds: 0
 
 2. Cortes con pendiente guardado viejo o ausente (se reportan, NO fallan)
-  stale (settlement_cash_pending_stale): 2; total $-211.800
-    stl-1786630129293-driver-driver-1778271901513: $-129.900
-    stl-1787066544779-driver-driver-1778271901513: $-81.900
+  stale (settlement_cash_pending_stale): 1; total $-79.900
+    stl-1780062400588-driver-driver-1778271901513: $-79.900
   missing (settlement_cash_pending_missing): 0; total $0
 
 3. Lista actual
