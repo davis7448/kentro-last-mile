@@ -105,7 +105,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     `nettedRows`, `isOverdue: false` aunque tenga 90 dias; pendiente + saldado → abierto; saldado + con
     faltante → `covered_by_netting`; fuera → `[]`.
 
-- [ ] **T8: Agrupaciones, proveedor, alcance y totales**
+- [x] **T8: Agrupaciones, proveedor, alcance y totales**
   * Requisitos cubiertos: RF_06, RF_08, RF_03, RF_09
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts
   * Accion: `byLeader` solo de `rows` (orden `overdueCop` desc, empate `outstandingCop`, id);

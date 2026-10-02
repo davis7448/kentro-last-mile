@@ -21,6 +21,7 @@ import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable
 import type { CashAlertSettings } from "./cash-outstanding-schemas";
 import { buildCodReceivedSet, codPartialReceivedCop } from "./seller-ledger";
 import { isDriverSettlementCashSettled } from "./settlement-math";
+import { groupWithheldBySupplier } from "./supplier-withheld";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
 export type { CashAlertSettings } from "./cash-outstanding-schemas";
@@ -348,6 +349,112 @@ function emptyTotals(): CashOutstandingTotals {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Proveedor, agrupaciones y totales (plan 4.2)
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Costo de producto retenido de cada pedido: asientos con `orderId` y sin `supplierSettlementId` (ya
+ * liquidado al proveedor = no retenido, como la posicion). La clave y el signo los pone
+ * `groupWithheldBySupplier`, no este archivo (RF_08).
+ */
+function withheldCostsByOrder(entries: WalletEntryDoc[]): Map<string, WalletEntryDoc[]> {
+  const byOrder = new Map<string, WalletEntryDoc[]>();
+  for (const entry of entries) {
+    if (!entry.orderId || entry.supplierSettlementId) continue;
+    const list = byOrder.get(entry.orderId) ?? [];
+    list.push(entry);
+    byOrder.set(entry.orderId, list);
+  }
+  return byOrder;
+}
+
+type SupplierGroup = SupplierWithheld & { overdueAmountCop: number };
+
+/** RF_08: solo `rows` (lo compensado no se debe). Orden `amountCop` desc, estable. */
+function groupBySupplier(rows: CashOutstandingRow[]): SupplierGroup[] {
+  const bySupplier = new Map<string, SupplierGroup>();
+  for (const row of rows) {
+    for (const item of row.supplierWithheld) {
+      const current = bySupplier.get(item.supplierId) ?? {
+        supplierId: item.supplierId,
+        supplierName: item.supplierName,
+        amountCop: 0,
+        overdueAmountCop: 0
+      };
+      current.amountCop += item.amountCop;
+      if (row.isOverdue) current.overdueAmountCop += item.amountCop;
+      if (item.supplierName) current.supplierName = item.supplierName;
+      bySupplier.set(item.supplierId, current);
+    }
+  }
+  return [...bySupplier.values()].sort((left, right) => right.amountCop - left.amountCop);
+}
+
+/** Desempate final por id; el grupo "Sin lider" (null) ordena como cadena vacia. */
+function compareLeaderIds(left: string | null, right: string | null): number {
+  const leftKey = left ?? "";
+  const rightKey = right ?? "";
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+/** RF_03 / RF_06: solo `rows`; `driverId` null forma el grupo "Sin lider". */
+function groupByLeader(rows: CashOutstandingRow[]): CashOutstandingGroup[] {
+  const byLeader = new Map<string | null, CashOutstandingGroup>();
+  for (const row of rows) {
+    const current = byLeader.get(row.leaderId) ?? {
+      leaderId: row.leaderId,
+      leaderName: row.leaderName,
+      orderCount: 0,
+      collectedCop: 0,
+      outstandingCop: 0,
+      overdueCount: 0,
+      overdueCop: 0,
+      oldestDeliveredAt: row.deliveredAt
+    };
+    current.orderCount += 1;
+    current.collectedCop += row.collectedCop;
+    current.outstandingCop += row.outstandingCop;
+    if (row.isOverdue) {
+      current.overdueCount += 1;
+      current.overdueCop += row.outstandingCop;
+    }
+    if (row.deliveredAt < current.oldestDeliveredAt) current.oldestDeliveredAt = row.deliveredAt;
+    byLeader.set(row.leaderId, current);
+  }
+  return [...byLeader.values()].sort(
+    (left, right) =>
+      right.overdueCop - left.overdueCop ||
+      right.outstandingCop - left.outstandingCop ||
+      compareLeaderIds(left.leaderId, right.leaderId)
+  );
+}
+
+/** RF_03 / RF_09: lo que falta sale solo de `rows`; lo compensado se cuenta aparte en `netted*`. */
+function computeTotals(rows: CashOutstandingRow[], nettedRows: CashOutstandingRow[]): CashOutstandingTotals {
+  const totals = emptyTotals();
+  for (const row of rows) {
+    totals.orderCount += 1;
+    totals.collectedCop += row.collectedCop;
+    totals.outstandingCop += row.outstandingCop;
+    if (row.location === "outside_settlement") totals.outsideSettlementCop += row.outstandingCop;
+    else if (row.location === "in_settlement_open") totals.inOpenSettlementCop += row.outstandingCop;
+    else if (row.location === "settlement_paid_short") totals.paidShortCop += row.outstandingCop;
+    if (row.isOverdue) {
+      totals.overdueCount += 1;
+      totals.overdueCop += row.outstandingCop;
+    }
+  }
+  const nettedSettlementIds = new Set<string>();
+  for (const row of nettedRows) {
+    totals.nettedCount += 1;
+    totals.nettedCollectedCop += row.collectedCop;
+    if (row.attributedSettlementId !== null) nettedSettlementIds.add(row.attributedSettlementId);
+  }
+  totals.nettedSettlementCount = nettedSettlementIds.size;
+  return totals;
+}
+
+// ---------------------------------------------------------------------------------------------------
 // Informe
 // ---------------------------------------------------------------------------------------------------
 
@@ -361,6 +468,9 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
   const amounts = amountsByOrder(input.receivableEntries);
   const settlementsOf = settlementsByOrder(input.settlements);
   const codRevenueAt = oldestCodRevenueAt(input.receivableEntries);
+  // RF_08: el retenido por proveedor es solo del admin; el lider no lo ve.
+  const isAdmin = input.scope.kind === "admin";
+  const withheldCosts = isAdmin ? withheldCostsByOrder(input.productCostEntries) : new Map<string, WalletEntryDoc[]>();
 
   const allRows: CashOutstandingRow[] = input.orders
     .filter((order) => isListedCandidate(order, input.scope, received))
@@ -398,7 +508,8 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
         location,
         settlements: rowSettlements,
         attributedSettlementId,
-        supplierWithheld: [] // T8
+        // Tambien en nettedRows, informativo: bySupplier solo suma rows.
+        supplierWithheld: groupWithheldBySupplier(withheldCosts.get(order.id) ?? [])
       };
     });
 
@@ -416,9 +527,9 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
     channelConfigured: input.channelConfigured,
     rows,
     nettedRows,
-    byLeader: [], // T8
-    bySupplier: [], // T8
-    totals: emptyTotals(), // T8
+    byLeader: groupByLeader(rows),
+    bySupplier: isAdmin ? groupBySupplier(rows) : [],
+    totals: computeTotals(rows, nettedRows),
     reconciliation: null, // T9
     isIncomplete,
     unreadableOrderIds: [...input.unreadableOrderIds],

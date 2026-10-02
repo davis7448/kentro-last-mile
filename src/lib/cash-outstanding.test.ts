@@ -909,3 +909,334 @@ describe("T7 · fecha, antiguedad y ubicacion (incluida la compensacion)", () =>
     });
   });
 });
+
+// ---------------------------------------------------------------------------------------------------
+// T8
+// ---------------------------------------------------------------------------------------------------
+
+/** Asiento `product_cost` de tienda (negativo, como en el ledger) retenido para un proveedor. */
+function productCost(orderId: string, amountCop: number, supplier?: { id: string; name: string }, extra: Record<string, unknown> = {}) {
+  entrySeq += 1;
+  return {
+    id: `pc-${orderId}-${entrySeq}`,
+    ownerType: "seller" as const,
+    ownerId: "seller-1",
+    orderId,
+    type: "product_cost" as const,
+    amountCop: -Math.abs(amountCop),
+    description: "",
+    createdAt: "2026-09-28T15:00:00.000Z",
+    ...(supplier ? { supplierId: supplier.id, supplierName: supplier.name } : {}),
+    ...extra
+  };
+}
+
+const SUP_A = { id: "sup-a", name: "Proveedor A" };
+const SUP_B = { id: "sup-b", name: "Proveedor B" };
+const sumOf = <T,>(items: T[], pick: (item: T) => number) => items.reduce((total, item) => total + pick(item), 0);
+
+describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
+  describe("RF_03 / RF_06: byLeader solo de rows", () => {
+    it("una fila con driverId null forma un grupo de byLeader con leaderId null (pedido sin lider)", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const a = aged("o-sin", 10, { driverId: null, messengerId: null });
+      const b = aged("o-con", 10);
+      const report = buildCashOutstandingReport(
+        input({ orders: [a.order, b.order], receivableEntries: [...a.entries, ...b.entries] })
+      );
+      const orphan = report.byLeader.find((group) => group.leaderId === null);
+      expect(orphan).toMatchObject({ leaderId: null, leaderName: null, orderCount: 1, outstandingCop: 45_000 });
+      expect(report.byLeader.map((group) => group.leaderId).sort()).toEqual(["leader-1", null].sort());
+    });
+
+    it("cada grupo suma orderCount, collectedCop, outstandingCop, overdueCount, overdueCop y su entrega mas antigua", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const a = aged("o-a", 3);
+      const b = aged("o-b", 20);
+      const c = aged("o-c", 12);
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [a.order, b.order, c.order],
+          receivableEntries: [...a.entries, ...b.entries, ...c.entries],
+          names: { sellers: new Map(), leaders: new Map([["leader-1", "Lider Uno"]]), messengers: new Map() }
+        })
+      );
+      expect(report.byLeader).toEqual([
+        {
+          leaderId: "leader-1",
+          leaderName: "Lider Uno",
+          orderCount: 3,
+          collectedCop: 150_000,
+          outstandingCop: 135_000,
+          overdueCount: 2,
+          overdueCop: 90_000,
+          oldestDeliveredAt: daysAgo(20)
+        }
+      ]);
+    });
+
+    it("orden por overdueCop desc aunque otro lider tenga mas pedidos", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const many = [aged("m-1", 2), aged("m-2", 3), aged("m-3", 4)]; // leader-1, ninguno vencido
+      const few = aged("f-1", 15, { driverId: "leader-2" }); // leader-2, uno vencido
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [...many.map((item) => item.order), few.order],
+          receivableEntries: [...many.flatMap((item) => item.entries), ...few.entries]
+        })
+      );
+      expect(report.byLeader.map((group) => group.leaderId)).toEqual(["leader-2", "leader-1"]);
+      expect(report.byLeader[0]).toMatchObject({ orderCount: 1, overdueCop: 45_000 });
+      expect(report.byLeader[1]).toMatchObject({ orderCount: 3, overdueCop: 0 });
+    });
+
+    it("a igual overdueCop desempata por outstandingCop desc y luego por id", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const z = [aged("z-1", 2, { driverId: "leader-z" }), aged("z-2", 2, { driverId: "leader-z" })]; // 90.000 sin vencer
+      const y = aged("y-1", 2, { driverId: "leader-y" }); // 45.000 sin vencer
+      const x = aged("x-1", 2, { driverId: "leader-x" }); // 45.000 sin vencer
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [y.order, x.order, ...z.map((item) => item.order)],
+          receivableEntries: [...y.entries, ...x.entries, ...z.flatMap((item) => item.entries)]
+        })
+      );
+      expect(report.byLeader.map((group) => group.leaderId)).toEqual(["leader-z", "leader-x", "leader-y"]);
+    });
+
+    it("RF_09: un compensado no forma grupo ni suma al de su lider", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const netted = aged("o-net", 90, { driverId: "leader-2" });
+      const nettedSame = aged("o-net-1", 60);
+      const live = aged("o-live", 10);
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [netted.order, nettedSame.order, live.order],
+          receivableEntries: [...netted.entries, ...nettedSame.entries, ...live.entries],
+          settlements: [settledNetting("s-net", "o-net"), settledNetting("s-net-1", "o-net-1")]
+        })
+      );
+      expect(report.byLeader).toHaveLength(1);
+      expect(report.byLeader[0]).toMatchObject({
+        leaderId: "leader-1",
+        orderCount: 1,
+        collectedCop: 50_000,
+        outstandingCop: 45_000,
+        overdueCount: 1,
+        overdueCop: 45_000,
+        oldestDeliveredAt: daysAgo(10)
+      });
+    });
+  });
+
+  describe("RF_03 / RF_09: totales", () => {
+    function scenario() {
+      const out = aged("t-out", 10); // fuera, vencido
+      const open = aged("t-open", 3); // corte abierto, sin vencer
+      const short = aged("t-short", 20); // pagado con faltante, vencido
+      const n1 = aged("t-n1", 90);
+      const n2 = aged("t-n2", 40);
+      const n3 = aged("t-n3", 35);
+      const sharedNetting = settlement("s-shared", {
+        status: "paid",
+        orderIds: ["t-n1", "t-n2", "t-shared-otro"],
+        cashExpectedCop: 135_000,
+        cashReceivedCop: 135_000,
+        cashPendingCop: 0,
+        cashAllocations: [
+          { orderId: "t-shared-otro", expectedCop: 45_000, receivedCop: 135_000, covered: true },
+          uncovered("t-n1"),
+          uncovered("t-n2")
+        ]
+      });
+      return {
+        orders: [out, open, short, n1, n2, n3].map((item) => item.order),
+        receivableEntries: [out, open, short, n1, n2, n3].flatMap((item) => item.entries),
+        settlements: [openSettlement("s-open", "t-open"), paidShort("s-short", "t-short"), sharedNetting, settledNetting("s-n3", "t-n3")]
+      };
+    }
+
+    it("orderCount, collectedCop y outstandingCop solo de rows", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(input(scenario()));
+      expect(rowIds(report.rows)).toEqual(["t-open", "t-out", "t-short"]);
+      expect(report.totals.orderCount).toBe(3);
+      expect(report.totals.collectedCop).toBe(150_000);
+      expect(report.totals.outstandingCop).toBe(sumOf(report.rows, (row) => row.outstandingCop));
+      expect(report.totals.outstandingCop).toBeGreaterThan(0);
+    });
+
+    it("los subtotales por ubicacion suman outstandingCop", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(input(scenario()));
+      const byLocation = (location: string) =>
+        sumOf(report.rows.filter((row) => row.location === location), (row) => row.outstandingCop);
+      expect(report.totals.outsideSettlementCop).toBe(byLocation("outside_settlement"));
+      expect(report.totals.inOpenSettlementCop).toBe(byLocation("in_settlement_open"));
+      expect(report.totals.paidShortCop).toBe(byLocation("settlement_paid_short"));
+      expect(report.totals.outsideSettlementCop + report.totals.inOpenSettlementCop + report.totals.paidShortCop).toBe(
+        report.totals.outstandingCop
+      );
+      expect(report.totals.outsideSettlementCop).toBe(45_000);
+      expect(report.totals.inOpenSettlementCop).toBe(45_000);
+    });
+
+    it("overdueCount y overdueCop cuentan solo filas vencidas de rows", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(input(scenario()));
+      const overdue = report.rows.filter((row) => row.isOverdue);
+      expect(overdue.map((row) => row.orderId).sort()).toEqual(["t-out", "t-short"]);
+      expect(report.totals.overdueCount).toBe(2);
+      expect(report.totals.overdueCop).toBe(sumOf(overdue, (row) => row.outstandingCop));
+    });
+
+    it("RF_09: los compensados van a netted* y no a outstandingCop ni overdueCop", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const withNetted = buildCashOutstandingReport(input(scenario()));
+      const base = scenario();
+      const keep = new Set(["t-out", "t-open", "t-short"]);
+      const withoutNetted = buildCashOutstandingReport(
+        input({ ...base, orders: base.orders.filter((candidate) => keep.has(candidate.id)) })
+      );
+      expect(withNetted.totals.nettedCount).toBe(3);
+      expect(withNetted.totals.nettedCollectedCop).toBe(150_000);
+      expect(withNetted.totals.outstandingCop).toBe(withoutNetted.totals.outstandingCop);
+      expect(withNetted.totals.overdueCop).toBe(withoutNetted.totals.overdueCop);
+      expect(withNetted.totals.overdueCount).toBe(withoutNetted.totals.overdueCount);
+      expect(withNetted.totals.orderCount).toBe(withoutNetted.totals.orderCount);
+    });
+
+    it("nettedSettlementCount = cortes distintos a los que se atribuyen los compensados (decision T8)", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(input(scenario()));
+      expect(new Set(report.nettedRows.map((row) => row.attributedSettlementId))).toEqual(new Set(["s-shared", "s-n3"]));
+      expect(report.totals.nettedSettlementCount).toBe(2);
+    });
+
+    it("sin pedidos, todos los totales en cero", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(input());
+      expect(Object.values(report.totals).every((value) => value === 0)).toBe(true);
+      expect(report.byLeader).toEqual([]);
+      expect(report.bySupplier).toEqual([]);
+    });
+  });
+
+  describe("RF_08: retenido por proveedor (clave de supplier-withheld.ts)", () => {
+    it("supplierWithheld por fila = groupWithheldBySupplier de sus product_cost, solo de ese pedido", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const { groupWithheldBySupplier } = await import("../../functions/src/supplier-withheld");
+      const a = aged("o-a", 10);
+      const b = aged("o-b", 10);
+      const costsA = [productCost("o-a", 12_000, SUP_A), productCost("o-a", 3_000, SUP_B), productCost("o-a", 1_000, SUP_A)];
+      const costsB = [productCost("o-b", 7_000, SUP_B)];
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [a.order, b.order],
+          receivableEntries: [...a.entries, ...b.entries],
+          productCostEntries: [...costsA, ...costsB]
+        })
+      );
+      const rowA = report.rows.find((row) => row.orderId === "o-a")!;
+      expect(rowA.supplierWithheld).toEqual(groupWithheldBySupplier(costsA));
+      expect(rowA.supplierWithheld).toEqual([
+        { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 13_000 },
+        { supplierId: "sup-b", supplierName: "Proveedor B", amountCop: 3_000 }
+      ]);
+    });
+
+    it('un product_cost sin supplierId cae en "(sin proveedor)"', async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const a = aged("o-a", 10);
+      const report = buildCashOutstandingReport(
+        input({ orders: [a.order], receivableEntries: a.entries, productCostEntries: [productCost("o-a", 8_000)] })
+      );
+      expect(report.rows[0].supplierWithheld).toEqual([{ supplierId: "(sin proveedor)", supplierName: "(sin proveedor)", amountCop: 8_000 }]);
+      expect(report.bySupplier).toEqual([
+        { supplierId: "(sin proveedor)", supplierName: "(sin proveedor)", amountCop: 8_000, overdueAmountCop: 8_000 }
+      ]);
+    });
+
+    it("un product_cost ya liquidado al proveedor (supplierSettlementId) no cuenta como retenido (decision T8, como la posicion)", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const a = aged("o-a", 10);
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [a.order],
+          receivableEntries: a.entries,
+          productCostEntries: [productCost("o-a", 5_000, SUP_A, { supplierSettlementId: "sup-set-1" }), productCost("o-a", 2_000, SUP_A)]
+        })
+      );
+      expect(report.rows[0].supplierWithheld).toEqual([{ supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 2_000 }]);
+    });
+
+    it("bySupplier agrega solo rows, con overdueAmountCop de las vencidas, ordenado por amountCop desc", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const overdue = aged("o-old", 15);
+      const fresh = aged("o-new", 2);
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [overdue.order, fresh.order],
+          receivableEntries: [...overdue.entries, ...fresh.entries],
+          productCostEntries: [
+            productCost("o-old", 4_000, SUP_A),
+            productCost("o-new", 6_000, SUP_A),
+            productCost("o-old", 20_000, SUP_B)
+          ]
+        })
+      );
+      expect(report.bySupplier).toEqual([
+        { supplierId: "sup-b", supplierName: "Proveedor B", amountCop: 20_000, overdueAmountCop: 20_000 },
+        { supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 10_000, overdueAmountCop: 4_000 }
+      ]);
+    });
+
+    it("RF_09: el product_cost de un compensado no suma a bySupplier", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const live = aged("o-live", 10);
+      const netted = aged("o-net", 90);
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [live.order, netted.order],
+          receivableEntries: [...live.entries, ...netted.entries],
+          settlements: [settledNetting("s-net", "o-net")],
+          productCostEntries: [productCost("o-live", 3_000, SUP_A), productCost("o-net", 50_000, SUP_A)]
+        })
+      );
+      expect(rowIds(report.nettedRows)).toEqual(["o-net"]);
+      expect(report.bySupplier).toEqual([{ supplierId: "sup-a", supplierName: "Proveedor A", amountCop: 3_000, overdueAmountCop: 3_000 }]);
+    });
+  });
+
+  describe("RF_06: alcance de lider", () => {
+    function leaderScenario() {
+      const mine = aged("l-mine", 10);
+      const mineFresh = aged("l-mine-2", 2);
+      const other = aged("l-other", 30, { driverId: "leader-2" });
+      const orphan = aged("l-orphan", 30, { driverId: null });
+      const items = [mine, mineFresh, other, orphan];
+      return input({
+        orders: items.map((item) => item.order),
+        receivableEntries: items.flatMap((item) => item.entries),
+        productCostEntries: [productCost("l-mine", 9_000, SUP_A), productCost("l-other", 9_000, SUP_B)],
+        scope: { kind: "leader", driverId: "leader-1" }
+      });
+    }
+
+    it("el lider solo ve lo suyo: un grupo, el suyo, y totales solo de sus pedidos", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(leaderScenario());
+      expect(rowIds(report.rows)).toEqual(["l-mine", "l-mine-2"]);
+      expect(report.byLeader.map((group) => group.leaderId)).toEqual(["leader-1"]);
+      expect(report.byLeader[0]).toMatchObject({ orderCount: 2, outstandingCop: 90_000, overdueCount: 1, overdueCop: 45_000 });
+      expect(report.totals).toMatchObject({ orderCount: 2, outstandingCop: 90_000, overdueCount: 1, overdueCop: 45_000 });
+    });
+
+    it("sin proveedor para el lider: bySupplier [] y supplierWithheld [] por fila aunque lleguen product_cost", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(leaderScenario());
+      expect(report.bySupplier).toEqual([]);
+      expect(report.rows.every((row) => row.supplierWithheld.length === 0)).toBe(true);
+    });
+  });
+});
