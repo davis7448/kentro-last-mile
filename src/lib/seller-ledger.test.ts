@@ -121,3 +121,76 @@ describe("consecuencia de revertir un pedido entregado a fallido", () => {
     expect(isSellerEntryEligible(asientos[0] as never, entregado as never, codReceived)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Spec 026 · T4 (RF_01, plan 2.2). Import aparte para no tocar el bloque de imports existente.
+// ---------------------------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { codPartialReceivedCop } from "../../functions/src/seller-ledger";
+
+describe("T4 · codPartialReceivedCop: efectivo parcial recibido por pedido no recibido", () => {
+  it("parcial en un corte: devuelve el receivedCop de la asignacion no cubierta", () => {
+    const partial = codPartialReceivedCop([
+      {
+        kind: "driver",
+        status: "paid",
+        orderIds: ["o-1", "o-2"],
+        cashAllocations: [
+          { orderId: "o-1", expectedCop: 100_000, receivedCop: 100_000, covered: true },
+          { orderId: "o-2", expectedCop: 80_000, receivedCop: 30_000, covered: false }
+        ]
+      }
+    ]);
+    expect(partial).toBeInstanceOf(Map);
+    expect(partial.get("o-2")).toBe(30_000);
+    expect(partial.has("o-1")).toBe(false);
+  });
+
+  it("parcial en dos cortes: suma lo recibido en ambos", () => {
+    const partial = codPartialReceivedCop([
+      { kind: "driver", status: "paid", orderIds: ["o-2"], cashAllocations: [{ orderId: "o-2", expectedCop: 80_000, receivedCop: 30_000, covered: false }] },
+      { kind: "driver", status: "pending", orderIds: ["o-2"], cashAllocations: [{ orderId: "o-2", expectedCop: 80_000, receivedCop: 20_000, covered: false }] }
+    ]);
+    expect(partial.get("o-2")).toBe(50_000);
+  });
+
+  it("parcial en un corte pero cubierto en otro: no aparece (ya es recibido segun buildCodReceivedSet)", () => {
+    const settlements = [
+      { kind: "driver", status: "paid", orderIds: ["o-2"], cashAllocations: [{ orderId: "o-2", expectedCop: 80_000, receivedCop: 30_000, covered: false }] },
+      { kind: "driver", status: "paid", orderIds: ["o-2"], cashAllocations: [{ orderId: "o-2", expectedCop: 80_000, receivedCop: 80_000, covered: true }] }
+    ];
+    expect(buildCodReceivedSet(settlements).has("o-2")).toBe(true);
+    expect(codPartialReceivedCop(settlements).has("o-2")).toBe(false);
+  });
+
+  it("corte pagado sin asignaciones: sus pedidos son recibidos y no aparecen como parciales", () => {
+    const partial = codPartialReceivedCop([{ kind: "driver", status: "paid", orderIds: ["o-9"], cashReceivedCop: 50_000 }]);
+    expect(partial.has("o-9")).toBe(false);
+    expect(partial.size).toBe(0);
+  });
+
+  it("asignacion no cubierta con receivedCop 0 no aparece; cortes que no son de domiciliario se ignoran", () => {
+    const partial = codPartialReceivedCop([
+      { kind: "driver", status: "pending", orderIds: ["o-3"], cashAllocations: [{ orderId: "o-3", expectedCop: 50_000, receivedCop: 0, covered: false }] },
+      { kind: "seller", status: "paid", orderIds: ["o-4"], cashAllocations: [{ orderId: "o-4", expectedCop: 50_000, receivedCop: 10_000, covered: false }] }
+    ]);
+    expect(partial.size).toBe(0);
+  });
+
+  it("sin cortes -> mapa vacio", () => {
+    expect(codPartialReceivedCop([]).size).toBe(0);
+  });
+
+  it("reutiliza la regla de recibido: el cuerpo llama a buildCodReceivedSet y no la copia", () => {
+    const source = readFileSync(resolve(__dirname, "../../functions/src/seller-ledger.ts"), "utf8");
+    const start = source.indexOf("export function codPartialReceivedCop");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const nextExport = source.indexOf("\nexport ", start + 1);
+    const body = source.slice(start, nextExport === -1 ? undefined : nextExport);
+    expect(body).toMatch(/buildCodReceivedSet\s*\(/);
+    // La regla ("covered" o el estado paid/reconciled del corte) no se reescribe aqui.
+    expect(body).not.toMatch(/status\s*===\s*["']paid["']/);
+    expect(body).not.toMatch(/status\s*===\s*["']reconciled["']/);
+  });
+});

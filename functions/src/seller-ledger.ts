@@ -34,6 +34,28 @@ export function buildCodReceivedSet(settlements: SettlementDoc[]) {
   return codReceived;
 }
 
+/**
+ * Efectivo ya recibido de la flota por pedidos cuyo COD aun NO cuenta como recibido (spec 026,
+ * RF_01): suma, entre cortes de domiciliario, el `receivedCop` de las asignaciones no cubiertas.
+ * La regla de "recibido" es la de buildCodReceivedSet; aqui solo se excluye lo que ella acepta.
+ */
+export function codPartialReceivedCop(settlements: SettlementDoc[]): Map<string, number> {
+  const received = buildCodReceivedSet(settlements);
+  const partial = new Map<string, number>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashAllocations)) continue;
+    for (const allocation of settlement.cashAllocations) {
+      if (allocation.covered || !allocation.orderId) continue;
+      const receivedCop = Number(allocation.receivedCop) || 0;
+      if (receivedCop <= 0) continue;
+      const orderId = String(allocation.orderId);
+      if (received.has(orderId)) continue;
+      partial.set(orderId, (partial.get(orderId) ?? 0) + receivedCop);
+    }
+  }
+  return partial;
+}
+
 // Tipos de asiento del seller que cuentan para la liquidacion/saldo (misma lista
 // que isLiquidationWalletType en functions/src/orders.ts, sin driver_earning).
 export const SELLER_LIQUIDATION_TYPES = new Set(["cod_revenue", "cod_remittance", "delivery_fee", "failed_fee", "fulfillment_fee", "product_cost", "seller_abono", "gmf_tax"]);

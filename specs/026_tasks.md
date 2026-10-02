@@ -58,7 +58,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: `driver-receivable.test.ts` y `platform-position.test.ts` verdes; mismas cifras (incluido
     corte sin `cashPendingCop` y asiento sin `supplierId`); subconjunto = ledger.
 
-- [ ] **T4: Parcial recibido y corte saldado, junto a sus reglas**
+- [x] **T4: Parcial recibido y corte saldado, junto a sus reglas**
   * Requisitos cubiertos: RF_01, RF_09
   * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts, functions/src/settlement-math.ts, src/lib/settlement-math.test.ts
   * Accion: `codPartialReceivedCop(settlements)` en `seller-ledger.ts` (llama a `buildCodReceivedSet`).
