@@ -582,3 +582,18 @@ export type AppState = {
     payoutDays: string[];
   };
 };
+
+/**
+ * Spec 026 — "Efectivo sin llegar". El informe lo arma el servidor (`getCashOutstanding`) con el nucleo
+ * puro de `functions/src/cash-outstanding.ts`; aqui solo se reexportan sus tipos para que la interfaz no
+ * declare una segunda forma que pueda divergir.
+ */
+export type {
+  CashAlertSettings,
+  CashOutstandingGroup,
+  CashOutstandingReport,
+  CashOutstandingRow,
+  CashRowSettlement,
+  CashSettlementLocation,
+  PositionReconciliation,
+} from "../../functions/src/cash-outstanding";

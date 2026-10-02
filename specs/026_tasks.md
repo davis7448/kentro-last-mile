@@ -170,7 +170,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Interfaz
 
-- [ ] **T14: Envoltorios, cache de la carga compartida y modelo de vista**
+- [x] **T14: Envoltorios, cache de la carga compartida y modelo de vista**
   * Requisitos cubiertos: RF_02, RF_03, RF_06, RF_08, RF_09
   * Archivos: src/lib/firebase/auth.ts, src/lib/types.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/lib/cash-outstanding-loads.ts, src/lib/cash-outstanding-loads.test.ts
   * Accion: `auth.ts`: `getFirebaseCashOutstanding({ includeReconciliation? })` y
