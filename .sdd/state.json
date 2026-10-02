@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "phase": "audit",
+  "phase": "verify",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
