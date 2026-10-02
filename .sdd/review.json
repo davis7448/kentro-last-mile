@@ -1,6 +1,6 @@
 {
   "spec": "specs/026_efectivo_que_no_llega_a_un_corte.md",
   "expected": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_07", "RF_08", "RF_09"],
-  "reviewed": ["RF_01", "RF_02", "RF_04", "RF_05", "RF_06", "RF_07", "RF_09"],
+  "reviewed": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_07", "RF_08", "RF_09"],
   "result": "partial"
 }

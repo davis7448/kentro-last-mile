@@ -301,6 +301,19 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: pruebas de vista (rows vacio + compensados con producto → tarjeta de proveedor visible y
     sin "pueden cobrar todo"; todo vacio → texto de hoy); guarda textual del componente (bloque T23).
 
+## Correccion de la revision adversarial (ronda 3, 2026-10-02)
+
+- [ ] **T24: El aviso de la tarjeta dice hacia donde puede estar mal la cifra (R3-RF_03-1)**
+  * Requisitos cubiertos: RF_03
+  * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
+  * Accion: un corte ilegible devuelve a la lista pedidos ya cubiertos (total inflado); un pedido o asiento
+    ilegible puede dejar fuera efectivo (total corto). La tarjeta usa el mismo criterio que la pestaña
+    (`settlementWarning` de `buildIncomplete`): `card.incompleteText` lo decide el modelo de vista — con corte
+    ilegible dice que la cifra puede incluir pedidos ya cubiertos; si no, que puede faltar efectivo; con ambos,
+    los dos. El componente pinta `card.incompleteText`, sin texto fijo.
+  * Verificacion: pruebas de vista para corte ilegible / pedido ilegible / ambos; guarda: el componente no
+    contiene "la cifra puede ser mayor" fijo y pinta `card.incompleteText`.
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |
