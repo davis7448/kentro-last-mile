@@ -2,7 +2,9 @@
 /**
  * Spec 026 — medicion en produccion. SOLO LECTURA: ningun subcomando escribe en Firestore.
  *
- *   node scripts/verify-026.js baseline   (T1) linea base antes de tocar codigo, con ids
+ *   node scripts/verify-026.js baseline      (T1) linea base antes de tocar codigo, con ids
+ *   node scripts/verify-026.js query-check   (T2) consultas del cargador con limit(1) (indices) y coste
+ *                                            cronometrado de los dos modos -> t2-query-check.txt
  *
  * Escribe dos evidencias locales (archivos del repo, no Firestore):
  *   .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base.txt
@@ -392,7 +394,199 @@ async function baseline() {
   console.log(`\nEvidencias: ${path.relative(process.cwd(), TXT_FILE)}, ${path.relative(process.cwd(), IDS_FILE)}`);
 }
 
-const COMMANDS = { "baseline": baseline };
+/**
+ * Lanza una consulta con limit(1) y dice si Firestore exige indice. Un indice que falta llega como
+ * FAILED_PRECONDITION (codigo 9) con el enlace de creacion en el mensaje; cualquier otro error se relanza.
+ */
+async function probeQuery(label, query) {
+  const started = Date.now();
+  try {
+    const snap = await query.limit(1).get();
+    return { label, needsIndex: false, docs: snap.size, ms: Date.now() - started, link: null };
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    const isMissingIndex = (error && (error.code === 9 || error.code === "failed-precondition")) || /FAILED_PRECONDITION/.test(message);
+    if (!isMissingIndex) throw error;
+    const link = (message.match(/https:\/\/console\.firebase\.google\.com\S+/) || [null])[0];
+    return { label, needsIndex: true, docs: 0, ms: Date.now() - started, link };
+  }
+}
+
+/** Descarga contada (docs y ms) de una consulta completa, sin limite. */
+async function timedRead(log, label, query) {
+  const started = Date.now();
+  const snap = await query.get();
+  log.push({ label, docs: snap.size, ms: Date.now() - started });
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+const QC_ORDER_FIELDS = ["trackingCode", "sellerId", "driverId", "messengerId", "status", "paymentMethod", "totalCop", "closedAt", "updatedAt", "createdAt", "evidence"];
+const qcCodOrders = () => db.collection("orders").where("paymentMethod", "==", "cod").where("status", "in", ["delivered", "liquidated"]);
+const qcNames = (collection) => db.collection(collection).select("name");
+
+/**
+ * Una carga completa como la hara el cargador (plan 4.3), cronometrada de punta a punta.
+ * scope: { kind: "admin", includeReconciliation } | { kind: "leader", driverId } (siempre resumen).
+ */
+async function loadLikeTheLoader(scope) {
+  const log = [];
+  const isLeader = scope.kind === "leader";
+  const ordersQuery = isLeader ? qcCodOrders().where("driverId", "==", scope.driverId) : qcCodOrders();
+  const settlementsQuery = isLeader
+    ? db.collection("settlements").where("kind", "==", "driver").where("ownerId", "==", scope.driverId)
+    : db.collection("settlements").where("kind", "==", "driver");
+  const nameCollections = isLeader ? ["sellers", "messengers"] : ["sellers", "drivers", "messengers", "suppliers"];
+  const [orders, settlements] = await Promise.all([
+    timedRead(log, "orders", ordersQuery.select(...QC_ORDER_FIELDS)),
+    timedRead(log, "settlements", settlementsQuery),
+    db.collection("settings").doc("cashAlerts").get().then((snap) => log.push({ label: "settings/cashAlerts", docs: snap.exists ? 1 : 0, ms: 0 })),
+    ...nameCollections.map((collection) => timedRead(log, `${collection} (nombres)`, qcNames(collection)))
+  ]);
+  const received = buildCodReceivedSet(settlements);
+  const candidateIds = orders.filter((order) => !received.has(order.id)).map((order) => order.id);
+  const isFull = scope.kind === "admin" && scope.includeReconciliation;
+  const lots = chunks(candidateIds, IN_BATCH);
+  if (isFull) {
+    await Promise.all([
+      timedRead(log, "walletEntries seller cod_revenue|cod_remittance", db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", ["cod_revenue", "cod_remittance"])),
+      timedRead(log, "walletEntries driver driver_earning", db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning")),
+      ...lots.map((ids, index) =>
+        timedRead(log, `walletEntries product_cost orderId in (lote ${index + 1})`, db.collection("walletEntries").where("type", "==", "product_cost").where("orderId", "in", ids))
+      )
+    ]);
+  } else {
+    await Promise.all(
+      lots.map((ids, index) => timedRead(log, `walletEntries orderId in (lote ${index + 1})`, db.collection("walletEntries").where("orderId", "in", ids)))
+    );
+  }
+  return { docs: log.reduce((total, item) => total + item.docs, 0), candidates: candidateIds.length, lots: lots.length, log };
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+/** Detalle de una carga: docs por consulta; de los lotes en paralelo, la suma de docs y el mas lento. */
+function describeLoad(say, name, stat, list) {
+  say(`  Modo ${name}: ${stat.docs} docs, mediana ${stat.msMedian} ms, maximo ${stat.msMax} ms (rondas: ${stat.msAll.join(" / ")} ms)`);
+  const last = list[list.length - 1];
+  say(`    candidatos no recibidos ${last.candidates}, lotes de ${IN_BATCH}: ${last.lots}`);
+  const grouped = last.log.reduce((acc, item) => {
+    const key = item.label.replace(/ \(lote \d+\)$/, " (lotes)");
+    acc[key] = acc[key] || { docs: 0, ms: 0, n: 0 };
+    acc[key].docs += item.docs;
+    acc[key].ms = Math.max(acc[key].ms, item.ms);
+    acc[key].n += 1;
+    return acc;
+  }, {});
+  for (const [label, value] of Object.entries(grouped)) {
+    say(`    ${label}: ${value.docs} docs, ${value.ms} ms${value.n > 1 ? ` (el mas lento de ${value.n}, en paralelo)` : ""}`);
+  }
+}
+
+async function queryCheck() {
+  const now = new Date();
+  const lines = [];
+  const say = (text = "") => lines.push(text);
+  const EVIDENCE_FILE = path.join(EVIDENCE_DIR, "t2-query-check.txt");
+  /** Umbrales de la compuerta (plan 4.3 / 5.4). */
+  const LIMITS = { summaryDocs: 20_000, fullDocs: 30_000, ms: 3_000 };
+  const RUNS = 3;
+
+  // Datos reales para parametrizar las consultas: el lider con mas contraentregas y un lote de ids no recibidos.
+  const drivers = (await db.collection("drivers").select("name").get()).docs;
+  const leaderCounts = await Promise.all(
+    drivers.map(async (doc) => ({
+      id: doc.id,
+      name: doc.get("name") || doc.id,
+      count: (await qcCodOrders().where("driverId", "==", doc.id).count().get()).data().count
+    }))
+  );
+  const leader = leaderCounts.sort((a, b) => b.count - a.count)[0];
+  const driverSettlements = (await db.collection("settlements").where("kind", "==", "driver").get()).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const receivedNow = buildCodReceivedSet(driverSettlements);
+  const sampleIds = (await qcCodOrders().select().get()).docs.map((doc) => doc.id).filter((id) => !receivedNow.has(id)).slice(0, IN_BATCH);
+
+  // ---- 1. Cada consulta del cargador con limit(1): pide indice? ----
+  const probes = [
+    ["ambos", "orders paymentMethod==cod, status in [delivered, liquidated] (select) - admin", qcCodOrders().select(...QC_ORDER_FIELDS)],
+    ["ambos", "orders paymentMethod==cod, status in [...], driverId==<lider> (select) - lider", qcCodOrders().where("driverId", "==", leader.id).select(...QC_ORDER_FIELDS)],
+    ["ambos", "settlements kind==driver - admin", db.collection("settlements").where("kind", "==", "driver")],
+    ["ambos", "settlements kind==driver, ownerId==<lider> - lider", db.collection("settlements").where("kind", "==", "driver").where("ownerId", "==", leader.id)],
+    ["ambos", "sellers (select name)", qcNames("sellers")],
+    ["ambos", "drivers (select name)", qcNames("drivers")],
+    ["ambos", "messengers (select name)", qcNames("messengers")],
+    ["ambos", "suppliers (select name)", qcNames("suppliers")],
+    ["resumen", `walletEntries orderId in [${sampleIds.length} ids no recibidos]`, db.collection("walletEntries").where("orderId", "in", sampleIds)],
+    ["conciliacion", "walletEntries ownerType==seller, type in [cod_revenue, cod_remittance]", db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", ["cod_revenue", "cod_remittance"])],
+    ["conciliacion", "walletEntries ownerType==driver, type==driver_earning", db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning")],
+    ["conciliacion", `walletEntries type==product_cost, orderId in [${sampleIds.length} ids no recibidos]`, db.collection("walletEntries").where("type", "==", "product_cost").where("orderId", "in", sampleIds)],
+    ["conciliacion", "walletEntries type in [cod_revenue, cod_remittance, driver_earning] (forma usada en T1)", db.collection("walletEntries").where("type", "in", ["cod_revenue", "cod_remittance", "driver_earning"])]
+  ];
+  const probeResults = [];
+  for (const [mode, label, query] of probes) probeResults.push({ mode, ...(await probeQuery(label, query)) });
+  const missingIndexes = probeResults.filter((probe) => probe.needsIndex);
+
+  // ---- 2. Carga completa de cada modo, intercalada (resumen, conciliacion, lider) RUNS veces ----
+  const runs = { resumen: [], conciliacion: [], lider: [] };
+  const timedLoad = async (scope) => {
+    const started = Date.now();
+    const load = await loadLikeTheLoader(scope);
+    return { ...load, ms: Date.now() - started };
+  };
+  if (missingIndexes.length === 0) {
+    for (let round = 0; round < RUNS; round += 1) {
+      runs.resumen.push(await timedLoad({ kind: "admin", includeReconciliation: false }));
+      runs.conciliacion.push(await timedLoad({ kind: "admin", includeReconciliation: true }));
+      runs.lider.push(await timedLoad({ kind: "leader", driverId: leader.id }));
+    }
+  }
+  const stats = (list) =>
+    list.length === 0
+      ? { docs: 0, msMedian: 0, msMax: 0, msAll: [] }
+      : { docs: list[list.length - 1].docs, msMedian: median(list.map((run) => run.ms)), msMax: Math.max(...list.map((run) => run.ms)), msAll: list.map((run) => run.ms) };
+  const summary = stats(runs.resumen);
+  const reconciliation = stats(runs.conciliacion);
+  const leaderStats = stats(runs.lider);
+  const summaryOk = summary.docs <= LIMITS.summaryDocs && summary.msMedian <= LIMITS.ms;
+  const reconciliationOk = reconciliation.docs <= LIMITS.fullDocs && reconciliation.msMedian <= LIMITS.ms;
+  const leaderOk = leaderStats.docs <= LIMITS.summaryDocs && leaderStats.msMedian <= LIMITS.ms;
+
+  // ---- Evidencia ----
+  say(`Spec 026 · T2 · query-check contra produccion (SOLO LECTURA)`);
+  say(`Generado: ${now.toISOString()}  ·  comando: node scripts/verify-026.js query-check`);
+  say(`Lider usado para las consultas de alcance lider: ${leader.name} (${leader.id}, ${leader.count} contraentregas entregadas)`);
+  say(`Lote de prueba de orderId in: ${sampleIds.length} ids no recibidos (buildCodReceivedSet de functions/lib)`);
+  say();
+  say(`1. Consultas del cargador con limit(1) (plan 4.3); si Firestore exige indice responde FAILED_PRECONDITION`);
+  for (const probe of probeResults) {
+    say(`  [${probe.mode}] ${probe.label}: ${probe.needsIndex ? "PIDE INDICE" : "OK sin indice nuevo"} (${probe.docs} docs, ${probe.ms} ms)`);
+    if (probe.link) say(`      ${probe.link}`);
+  }
+  say(`  Indices que faltan: ${missingIndexes.length === 0 ? "ninguno (firestore.indexes.json no se toca, plan 7)" : `${missingIndexes.length}; cargas completas NO cronometradas hasta desplegarlos`}`);
+  say();
+  say(`2. Carga completa de cada modo, de punta a punta, ${RUNS} rondas intercaladas (cronometro Date.now, ms por ronda)`);
+  if (missingIndexes.length === 0) {
+    describeLoad(say, "resumen (admin, includeReconciliation: false)", summary, runs.resumen);
+    describeLoad(say, "con conciliacion (admin, includeReconciliation: true)", reconciliation, runs.conciliacion);
+    describeLoad(say, `resumen del lider (${leader.name})`, leaderStats, runs.lider);
+  }
+  say();
+  say(`3. Compuerta de coste (plan 4.3 / 5.4; veredicto sobre la mediana)`);
+  say(`  resumen: ${summary.docs} docs (umbral ${LIMITS.summaryDocs}), ${summary.msMedian} ms (umbral ${LIMITS.ms} ms) -> ${summaryOk ? "CUMPLE" : "SUPERA: Fase 2 (cola materializada) antes de T12"}`);
+  say(`  con conciliacion: ${reconciliation.docs} docs (umbral ${LIMITS.fullDocs}), ${reconciliation.msMedian} ms (umbral ${LIMITS.ms} ms) -> ${reconciliationOk ? "CUMPLE" : "SUPERA: conciliacion diaria guardada, decision del responsable antes de T12"}`);
+  say(`  resumen del lider: ${leaderStats.docs} docs, ${leaderStats.msMedian} ms -> ${leaderOk ? "CUMPLE" : "SUPERA"}`);
+  say(`  indices: ${missingIndexes.length === 0 ? "CUMPLE (ninguno nuevo)" : "ANADIR a firestore.indexes.json y desplegar indices ANTES de functions (plan 8)"}`);
+
+  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+  fs.writeFileSync(EVIDENCE_FILE, `${lines.join("\n")}\n`);
+  console.log(lines.join("\n"));
+  console.log(`\nEvidencia: ${path.relative(process.cwd(), EVIDENCE_FILE)}`);
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck };
 
 async function main() {
   const command = process.argv[2];

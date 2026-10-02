@@ -1,0 +1,58 @@
+Spec 026 · T2 · query-check contra produccion (SOLO LECTURA)
+Generado: 2026-10-02T16:57:48.910Z  ·  comando: node scripts/verify-026.js query-check
+Lider usado para las consultas de alcance lider: Domiciliario (driver-1778271901513, 3343 contraentregas entregadas)
+Lote de prueba de orderId in: 30 ids no recibidos (buildCodReceivedSet de functions/lib)
+
+1. Consultas del cargador con limit(1) (plan 4.3); si Firestore exige indice responde FAILED_PRECONDITION
+  [ambos] orders paymentMethod==cod, status in [delivered, liquidated] (select) - admin: OK sin indice nuevo (1 docs, 87 ms)
+  [ambos] orders paymentMethod==cod, status in [...], driverId==<lider> (select) - lider: OK sin indice nuevo (1 docs, 147 ms)
+  [ambos] settlements kind==driver - admin: OK sin indice nuevo (1 docs, 86 ms)
+  [ambos] settlements kind==driver, ownerId==<lider> - lider: OK sin indice nuevo (1 docs, 134 ms)
+  [ambos] sellers (select name): OK sin indice nuevo (1 docs, 88 ms)
+  [ambos] drivers (select name): OK sin indice nuevo (1 docs, 120 ms)
+  [ambos] messengers (select name): OK sin indice nuevo (1 docs, 85 ms)
+  [ambos] suppliers (select name): OK sin indice nuevo (1 docs, 120 ms)
+  [resumen] walletEntries orderId in [30 ids no recibidos]: OK sin indice nuevo (1 docs, 81 ms)
+  [conciliacion] walletEntries ownerType==seller, type in [cod_revenue, cod_remittance]: OK sin indice nuevo (1 docs, 109 ms)
+  [conciliacion] walletEntries ownerType==driver, type==driver_earning: OK sin indice nuevo (1 docs, 90 ms)
+  [conciliacion] walletEntries type==product_cost, orderId in [30 ids no recibidos]: OK sin indice nuevo (1 docs, 176 ms)
+  [conciliacion] walletEntries type in [cod_revenue, cod_remittance, driver_earning] (forma usada en T1): OK sin indice nuevo (1 docs, 76 ms)
+  Indices que faltan: ninguno (firestore.indexes.json no se toca, plan 7)
+
+2. Carga completa de cada modo, de punta a punta, 3 rondas intercaladas (cronometro Date.now, ms por ronda)
+  Modo resumen (admin, includeReconciliation: false): 4120 docs, mediana 1120 ms, maximo 1220 ms (rondas: 1120 / 1035 / 1220 ms)
+    candidatos no recibidos 171, lotes de 30: 6
+    drivers (nombres): 2 docs, 66 ms
+    settings/cashAlerts: 0 docs, 0 ms
+    suppliers (nombres): 4 docs, 79 ms
+    messengers (nombres): 7 docs, 117 ms
+    sellers (nombres): 29 docs, 176 ms
+    settlements: 42 docs, 280 ms
+    orders: 3362 docs, 881 ms
+    walletEntries orderId in (lotes): 674 docs, 319 ms (el mas lento de 6, en paralelo)
+  Modo con conciliacion (admin, includeReconciliation: true): 10509 docs, mediana 1815 ms, maximo 1900 ms (rondas: 1900 / 1627 / 1815 ms)
+    candidatos no recibidos 171, lotes de 30: 6
+    settings/cashAlerts: 0 docs, 0 ms
+    suppliers (nombres): 4 docs, 88 ms
+    messengers (nombres): 7 docs, 91 ms
+    drivers (nombres): 2 docs, 103 ms
+    sellers (nombres): 29 docs, 178 ms
+    settlements: 42 docs, 444 ms
+    orders: 3362 docs, 980 ms
+    walletEntries product_cost orderId in (lotes): 160 docs, 193 ms (el mas lento de 6, en paralelo)
+    walletEntries driver driver_earning: 3529 docs, 757 ms
+    walletEntries seller cod_revenue|cod_remittance: 3374 docs, 810 ms
+  Modo resumen del lider (Domiciliario): 4093 docs, mediana 1044 ms, maximo 1088 ms (rondas: 1044 / 1088 / 994 ms)
+    candidatos no recibidos 171, lotes de 30: 6
+    settings/cashAlerts: 0 docs, 0 ms
+    sellers (nombres): 29 docs, 56 ms
+    messengers (nombres): 7 docs, 102 ms
+    settlements: 40 docs, 364 ms
+    orders: 3343 docs, 816 ms
+    walletEntries orderId in (lotes): 674 docs, 166 ms (el mas lento de 6, en paralelo)
+
+3. Compuerta de coste (plan 4.3 / 5.4; veredicto sobre la mediana)
+  resumen: 4120 docs (umbral 20000), 1120 ms (umbral 3000 ms) -> CUMPLE
+  con conciliacion: 10509 docs (umbral 30000), 1815 ms (umbral 3000 ms) -> CUMPLE
+  resumen del lider: 4093 docs, 1044 ms -> CUMPLE
+  indices: CUMPLE (ninguno nuevo)

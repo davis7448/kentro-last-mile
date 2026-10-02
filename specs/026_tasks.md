@@ -39,9 +39,9 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     distintos de 29 / 36 / $1.151.997 **en la misma metrica** → reportar antes de T7; filas >30 dias por
     `updatedAt` → reportar antes de T7; umbrales de coste → decision antes de T12.
 
-- [ ] **T2: Consultas exactas, indices y coste de los dos modos documentado**
+- [x] **T2: Consultas exactas, indices y coste de los dos modos documentado**
   * Requisitos cubiertos: RNF_01, RF_07
-  * Archivos: scripts/verify-026.js, firestore.indexes.json, .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t2-query-check.txt, docs/rendimiento.md
+  * Archivos: scripts/verify-026.js, firestore.indexes.json, .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t2-query-check.txt, docs/rendimiento.md, src/lib/spec-026-guards.test.ts (bloque `describe("T2 · ...")`; anadido en implement el 2026-10-02 para que T2 tenga su RED)
   * Accion: `query-check`: cada consulta del cargador con `limit(1)` e indices pedidos; carga completa de
     cada modo cronometrada. Si pide indice: comparar con `firebase firestore:indexes` y **anadir** sin quitar
     nada; si no, `firestore.indexes.json` no se toca. Seccion "Spec 026" en `docs/rendimiento.md`.

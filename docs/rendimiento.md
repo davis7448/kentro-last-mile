@@ -205,6 +205,40 @@ propio cambio y su propia verificación.
 la UI lo cierra a los roles con ventana. Abrirlo pediría seis índices más
 (`driverId`/`messengerId` × `trackingCode`/`shopifyOrderId`/`customerPhone`).
 
+## Efectivo sin llegar a un corte (Spec 026, RF_07 / RNF_01)
+
+`getCashOutstanding` corre **en servidor** (plan 2.1): el navegador recibe el informe, no los
+pedidos ni los asientos. Lo que se mide aqui es lo que lee la funcion. Cifras de
+`.sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t2-query-check.txt`, generadas el 2026-10-02 con
+`node scripts/verify-026.js query-check` contra produccion (solo lectura), 3 rondas intercaladas por
+modo, de punta a punta y con las consultas en paralelo como las hara el cargador (plan 4.3):
+
+| Modo | Quien lo pide | Docs | Mediana | Maximo | Umbral (plan 4.3 / 5.4) |
+|---|---|---|---|---|---|
+| resumen (`includeReconciliation: false`) | admin: tarjeta y Por pagar; programada diaria | 4.120 docs | 1.120 ms | 1.220 ms | 20.000 docs o 3.000 ms |
+| con conciliacion (`includeReconciliation: true`) | solo la pestana "Efectivo sin llegar" | 10.509 docs | 1.815 ms | 1.900 ms | 30.000 docs o 3.000 ms |
+| resumen del lider (Domiciliario) | Finanzas del lider | 4.093 docs | 1.044 ms | 1.088 ms | 20.000 docs o 3.000 ms |
+
+Los dos modos **cumplen** la compuerta. Donde se va el tiempo:
+
+- La consulta de `orders` (`cod`, `delivered|liquidated`, con `select`, sin fecha ni limite: 3.362
+  docs, 880-980 ms) es comun a los dos y es la mayor parte del modo resumen.
+- El modo resumen solo baja asientos de los 171 pedidos no recibidos (`orderId in` por lotes de 30:
+  6 lotes, 674 docs, ~320 ms el mas lento).
+- El modo con conciliacion baja enteros `cod_revenue|cod_remittance` de tienda (3.374 docs, ~810 ms)
+  y `driver_earning` (3.529 docs, ~760 ms), en paralelo; mas `product_cost` de los no recibidos (160).
+
+**Indices: ninguno nuevo.** Las trece consultas del cargador (incluidas las de alcance lider con
+`driverId` y `ownerId`) se lanzaron con `limit(1)` y ninguna devolvio `FAILED_PRECONDITION`;
+`firestore.indexes.json` no se toco (plan 7).
+
+**Riesgo (plan 4.3): las dos cargas crecen sin ventana**, ~1.800 docs/mes el resumen y ~2.500/mes la
+conciliacion. Al ritmo de hoy quedan anos hasta 20.000 / 30.000 docs, pero el limite que llegara
+antes es el de tiempo: 3 s. Si el resumen pasa de 20.000 docs o de 3 s → Fase 2 (cola
+materializada, plan 2.1 opcion B). Si la conciliacion pasa de 30.000 docs o de 3 s → conciliacion
+diaria guardada, **con decision del responsable**. Para volver a medir: `node scripts/verify-026.js
+query-check` (requiere `cd functions && npm run build`).
+
 ## Lider de comunidad (rol nuevo, spec 001)
 
 **Presupuesto de diseno: CERO pedidos.** El rol no descarga la coleccion `orders` en ningun
