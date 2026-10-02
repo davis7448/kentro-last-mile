@@ -2068,3 +2068,414 @@ describe("T17 · RF_01: la guarda anti-copia mira los cuatro archivos", () => {
     expect(pending.replace(/\/\/.*$/gm, "").trim()).toBe("");
   });
 });
+
+describe("T18 · compare: posicion de la plataforma y linea base (RNF_02, DoD 3 y 4)", () => {
+  /*
+   * T18 (plan 4.4, 5.3). `node scripts/verify-026.js compare [--deployed]` corre contra produccion y lo
+   * lanza una persona; la suite no lo ejecuta contra Firestore. Aqui se ata:
+   *
+   * 1. Fuente: el subcomando `compare` esta en COMMANDS y reutiliza lo COMPILADO
+   *    (`functions/lib/cash-outstanding-api.js` -> `loadCashOutstandingInput` con alcance admin,
+   *    `includeReconciliation: true` y `coverage: "full"`; `functions/lib/cash-outstanding.js` ->
+   *    `buildCashOutstandingReport`/`reconcileWithPlatformPosition`; `computePlatformPosition`), sin
+   *    las reproducciones locales de T1 (`isDriverSettlementCashSettledLocal`, `locationOf`).
+   *    Lee `t1-linea-base-ids.json`, escribe `t18-compare.txt` y sale con codigo 1 si no pasa.
+   *
+   * 2. Contrato de la funcion PURA exportada por el script:
+   *
+   *    module.exports = { evaluateCompare, ... }   y   main() solo si `require.main === module`
+   *    (requerir el script desde la suite no puede lanzar main ni process.exit).
+   *
+   *    evaluateCompare({
+   *      reconciliation: PositionReconciliation | null,          // report.reconciliation
+   *      position: { driverReceivableCop: number },              // computePlatformPosition / getPlatformPosition
+   *      report: { rows, nettedRows, unreadableOrderIds, unreadableSettlementIds, unreadableEntryIds },
+   *      baseline: { generatedAt, over30Days, coveredByNetting, rows },   // t1-linea-base-ids.json
+   *      evidence: { receivedOrderIds: string[]; universeOrderIds: string[] }
+   *    }) -> {
+   *      pass: boolean,                    // === (failures.length === 0)
+   *      failures: string[],               // una frase por condicion incumplida
+   *      stale:   Array<{ settlementId: string; amountCop: number }>,  // causa settlement_cash_pending_stale
+   *      missing: Array<{ settlementId: string; amountCop: number }>,  // causa settlement_cash_pending_missing
+   *      changes: Array<{ orderId: string; from: Group; to: Group; reason: Reason | null }>
+   *    }
+   *    Group  = "rows" | "netted" | "absent"
+   *    Reason = "received" | "netted" | "status_corrected" | "unreadable" | "new_order"
+   *
+   *    Regla de paso (DoD 4): falla si `reconciliation` es null, si `unexplainedCop !== 0`, si
+   *    `reconciliation.driverReceivableCop !== position.driverReceivableCop` o si alguno de los tres
+   *    `unreadable*` del informe no esta vacio. `stale` y `missing` se listan y NUNCA fallan.
+   *
+   *    DoD 3: grupo en linea base = "netted" si esta en `coveredByNetting`, "rows" si en `rows`, si no
+   *    "absent"; grupo actual = "netted" si esta en `report.nettedRows`, "rows" si en `report.rows`, si
+   *    no "absent". Solo los ids con from !== to van a `changes`. Motivo:
+   *      - to "absent": "unreadable" si esta en unreadableOrderIds; si no "received" si esta en
+   *        receivedOrderIds; si no "status_corrected" si NO esta en universeOrderIds; si no null.
+   *      - to "netted": "netted".
+   *      - from "absent" -> "rows": "new_order" si su deliveredAt > baseline.generatedAt; si no null.
+   *      - from "netted" -> "rows": null (un compensado no puede volver a deberse sin motivo).
+   *    Un cambio con reason null falla. Una fila de `nettedRows` con `isOverdue` falla (RF_09).
+   */
+  const SCRIPT = "scripts/verify-026.js";
+  const EVIDENCE = ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t18-compare.txt";
+  const source = () => sourceWithoutComments(SCRIPT);
+
+  /** Cuerpo de la funcion que COMMANDS registra como "compare" (mismo criterio que T2). */
+  function compareBody(): string {
+    const src = source();
+    const name = src.match(/["']?compare["']?\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
+    if (!name) return "";
+    const start = src.search(new RegExp(`^(?:async\\s+)?function\\s+${name}\\s*\\(`, "m"));
+    if (start < 0) return "";
+    const end = src.indexOf("\n}\n", start);
+    return end < 0 ? src.slice(start) : src.slice(start, end + 2);
+  }
+
+  /** Cuerpo de cualquier funcion de nivel superior del script, por nombre. */
+  function functionBody(name: string): string {
+    const src = source();
+    const start = src.search(new RegExp(`^(?:async\\s+)?function\\s+${name}\\s*\\(`, "m"));
+    if (start < 0) return "";
+    const end = src.indexOf("\n}\n", start);
+    return end < 0 ? src.slice(start) : src.slice(start, end + 2);
+  }
+
+  /** Cuerpo de compare mas las funciones de nivel superior que llama (helpers propios del subcomando). */
+  function compareClosure(): string {
+    const body = compareBody();
+    const called = [...body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)].map((match) => match[1]);
+    const helpers = [...new Set(called)].map(functionBody).filter(Boolean);
+    return [body, ...helpers].join("\n");
+  }
+
+  type Group = "rows" | "netted" | "absent";
+  type Reason = "received" | "netted" | "status_corrected" | "unreadable" | "new_order";
+  type Row = { orderId: string; deliveredAt: string; isOverdue: boolean; location: string };
+  type CompareInput = {
+    reconciliation: {
+      driverReceivableCop: number;
+      listOutstandingCop: number;
+      deltaCop: number;
+      causes: Array<{ cause: string; amountCop: number; orderIds: string[]; settlementId?: string }>;
+      staleSettlementsCop: number;
+      missingPendingSettlementsCop: number;
+      unexplainedCop: number;
+      unexplainedOrderIds: string[];
+    } | null;
+    position: { driverReceivableCop: number };
+    report: {
+      rows: Row[];
+      nettedRows: Row[];
+      unreadableOrderIds: string[];
+      unreadableSettlementIds: string[];
+      unreadableEntryIds: string[];
+    };
+    baseline: {
+      generatedAt: string;
+      over30Days: Array<{ orderId: string }>;
+      coveredByNetting: Array<{ orderId: string }>;
+      rows: Array<{ orderId: string }>;
+    };
+    evidence: { receivedOrderIds: string[]; universeOrderIds: string[] };
+  };
+  type CompareResult = {
+    pass: boolean;
+    failures: string[];
+    stale: Array<{ settlementId: string; amountCop: number }>;
+    missing: Array<{ settlementId: string; amountCop: number }>;
+    changes: Array<{ orderId: string; from: Group; to: Group; reason: Reason | null }>;
+  };
+
+  async function evaluateCompare(): Promise<(input: CompareInput) => CompareResult> {
+    // Sin la guarda, requerir el script lanzaria main() y process.exit(2) dentro de la suite.
+    if (!/require\.main\s*===\s*module/.test(source())) {
+      throw new Error("verify-026.js debe ejecutar main() solo si require.main === module para poder importarse");
+    }
+    const { createRequire } = await import("node:module");
+    const mod = createRequire(import.meta.url)(absolute(SCRIPT)) as Record<string, unknown>;
+    if (typeof mod.evaluateCompare !== "function") throw new Error("verify-026.js no exporta evaluateCompare");
+    return mod.evaluateCompare as (input: CompareInput) => CompareResult;
+  }
+
+  const BASELINE_AT = "2026-10-02T16:49:33.210Z";
+  const row = (orderId: string, extra: Partial<Row> = {}): Row => ({
+    orderId,
+    deliveredAt: "2026-09-20T10:00:00.000Z",
+    isOverdue: false,
+    location: "outside_settlement",
+    ...extra
+  });
+  const netted = (orderId: string, extra: Partial<Row> = {}): Row => row(orderId, { location: "covered_by_netting", ...extra });
+
+  /** Escenario sano: misma lista que la linea base, posicion igual, sin residuo ni ilegibles. */
+  function healthy(): CompareInput {
+    return {
+      reconciliation: {
+        driverReceivableCop: 500_000,
+        listOutstandingCop: 480_000,
+        deltaCop: 20_000,
+        causes: [{ cause: "outside_negative_net", amountCop: 20_000, orderIds: ["o-neg"] }],
+        staleSettlementsCop: 0,
+        missingPendingSettlementsCop: 0,
+        unexplainedCop: 0,
+        unexplainedOrderIds: []
+      },
+      position: { driverReceivableCop: 500_000 },
+      report: {
+        rows: [row("o-1"), row("o-2", { location: "in_settlement_open" })],
+        nettedRows: [netted("o-n1"), netted("o-n2")],
+        unreadableOrderIds: [],
+        unreadableSettlementIds: [],
+        unreadableEntryIds: []
+      },
+      baseline: {
+        generatedAt: BASELINE_AT,
+        over30Days: [{ orderId: "o-n1" }],
+        coveredByNetting: [{ orderId: "o-n1" }, { orderId: "o-n2" }],
+        rows: [{ orderId: "o-1" }, { orderId: "o-2" }]
+      },
+      evidence: { receivedOrderIds: [], universeOrderIds: ["o-1", "o-2", "o-n1", "o-n2", "o-neg"] }
+    };
+  }
+
+  describe("fuente del subcomando", () => {
+    it("COMMANDS registra el subcomando compare", () => {
+      expect(source()).toMatch(/COMMANDS\s*=\s*\{[^}]*["']?compare["']?\s*:/);
+      expect(compareBody()).not.toBe("");
+    });
+
+    it("compare usa el cargador compilado loadCashOutstandingInput de functions/lib/cash-outstanding-api", () => {
+      expect(source()).toMatch(/require\([^)]*functions\/lib\/cash-outstanding-api["'][^)]*\)/);
+      expect(compareClosure()).toMatch(/loadCashOutstandingInput\s*\(/);
+    });
+
+    it("compare pide la carga completa del admin con conciliacion (coverage full)", () => {
+      const closure = compareClosure();
+      expect(closure).toMatch(/includeReconciliation\s*:\s*true/);
+      expect(closure).toMatch(/coverage\s*:\s*["']full["']/);
+      expect(closure).toMatch(/kind\s*:\s*["']admin["']/);
+    });
+
+    it("compare usa el nucleo compilado de functions/lib/cash-outstanding (informe y conciliacion)", () => {
+      expect(source()).toMatch(/require\([^)]*functions\/lib\/cash-outstanding["'][^)]*\)/);
+      expect(compareClosure()).toMatch(/buildCashOutstandingReport\s*\(|reconcileWithPlatformPosition\s*\(/);
+    });
+
+    it("compare obtiene la posicion con computePlatformPosition compilado", () => {
+      expect(compareClosure()).toMatch(/computePlatformPosition\s*\(/);
+    });
+
+    it("compare no usa las reproducciones locales de T1 (nada se reimplementa)", () => {
+      const closure = compareClosure();
+      expect(compareBody()).not.toBe("");
+      expect(closure).not.toMatch(/isDriverSettlementCashSettledLocal\s*\(/);
+      expect(closure).not.toMatch(/\blocationOf\s*\(/);
+      expect(closure).not.toMatch(/\bdeliveredAtOf\s*\(/);
+    });
+
+    it("compare lee la linea base t1-linea-base-ids.json", () => {
+      expect(compareClosure()).toMatch(/IDS_FILE|t1-linea-base-ids\.json/);
+    });
+
+    it("compare decide con evaluateCompare y sale con codigo 1 si no pasa", () => {
+      const closure = compareClosure();
+      expect(closure).toMatch(/evaluateCompare\s*\(/);
+      expect(closure).toMatch(/process\.exitCode\s*=\s*1|process\.exit\(\s*1\s*\)/);
+    });
+
+    it("compare escribe la evidencia t18-compare.txt", () => {
+      expect(compareClosure()).toContain("t18-compare.txt");
+    });
+
+    it("compare --deployed usa los callables desplegados getCashOutstanding y getPlatformPosition", () => {
+      const closure = compareClosure();
+      expect(closure).toContain("--deployed");
+      expect(closure).toContain("getCashOutstanding");
+      expect(closure).toContain("getPlatformPosition");
+    });
+
+    it("compare --deployed sin credenciales falla con un mensaje que nombra las variables", async () => {
+      expect(compareBody()).not.toBe("");
+      const { spawnSync } = await import("node:child_process");
+      const env = { ...process.env };
+      delete env.VERIFY_026_ADMIN_EMAIL;
+      delete env.VERIFY_026_ADMIN_PASSWORD;
+      const result = spawnSync(process.execPath, [absolute(SCRIPT), "compare", "--deployed"], {
+        cwd: absolute(""),
+        env,
+        encoding: "utf8",
+        timeout: 20_000
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.status).not.toBe(2); // 2 = subcomando desconocido
+      expect(result.stderr).toContain("VERIFY_026_ADMIN_EMAIL");
+      expect(result.stderr).toContain("VERIFY_026_ADMIN_PASSWORD");
+    });
+  });
+
+  describe("evaluateCompare (puro): regla de paso DoD 4", () => {
+    it("se exporta y el escenario sano pasa", async () => {
+      const result = (await evaluateCompare())(healthy());
+      expect(result.failures).toEqual([]);
+      expect(result.pass).toBe(true);
+      expect(result.changes).toEqual([]);
+    });
+
+    it("unexplainedCop distinto de 0 falla", async () => {
+      const input = healthy();
+      input.reconciliation!.unexplainedCop = 31_000;
+      input.reconciliation!.unexplainedOrderIds = ["o-perdido"];
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(false);
+      expect(result.failures.join(" ")).toMatch(/unexplained/i);
+    });
+
+    it("driverReceivableCop distinto del de la posicion falla aunque el residuo sea 0", async () => {
+      const input = healthy();
+      input.position.driverReceivableCop = 499_999;
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(false);
+      expect(result.failures.join(" ")).toMatch(/driverReceivable/i);
+    });
+
+    it.each(["unreadableOrderIds", "unreadableSettlementIds", "unreadableEntryIds"] as const)(
+      "%s no vacio falla",
+      async (key) => {
+        const input = healthy();
+        input.report[key] = ["x-ilegible"];
+        const result = (await evaluateCompare())(input);
+        expect(result.pass).toBe(false);
+        expect(result.failures.join(" ")).toContain(key);
+      }
+    );
+
+    it("sin conciliacion (null) falla: no hay nada que comparar", async () => {
+      const input = healthy();
+      input.reconciliation = null;
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(false);
+    });
+
+    it("stale y missing se listan por corte y NO fallan", async () => {
+      const input = healthy();
+      input.reconciliation!.causes.push(
+        { cause: "settlement_cash_pending_stale", amountCop: 12_000, orderIds: [], settlementId: "stl-viejo" },
+        { cause: "settlement_cash_pending_missing", amountCop: -8_000, orderIds: [], settlementId: "stl-sin-campo" }
+      );
+      input.reconciliation!.staleSettlementsCop = 12_000;
+      input.reconciliation!.missingPendingSettlementsCop = -8_000;
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(true);
+      expect(result.stale).toEqual([{ settlementId: "stl-viejo", amountCop: 12_000 }]);
+      expect(result.missing).toEqual([{ settlementId: "stl-sin-campo", amountCop: -8_000 }]);
+    });
+  });
+
+  describe("evaluateCompare (puro): linea base DoD 3", () => {
+    it("un compensado de la linea base que ahora esta en rows falla sin motivo", async () => {
+      const input = healthy();
+      input.report.nettedRows = [netted("o-n1")];
+      input.report.rows.push(row("o-n2", { location: "settlement_paid_short" }));
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(false);
+      expect(result.changes).toEqual([{ orderId: "o-n2", from: "netted", to: "rows", reason: null }]);
+    });
+
+    it("un compensado vencido falla (RF_09: lo compensado no vence)", async () => {
+      const input = healthy();
+      input.report.nettedRows = [netted("o-n1", { isOverdue: true }), netted("o-n2")];
+      const result = (await evaluateCompare())(input);
+      expect(result.pass).toBe(false);
+    });
+
+    it("fila que paso a compensada: motivo netted, pasa", async () => {
+      const input = healthy();
+      input.report.rows = [row("o-2", { location: "in_settlement_open" })];
+      input.report.nettedRows.push(netted("o-1"));
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-1", from: "rows", to: "netted", reason: "netted" }]);
+      expect(result.pass).toBe(true);
+    });
+
+    it("fila que desaparecio por estar recibida ahora: motivo received, pasa", async () => {
+      const input = healthy();
+      input.report.rows = [row("o-2", { location: "in_settlement_open" })];
+      input.evidence.receivedOrderIds = ["o-1"];
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-1", from: "rows", to: "absent", reason: "received" }]);
+      expect(result.pass).toBe(true);
+    });
+
+    it("compensado que ahora esta recibido (su estado actual): motivo received, pasa", async () => {
+      const input = healthy();
+      input.report.nettedRows = [netted("o-n1")];
+      input.evidence.receivedOrderIds = ["o-n2"];
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-n2", from: "netted", to: "absent", reason: "received" }]);
+      expect(result.pass).toBe(true);
+    });
+
+    it("fila que salio del universo (corregida de estado): motivo status_corrected, pasa", async () => {
+      const input = healthy();
+      input.report.rows = [row("o-2", { location: "in_settlement_open" })];
+      input.evidence.universeOrderIds = input.evidence.universeOrderIds.filter((id) => id !== "o-1");
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-1", from: "rows", to: "absent", reason: "status_corrected" }]);
+      expect(result.pass).toBe(true);
+    });
+
+    it("fila ilegible: motivo unreadable (y la regla de paso falla por el ilegible, no por el cambio)", async () => {
+      const input = healthy();
+      input.report.rows = [row("o-2", { location: "in_settlement_open" })];
+      input.report.unreadableOrderIds = ["o-1"];
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-1", from: "rows", to: "absent", reason: "unreadable" }]);
+      expect(result.pass).toBe(false);
+      expect(result.failures.join(" ")).toContain("unreadableOrderIds");
+    });
+
+    it("pedido entregado despues de la linea base: motivo new_order, pasa", async () => {
+      const input = healthy();
+      input.report.rows.push(row("o-nuevo", { deliveredAt: "2026-10-03T09:00:00.000Z" }));
+      input.evidence.universeOrderIds.push("o-nuevo");
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-nuevo", from: "absent", to: "rows", reason: "new_order" }]);
+      expect(result.pass).toBe(true);
+    });
+
+    it("pedido antiguo que aparece sin estar en la linea base: sin motivo, falla", async () => {
+      const input = healthy();
+      input.report.rows.push(row("o-aparecido", { deliveredAt: "2026-08-01T09:00:00.000Z" }));
+      input.evidence.universeOrderIds.push("o-aparecido");
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-aparecido", from: "absent", to: "rows", reason: null }]);
+      expect(result.pass).toBe(false);
+      expect(result.failures.join(" ")).toContain("o-aparecido");
+    });
+
+    it("fila que desaparece sin estar recibida, legible y en el universo: sin motivo, falla con su id", async () => {
+      const input = healthy();
+      input.report.rows = [row("o-2", { location: "in_settlement_open" })];
+      const result = (await evaluateCompare())(input);
+      expect(result.changes).toEqual([{ orderId: "o-1", from: "rows", to: "absent", reason: null }]);
+      expect(result.pass).toBe(false);
+      expect(result.failures.join(" ")).toContain("o-1");
+    });
+  });
+
+  describe("evidencia de produccion", () => {
+    it("t18-compare.txt existe", () => {
+      expect(existsSync(absolute(EVIDENCE))).toBe(true);
+    });
+
+    it("t18-compare.txt trae la regla de paso, la lista stale/missing y la tabla de ids con motivo", () => {
+      const evidence = existsSync(absolute(EVIDENCE)) ? readFileSync(absolute(EVIDENCE), "utf8") : "";
+      expect(evidence).toMatch(/unexplainedCop/);
+      expect(evidence).toMatch(/driverReceivableCop/);
+      expect(evidence).toMatch(/stale/i);
+      expect(evidence).toMatch(/missing/i);
+      expect(evidence).toMatch(/t1-linea-base-ids\.json/);
+      expect(evidence).toMatch(/\b(PASA|FALLA)\b/);
+    });
+  });
+});

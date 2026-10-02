@@ -5,6 +5,11 @@
  *   node scripts/verify-026.js baseline      (T1) linea base antes de tocar codigo, con ids
  *   node scripts/verify-026.js query-check   (T2) consultas del cargador con limit(1) (indices) y coste
  *                                            cronometrado de los dos modos -> t2-query-check.txt
+ *   node scripts/verify-026.js compare [--deployed]
+ *                                            (T18) conciliacion con la posicion (DoD 4) y cambios de grupo
+ *                                            contra t1-linea-base-ids.json (DoD 3) -> t18-compare.txt; sale
+ *                                            con codigo 1 si no pasa. --deployed usa los callables
+ *                                            desplegados con VERIFY_026_ADMIN_EMAIL/VERIFY_026_ADMIN_PASSWORD.
  *
  * Escribe dos evidencias locales (archivos del repo, no Firestore):
  *   .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base.txt
@@ -23,7 +28,8 @@ const fs = require("fs");
 const path = require("path");
 const admin = require(path.join(__dirname, "../functions/node_modules/firebase-admin"));
 
-admin.initializeApp({ projectId: "kentro-last-mile" });
+// La suite requiere este archivo para probar evaluateCompare: no inicializar dos veces.
+if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile" });
 const db = admin.firestore();
 
 const { buildCodReceivedSet } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
@@ -586,19 +592,311 @@ async function queryCheck() {
   console.log(`\nEvidencia: ${path.relative(process.cwd(), EVIDENCE_FILE)}`);
 }
 
-const COMMANDS = { "baseline": baseline, "query-check": queryCheck };
+// ---------------------------------------------------------------------------------------------------
+// T18 — compare: posicion de la plataforma y linea base (RNF_02, DoD 3 y 4; plan 4.4, 5.3)
+// ---------------------------------------------------------------------------------------------------
+
+const COMPARE_FILE = path.join(EVIDENCE_DIR, "t18-compare.txt");
+const CALLABLE_BASE_URL = "https://us-central1-kentro-last-mile.cloudfunctions.net";
+const CREDENTIAL_VARS = ["VERIFY_026_ADMIN_EMAIL", "VERIFY_026_ADMIN_PASSWORD"];
+const UNREADABLE_KEYS = ["unreadableOrderIds", "unreadableSettlementIds", "unreadableEntryIds"];
+
+/** Grupo de un id en la linea base (t1-linea-base-ids.json) o en el informe actual. */
+function groupOf(orderId, nettedIds, rowIds) {
+  if (nettedIds.has(orderId)) return "netted";
+  if (rowIds.has(orderId)) return "rows";
+  return "absent";
+}
+
+/**
+ * Motivo comprobado de un cambio de grupo (plan 5.3). null = sin motivo, y eso hace fallar.
+ * `current` es la fila actual (para la fecha de entrega de un pedido nuevo).
+ */
+function reasonOf(change, context) {
+  const { orderId, from, to } = change;
+  if (to === "netted") return "netted";
+  if (to === "absent") {
+    if (context.unreadable.has(orderId)) return "unreadable";
+    if (context.received.has(orderId)) return "received";
+    if (!context.universe.has(orderId)) return "status_corrected";
+    return null;
+  }
+  // to === "rows"
+  if (from === "absent") {
+    const deliveredMs = Date.parse(String(change.current?.deliveredAt ?? ""));
+    return Number.isFinite(deliveredMs) && deliveredMs > context.baselineMs ? "new_order" : null;
+  }
+  // netted -> rows: un compensado no vuelve a deberse sin motivo.
+  return null;
+}
+
+/**
+ * Regla de paso de T18. PURA: sin Firestore ni red. Ver el contrato en el bloque T18 de
+ * src/lib/spec-026-guards.test.ts.
+ */
+function evaluateCompare(input) {
+  const { reconciliation, position, report, baseline, evidence } = input;
+  const failures = [];
+
+  // ---- DoD 4: conciliacion con la posicion ----
+  if (!reconciliation) {
+    failures.push("Sin conciliacion (reconciliation null): el informe no se pidio con includeReconciliation/coverage full.");
+  } else {
+    if (reconciliation.unexplainedCop !== 0) {
+      const ids = reconciliation.unexplainedOrderIds ?? [];
+      failures.push(`unexplainedCop = ${reconciliation.unexplainedCop} (debe ser 0)${ids.length ? `; pedidos: ${ids.join(", ")}` : ""}.`);
+    }
+    if (reconciliation.driverReceivableCop !== position.driverReceivableCop) {
+      failures.push(
+        `driverReceivableCop de la conciliacion (${reconciliation.driverReceivableCop}) distinto del de la posicion (${position.driverReceivableCop}).`
+      );
+    }
+  }
+  for (const key of UNREADABLE_KEYS) {
+    const ids = report[key] ?? [];
+    if (ids.length > 0) failures.push(`${key} no esta vacio (${ids.length}): ${ids.join(", ")}.`);
+  }
+
+  // stale y missing se listan por corte y no fallan.
+  const causes = reconciliation ? reconciliation.causes : [];
+  const bySettlement = (cause) =>
+    causes.filter((item) => item.cause === cause).map((item) => ({ settlementId: String(item.settlementId ?? ""), amountCop: item.amountCop }));
+  const stale = bySettlement("settlement_cash_pending_stale");
+  const missing = bySettlement("settlement_cash_pending_missing");
+
+  // ---- RF_09: lo compensado no vence ----
+  const overdueNetted = report.nettedRows.filter((row) => row.isOverdue);
+  if (overdueNetted.length > 0) {
+    failures.push(`Compensados marcados como vencidos (RF_09): ${overdueNetted.map((row) => row.orderId).join(", ")}.`);
+  }
+
+  // ---- DoD 3: cambios de grupo contra la linea base ----
+  const baselineNetted = new Set(baseline.coveredByNetting.map((item) => item.orderId));
+  const baselineRows = new Set(baseline.rows.map((item) => item.orderId));
+  const currentNetted = new Set(report.nettedRows.map((row) => row.orderId));
+  const currentRows = new Set(report.rows.map((row) => row.orderId));
+  const currentById = new Map([...report.rows, ...report.nettedRows].map((row) => [row.orderId, row]));
+  const context = {
+    unreadable: new Set(report.unreadableOrderIds ?? []),
+    received: new Set(evidence.receivedOrderIds),
+    universe: new Set(evidence.universeOrderIds),
+    baselineMs: Date.parse(baseline.generatedAt)
+  };
+  const allIds = [...new Set([...baselineRows, ...baselineNetted, ...currentRows, ...currentNetted])];
+  const changes = allIds
+    .map((orderId) => ({
+      orderId,
+      from: groupOf(orderId, baselineNetted, baselineRows),
+      to: groupOf(orderId, currentNetted, currentRows),
+      current: currentById.get(orderId)
+    }))
+    .filter((change) => change.from !== change.to)
+    .map((change) => ({ orderId: change.orderId, from: change.from, to: change.to, reason: reasonOf(change, context) }));
+  const unexplainedChanges = changes.filter((change) => change.reason === null);
+  if (unexplainedChanges.length > 0) {
+    failures.push(
+      `Cambios de grupo sin motivo contra t1-linea-base-ids.json: ${unexplainedChanges.map((c) => `${c.orderId} (${c.from} -> ${c.to})`).join(", ")}.`
+    );
+  }
+
+  return { pass: failures.length === 0, failures, stale, missing, changes };
+}
+
+function readBaselineIds() {
+  if (!fs.existsSync(IDS_FILE)) {
+    throw new Error(`Falta la linea base ${path.relative(process.cwd(), IDS_FILE)}: correr antes "baseline" (T1).`);
+  }
+  return JSON.parse(fs.readFileSync(IDS_FILE, "utf8"));
+}
+
+/** Universo (contraentregas entregadas) y recibidos segun la regla compilada, para dar motivo a los cambios. */
+function evidenceFrom(orderIds, settlements) {
+  return { universeOrderIds: orderIds, receivedOrderIds: [...buildCodReceivedSet(settlements)] };
+}
+
+/**
+ * Modo local: el mismo cargador y el mismo nucleo que el callable getCashOutstanding (compilados), y
+ * la posicion con las MISMAS lecturas que el callable getPlatformPosition (que no exporta cargador:
+ * las colecciones walletEntries y settlements enteras) pasadas a computePlatformPosition.
+ */
+async function loadCompareLocal() {
+  const { loadCashOutstandingInput } = require(path.join(__dirname, "../functions/lib/cash-outstanding-api"));
+  const { buildCashOutstandingReport } = require(path.join(__dirname, "../functions/lib/cash-outstanding"));
+  const input = await loadCashOutstandingInput(db, {
+    scope: { kind: "admin", includeReconciliation: true },
+    coverage: "full",
+    channelConfigured: null,
+    now: new Date().toISOString()
+  });
+  const report = buildCashOutstandingReport(input);
+  const [walletSnapshot, settlementSnapshot] = await Promise.all([db.collection("walletEntries").get(), db.collection("settlements").get()]);
+  const position = computePlatformPosition(
+    walletSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+  );
+  return {
+    source: "local (functions/lib compilado + ADC, solo lectura)",
+    report,
+    position,
+    evidence: evidenceFrom(input.orders.map((order) => order.id), input.settlements),
+    readCounts: `walletEntries ${walletSnapshot.size}, settlements ${settlementSnapshot.size} (posicion); pedidos del universo ${input.orders.length}`
+  };
+}
+
+/** API key web publica del cliente (src/lib/firebase/client.ts), sin copiarla aqui. */
+function webApiKey() {
+  const client = fs.readFileSync(path.join(__dirname, "../src/lib/firebase/client.ts"), "utf8");
+  const key = (client.match(/apiKey:\s*"([^"]+)"/) || [])[1];
+  if (!key) throw new Error("No se encontro apiKey en src/lib/firebase/client.ts");
+  return key;
+}
+
+async function callCallable(name, idToken, data) {
+  const response = await fetch(`${CALLABLE_BASE_URL}/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ data })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    throw new Error(`${name} respondio ${response.status}: ${JSON.stringify(body.error ?? body)}`);
+  }
+  return body.result;
+}
+
+/**
+ * Modo --deployed: sesion real de admin y los callables desplegados getCashOutstanding y
+ * getPlatformPosition. El universo y los recibidos (solo para dar motivo a los cambios) se leen por ADC.
+ */
+async function loadCompareDeployed(credentials) {
+  const signIn = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${webApiKey()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: credentials.email, password: credentials.password, returnSecureToken: true })
+  }).then((response) => response.json());
+  if (!signIn.idToken) throw new Error(`signInWithPassword fallo: ${JSON.stringify(signIn.error ?? signIn)}`);
+  const [report, position, orderSnapshot, settlementSnapshot] = await Promise.all([
+    callCallable("getCashOutstanding", signIn.idToken, { includeReconciliation: true }),
+    callCallable("getPlatformPosition", signIn.idToken, null),
+    db.collection("orders").where("paymentMethod", "==", "cod").where("status", "in", ["delivered", "liquidated"]).select().get(),
+    db.collection("settlements").where("kind", "==", "driver").get()
+  ]);
+  return {
+    source: `desplegado (callables getCashOutstanding y getPlatformPosition con sesion de ${credentials.email})`,
+    report,
+    position,
+    evidence: evidenceFrom(
+      orderSnapshot.docs.map((doc) => doc.id),
+      settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    ),
+    readCounts: `pedidos del universo ${orderSnapshot.size}, cortes de domiciliario ${settlementSnapshot.size} (ADC, solo para motivos)`
+  };
+}
+
+function renderCompare(loaded, baseline, result, isDeployed) {
+  const { report, position } = loaded;
+  const reconciliation = report.reconciliation;
+  const lines = [];
+  const say = (text = "") => lines.push(text);
+  say(`Spec 026 · T18 · compare contra produccion (SOLO LECTURA)`);
+  say(`Generado: ${new Date().toISOString()}  ·  comando: node scripts/verify-026.js compare${isDeployed ? " --deployed" : ""}`);
+  say(`Fuente: ${loaded.source}`);
+  say(`Lecturas: ${loaded.readCounts}`);
+  say(`Linea base: t1-linea-base-ids.json (generada ${baseline.generatedAt}; rows ${baseline.rows.length}, coveredByNetting ${baseline.coveredByNetting.length}, over30Days ${baseline.over30Days.length})`);
+  say();
+  say(`VEREDICTO: ${result.pass ? "PASA" : "FALLA"}`);
+  for (const failure of result.failures) say(`  - ${failure}`);
+  say();
+  say(`1. Regla de paso (DoD 4, plan 4.4)`);
+  say(`  driverReceivableCop posicion (computePlatformPosition / getPlatformPosition): ${cop(position.driverReceivableCop)} (${position.driverReceivableCop})`);
+  if (reconciliation) {
+    say(`  driverReceivableCop conciliacion: ${cop(reconciliation.driverReceivableCop)} (${reconciliation.driverReceivableCop}) -> ${reconciliation.driverReceivableCop === position.driverReceivableCop ? "IGUAL" : "DISTINTO"}`);
+    say(`  listOutstandingCop (lista): ${cop(reconciliation.listOutstandingCop)}; deltaCop: ${cop(reconciliation.deltaCop)}`);
+    say(`  unexplainedCop: ${reconciliation.unexplainedCop}${reconciliation.unexplainedOrderIds.length ? ` (pedidos: ${reconciliation.unexplainedOrderIds.join(", ")})` : ""}`);
+    say(`  Causas (suma por tipo):`);
+    const byCause = reconciliation.causes.reduce((acc, item) => {
+      acc[item.cause] = acc[item.cause] || { amountCop: 0, n: 0 };
+      acc[item.cause].amountCop += item.amountCop;
+      acc[item.cause].n += 1;
+      return acc;
+    }, {});
+    for (const [cause, value] of Object.entries(byCause)) say(`    ${cause}: ${cop(value.amountCop)} (${value.n} partidas)`);
+  } else {
+    say(`  conciliacion: null`);
+  }
+  for (const key of UNREADABLE_KEYS) say(`  ${key}: ${(report[key] ?? []).length}`);
+  say();
+  say(`2. Cortes con pendiente guardado viejo o ausente (se reportan, NO fallan)`);
+  say(`  stale (settlement_cash_pending_stale): ${result.stale.length}; total ${cop(reconciliation ? reconciliation.staleSettlementsCop : 0)}`);
+  for (const item of result.stale) say(`    ${item.settlementId}: ${cop(item.amountCop)}`);
+  say(`  missing (settlement_cash_pending_missing): ${result.missing.length}; total ${cop(reconciliation ? reconciliation.missingPendingSettlementsCop : 0)}`);
+  for (const item of result.missing) say(`    ${item.settlementId}: ${cop(item.amountCop)}`);
+  say();
+  say(`3. Lista actual`);
+  say(`  rows: ${report.rows.length}; nettedRows: ${report.nettedRows.length} (vencidos entre los compensados: ${report.nettedRows.filter((row) => row.isOverdue).length})`);
+  say();
+  say(`4. Cambios de grupo contra t1-linea-base-ids.json (DoD 3): ${result.changes.length}`);
+  const countsByReason = countBy(result.changes, (change) => String(change.reason));
+  say(`  por motivo: ${Object.entries(countsByReason).map(([k, v]) => `${k} ${v}`).join(", ") || "-"}`);
+  say(`  | Pedido | Seguimiento | De | A | Motivo |`);
+  const trackingOf = new Map(
+    [...baseline.rows, ...baseline.coveredByNetting, ...report.rows, ...report.nettedRows].map((item) => [item.orderId, item.trackingCode || ""])
+  );
+  for (const change of result.changes) {
+    say(`  | ${change.orderId} | ${trackingOf.get(change.orderId) || "-"} | ${change.from} | ${change.to} | ${change.reason ?? "SIN MOTIVO"} |`);
+  }
+  return lines;
+}
+
+async function compare() {
+  const isDeployed = process.argv.includes("--deployed");
+  let credentials = null;
+  if (isDeployed) {
+    // Antes de tocar la red: sin las dos variables no hay sesion de admin que probar.
+    const absent = CREDENTIAL_VARS.filter((name) => !process.env[name]);
+    if (absent.length > 0) {
+      console.error(`compare --deployed necesita ${CREDENTIAL_VARS.join(" y ")} (faltan: ${absent.join(", ")}).`);
+      process.exitCode = 1;
+      return;
+    }
+    credentials = { email: process.env.VERIFY_026_ADMIN_EMAIL, password: process.env.VERIFY_026_ADMIN_PASSWORD };
+  }
+
+  const baseline = readBaselineIds();
+  const loaded = isDeployed ? await loadCompareDeployed(credentials) : await loadCompareLocal();
+  const result = evaluateCompare({
+    reconciliation: loaded.report.reconciliation,
+    position: loaded.position,
+    report: loaded.report,
+    baseline,
+    evidence: loaded.evidence
+  });
+
+  const lines = renderCompare(loaded, baseline, result, isDeployed);
+  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+  fs.writeFileSync(COMPARE_FILE, `${lines.join("\n")}\n`);
+  console.log(lines.join("\n"));
+  console.log(`\nEvidencia: ${path.relative(process.cwd(), path.join(EVIDENCE_DIR, "t18-compare.txt"))}`);
+  if (!result.pass) process.exitCode = 1;
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "compare": compare };
 
 async function main() {
   const command = process.argv[2];
   const run = COMMANDS[command];
   if (!run) {
-    console.error(`Uso: node scripts/verify-026.js <${Object.keys(COMMANDS).join("|")}>`);
+    console.error(`Uso: node scripts/verify-026.js <${Object.keys(COMMANDS).join("|")}> [--deployed]`);
     process.exit(2);
   }
   await run();
 }
 
-main().catch((error) => {
-  console.error("[verify-026]", error);
-  process.exit(1);
-});
+module.exports = { evaluateCompare };
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("[verify-026]", error);
+    process.exit(1);
+  });
+}

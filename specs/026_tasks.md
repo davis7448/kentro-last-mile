@@ -231,9 +231,9 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Verificacion contra produccion
 
-- [ ] **T18: Comparacion con la posicion y con la linea base**
+- [x] **T18: Comparacion con la posicion y con la linea base**
   * Requisitos cubiertos: RNF_02, RF_07, RF_09, RNF_01
-  * Archivos: scripts/verify-026.js, .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t18-compare.txt
+  * Archivos: scripts/verify-026.js, .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t18-compare.txt, src/lib/spec-026-guards.test.ts (bloque `describe("T18 · ...")`; anadido en implement el 2026-10-02 para que T18 tenga su RED)
   * Accion: `compare` y `compare --deployed` (plan 5.3). **Regla de paso (DoD 4):** pasa si y solo si
     `unexplainedCop === 0` y `driverReceivableCop` es igual al de la posicion, con los tres `unreadable*`
     vacios. `staleSettlementsCop` y `missingPendingSettlementsCop` se reportan por corte como hallazgo y
