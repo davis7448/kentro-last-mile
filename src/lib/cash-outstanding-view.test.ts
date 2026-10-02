@@ -642,3 +642,80 @@ describe("T19 · la tarjeta y los grupos miden el vencido en bruto (R1-RF_03-1, 
     expect(groupsGross).toBe(view.summary.overdueCop);
   });
 });
+
+describe("T22 · la tarjeta de Operacion dice 'cifras incompletas' (R2-RF_03-1, RF_03)", () => {
+  /**
+   * Contrato que fija este bloque (design-system: "si una cifra sale de datos incompletos, dilo o no la
+   * muestres"):
+   *   card.isIncomplete: boolean  — true si `report.isIncomplete` o si alguna lista `unreadable*Ids` trae ids
+   *                                 (el mismo criterio que `view.incomplete`).
+   *   Con `card.isIncomplete`: `isAllClear` false y `allClearText` null aunque el vencido legible sea 0; la
+   *   cifra legible (overdueCop, overdueCount) se conserva tal cual.
+   */
+  type CardT22 = { isIncomplete?: boolean; isAllClear: boolean; allClearText: string | null; overdueCop: number; overdueCount: number };
+  const cardOf = (view: { card: unknown }) => view.card as CardT22;
+
+  /** Solo un pedido legible y no vencido: el vencido legible es $0. */
+  const zeroOverdueRows = () => [makeRow({ orderId: "r1", isOverdue: false, ageDays: 3 })];
+
+  type UnreadableKind = [string, Partial<Pick<CashOutstandingReport, "unreadableOrderIds" | "unreadableSettlementIds" | "unreadableEntryIds">>];
+  const KINDS: UnreadableKind[] = [
+    ["pedido", { unreadableOrderIds: ["o-bad"] }],
+    ["corte", { unreadableSettlementIds: ["s-bad"] }],
+    ["asiento", { unreadableEntryIds: ["e-bad"] }],
+  ];
+
+  it.each(KINDS)("vencido legible en cero y un %s ilegible: card.isIncomplete es true", async (_kind, unreadable) => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: zeroOverdueRows(), isIncomplete: true, ...unreadable }), { viewport: "mobile", role: "admin" });
+    expect(cardOf(view).isIncomplete).toBe(true);
+  });
+
+  it.each(KINDS)("vencido legible en cero y un %s ilegible: no dice 'al dia' (isAllClear false, allClearText null)", async (_kind, unreadable) => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: zeroOverdueRows(), isIncomplete: true, ...unreadable }), { viewport: "mobile", role: "admin" });
+    expect({ isAllClear: cardOf(view).isAllClear, allClearText: cardOf(view).allClearText }).toEqual({ isAllClear: false, allClearText: null });
+  });
+
+  it("lista vacia y un pedido ilegible (el escenario del hallazgo): sin 'al dia' y con aviso", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: [], isIncomplete: true, unreadableOrderIds: ["o-40-dias"] }), { viewport: "mobile", role: "admin" });
+    expect({ isIncomplete: cardOf(view).isIncomplete, isAllClear: cardOf(view).isAllClear, allClearText: cardOf(view).allClearText }).toEqual({
+      isIncomplete: true,
+      isAllClear: false,
+      allClearText: null,
+    });
+  });
+
+  it("ids ilegibles aunque el servidor no marque isIncomplete: la tarjeta tambien avisa (mismo criterio que view.incomplete)", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: zeroOverdueRows(), isIncomplete: false, unreadableOrderIds: ["o-bad"] }), { viewport: "mobile", role: "admin" });
+    expect({ isIncomplete: cardOf(view).isIncomplete, isAllClear: cardOf(view).isAllClear }).toEqual({ isIncomplete: true, isAllClear: false });
+  });
+
+  it("vencido > 0 e incompleto: la cifra legible se conserva y la tarjeta avisa", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(twoLeadersReport({ isIncomplete: true, unreadableSettlementIds: ["s-bad"] }), { viewport: "mobile", role: "admin" });
+    expect({
+      isIncomplete: cardOf(view).isIncomplete,
+      overdueCop: cardOf(view).overdueCop,
+      overdueCount: cardOf(view).overdueCount,
+      isAllClear: cardOf(view).isAllClear,
+      allClearText: cardOf(view).allClearText,
+    }).toEqual({ isIncomplete: true, overdueCop: 450_000, overdueCount: 7, isAllClear: false, allClearText: null });
+  });
+
+  it("completo y vencido $0: igual que hoy, 'Efectivo vencido: $0 · al dia' y isIncomplete false", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: zeroOverdueRows() }), { viewport: "mobile", role: "admin" });
+    expect(cardOf(view).isIncomplete).toBe(false);
+    expect(cardOf(view).isAllClear).toBe(true);
+    expect(cardOf(view).allClearText).toMatch(/^Efectivo vencido: \$\s?0 · al dia$/);
+  });
+
+  it("completo y vencido > 0: isIncomplete false", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(twoLeadersReport(), { viewport: "mobile", role: "admin" });
+    expect(cardOf(view).isIncomplete).toBe(false);
+  });
+});

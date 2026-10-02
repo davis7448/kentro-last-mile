@@ -281,7 +281,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Correcciones de la revision adversarial (ronda 2, 2026-10-02)
 
-- [ ] **T22: La tarjeta de Operacion dice "cifras incompletas" (R2-RF_03-1)**
+- [x] **T22: La tarjeta de Operacion dice "cifras incompletas" (R2-RF_03-1)**
   * Requisitos cubiertos: RF_03
   * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
   * Accion: `buildCard` lee `report.isIncomplete`: expone `isIncomplete` y, con datos incompletos, nunca da

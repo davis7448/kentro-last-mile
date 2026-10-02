@@ -105,8 +105,11 @@ export interface CashOutstandingCard {
   nettedCount: number;
   /** "No cuenta N cubiertos por compensacion", o null sin compensados. */
   nettedText: string | null;
+  /** Hay documentos sin leer (mismo criterio que `incomplete`): la cifra puede quedarse corta. */
+  isIncomplete: boolean;
+  /** Nunca true con datos incompletos: un $0 a medias no es "al dia". */
   isAllClear: boolean;
-  /** "Efectivo vencido: $0 · al dia" con vencido $0; null en otro caso. */
+  /** "Efectivo vencido: $0 · al dia" con vencido $0 y datos completos; null en otro caso. */
   allClearText: string | null;
 }
 
@@ -256,7 +259,8 @@ function buildCard(report: CashOutstandingReport): CashOutstandingCard {
   const overdueRows = report.rows.filter((row) => row.isOverdue);
   const overdueCop = sumOf(overdueRows, (row) => row.collectedCop);
   const overdueCount = overdueRows.length;
-  const isAllClear = overdueCop <= 0;
+  const isIncomplete = hasIncompleteData(report);
+  const isAllClear = overdueCop <= 0 && !isIncomplete;
   const first: CashOutstandingGroup | undefined = byOverdueCollected(report.byLeader)[0];
   const firstName = first ? (first.leaderId === null ? NO_LEADER_TITLE : (first.leaderName ?? first.leaderId)) : "";
   const topLeader: CashOutstandingCardLeader | null =
@@ -278,6 +282,7 @@ function buildCard(report: CashOutstandingReport): CashOutstandingCard {
     topLeader,
     nettedCount,
     nettedText: nettedCount > 0 ? `No cuenta ${nettedCount} cubiertos por compensacion` : null,
+    isIncomplete,
     isAllClear,
     allClearText: isAllClear ? `Efectivo vencido: ${formatCop(0)} · al dia` : null,
   };
@@ -347,10 +352,18 @@ function buildNetted(rows: CashOutstandingRow[], options: { role: CashViewRole; 
   };
 }
 
+/** Unico criterio de "datos incompletos": lo comparten la tarjeta y el aviso de la pestana. */
+function hasIncompleteData(report: CashOutstandingReport): boolean {
+  return (
+    report.isIncomplete ||
+    report.unreadableOrderIds.length > 0 ||
+    report.unreadableSettlementIds.length > 0 ||
+    report.unreadableEntryIds.length > 0
+  );
+}
+
 function buildIncomplete(report: CashOutstandingReport, role: CashViewRole): CashOutstandingIncomplete | null {
-  const hasUnreadable =
-    report.unreadableOrderIds.length > 0 || report.unreadableSettlementIds.length > 0 || report.unreadableEntryIds.length > 0;
-  if (!report.isIncomplete && !hasUnreadable) return null;
+  if (!hasIncompleteData(report)) return null;
   if (role === "leader") {
     return {
       title: INCOMPLETE_TITLE,

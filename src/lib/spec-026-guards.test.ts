@@ -2479,3 +2479,42 @@ describe("T18 · compare: posicion de la plataforma y linea base (RNF_02, DoD 3 
     });
   });
 });
+
+describe("T22 · la tarjeta de Operacion avisa de cifras incompletas (R2-RF_03-1, RF_03)", () => {
+  /*
+   * Guarda de fuente (no hay render de componentes en el repo). Contrato:
+   *  - `CashOutstandingOverdueCard` lee `card.isIncomplete` (o `card?.isIncomplete`) del modelo de vista.
+   *  - Pinta el literal "Cifras incompletas" DENTRO de su propio cuerpo: el que ya pinta la pestana
+   *    (`IncompleteNotice`) no cuenta, porque el admin no entra a la pestana para enterarse.
+   *  - La tarjeta conserva el boton que lleva a la pestana (`onClick={open}`).
+   */
+  const ADMIN = "src/components/cash-outstanding-admin.tsx";
+  const admin = () => (existsSync(absolute(ADMIN)) ? sourceWithoutComments(ADMIN) : "");
+
+  /** Cuerpo de una funcion de nivel superior: hasta la siguiente declaracion de nivel superior. */
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  const cardBody = () => topLevelBody(admin(), "CashOutstandingOverdueCard");
+
+  it("CashOutstandingOverdueCard existe", () => {
+    expect(cardBody()).not.toBe("");
+  });
+
+  it("lee card.isIncomplete", () => {
+    expect(cardBody()).toMatch(/\bcard\??\.isIncomplete\b/);
+  });
+
+  it("pinta el literal 'Cifras incompletas' dentro de la tarjeta", () => {
+    expect(cardBody()).toContain("Cifras incompletas");
+  });
+
+  it("sigue llevando a la pestana (onClick={open})", () => {
+    expect(cardBody()).toMatch(/onClick=\{\s*open\s*\}/);
+  });
+});

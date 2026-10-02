@@ -133,7 +133,7 @@ export function CashOutstandingOverdueCard({ uid, onOpen }: { uid: string; onOpe
       {load.status === "error" && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <p className="min-w-0 flex-1 text-sm text-rust">No se pudo calcular el efectivo vencido.</p>
-          <button className="focus-ring rounded-full border border-white/10 px-4 text-sm font-semibold hover:bg-field" type="button" onClick={() => read(true)}>
+          <button className="focus-ring min-h-11 rounded-full border border-white/10 px-4 text-sm font-semibold hover:bg-field" type="button" onClick={() => read(true)}>
             Reintentar
           </button>
         </div>
@@ -152,8 +152,13 @@ export function CashOutstandingOverdueCard({ uid, onOpen }: { uid: string; onOpe
             <p className="text-sm text-ink-60">El mas antiguo lleva {pluralize(card.oldestOverdueDays, "dia", "dias")}</p>
           )}
           {card.nettedText && <p className="text-xs text-ink-60">{card.nettedText}</p>}
+          {card.isIncomplete && (
+            <p className="mt-1 rounded-2xl border border-rust/20 bg-rust/10 px-3 py-2 text-sm text-ink-70" role="note">
+              <span className="font-semibold text-rust">Cifras incompletas:</span> faltan documentos por leer; la cifra puede ser mayor.
+            </p>
+          )}
           <button
-            className="focus-ring mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-acid px-4 text-sm font-semibold text-deep sm:w-fit"
+            className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-acid px-4 text-sm font-semibold text-deep sm:w-fit"
             type="button"
             onClick={open}
           >
