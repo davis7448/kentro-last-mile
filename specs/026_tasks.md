@@ -190,7 +190,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     `uid` → otra; `refresh` → otra; `prime` sustituye; `clear` vacia; un rechazo no queda cacheado. `tsc` en
     la raiz.
 
-- [ ] **T15: Admin — tarjeta de Operacion y pestana "Efectivo sin llegar"**
+- [x] **T15: Admin — tarjeta de Operacion y pestana "Efectivo sin llegar"**
   * Requisitos cubiertos: RF_02, RF_03, RF_09, RNF_01
   * Archivos: src/components/cash-outstanding-admin.tsx, src/components/operations-app.tsx, src/lib/spec-026-guards.test.ts
   * Accion: instancia de la cache con `getFirebaseCashOutstanding` y el `uid` de la sesion; tarjeta desde la

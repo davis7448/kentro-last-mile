@@ -1193,3 +1193,267 @@ describe("T13 · escrituras sin undefined y aviso tras envio", () => {
     });
   });
 });
+
+describe("T15 · interfaz del admin: lista y tarjeta", () => {
+  /*
+   * T15 (RF_02, RF_03, RF_09, RNF_01; README decisiones 2, 3, 4, 5, 11, 12; pantallas HU_01.*).
+   *
+   * No hay infraestructura de render de componentes en el repo (sin @testing-library ni jsdom), asi que
+   * esto son guardas de fuente. El E2E con los nombres accesibles reales de los screen.json lo hace
+   * /sdd-verify.
+   *
+   * Contrato que fija este bloque:
+   *  - `src/components/cash-outstanding-admin.tsx` exporta `CashOutstandingOverdueCard` (tarjeta de
+   *    Operacion) y `CashOutstandingTab` (pestana de Liquidaciones).
+   *  - Una sola cache por sesion de pagina: `const <x> = createCashOutstandingSummaryCache(...)` a nivel
+   *    de modulo, alimentada con `getFirebaseCashOutstanding`; se consulta con `.get({ uid ... })`.
+   *  - Solo la pestana pide `includeReconciliation: true` (una aparicion en todo el archivo) y deja el
+   *    resultado como compartido con `.prime(uid, ...)`. La tarjeta no menciona `includeReconciliation`.
+   *  - El filtro "Lider" es un `<select aria-label="Lider">` cuyo `onChange` solo cambia estado.
+   *  - `operations-app.tsx` importa los dos componentes, monta la tarjeta en `AdminView` y la pestana en
+   *    `LiquidationsPage`, con "Efectivo sin llegar" como segunda pestana tras "Por pagar".
+   *  - "Plazo y aviso" es de T16 y no se exige aqui.
+   */
+  const ADMIN = "src/components/cash-outstanding-admin.tsx";
+  const VIEW = "src/lib/cash-outstanding-view.ts";
+  const APP = "src/components/operations-app.tsx";
+  // Medido el 2026-10-02 al escribir esta guarda (import + lineas 7509 y 8027): `grep -c` = 3.
+  const FROZEN_COD_RECEIVED_COUNT = 3;
+
+  const admin = () => (existsSync(absolute(ADMIN)) ? sourceWithoutComments(ADMIN) : "");
+  const app = () => sourceWithoutComments(APP);
+  /** Lo que se pinta sale del componente y del modelo de vista (titulos y rotulos viven en este). */
+  const painted = () => `${admin()}\n${sourceWithoutComments(VIEW)}`;
+
+  /** Cuerpo de una funcion de nivel superior: hasta la siguiente declaracion de nivel superior. */
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  /** Contenido entre llaves equilibradas que empieza en `source[open] === "{"`. */
+  function balancedBraces(source: string, open: number): string {
+    let depth = 0;
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === "{") depth += 1;
+      if (source[index] === "}") {
+        depth -= 1;
+        if (depth === 0) return source.slice(open + 1, index);
+      }
+    }
+    return source.slice(open + 1);
+  }
+
+  function count(source: string, token: string): number {
+    return source.split(token).length - 1;
+  }
+
+  describe("el componente", () => {
+    it("existe", () => {
+      expect(existsSync(absolute(ADMIN))).toBe(true);
+    });
+
+    it.each(["CashOutstandingOverdueCard", "CashOutstandingTab"])("exporta %s", (name) => {
+      expect(admin()).toMatch(new RegExp(`export\\s+(?:function\\s+${name}\\b|const\\s+${name}\\b)`));
+    });
+
+    it("pinta desde buildCashOutstandingView (importado del modelo de vista)", () => {
+      expect(admin()).toMatch(/import\s*\{[^}]*\bbuildCashOutstandingView\b[^}]*\}\s*from\s*["'][^"']*cash-outstanding-view["']/);
+      expect(admin()).toMatch(/\bbuildCashOutstandingView\s*\(/);
+    });
+
+    it("crea UNA cache a nivel de modulo con createCashOutstandingSummaryCache y getFirebaseCashOutstanding", () => {
+      expect(admin()).toMatch(/import\s*\{[^}]*\bcreateCashOutstandingSummaryCache\b[^}]*\}\s*from\s*["'][^"']*cash-outstanding-loads["']/);
+      expect(admin()).toMatch(/import\s*\{[^}]*\bgetFirebaseCashOutstanding\b[^}]*\}\s*from\s*["'][^"']*firebase\/auth["']/);
+      expect(admin()).toMatch(/^(?:export\s+)?const\s+\w+\s*=\s*createCashOutstandingSummaryCache\(/m);
+      expect(count(admin(), "createCashOutstandingSummaryCache(")).toBe(1);
+      const factoryArgs = admin().match(/createCashOutstandingSummaryCache\(([\s\S]*?)\);/)?.[1] ?? "";
+      expect(factoryArgs).toMatch(/\bgetFirebaseCashOutstanding\b/);
+    });
+
+    it("lee la carga compartida con .get({ uid ... }) de la sesion", () => {
+      expect(admin()).toMatch(/\.get\(\s*\{[^}]*\buid\b/);
+    });
+  });
+
+  describe("dos cargas: la tarjeta resume, solo la pestana concilia (decision 11)", () => {
+    it("includeReconciliation: true aparece una sola vez en el archivo", () => {
+      expect(count(admin().replace(/\s+/g, " "), "includeReconciliation: true")).toBe(1);
+    });
+
+    it("la pestana pide con conciliacion y hace prime con el uid", () => {
+      const tab = topLevelBody(admin(), "CashOutstandingTab");
+      expect(tab).not.toBe("");
+      expect(tab.replace(/\s+/g, " ")).toMatch(/getFirebaseCashOutstanding\(\s*\{\s*includeReconciliation:\s*true\s*\}\s*\)/);
+      expect(tab).toMatch(/\.prime\(\s*[\w.]*uid\b/i);
+    });
+
+    it("la tarjeta no pide conciliacion ni llama al callable directamente", () => {
+      const card = topLevelBody(admin(), "CashOutstandingOverdueCard");
+      expect(card).not.toBe("");
+      expect(card).not.toMatch(/includeReconciliation/);
+      expect(card).not.toMatch(/\bgetFirebaseCashOutstanding\s*\(/);
+    });
+
+    it("el filtro Lider es un select con aria-label y su onChange solo cambia estado (no llama)", () => {
+      const source = admin();
+      const label = source.search(/aria-label=(?:"Lider"|\{\s*["']Lider["']\s*\})/);
+      expect(label, "falta <select aria-label=\"Lider\">").toBeGreaterThanOrEqual(0);
+      const selectStart = source.lastIndexOf("<select", label);
+      const selectEnd = source.indexOf("</select>", label);
+      expect(selectStart).toBeGreaterThanOrEqual(0);
+      const select = source.slice(selectStart, selectEnd < 0 ? undefined : selectEnd);
+      const onChangeAt = select.indexOf("onChange={");
+      expect(onChangeAt, "el select Lider no tiene onChange").toBeGreaterThanOrEqual(0);
+      const handler = balancedBraces(select, onChangeAt + "onChange=".length);
+      expect(handler).toMatch(/\bset[A-Z]\w*\(/);
+      expect(handler).not.toMatch(/getFirebaseCashOutstanding|\.get\(|\.prime\(|fetch|load|refresh|reload|includeReconciliation/i);
+    });
+  });
+
+  describe("RNF_01 · no recalcula ni baja historico", () => {
+    const FORBIDDEN = [
+      /\bbuildCodReceivedSet\b/,
+      /\bisSellerEntryEligible\b/,
+      /\bcomputeDriverCashSummary\b/,
+      /\bbuildWalletEntries\b/,
+      /\bwalletEntries\b/,
+      /\bstate\.settlements\b/,
+      /\bstate\.orders\b/,
+      /["']firebase\/firestore["']/,
+      /\bcollection\(/,
+      /\bonSnapshot\(/,
+      /\bgetDocs\(/,
+    ];
+
+    it.each([ADMIN, VIEW])("%s no usa la materia prima del calculo ni lee Firestore", (file) => {
+      expect(existsSync(absolute(file)), `${file} no existe`).toBe(true);
+      const source = sourceWithoutComments(file);
+      const hits = FORBIDDEN.filter((pattern) => pattern.test(source)).map(String);
+      expect(hits).toEqual([]);
+    });
+
+    it(`operations-app.tsx: buildCodReceivedSet sigue con ${FROZEN_COD_RECEIVED_COUNT} apariciones (congelado)`, () => {
+      const raw = readFileSync(absolute(APP), "utf8");
+      expect(raw.match(/\bbuildCodReceivedSet\b/g)?.length ?? 0).toBe(FROZEN_COD_RECEIVED_COUNT);
+    });
+  });
+
+  describe("montaje en operations-app.tsx", () => {
+    it("importa los dos componentes de ./cash-outstanding-admin", () => {
+      const imports = [...app().matchAll(/import\s*\{([^}]*)\}\s*from\s*["']\.\/cash-outstanding-admin["']/g)].map((m) => m[1]).join(",");
+      expect(imports).toMatch(/\bCashOutstandingOverdueCard\b/);
+      expect(imports).toMatch(/\bCashOutstandingTab\b/);
+    });
+
+    it("la tarjeta se monta en AdminView (Operacion)", () => {
+      expect(topLevelBody(app(), "AdminView")).toMatch(/<CashOutstandingOverdueCard\b/);
+    });
+
+    it("la pestana se monta en LiquidationsPage", () => {
+      expect(topLevelBody(app(), "LiquidationsPage")).toMatch(/<CashOutstandingTab\b/);
+    });
+
+    it("\"Efectivo sin llegar\" es la segunda pestana de Liquidaciones, tras \"Por pagar\"", () => {
+      const tabs = app().match(/const\s+LIQUIDATION_TABS\s*=\s*\[([\s\S]*?)\];/)?.[1] ?? "";
+      const labels = [...tabs.matchAll(/label:\s*["']([^"']+)["']/g)].map((m) => m[1]);
+      expect(labels.slice(0, 2)).toEqual(["Por pagar", "Efectivo sin llegar"]);
+    });
+
+    it("operations-app no llama al callable por su cuenta (lo hace el componente)", () => {
+      expect(app()).not.toMatch(/\bgetFirebaseCashOutstanding\b/);
+      expect(app()).not.toMatch(/\bcreateCashOutstandingSummaryCache\b/);
+    });
+  });
+
+  describe("textos y nombres accesibles del diseno", () => {
+    it.each([
+      "Efectivo vencido",
+      "Ver efectivo sin llegar",
+      "Efectivo sin llegar",
+      "Actualizar",
+      "Reintentar",
+      "Todo el efectivo llego",
+      "No se pudo calcular el efectivo sin llegar",
+      "Calculando el efectivo sin llegar",
+      "Cuadre con la posicion de la plataforma",
+      "Ver documentos ilegibles",
+      "calculado hoy",
+    ])("el componente contiene \"%s\"", (text) => {
+      expect(admin()).toContain(text);
+    });
+
+    it("la tarjeta nombra \"el lider con mas efectivo vencido\" (decision 2)", () => {
+      expect(admin()).toMatch(/el lider con mas efectivo vencido/i);
+    });
+
+    it.each(["Cubiertos por compensacion", "Cubierto por compensacion", "Cifras incompletas"])(
+      "lo pintado (componente + modelo de vista) contiene \"%s\"",
+      (text) => {
+        expect(painted()).toContain(text);
+      }
+    );
+
+    it.each([
+      "Efectivo vencido",
+      "Resumen del efectivo sin llegar",
+      "Producto retenido a proveedores",
+      "Documentos ilegibles",
+      "Efectivo sin llegar por lider",
+      "Pedidos cubiertos por compensacion",
+      "Lider",
+    ])("aria-label=\"%s\" (region, lista, tabla o combobox del screen.json)", (name) => {
+      expect(admin()).toMatch(new RegExp(`aria-label=(?:"${name}"|\\{\\s*["']${name}["']\\s*\\})`));
+    });
+
+    it.each(["Guia", "Tienda", "Mensajero", "Entregado", "Dias", "Efectivo", "Recaudo", "Lider"])(
+      "cabecera de columna <th> \"%s\"",
+      (header) => {
+        expect(admin()).toMatch(new RegExp(`<th\\b[^>]*>\\s*${header}\\s*</th>`));
+      }
+    );
+
+    it("tiene role=\"status\" (cargando) y role=\"alert\" (error)", () => {
+      expect(admin()).toMatch(/role=["']status["']/);
+      expect(admin()).toMatch(/role=["']alert["']/);
+    });
+
+    it("las divulgaciones con cifras variables las llevan en aria-describedby (decisiones 3 y 12)", () => {
+      expect(admin()).toMatch(/aria-describedby=/);
+      expect(admin()).toMatch(/aria-expanded=/);
+    });
+
+    it("usa h3 para los grupos de lider y la seccion de compensados", () => {
+      expect(admin()).toMatch(/<h3\b/);
+    });
+  });
+
+  describe("sistema de diseno (docs/design-system.md)", () => {
+    it("sin colores literales (hex, rgb, hsl ni clases arbitrarias de color)", () => {
+      expect(existsSync(absolute(ADMIN)), `${ADMIN} no existe`).toBe(true);
+      const source = admin();
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
+      expect(source).not.toMatch(/\[(?:#|rgb|hsl)/);
+    });
+
+    it("todo <button> y <select> tiene objetivo tactil >= 44px (focus-ring o min-h-11)", () => {
+      const source = admin();
+      const controls = [...source.matchAll(/<(button|select)\b/g)];
+      expect(controls.length).toBeGreaterThan(0);
+      const short = controls
+        .map((match) => {
+          const start = match.index ?? 0;
+          const close = source.indexOf(match[1] === "button" ? "</button>" : "</select>", start);
+          const tag = source.slice(start, close < 0 ? start + 800 : Math.min(close, start + 800));
+          return { line: source.slice(0, start).split("\n").length, tag };
+        })
+        .filter(({ tag }) => !/\bfocus-ring\b|\bmin-h-11\b|\bmin-h-\[44px\]|\bh-11\b|\bmin-h-12\b|\bmin-h-14\b/.test(tag))
+        .map(({ line }) => `linea ${line}`);
+      expect(short).toEqual([]);
+    });
+  });
+});
