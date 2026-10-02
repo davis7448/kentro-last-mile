@@ -94,7 +94,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     recibido no se copia")`: importa y llama la regla; `findReceivedRuleCopies` `[]` en los archivos de la
     lista fija que existan; mutacion detectada. `EV/mutacion-rf01.txt`.
 
-- [ ] **T7: Fecha, antiguedad y ubicacion (incluida la compensacion)**
+- [x] **T7: Fecha, antiguedad y ubicacion (incluida la compensacion)**
   * Requisitos cubiertos: RF_02, RF_03, RF_09
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts
   * Accion: `deliveredAt`, `ageDays`, `isOverdue` (falso si `covered_by_netting`); `row.settlements` con

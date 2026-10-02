@@ -264,6 +264,73 @@ function settlementsByOrder(settlements: SettlementDoc[]): Map<string, CashRowSe
   return byOrder;
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Fecha de entrega, antiguedad y ubicacion (plan 2.3, 2.9, 4.2 paso 4)
+// ---------------------------------------------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+
+/** Fecha del asiento `cod_revenue` de tienda MAS ANTIGUO por pedido (fuente `cod_entry`). */
+function oldestCodRevenueAt(entries: WalletEntryDoc[]): Map<string, string> {
+  const byOrder = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry.orderId || entry.ownerType !== "seller" || entry.type !== "cod_revenue" || !entry.createdAt) continue;
+    const current = byOrder.get(entry.orderId);
+    if (current === undefined || entry.createdAt < current) byOrder.set(entry.orderId, entry.createdAt);
+  }
+  return byOrder;
+}
+
+/** Plan 2.3: closedAt → ultima evidencia `delivery` → `cod_revenue` mas antiguo → updatedAt. */
+function resolveDeliveredAt(
+  order: CashOutstandingOrder,
+  codRevenueAt: Map<string, string>
+): { deliveredAt: string; deliveredAtSource: DeliveredAtSource } {
+  if (order.closedAt) return { deliveredAt: order.closedAt, deliveredAtSource: "closedAt" };
+  let latestDelivery: string | undefined;
+  for (const item of order.evidence) {
+    if (item.type !== "delivery" || !item.createdAt) continue;
+    if (latestDelivery === undefined || item.createdAt > latestDelivery) latestDelivery = item.createdAt;
+  }
+  if (latestDelivery !== undefined) return { deliveredAt: latestDelivery, deliveredAtSource: "evidence" };
+  const codAt = codRevenueAt.get(order.id);
+  if (codAt !== undefined) return { deliveredAt: codAt, deliveredAtSource: "cod_entry" };
+  return { deliveredAt: order.updatedAt ?? "", deliveredAtSource: "updatedAt" };
+}
+
+function ageInDays(now: string, deliveredAt: string): number {
+  const elapsed = Date.parse(now) - Date.parse(deliveredAt);
+  return Number.isFinite(elapsed) ? Math.floor(elapsed / DAY_MS) : 0;
+}
+
+/**
+ * Plan 2.9: un corte abierto manda; si no, uno saldado en total (compensacion); si no, uno cerrado
+ * con faltante. Los cortes llegan validados como pending|paid|reconciled, asi que "cerrado" es
+ * "no pending", y el saldado lo decide `isDriverSettlementCashSettled` (ya volcado en `cashSettled`).
+ * `settlements` viene `createdAt` desc: el primero de la clase ganadora es el mas reciente.
+ */
+function resolveLocation(settlements: CashRowSettlement[]): {
+  location: CashSettlementLocation;
+  attributedSettlementId: string | null;
+} {
+  const open = settlements.find((item) => item.status === "pending");
+  if (open) return { location: "in_settlement_open", attributedSettlementId: open.id };
+  const netted = settlements.find((item) => item.cashSettled);
+  if (netted) return { location: "covered_by_netting", attributedSettlementId: netted.id };
+  const closedShort = settlements[0];
+  if (closedShort) return { location: "settlement_paid_short", attributedSettlementId: closedShort.id };
+  return { location: "outside_settlement", attributedSettlementId: null };
+}
+
+function nameOf(names: Map<string, string>, id: string | null): string | null {
+  return id === null ? null : names.get(id) ?? null;
+}
+
+function byDeliveredAtAsc(left: CashOutstandingRow, right: CashOutstandingRow): number {
+  if (left.deliveredAt !== right.deliveredAt) return left.deliveredAt < right.deliveredAt ? -1 : 1;
+  return left.orderId < right.orderId ? -1 : left.orderId > right.orderId ? 1 : 0;
+}
+
 function emptyTotals(): CashOutstandingTotals {
   return {
     orderCount: 0,
@@ -293,8 +360,9 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
   // `full` y `targeted` dan las mismas filas (invariante del plan 4.2).
   const amounts = amountsByOrder(input.receivableEntries);
   const settlementsOf = settlementsByOrder(input.settlements);
+  const codRevenueAt = oldestCodRevenueAt(input.receivableEntries);
 
-  const rows: CashOutstandingRow[] = input.orders
+  const allRows: CashOutstandingRow[] = input.orders
     .filter((order) => isListedCandidate(order, input.scope, received))
     .map((order) => {
       const orderAmounts = amounts.get(order.id);
@@ -303,31 +371,39 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
       const driverPayCop = orderAmounts?.driverPayCop ?? 0;
       const expectedCashCop = Math.max(0, collectedCop - driverPayCop);
       const receivedCop = partialReceived.get(order.id) ?? 0;
+      const rowSettlements = settlementsOf.get(order.id) ?? [];
+      const { deliveredAt, deliveredAtSource } = resolveDeliveredAt(order, codRevenueAt);
+      const ageDays = ageInDays(input.now, deliveredAt);
+      const { location, attributedSettlementId } = resolveLocation(rowSettlements);
       return {
         orderId: order.id,
         trackingCode: order.trackingCode ?? order.id,
         sellerId: order.sellerId,
-        sellerName: "", // T7
+        sellerName: input.names.sellers.get(order.sellerId) ?? order.sellerId,
         leaderId: order.driverId,
-        leaderName: null, // T7
+        leaderName: nameOf(input.names.leaders, order.driverId),
         messengerId: order.messengerId,
-        messengerName: null, // T7
-        deliveredAt: "", // T7
-        deliveredAtSource: "updatedAt", // T7
-        ageDays: 0, // T7
-        isOverdue: false, // T7
+        messengerName: nameOf(input.names.messengers, order.messengerId),
+        deliveredAt,
+        deliveredAtSource,
+        ageDays,
+        // RF_09: lo cubierto por compensacion no vence (no falta dinero).
+        isOverdue: ageDays > input.settings.overdueDays && location !== "covered_by_netting",
         collectedCop,
         collectedSource: hasCodEntry ? "wallet" : "order_total",
         driverPayCop,
         expectedCashCop,
         receivedCop,
         outstandingCop: Math.max(0, expectedCashCop - receivedCop),
-        location: "outside_settlement", // T7
-        settlements: settlementsOf.get(order.id) ?? [],
-        attributedSettlementId: null, // T7
+        location,
+        settlements: rowSettlements,
+        attributedSettlementId,
         supplierWithheld: [] // T8
       };
     });
+
+  const rows = allRows.filter((row) => row.location !== "covered_by_netting").sort(byDeliveredAtAsc);
+  const nettedRows = allRows.filter((row) => row.location === "covered_by_netting").sort(byDeliveredAtAsc);
 
   const isIncomplete =
     input.unreadableOrderIds.length > 0 || input.unreadableSettlementIds.length > 0 || input.unreadableEntryIds.length > 0;
@@ -339,7 +415,7 @@ export function buildCashOutstandingReport(input: CashOutstandingInput): CashOut
     settingsInvalid: input.settingsInvalid,
     channelConfigured: input.channelConfigured,
     rows,
-    nettedRows: [], // T7 reparte las filas cubiertas por compensacion
+    nettedRows,
     byLeader: [], // T8
     bySupplier: [], // T8
     totals: emptyTotals(), // T8
