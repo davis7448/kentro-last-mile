@@ -6,7 +6,10 @@
  * resultado, y ningun mensaje de error contiene la url (el webhook lleva el token en la ruta y el
  * resultado se guarda en `cashOverdueRuns`).
  *
- * Cuerpo `{ content, text }`: `content` lo lee Discord; `text`, Slack y Google Chat.
+ * El cuerpo depende del host del webhook (T20, hallazgo R1-RF_05-1): Discord (discord.com,
+ * discordapp.com y sus subdominios) recibe exactamente `{ content }`; cualquier otro host, o una url
+ * que no se pueda parsear, recibe exactamente `{ text }` (Slack, Google Chat). Nunca un campo de mas:
+ * Google Chat responde 400 ante el campo desconocido `content`.
  */
 
 export type OpsNoticeResult =
@@ -31,6 +34,24 @@ export function isOpsChannelConfigured(url: string | undefined | null): boolean 
   if (typeof url !== "string") return false;
   const trimmed = url.trim();
   return trimmed !== "" && trimmed.toLowerCase() !== NO_CHANNEL_SENTINEL;
+}
+
+const DISCORD_HOSTS = ["discord.com", "discordapp.com"];
+
+function isDiscordHost(url: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(url.trim()).hostname.toLowerCase();
+  } catch {
+    // Url no parseable: se trata como canal generico; el envio decide si falla.
+    return false;
+  }
+  return DISCORD_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+}
+
+/** Cuerpo exacto para el canal: `{ content }` en Discord, `{ text }` en los demas. */
+function buildNoticeBody(text: string, url: string): { content: string } | { text: string } {
+  return isDiscordHost(url) ? { content: text } : { text };
 }
 
 /** Quita la url del webhook (y cualquier otra url) de un mensaje de error. */
@@ -74,7 +95,7 @@ export async function sendOpsNotice(text: string, options: SendOpsNoticeOptions)
       fetchImpl(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text, text }),
+        body: JSON.stringify(buildNoticeBody(text, url)),
         signal: controller.signal
       })
     );

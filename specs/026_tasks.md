@@ -259,7 +259,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     prueba de dos lideres donde el orden por bruto y por neto difieren; el ayudante de la prueba de vista arma los
     grupos como el servidor.
 
-- [ ] **T20: El aviso llega a Discord, Slack y Google Chat (R1-RF_05-1)**
+- [x] **T20: El aviso llega a Discord, Slack y Google Chat (R1-RF_05-1)**
   * Requisitos cubiertos: RF_05
   * Archivos: functions/src/ops-notify.ts, src/lib/ops-notify.test.ts
   * Accion: Google Chat rechaza con 400 un campo desconocido (`content`). El cuerpo se elige por el host de la
