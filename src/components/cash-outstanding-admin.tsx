@@ -646,13 +646,25 @@ function CashOutstandingBody({
         </section>
       )}
 
-      {hasAnyRows && report.bySupplier.length > 0 && <SupplierWithheldCard report={report} viewport={viewport} />}
+      {view.showSupplierWithheld && <SupplierWithheldCard report={report} viewport={viewport} />}
 
       {view.reconciliation && <ReconciliationDisclosure reconciliation={view.reconciliation} trackingById={trackingById} />}
 
       {!hasRows && (
         <section className="grid gap-1 rounded-3xl border border-white/[0.06] bg-panel p-5">
-          {leaderFilter === "" ? (
+          {leaderFilter !== "" ? (
+            <p className="text-sm text-ink-60">Este lider no tiene efectivo sin llegar.</p>
+          ) : view.emptyState === "only_netted" ? (
+            <>
+              <h3 className="flex items-center gap-2 text-base font-bold">
+                <Check size={18} aria-hidden="true" className="text-mint" />
+                No se debe efectivo
+              </h3>
+              <p className="text-sm text-ink-60">
+                Todo lo que falta esta cubierto por compensacion: no se debe efectivo, pero el producto de esos pedidos sigue retenido al proveedor.
+              </p>
+            </>
+          ) : view.emptyState === "all_clear" ? (
             <>
               <h3 className="flex items-center gap-2 text-base font-bold">
                 <Check size={18} aria-hidden="true" className="text-mint" />
@@ -663,7 +675,7 @@ function CashOutstandingBody({
               </p>
             </>
           ) : (
-            <p className="text-sm text-ink-60">Este lider no tiene efectivo sin llegar.</p>
+            <p className="text-sm text-ink-60">Ninguna contraentrega entregada espera su efectivo, pero hay producto retenido a proveedores.</p>
           )}
         </section>
       )}

@@ -2518,3 +2518,66 @@ describe("T22 · la tarjeta de Operacion avisa de cifras incompletas (R2-RF_03-1
     expect(cardBody()).toMatch(/onClick=\{\s*open\s*\}/);
   });
 });
+
+describe("T23 · lo retenido a proveedores se ve aunque todo este compensado (R2-RF_08-1, RF_08, RF_09)", () => {
+  /*
+   * Guarda de fuente sobre `CashOutstandingBody` (src/components/cash-outstanding-admin.tsx). Contrato:
+   *  - `<SupplierWithheldCard` se condiciona a `view.showSupplierWithheld`, no a `report.rows.length` ni a
+   *    `hasAnyRows` (la decision es del modelo de vista).
+   *  - El literal "pueden cobrar todo lo entregado" solo sale bajo `emptyState === "all_clear"`.
+   *  - Hay una rama `emptyState === "only_netted"` con su propio texto, que habla de compensacion y NO dice
+   *    "pueden cobrar todo".
+   */
+  const ADMIN = "src/components/cash-outstanding-admin.tsx";
+  const admin = () => (existsSync(absolute(ADMIN)) ? sourceWithoutComments(ADMIN) : "");
+
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  const body = () => topLevelBody(admin(), "CashOutstandingBody");
+
+  /** La expresion `{ ... && <SupplierWithheldCard` en la que se monta la tarjeta. */
+  const supplierCondition = (): string => {
+    const match = body().match(/\{([^{}]*?)&&\s*<SupplierWithheldCard\b/);
+    return match ? match[1] : "";
+  };
+
+  it("CashOutstandingBody existe", () => {
+    expect(body()).not.toBe("");
+  });
+
+  it("la tarjeta de proveedor se condiciona a view.showSupplierWithheld", () => {
+    expect(supplierCondition()).toMatch(/\bview\??\.showSupplierWithheld\b/);
+  });
+
+  it("la tarjeta de proveedor ya no depende de que haya rows (ni hasAnyRows ni report.rows.length)", () => {
+    expect(supplierCondition()).not.toMatch(/hasAnyRows|rows\.length/);
+  });
+
+  it("'pueden cobrar todo lo entregado' solo bajo emptyState === \"all_clear\"", () => {
+    const source = body();
+    const at = source.indexOf("pueden cobrar todo lo entregado");
+    expect(at).toBeGreaterThan(-1);
+    const before = source.slice(0, at);
+    const lastBranch = Math.max(before.lastIndexOf("all_clear"), before.lastIndexOf("only_netted"));
+    expect(lastBranch, "no hay rama emptyState antes del literal").toBeGreaterThan(-1);
+    expect(before.slice(lastBranch)).toMatch(/^all_clear["']/);
+    expect(before).toMatch(/emptyState\s*===\s*["']all_clear["']/);
+  });
+
+  it("hay una rama emptyState === \"only_netted\" con texto de compensacion y sin 'pueden cobrar todo'", () => {
+    const source = body();
+    const at = source.search(/emptyState\s*===\s*["']only_netted["']/);
+    expect(at).toBeGreaterThan(-1);
+    const rest = source.slice(at + 1);
+    const end = rest.search(/emptyState\s*===|<LeaderGroups\b|<NettedSection\b/);
+    const branch = end < 0 ? rest : rest.slice(0, end);
+    expect(branch).toMatch(/cubierto por compensacion/);
+    expect(branch).not.toMatch(/pueden cobrar todo/);
+  });
+});

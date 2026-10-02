@@ -719,3 +719,69 @@ describe("T22 · la tarjeta de Operacion dice 'cifras incompletas' (R2-RF_03-1, 
     expect(cardOf(view).isIncomplete).toBe(false);
   });
 });
+
+describe("T23 · lo retenido a proveedores se ve aunque todo este compensado (R2-RF_08-1, RF_08, RF_09)", () => {
+  /**
+   * Contrato que fija este bloque (la decision vive en el modelo de vista, no en el componente):
+   *   view.showSupplierWithheld: boolean — admin y `report.bySupplier` no vacio, haya o no `rows`.
+   *                                        Siempre false para el lider.
+   *   view.emptyState: "all_clear" | "only_netted" | null
+   *     - null          si hay `rows`.
+   *     - "only_netted" si no hay `rows` pero si compensados (`nettedRows`).
+   *     - "all_clear"   solo si no hay `rows`, ni `bySupplier`, ni `nettedRows`.
+   */
+  type ViewT23 = { showSupplierWithheld?: boolean; emptyState?: "all_clear" | "only_netted" | null };
+  const t23 = (view: unknown) => view as ViewT23;
+
+  const LAB = { supplierId: "adma-lab", supplierName: "ADMA LABORATORIO", amountCop: 500_000, overdueAmountCop: 0, nettedAmountCop: 500_000 };
+  const netted = () => [makeRow({ orderId: "n1", location: "covered_by_netting", attributedSettlementId: "s-1" })];
+
+  /** El escenario del hallazgo: rows vacio, solo compensados con producto de LAB sin pagar. */
+  const onlyNetted = () => makeReport({ rows: [], nettedRows: netted(), bySupplier: [LAB] });
+  const allEmpty = () => makeReport({ rows: [] });
+
+  it("rows vacio + compensados con producto: showSupplierWithheld es true", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(onlyNetted(), { viewport: "mobile", role: "admin" })).showSupplierWithheld).toBe(true);
+  });
+
+  it("rows vacio + compensados con producto: emptyState es 'only_netted' (no promete que el proveedor cobre)", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(onlyNetted(), { viewport: "mobile", role: "admin" })).emptyState).toBe("only_netted");
+  });
+
+  it("todo vacio: emptyState es 'all_clear'", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(allEmpty(), { viewport: "mobile", role: "admin" })).emptyState).toBe("all_clear");
+  });
+
+  it("todo vacio: showSupplierWithheld es false", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(allEmpty(), { viewport: "mobile", role: "admin" })).showSupplierWithheld).toBe(false);
+  });
+
+  it("rows vacio y sin compensados pero con retenido a proveedor: no es 'all_clear'", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: [], bySupplier: [{ ...LAB, nettedAmountCop: 0 }] }), { viewport: "mobile", role: "admin" });
+    expect({ showSupplierWithheld: t23(view).showSupplierWithheld, isAllClear: t23(view).emptyState === "all_clear" }).toEqual({ showSupplierWithheld: true, isAllClear: false });
+  });
+
+  it("con rows: emptyState es null", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(twoLeadersReport({ bySupplier: [LAB] }), { viewport: "desktop", role: "admin" })).emptyState).toBeNull();
+  });
+
+  it("con rows y bySupplier: showSupplierWithheld es true (como hoy)", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(twoLeadersReport({ bySupplier: [LAB] }), { viewport: "desktop", role: "admin" })).showSupplierWithheld).toBe(true);
+  });
+
+  it.each([
+    ["con rows", () => twoLeadersReport({ bySupplier: [LAB] })],
+    ["solo compensados", onlyNetted],
+    ["todo vacio", allEmpty],
+  ] as const)("lider (%s): showSupplierWithheld es false", async (_case, build) => {
+    const { buildCashOutstandingView } = await loadView();
+    expect(t23(buildCashOutstandingView(build(), { viewport: "mobile", role: "leader" })).showSupplierWithheld).toBe(false);
+  });
+});

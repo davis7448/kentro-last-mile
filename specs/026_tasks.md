@@ -290,7 +290,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
   * Verificacion: prueba de vista (vencido legible 0 + un ilegible → sin "al dia", con aviso; vencido > 0 +
     ilegible → cifra con aviso); guarda textual del componente (bloque T22).
 
-- [ ] **T23: Lo retenido a proveedores se ve aunque todo este compensado (R2-RF_08-1)**
+- [x] **T23: Lo retenido a proveedores se ve aunque todo este compensado (R2-RF_08-1)**
   * Requisitos cubiertos: RF_08, RF_09
   * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
   * Accion: la tarjeta "Producto retenido a proveedores" se muestra si `bySupplier` no esta vacio, haya o no

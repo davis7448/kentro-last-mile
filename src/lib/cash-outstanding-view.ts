@@ -130,7 +130,19 @@ export interface CashOutstandingView {
   /** Solo admin, con la carga con conciliacion y sin filtro de lider (README decision 3). */
   reconciliation: PositionReconciliation | null;
   incomplete: CashOutstandingIncomplete | null;
+  /**
+   * Tarjeta de lo retenido a proveedores: solo admin y con `bySupplier` no vacio, haya o no `rows`. Con todo
+   * compensado sigue habiendo producto retenido al proveedor (R2-RF_08-1).
+   */
+  showSupplierWithheld: boolean;
+  /**
+   * Que estado vacio se pinta: null si hay filas; "only_netted" si solo quedan compensados; "all_clear" solo
+   * si no hay filas, ni compensados, ni nada retenido a proveedores (solo entonces "pueden cobrar todo").
+   */
+  emptyState: CashOutstandingEmptyState;
 }
+
+export type CashOutstandingEmptyState = "all_clear" | "only_netted" | null;
 
 // ---------------------------------------------------------------------------------------------------
 // Fechas: "<dia> <mes>" en hora de Bogota (UTC-5 todo el ano, sin horario de verano).
@@ -402,7 +414,16 @@ export function buildCashOutstandingView(report: CashOutstandingReport, options:
     // El cuadre compara la lista ENTERA con la posicion: con un lider elegido no cuadraria nada.
     reconciliation: role === "admin" && filter === null ? report.reconciliation : null,
     incomplete: buildIncomplete(report, role),
+    showSupplierWithheld: role === "admin" && report.bySupplier.length > 0,
+    emptyState: emptyStateOf(rows.length, nettedRows.length, report.bySupplier.length),
   };
+}
+
+function emptyStateOf(rowCount: number, nettedCount: number, supplierCount: number): CashOutstandingEmptyState {
+  if (rowCount > 0) return null;
+  if (nettedCount > 0) return "only_netted";
+  // Sin filas ni compensados pero con producto retenido: no se puede prometer que el proveedor cobre todo.
+  return supplierCount === 0 ? "all_clear" : null;
 }
 
 // ---------------------------------------------------------------------------------------------------
