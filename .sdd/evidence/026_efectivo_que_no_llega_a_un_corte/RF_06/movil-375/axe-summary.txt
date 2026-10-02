@@ -1,0 +1,12 @@
+# axe-core 4.13 · RF_06 · movil-375
+  estados analizados: finanzas (1 contenedores 026), final (0 contenedores 026)
+  nodos unicos con violacion (regla + selector), por impacto:
+                critical   serious  moderate     minor
+    026                0         0         0         0
+    resto app          0         0         0         0
+
+## Dentro de los componentes de la 026
+  (ninguna)
+
+## Resto de la app
+  (ninguna)

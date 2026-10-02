@@ -1,0 +1,190 @@
+# Spec 026 — verify E2E por requisito (2026-10-02T21:06:08.901Z)
+  http://localhost:3100 · Firebase de produccion, solo lectura · lider driver-1778271901513
+
+  Informe admin resumen: 145 filas, 37 compensados (3665 ms)
+  Informe admin con conciliacion: 145 filas, 37 compensados, sin explicar $ 0 (4262 ms)
+  Informe lider: 145 filas, 37 compensados (3642 ms)
+
+  Informe admin con reloj +10 dias: 145 vencidos, $ 14.361.980 brutos, 37 compensados
+## RF_03 · movil-375 —PASA
+  HU_01 · tarjeta "Efectivo vencido" en Operacion (total vencido, lider, compensados fuera)
+  OK    sin vencidos: la tarjeta queda en una linea "Efectivo vencido: $ 0 · al dia"
+  OK    sin vencidos no hay boton ni lider destacado
+  OK    aparta los compensados: "No cuenta 37 cubiertos por compensacion"
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_03/movil-375
+
+## RF_03 · escritorio-1280 —PASA
+  HU_01 · tarjeta "Efectivo vencido" en Operacion (total vencido, lider, compensados fuera)
+  OK    sin vencidos: la tarjeta queda en una linea "Efectivo vencido: $ 0 · al dia"
+  OK    sin vencidos no hay boton ni lider destacado
+  OK    aparta los compensados: "No cuenta 37 cubiertos por compensacion"
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_03/escritorio-1280
+
+## RF_03 · movil-375 (reloj-10d) —PASA
+  HU_01 · tarjeta "Efectivo vencido" con el reloj del calculo +10 dias (estado vencido con datos reales)
+  OK    muestra el vencido $ 14.361.980
+  OK    dice 145 contraentregas sin su efectivo
+  OK    nombra al lider con mas vencido: Domiciliario, $ 14.361.980
+  OK    el boton "Ver efectivo sin llegar" esta visible
+  OK    aparta los compensados: "No cuenta 37 cubiertos por compensacion"
+  OK    "Ver efectivo sin llegar" abre Liquidaciones en la pestana "Efectivo sin llegar"
+  OK    la pestana pinta el mismo vencido que la tarjeta ($ 14.361.980)
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_03/movil-375-reloj-10d
+
+## RF_03 · escritorio-1280 (reloj-10d) —PASA
+  HU_01 · tarjeta "Efectivo vencido" con el reloj del calculo +10 dias (estado vencido con datos reales)
+  OK    muestra el vencido $ 14.361.980
+  OK    dice 145 contraentregas sin su efectivo
+  OK    nombra al lider con mas vencido: Domiciliario, $ 14.361.980
+  OK    el boton "Ver efectivo sin llegar" esta visible
+  OK    aparta los compensados: "No cuenta 37 cubiertos por compensacion"
+  OK    "Ver efectivo sin llegar" abre Liquidaciones en la pestana "Efectivo sin llegar"
+  OK    la pestana pinta el mismo vencido que la tarjeta ($ 14.361.980)
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_03/escritorio-1280-reloj-10d
+
+## RF_02 · movil-375 —PASA
+  HU_01 · pestana "Efectivo sin llegar": franja, grupos por lider, cuadre sin filtro y oculto con filtro
+  OK    franja "Sin llegar" $ 14.361.980 en 145 pedidos
+  OK    franja "Vencido, mas de 7 dias" $ 0
+  OK    franja separa "fuera de todo corte" y "en un corte, sin cubrir"
+  OK    un grupo por lider: 1 en pantalla, 1 en el informe
+  OK    los grupos son los lideres del informe (Domiciliario)
+  OK    plegado inicial: el primer grupo esta plegado (no hay vencidos)
+  OK    al desplegar el grupo se ven sus pedidos
+  OK    el cuadre se muestra sin filtro
+  OK    cuadre: por cobrar $ 12.596.829 · sin explicar $ 0
+  OK    con filtro de lider (Domiciliario) el cuadre se oculta
+  OK    con filtro queda un solo grupo
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_02/movil-375
+
+## RF_02 · escritorio-1280 —PASA
+  HU_01 · pestana "Efectivo sin llegar": franja, grupos por lider, cuadre sin filtro y oculto con filtro
+  OK    franja "Sin llegar" $ 14.361.980 en 145 pedidos
+  OK    franja "Vencido, mas de 7 dias" $ 0
+  OK    franja separa "fuera de todo corte" y "en un corte, sin cubrir"
+  OK    un grupo por lider: 1 en pantalla, 1 en el informe
+  OK    los grupos son los lideres del informe (Domiciliario)
+  OK    plegado inicial: el primer grupo esta plegado (no hay vencidos)
+  OK    al desplegar el grupo se ven sus pedidos
+  OK    el cuadre se muestra sin filtro
+  OK    cuadre: por cobrar $ 12.596.829 · sin explicar $ 0
+  OK    con filtro de lider (Domiciliario) el cuadre se oculta
+  OK    con filtro queda un solo grupo
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_02/escritorio-1280
+
+## RF_09 · movil-375 —PASA
+  HU_01 · "Cubiertos por compensacion" aparte, con todos sus pedidos y fuera del vencido
+  OK    la franja avisa "Aparte, al final: 37 cubiertos por compensacion"
+  OK    resumen: 37 pedidos · $ 3.192.911 · 29 cortes saldados
+  OK    explica que no cuentan como vencidos ni avisan
+  OK    se listan los 37 pedidos (en pantalla: 37)
+  OK    son exactamente las guias del informe
+  OK    el informe trae 37 compensados (DoD 3 del responsable): 37
+  OK    cada fila lleva la pildora "Cubierto por compensacion" (37)
+  OK    ningun compensado esta en la lista de vencidos del informe
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_09/movil-375
+
+## RF_09 · escritorio-1280 —PASA
+  HU_01 · "Cubiertos por compensacion" aparte, con todos sus pedidos y fuera del vencido
+  OK    la franja avisa "Aparte, al final: 37 cubiertos por compensacion"
+  OK    resumen: 37 pedidos · $ 3.192.911 · 29 cortes saldados
+  OK    explica que no cuentan como vencidos ni avisan
+  OK    se listan los 37 pedidos (en pantalla: 37)
+  OK    son exactamente las guias del informe
+  OK    el informe trae 37 compensados (DoD 3 del responsable): 37
+  OK    cada fila lleva la pildora "Cubierto por compensacion" (37)
+  OK    ningun compensado esta en la lista de vencidos del informe
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_09/escritorio-1280
+
+## RF_04 · movil-375 —PASA
+  HU_01 · dialogo "Plazo y aviso": abre, valida plazo 0 y se cancela sin guardar
+  OK    abre con el plazo vigente (7)
+  OK    abre con el umbral vigente (20000)
+  OK    dice si hay canal de aviso
+  OK    plazo 0 muestra el error "Escribe un numero entero de dias entre 1 y 120."
+  OK    el campo queda aria-invalid
+  OK    no se llamo a updateCashAlertSettings
+  OK    Cancelar cierra el dialogo
+  OK    tras cancelar sigue sin llamarse updateCashAlertSettings
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_04/movil-375
+
+## RF_04 · escritorio-1280 —PASA
+  HU_01 · dialogo "Plazo y aviso": abre, valida plazo 0 y se cancela sin guardar
+  OK    abre con el plazo vigente (7)
+  OK    abre con el umbral vigente (20000)
+  OK    dice si hay canal de aviso
+  OK    plazo 0 muestra el error "Escribe un numero entero de dias entre 1 y 120."
+  OK    el campo queda aria-invalid
+  OK    no se llamo a updateCashAlertSettings
+  OK    Cancelar cierra el dialogo
+  OK    tras cancelar sigue sin llamarse updateCashAlertSettings
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_04/escritorio-1280
+
+## RF_08 · escritorio-1280 —PASA
+  HU_01 · "No se puede pagar todavia" por proveedor en Por pagar y producto retenido en la pestana
+  OK    hay lineas "No se puede pagar todavia" en Por pagar (1; proveedores con retenido en el informe: 2)
+  OK    cada linea pinta el importe de un proveedor del informe
+  OK    la linea esta bajo el proveedor que le corresponde
+  OK    ADMA LABORATORIO: dice cuanto es de compensados ($ 639.550)
+  OK    la pestana muestra el producto retenido: ADMA LABORATORIO $ 951.550
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_08/escritorio-1280
+
+## RF_08 · movil-375 —PASA
+  HU_01 · "No se puede pagar todavia" por proveedor en Por pagar y producto retenido en la pestana
+  OK    hay lineas "No se puede pagar todavia" en Por pagar (1; proveedores con retenido en el informe: 2)
+  OK    cada linea pinta el importe de un proveedor del informe
+  OK    la linea esta bajo el proveedor que le corresponde
+  OK    ADMA LABORATORIO: dice cuanto es de compensados ($ 639.550)
+  OK    la pestana muestra el producto retenido: ADMA LABORATORIO $ 951.550
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: admin-resumen, admin+conciliacion
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_08/movil-375
+
+## RF_06 · movil-375 —PASA
+  HU_02 · el lider ve su efectivo sin llegar en Finanzas y "Pendiente por entregar" sigue
+  OK    Operacion muestra "Pendiente por entregar" ($12.668.829)
+  OK    muestra su cifra $ 12.668.829 por entregar en 145 pedidos
+  OK    solo trae sus pedidos (todas las filas del informe son de su driverId)
+  OK    el informe del lider no trae conciliacion ni proveedores
+  OK    aparta 37 cubiertos en cortes saldados
+  OK    "Pendiente por entregar" sigue en Operacion con la misma cifra (antes $12.668.829, despues $12.668.829)
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: leader
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_06/movil-375
+
+## RF_06 · escritorio-1280 —PASA
+  HU_02 · el lider ve su efectivo sin llegar en Finanzas y "Pendiente por entregar" sigue
+  OK    Operacion muestra "Pendiente por entregar" ($12.668.829)
+  OK    muestra su cifra $ 12.668.829 por entregar en 145 pedidos
+  OK    solo trae sus pedidos (todas las filas del informe son de su driverId)
+  OK    el informe del lider no trae conciliacion ni proveedores
+  OK    aparta 37 cubiertos en cortes saldados
+  OK    "Pendiente por entregar" sigue en Operacion con la misma cifra (antes $12.668.829, despues $12.668.829)
+  OK    la callable se llamo con sesion (Bearer) y alcance del rol: leader
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx: 1 (no contempladas 0)
+  evidencia: .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/RF_06/escritorio-1280
+
+Cuentas desechables borradas (smoke026-admin, smoke026-driver).
+VERIFY OK: todos los recorridos completos, sin errores de consola ni red no contemplados.

@@ -1,0 +1,37 @@
+# Spec 026 — accesibilidad con axe-core 4.13 (2026-10-02T21:09:30.487Z)
+  26 estados analizados en 14 recorridos (movil 375 y escritorio 1280).
+  Reglas: wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa y best-practice, sobre el documento entero.
+  "026" = nodo dentro de un componente cash-outstanding-* (tarjeta, pestana, dialogo Plazo y aviso,
+  panel del lider, linea de proveedor). "resto app" = todo lo demas. Nodos unicos por regla + selector.
+
+                critical   serious  moderate     minor
+    026                0         0         0         0
+    resto app          0         0         4         0
+
+## Por recorrido (026 crit/ser/mod/min · resto crit/ser/mod/min)
+  RF_03 movil-375: 026 0/0/0/0 · resto 0/0/0/0
+  RF_03 escritorio-1280: 026 0/0/0/0 · resto 0/0/0/0
+  RF_03 movil-375 (reloj-10d): 026 0/0/0/0 · resto 0/0/1/0
+  RF_03 escritorio-1280 (reloj-10d): 026 0/0/0/0 · resto 0/0/1/0
+  RF_02 movil-375: 026 0/0/0/0 · resto 0/0/1/0
+  RF_02 escritorio-1280: 026 0/0/0/0 · resto 0/0/1/0
+  RF_09 movil-375: 026 0/0/0/0 · resto 0/0/1/0
+  RF_09 escritorio-1280: 026 0/0/0/0 · resto 0/0/1/0
+  RF_04 movil-375: 026 0/0/0/0 · resto 0/0/1/0
+  RF_04 escritorio-1280: 026 0/0/0/0 · resto 0/0/1/0
+  RF_08 escritorio-1280: 026 0/0/0/0 · resto 0/0/2/0
+  RF_08 movil-375: 026 0/0/0/0 · resto 0/0/2/0
+  RF_06 movil-375: 026 0/0/0/0 · resto 0/0/0/0
+  RF_06 escritorio-1280: 026 0/0/0/0 · resto 0/0/0/0
+
+## critical / serious dentro de la 026
+  (ninguna)
+
+## critical / serious en el resto de la app
+  (ninguna)
+
+## Sin decidir por axe dentro de la 026 (incomplete; nodos sumados sobre todos los estados, revisar a mano)
+  color-contrast: 4
+
+## moderate / minor dentro de la 026
+  (ninguna)

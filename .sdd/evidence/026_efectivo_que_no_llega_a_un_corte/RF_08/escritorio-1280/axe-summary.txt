@@ -1,0 +1,13 @@
+# axe-core 4.13 · RF_08 · escritorio-1280
+  estados analizados: por-pagar (1 contenedores 026), final (1 contenedores 026)
+  nodos unicos con violacion (regla + selector), por impacto:
+                critical   serious  moderate     minor
+    026                0         0         0         0
+    resto app          0         0         2         0
+
+## Dentro de los componentes de la 026
+  (ninguna)
+
+## Resto de la app
+  [moderate] region — .border-t.bg-panel.border-white\/10 — All page content should be contained by landmarks (estados: por-pagar)
+  [moderate] region — .border-t — All page content should be contained by landmarks (estados: final)
