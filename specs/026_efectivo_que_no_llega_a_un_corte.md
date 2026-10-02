@@ -86,9 +86,9 @@ por compensacion, para que la alerta hable solo de dinero que de verdad falta.
 
 ## 4. Requisitos no funcionales
 
-- **RNF_01 (rendimiento):** El total y la lista MUST calcularse en servidor (constitucion, principio 11).
+- **RNF_01:** (rendimiento) El total y la lista MUST calcularse en servidor (constitucion, principio 11).
   El navegador del administrador MUST NOT bajar el historico para obtenerlos.
-- **RNF_02 (coherencia):** El total de efectivo no recibido MUST coincidir con lo que la posicion de la
+- **RNF_02:** (coherencia) El total de efectivo no recibido MUST coincidir con lo que la posicion de la
   plataforma ya llama "por cobrar al domiciliario".
 
 ## 5. Casos limite

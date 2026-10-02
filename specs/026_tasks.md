@@ -244,6 +244,41 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     evidencia con la lista de stale/missing y la tabla de ids con motivo. `compare --deployed` en
     `/sdd-verify` tras el despliegue.
 
+## Correcciones de la revision adversarial (ronda 1, 2026-10-02)
+
+- [ ] **T19: La tarjeta y los grupos miden el vencido en la misma base (R1-RF_03-1)**
+  * Requisitos cubiertos: RF_03
+  * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx
+  * Accion: la spec fija que el admin ve **recaudo bruto** (seccion 9, P1). Hoy el total de la tarjeta suma
+    `collectedCop` (bruto) pero `byLeader[].overdueCop` y `totals.overdueCop` suman `outstandingCop` (neto), y la
+    linea "el lider con mas efectivo vencido" y los grupos de la pestaña pintan el neto. Anadir a cada grupo
+    `overdueCollectedCop` (Σ collectedCop de sus vencidas) y a `totals` `overdueCollectedCop`; la tarjeta, la
+    franja y los grupos pintan el bruto, y "el lider con mas efectivo vencido" es el de mayor
+    `overdueCollectedCop`. `overdueCop` neto se conserva (lo usa el aviso, que compara el umbral con lo que se debe).
+  * Verificacion: prueba con un lider de recaudo $100.000 y pago $7.000: total y linea del lider dicen lo mismo;
+    prueba de dos lideres donde el orden por bruto y por neto difieren; el ayudante de la prueba de vista arma los
+    grupos como el servidor.
+
+- [ ] **T20: El aviso llega a Discord, Slack y Google Chat (R1-RF_05-1)**
+  * Requisitos cubiertos: RF_05
+  * Archivos: functions/src/ops-notify.ts, src/lib/ops-notify.test.ts
+  * Accion: Google Chat rechaza con 400 un campo desconocido (`content`). El cuerpo se elige por el host de la
+    url: `discord.com`/`discordapp.com` → `{ content }`; cualquier otro (Slack, Google Chat, generico) → `{ text }`.
+  * Verificacion: pruebas por host (discord, hooks.slack.com, chat.googleapis.com, otro) que fijan el cuerpo exacto
+    y que ninguna lleva campos de mas.
+
+- [ ] **T21: "No se puede pagar todavia" incluye el producto de los compensados (R1-RF_08-1)**
+  * Requisitos cubiertos: RF_08, RF_09
+  * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts
+  * Accion: RF_09 no cambia la regla de RF_01, asi que el corte de proveedor tampoco paga el producto de un pedido
+    compensado. `bySupplier[].amountCop` suma el retenido de `rows` **y** de `nettedRows`; se anade
+    `nettedAmountCop` (la parte de compensados) para poder decirlo; `overdueAmountCop` sigue solo de filas vencidas
+    de `rows` (los compensados no vencen). `supplierPendingLine` usa `amountCop` y, si `nettedAmountCop > 0`,
+    lo dice ("incluye $Y de pedidos cubiertos por compensacion").
+  * Verificacion: la prueba "RF_09: el product_cost de un compensado no suma a bySupplier" se sustituye por la
+    contraria (suma a `amountCop` y a `nettedAmountCop`, no a `overdueAmountCop`); prueba de la linea con y sin
+    compensados.
+
 ## Cobertura RF → tarea
 
 | Requisito | Tareas |

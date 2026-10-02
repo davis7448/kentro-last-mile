@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "phase": "audit",
+  "phase": "implement",
+  "activeTask": "T19",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
@@ -265,6 +266,24 @@
       ],
       "testWritten": true,
       "done": true
+    },
+    "T19": {
+      "requirements": ["RF_03"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx"],
+      "testWritten": false,
+      "done": false
+    },
+    "T20": {
+      "requirements": ["RF_05"],
+      "files": ["functions/src/ops-notify.ts", "src/lib/ops-notify.test.ts"],
+      "testWritten": false,
+      "done": false
+    },
+    "T21": {
+      "requirements": ["RF_08", "RF_09"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts"],
+      "testWritten": false,
+      "done": false
     }
   },
   "testCommand": "npm test",
