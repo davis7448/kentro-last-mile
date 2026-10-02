@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "phase": "implement",
+  "activeTask": "T2",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
@@ -11,17 +12,259 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
-    "T1": { "requirements": ["RNF_02"], "files": ["functions/src/driver-receivable.ts", "functions/src/platform-position.ts", "src/lib/driver-receivable.test.ts"], "testWritten": false, "done": false },
-    "T2": { "requirements": ["RF_04"], "files": ["functions/src/cash-outstanding-schemas.ts", "src/lib/cash-outstanding-schemas.test.ts"], "testWritten": false, "done": false },
-    "T3": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_07"], "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": false, "done": false },
-    "T4": { "requirements": ["RF_06", "RF_08", "RNF_02"], "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": false, "done": false },
-    "T5": { "requirements": ["RF_05"], "files": ["functions/src/cash-overdue-notice.ts", "src/lib/cash-overdue-notice.test.ts"], "testWritten": false, "done": false },
-    "T6": { "requirements": ["RF_05"], "files": ["functions/src/ops-notify.ts", "src/lib/ops-notify.test.ts"], "testWritten": false, "done": false },
-    "T7": { "requirements": ["RF_04", "RF_05", "RF_06", "RF_07", "RNF_01"], "files": ["functions/src/cash-outstanding-api.ts", "functions/src/index.ts", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
-    "T8": { "requirements": ["RF_02", "RF_03", "RF_06"], "files": ["src/lib/firebase/auth.ts", "src/lib/types.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts"], "testWritten": false, "done": false },
-    "T9": { "requirements": ["RF_02", "RF_03", "RF_04", "RF_08"], "files": ["src/components/cash-outstanding-admin.tsx", "src/components/operations-app.tsx", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
-    "T10": { "requirements": ["RF_06"], "files": ["src/components/cash-outstanding-leader.tsx", "src/components/operations-app.tsx", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false },
-    "T11": { "requirements": ["RNF_01", "RNF_02", "RF_07"], "files": ["scripts/verify-026.js", "docs/rendimiento.md", "src/lib/spec-026-guards.test.ts"], "testWritten": false, "done": false }
+    "T1": {
+      "requirements": [
+        "RNF_01",
+        "RNF_02",
+        "RF_07",
+        "RF_09"
+      ],
+      "files": [
+        "scripts/verify-026.js",
+        "src/lib/spec-026-guards.test.ts",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base.txt",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base-ids.json"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T2": {
+      "requirements": [
+        "RNF_01",
+        "RF_07"
+      ],
+      "files": [
+        "scripts/verify-026.js",
+        "firestore.indexes.json",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t2-query-check.txt",
+        "docs/rendimiento.md"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T3": {
+      "requirements": [
+        "RNF_02",
+        "RF_08"
+      ],
+      "files": [
+        "functions/src/driver-receivable.ts",
+        "functions/src/supplier-withheld.ts",
+        "functions/src/platform-position.ts",
+        "src/lib/driver-receivable.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T4": {
+      "requirements": [
+        "RF_01",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/seller-ledger.ts",
+        "src/lib/seller-ledger.test.ts",
+        "functions/src/settlement-math.ts",
+        "src/lib/settlement-math.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T5": {
+      "requirements": [
+        "RF_04"
+      ],
+      "files": [
+        "functions/src/cash-outstanding-schemas.ts",
+        "src/lib/cash-outstanding-schemas.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T6": {
+      "requirements": [
+        "RF_01",
+        "RF_07"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts",
+        "src/lib/spec-026-guards.test.ts",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/mutacion-rf01.txt"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T7": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T8": {
+      "requirements": [
+        "RF_06",
+        "RF_08",
+        "RF_03",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T9": {
+      "requirements": [
+        "RNF_02",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T10": {
+      "requirements": [
+        "RF_05",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-overdue-notice.ts",
+        "src/lib/cash-overdue-notice.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T11": {
+      "requirements": [
+        "RF_05"
+      ],
+      "files": [
+        "functions/src/ops-notify.ts",
+        "src/lib/ops-notify.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T12": {
+      "requirements": [
+        "RF_06",
+        "RF_07",
+        "RNF_01",
+        "RNF_02"
+      ],
+      "files": [
+        "functions/src/cash-outstanding-schemas.ts",
+        "functions/src/cash-outstanding-api.ts",
+        "functions/src/index.ts",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T13": {
+      "requirements": [
+        "RF_04",
+        "RF_05"
+      ],
+      "files": [
+        "functions/src/cash-outstanding-api.ts",
+        "functions/src/index.ts",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T14": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_06",
+        "RF_08",
+        "RF_09"
+      ],
+      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/lib/types.ts",
+        "src/lib/cash-outstanding-view.ts",
+        "src/lib/cash-outstanding-view.test.ts",
+        "src/lib/cash-outstanding-loads.ts",
+        "src/lib/cash-outstanding-loads.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T15": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_09",
+        "RNF_01"
+      ],
+      "files": [
+        "src/components/cash-outstanding-admin.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T16": {
+      "requirements": [
+        "RF_04",
+        "RF_08",
+        "RNF_01"
+      ],
+      "files": [
+        "src/lib/cash-outstanding-loads.ts",
+        "src/lib/cash-outstanding-loads.test.ts",
+        "src/components/cash-outstanding-admin.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T17": {
+      "requirements": [
+        "RF_06",
+        "RF_09",
+        "RF_01",
+        "RNF_01"
+      ],
+      "files": [
+        "src/components/cash-outstanding-leader.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": false,
+      "done": false
+    },
+    "T18": {
+      "requirements": [
+        "RNF_02",
+        "RF_07",
+        "RF_09",
+        "RNF_01"
+      ],
+      "files": [
+        "scripts/verify-026.js",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t18-compare.txt"
+      ],
+      "testWritten": false,
+      "done": false
+    }
   },
   "testCommand": "npm test",
   "deployUrl": "https://kentro-last-mile.web.app",
@@ -218,7 +461,13 @@
       "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
       "status": "aprobada",
       "approved": "2026-10-02",
-      "origen": "producto de LAB sin poder pagarse por efectivo con el domiciliario (2026-09-30)"
+      "origen": "producto de LAB sin poder pagarse por efectivo con el domiciliario (2026-09-30)",
+      "enmienda": "2026-10-02: RF_09 cubierto por compensacion (decidido por el responsable)"
+    },
+    "027": {
+      "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
+      "status": "borrador",
+      "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
     }
   },
   "archivedTasks": {
@@ -2219,7 +2468,7 @@
       }
     }
   },
-  "activeTask": "T1",
   "plan": "specs/026_plan.md",
-  "tasksFile": "specs/026_tasks.md"
+  "tasksFile": "specs/026_tasks.md",
+  "migrations": []
 }

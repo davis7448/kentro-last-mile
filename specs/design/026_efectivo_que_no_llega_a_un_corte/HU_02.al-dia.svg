@@ -13,21 +13,23 @@
   <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
   <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
   <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <!-- Lider sin pedidos en la lista del admin (no es ninguno de los cinco grupos de HU_01.lista) -->
   <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
-  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">CM</text>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">LG</text>
 
   <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Finanzas</text>
   <text x="16" y="124" font-size="15" fill="#9aa5b3">Efectivo por entregar, cortes y abonos.</text>
 
   <rect x="16" y="142" width="343" height="176" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
   <text x="32" y="178" font-size="18" font-weight="700" fill="#f4f6f8">Efectivo sin llegar a Kentro</text>
-  <circle cx="331" cy="226" r="28" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
-  <path d="M323 228 a8 8 0 1 0 8 -9" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M328 214 l4 5 l-6 2" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Actualizar (icono, 56px), dentro del margen de 16 px de la tarjeta -->
+  <circle cx="315" cy="226" r="28" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <path d="M307 228 a8 8 0 1 0 8 -9" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M312 214 l4 5 l-6 2" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="54" cy="226" r="22" fill="#c6f24e" fill-opacity="0.14"/>
   <path d="M45 226 l6 6 l12 -13" fill="none" stroke="#c6f24e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="32" y="276" font-size="17" font-weight="700" fill="#c6f24e">Kentro tiene todo tu efectivo</text>
-  <text x="32" y="300" font-size="15" fill="#9aa5b3">Ninguna entrega tuya espera un corte.</text>
+  <text x="32" y="300" font-size="15" fill="#9aa5b3">Ninguna entrega tuya espera su corte.</text>
 
   <!-- Resto de Finanzas, sin cambios -->
   <rect x="16" y="334" width="343" height="390" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>

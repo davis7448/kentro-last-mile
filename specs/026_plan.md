@@ -1,497 +1,528 @@
 # Plan tecnico — Spec 026: que nadie descubra a los tres meses que el efectivo de una entrega nunca llego
 
-- **Spec:** `specs/026_efectivo_que_no_llega_a_un_corte.md` (**aprobada el 2026-10-02**; las preguntas de la
-  seccion 11 estan resueltas en la seccion 9 de la spec).
-- **Fecha:** 2026-10-02
-- **Diseno:** `specs/design/026_efectivo_que_no_llega_a_un_corte/` (11 pantallas + README, completo segun
-  `design-check`, sin observar). La interfaz se construye sobre esas pantallas; este plan fija el contrato de
-  datos que consumen.
+- **Spec:** `specs/026_efectivo_que_no_llega_a_un_corte.md` — **aprobada el 2026-10-02** y **enmendada el
+  mismo dia** (RF_09 "cubierto por compensacion", decidido por el responsable; seccion 9 de la spec). Grill
+  omitido por decision del responsable; las preguntas abiertas del plan se respondieron con las propuestas
+  por defecto.
+- **Fecha:** 2026-10-02 (revisado tras cinco pasadas de `/sdd-analyze` el mismo dia; ver seccion 12).
+- **Spec relacionada:** `specs/027_la_compensacion_cubre_los_pedidos.md` (**borrador**): corrige de fondo
+  `buildCodReceivedSet`. Esta spec no la implementa; solo muestra aparte lo que la 027 corregira.
+- **Diseno:** `specs/design/026_efectivo_que_no_llega_a_un_corte/` (README + 11 pantallas, redibujadas y
+  observadas tras la enmienda). Pantallas:
+  - admin (HU_01): `HU_01.aviso-operacion`, `HU_01.lista` (movil), `HU_01.lista-escritorio`, `HU_01.plazo`,
+    `HU_01.cargando`, `HU_01.vacio`, `HU_01.error`, `HU_01.ilegibles`;
+  - lider (HU_02): `HU_02.finanzas`, `HU_02.al-dia`, `HU_02.error`.
+- **Evidencia:** `.sdd/evidence/026_efectivo_que_no_llega_a_un_corte/` (abajo `EV/`).
 
-### Resolucion de las preguntas de la seccion 11 (2026-10-02)
+### Preguntas del plan: resueltas (2026-10-02, seccion 9 de la spec)
 
-| Pregunta | Resolucion |
+| Pregunta | Respuesta aplicada |
 |---|---|
-| P1 | RNF_02 = coincide salvo diferencias explicadas por causa, residuo $0. El admin ve el recaudo bruto |
-| P2 | webhook generico por secreto `OPS_NOTICE_WEBHOOK_URL`; sin URL, `notifyOverdueCash` registra la corrida como `skipped: no_channel` y no marca avisos |
-| P3 | `notifyMinCop` por defecto **20.000** |
-| P4 | plazo global |
-| P5 | diaria 08:00 `America/Bogota`; la primera corrida avisa todo el atraso en un solo mensaje |
-| P6 | la vista del lider **complementa** "Pendiente por entregar" (ver README del diseno) |
-| P7 | fuera de alcance; los pedidos de neto <= 0 se ven con $0 y no avisan |
-| P8 | se incluyen `liquidated` |
+| P1 — RNF_02 y total del admin | "coincide salvo diferencias explicadas por causa, residuo $0" (4.4). El admin ve el **recaudo bruto** y la conciliacion plegada |
+| P2 — canal | webhook generico por secreto `OPS_NOTICE_WEBHOOK_URL`; `none`/vacio = solo en la app (2.5) |
+| P3 — umbral | `notifyMinCop` por defecto **20.000** |
+| P4 — plazo | global |
+| P5 — hora y primera corrida | diaria 08:00 `America/Bogota`; la primera corrida con canal avisa todo el atraso en un mensaje y lo marca |
+| P6 — vista del lider | complementa "Pendiente por entregar" |
+| P7 — neto <= 0 | fuera de alcance; se ven con $0 y no avisan |
+| P8 — `liquidated` | se incluyen |
+| Enmienda — corte saldado por compensacion | estado propio `covered_by_netting`, aparte, sin vencer ni avisar (2.9). Decidido por el responsable |
+| Enmienda — RF_05 | "al menos una vez", aceptado (2.4); el texto visible conserva "una vez" |
 
 ## 1. Lo que hay hoy (leido en el codigo, no supuesto)
 
 | Donde | Que hace | Consecuencia para la 026 |
 |---|---|---|
-| `functions/src/seller-ledger.ts` `buildCodReceivedSet` | LA regla de "efectivo recibido" (spec 018, RF_04): si el corte de domiciliario trae `cashAllocations`, cuentan las `covered`; si no, el corte `paid`/`reconciled` cubre todos sus `orderIds` | RF_01 se cumple **importandola**. Es pura (sin `firebase-admin`), la raiz ya la importa |
-| `seller-ledger.ts` `isSellerEntryEligible` | la compuerta de tienda/proveedor: pedido COD en `delivered` **o `liquidated`** exige estar en `codReceived` | el universo de la 026 es `paymentMethod == "cod"` y `status in ["delivered","liquidated"]`, no solo `delivered` como la medicion de la spec |
-| `functions/src/settlement-math.ts` `computeDriverCashSummary` | efectivo esperado por pedido = `max(0, cod − pago domiciliario)`; **solo** los pedidos con esperado > 0 reciben `cashAllocation` | un pedido de recaudo menor que el pago (el caso de $1, KNT-005242) **nunca** tiene asignacion: segun la regla, su efectivo nunca "llega". Ver 4.5 |
-| `functions/src/platform-position.ts` `computePlatformPosition` | `driverReceivableCop = Σ cashPendingCop (cortes de domiciliario) + max(0, codFueraDeCortes − pagoDomiciliarioFueraDeCortes)`; "fuera" = `orderId` ausente de todo `settlement.orderIds` de domiciliario | **no** es la suma por pedido de lo no recibido: netea en agregado el pago de visitas fallidas y de pedidos de $1 (ver 4.4 y pregunta P1) |
-| `src/lib/finance.ts:863` `calculatePlatformPosition` | espejo de cliente, atado por `src/lib/platform-position.test.ts` | la tarjeta del admin hoy la calcula en el navegador con el ledger entero |
-| `src/lib/finance.ts:735` `calculateDriverFinancialSummary` | "Pendiente por entregar" del lider = cortes incompletos (`cashPendingCop`) + entregados COD fuera de corte | HU_02 se solapa con esta cifra: hay que decidir si convive o la sustituye (pregunta P6) |
-| `functions/src/orders.ts:1198` `closeOrder` | escribe `closedAt` en todo cierre terminal y una evidencia `type: "delivery"` con `createdAt` | `closedAt` es el eje de fecha del dinero, pero **solo es fiable desde la spec 001**; los pedidos de junio-julio pueden no tenerlo |
-| `functions/src/order-corrections-plan.ts:350` | al corregir a entregado conserva `order.closedAt ?? now` | una correccion fallido→entregado hereda la fecha del fallo; aceptable (es la fecha de la visita) |
-| `functions/src/uchat-pull.ts`, `sync-issues-cleanup.ts` | patron de funcion programada (`onSchedule`) | RF_05 usa el mismo patron |
-| Canales salientes | **no hay ninguno.** No hay correo (`nodemailer` no esta), ni mensajeria a una persona. La spec 010 pide lo mismo y sigue en borrador sin implementar. UChat/ChatBy usa tokens **de cada tienda**, no de la plataforma | RF_05 necesita un canal nuevo (seccion 6, pregunta P2) |
-| `firestore.rules` `settings/{id}` | lectura para cualquier sesion, escritura del admin | el plazo se guarda en un documento propio, no en `settings/global` (4.6) |
-| `community-floor-trigger.ts` | `onDocumentUpdated("settings/global")` | escribir el plazo en `settings/global` dispararia ese trigger en cada cambio: por eso va aparte |
+| `functions/src/seller-ledger.ts` `buildCodReceivedSet` | LA regla de "recibido" (spec 018 RF_04): con `cashAllocations`, las `covered`; sin ellas, el corte `paid`/`reconciled` cubre todos sus `orderIds` | RF_01 se cumple **importandola**. No se cambia (spec 027) |
+| `seller-ledger.ts` `isSellerEntryEligible` | compuerta de tienda/proveedor para `delivered` y `liquidated` | universo: `cod` y `delivered|liquidated` |
+| `functions/src/settlement-math.ts` `computeDriverCashSummary` | esperado del corte **agregado** (`max(0, Σcod − Σpago)`, el pago incluye fallidos); asigna lo recibido pedido a pedido solo a los que deben efectivo | **origen de la compensacion**: en un corte saldado exacto los 1-3 pedidos mas nuevos quedan `covered: false` (29 cortes, 36 pedidos, $1.151.997 medidos el 2026-10-02; unidad por confirmar en T1) |
+| `settlement-math.ts` `settlementCashReceivedCop` | recibido del corte | predicado de saldado (2.9) y recalculo (4.4) |
+| `functions/src/orders.ts:1464, 1571` | `cashPendingCop = max(0, expected − received)` al conciliar/registrar recibos | el guardado puede quedar viejo (4.4) |
+| `functions/src/orders.ts:~1949` `buildSettlement` | crea cortes de domiciliario **sin** `cashPendingCop` | campo opcional; ausente = 0 como la posicion; causa propia (4.4); T1 los cuenta |
+| `functions/src/platform-position.ts` | `driverReceivableCop = Σ (cashPendingCop || 0) + max(0, codFuera − pagoFuera)`; "fuera" por pertenencia a `settlement.orderIds`; proveedor `supplierId ?? "(sin proveedor)"` | mismo criterio, documentos y clave (T3) |
+| `getPlatformPosition` | lee `walletEntries` y `settlements` enteras | precedente de coste (4.3) |
+| `src/lib/finance.ts:863` `calculatePlatformPosition` | espejo de cliente (`platform-position.test.ts`) | la extraccion no lo mueve |
+| `src/components/operations-app.tsx` (l. 53, 7509, 8027) | ya usa `buildCodReceivedSet` (3 apariciones) | guarda RNF_01 limitada a archivos nuevos; conteo congelado (5.1) |
+| `src/lib/firebase/state-store.ts` | ya lee `walletEntries` y `settings` | fuera de la guarda; ninguna tarea lo toca |
+| `functions/src/orders.ts:754` | lider por claim `token.driverId` | 2.7 |
+| `functions/src/wallet-entries.ts:279` `stripUndefined` | superficial | 2.8 |
+| Canales salientes | ninguno | 2.5 |
+| `settings/{id}` / `community-floor-trigger.ts` | trigger sobre `settings/global` | plazo en `settings/cashAlerts` |
+| `src/lib/firebase/auth.ts` | envoltorios `getFirebase<X>` / `<verbo>Firebase<X>`; no hay precedente de `vi.mock` de este archivo | `getFirebaseCashOutstanding`, `updateFirebaseCashAlertSettings`; la cache va fuera (2.1) |
 
 ## 2. Decisiones de diseno
 
-### 2.1 Calcular en servidor sobre una consulta acotada por estado, no por fecha (RF_07, RNF_01)
+### 2.1 Calcular en servidor, dos modos de carga (RF_07, RNF_01)
 
-Un callable `getCashOutstanding` recorre en servidor todas las contraentregas cerradas como entregadas,
-sin ventana de fecha, y les resta las cubiertas con `buildCodReceivedSet`. El navegador recibe solo el
-resultado (hoy ~153 filas). Constitucion 8 y 11.
+Un callable `getCashOutstanding` recorre en servidor todas las contraentregas entregadas sin ventana de
+fecha y les resta las cubiertas con `buildCodReceivedSet`. Opcion A (recorrer en cada llamada); B (cola
+materializada) queda como Fase 2 con umbral; C (campo en el pedido) descartada (spec 017, principio 5).
 
-**Alternativas evaluadas:**
-
-| Opcion | Lecturas por llamada | Riesgo | Decision |
+| Modo | Quien | Lectura (4.3) | Devuelve |
 |---|---|---|---|
-| A. Recorrer en cada llamada `orders` COD entregados + cortes de domiciliario | N entregados COD (medir en T1; orden de 2–4 mil hoy) + cortes de domiciliario (decenas–cientos) + asientos de las filas | ninguno de coherencia: misma regla, mismos datos, en el momento | **elegida para la Fase 1** |
-| B. Cola materializada (`cashOutstanding/{orderId}`) mantenida por triggers sobre `orders` y `settlements` | ~filas pendientes | la cola puede divergir en silencio (evento perdido, correccion que recalcula un corte, despliegue a medias). Es exactamente el tipo de fallo que esta spec existe para cazar | descartada en Fase 1; queda como Fase 2 con umbral (abajo) |
-| C. Campo denormalizado en el pedido (`cashReceived: boolean`) | ~filas | escribe en `orders` desde cortes: toca los listeners de todos los roles, entra en el terreno de la spec 017 (que conserva una importacion) y del principio 5 | descartada |
+| **resumen** (`includeReconciliation: false`, defecto) | tarjeta de Operacion, linea de Por pagar, lider, programada | `targeted` | sin `reconciliation` |
+| **con conciliacion** (`true`) | solo la pestana "Efectivo sin llegar" | `full` | con `reconciliation` |
 
-- Las lecturas se proyectan con `.select(...)` (mismas lecturas facturadas, mucho menos transferencia).
-- **Umbral para pasar a B:** si T1 mide mas de 20.000 contraentregas entregadas, o si el callable pasa de
-  3 s en caliente, se abre un plan de Fase 2. Con el volumen actual (~3.700 pedidos/mes en total, la mitad
-  COD) el umbral queda a varios meses; T1 lo anota en `docs/rendimiento.md`.
-- **Frecuencia:** el callable no se suscribe; se llama al abrir la pantalla y bajo demanda (cadencia
-  final en `/sdd-design`). La alerta programada (2.4) lo recorre una vez al dia.
+**Carga resumen compartida — cache con la llamada inyectada:** en `src/lib/cash-outstanding-loads.ts`
+(T14), sin importar `auth.ts`:
 
-### 2.2 Un solo modulo puro con toda la decision (RF_01–RF_03, RF_06, RF_08)
+```ts
+export function createCashOutstandingSummaryCache(
+  fetchReport: (input: { includeReconciliation: boolean }) => Promise<CashOutstandingReport>
+): {
+  get(options: { uid: string; refresh?: boolean }): Promise<CashOutstandingReport>; // una peticion por uid
+  prime(uid: string, report: CashOutstandingReport): void;   // la carga con conciliacion la sustituye
+  clear(): void;
+};
+```
 
-`functions/src/cash-outstanding.ts` es **puro** (sin `firebase-admin`), como `seller-balance.ts` y
-`computePlatformPosition`. Recibe documentos ya validados y devuelve el informe completo. La regla de
-recibido **no** se reescribe: el modulo importa `buildCodReceivedSet` de `./seller-ledger` y una guarda
-de fuente (T3) se pone roja si aparece `cashAllocations` o `covered` en el archivo.
+La instancia la crea `cash-outstanding-admin.tsx` (T15) con `getFirebaseCashOutstanding` y el `uid` de la
+sesion. Se prueba con un `fetchReport` falso, sin `vi.mock`.
 
-`functions/src/cash-outstanding-api.ts` contiene solo lecturas: el cargador, el callable y el
-programador. Zod valida cada documento en la frontera; un documento que no pasa no se descarta en
-silencio: va a `unreadableOrderIds` / `unreadableSettlementIds` y el informe lo dice (mismo criterio que
-RF_22 de la 018).
+**Frecuencia** (README, decision 11; sin suscripcion):
+
+- Admin: la carga resumen se pide una vez al entrar y solo "Actualizar" la refresca; tarjeta y linea de
+  proveedor la comparten.
+- Pestana: al abrirla y con "Actualizar", `includeReconciliation: true` y `prime`.
+- Guardar "Plazo y aviso": `reloadAfterCashAlertSave` (T16): pestana abierta → con conciliacion y `prime`;
+  cerrada → `get({ refresh: true })`.
+- Filtro "Lider": en cliente; con filtro activo el cuadre no se muestra.
+- Lider: al abrir Finanzas y con "Actualizar", resumen. Programada: una al dia, resumen.
+
+### 2.2 Un solo modulo puro; la regla de recibido no se copia (RF_01)
+
+`functions/src/cash-outstanding.ts` es puro. Importa `buildCodReceivedSet` y `codPartialReceivedCop` de
+`./seller-ledger` (T4) y no toca `cashAllocations`. En el nucleo, la unica comparacion de estado de corte es
+`status === "pending"`; el saldado por compensacion lo decide `isDriverSettlementCashSettled` (2.9, en
+`settlement-math.ts`). Los rotulos viven en el modelo de vista.
+
+**Guarda anti-copia** (`spec-026-guards.test.ts`):
+
+- Lista fija: `functions/src/cash-outstanding.ts`, `functions/src/cash-outstanding-api.ts`,
+  `functions/src/cash-overdue-notice.ts`, `src/lib/cash-outstanding-view.ts`.
+- `describe("T6 · RF_01: la regla de recibido no se copia")`: importa y llama `buildCodReceivedSet`;
+  `findReceivedRuleCopies` (`cashAllocations`, `covered`, fuera de comentarios) da `[]` en los que ya
+  existan (los pendientes, nombrados); mutacion con el cuerpo de la regla pegado detectada.
+- `describe("T17 · RF_01: la guarda anti-copia mira los cuatro archivos")`: los cuatro existen y dan `[]`.
+- Equivalencia (T6): todo pedido de `rows` o `nettedRows` es `!isSellerEntryEligible` (la 026 no cambia la
+  compuerta) y todo no elegible del universo esta en una de las dos.
+- Evidencia manual en `EV/mutacion-rf01.txt`.
+
+Zod en la frontera; lo ilegible a `unreadableOrderIds`, `unreadableSettlementIds`, `unreadableEntryIds`.
 
 ### 2.3 Fecha de entrega y antiguedad
 
-`deliveredAt` se resuelve en este orden y la fila declara de donde salio (`deliveredAtSource`):
-
-1. `order.closedAt` — eje oficial del dinero (spec 001, `closeOrder`).
-2. `createdAt` de la **ultima** evidencia con `type === "delivery"` — existe en todo cierre por la app,
-   tambien antes de la 001.
-3. `createdAt` del asiento `cod_revenue` del pedido — lo escribe el cierre en el mismo instante.
-4. `order.updatedAt` — ultimo recurso, marcado como `"updatedAt"` para que se sepa que es aproximada.
-
-`ageDays = floor((now − deliveredAt) / 86_400_000)`. Bogota no tiene horario de verano, asi que el
-calculo en milisegundos no se desplaza. **Vencido** (RF_03) = `ageDays > overdueDays` (con plazo 7, el
-dia 8 ya vence; coincide con la tabla de la spec, "7 dias o menos" = al dia).
-
-T1 cuenta en produccion cuantas filas caen en cada fuente. Si alguna fila de mas de 30 dias sale de
-`updatedAt`, se reporta antes de T4.
+`deliveredAt`: `closedAt` → ultima evidencia `delivery` → `cod_revenue` → `updatedAt` ("aprox."). `ageDays =
+floor((now − deliveredAt) / 86_400_000)`; vencido = `ageDays > overdueDays` **y no `covered_by_netting`**.
 
 ### 2.4 Aviso fuera de la app (RF_05)
 
-Funcion programada `notifyOverdueCash` (diaria, `America/Bogota`, hora en P5):
+`notifyOverdueCash` diaria 08:00 Bogota, modo resumen. Sin canal → `skipped_no_channel` sin marcar.
+Candidatas = `selectNoticeCandidates` sobre `report.rows` (los `covered_by_netting` estan en `nettedRows` y
+nunca son candidatos). Un mensaje por corrida agrupado por lider. Marca `cashOverdueNotices` solo tras
+`ok`. Corrida en `cashOverdueRuns`.
 
-1. Calcula el informe con el mismo cargador que el callable.
-2. Candidatas = filas vencidas con `outstandingCop >= notifyMinCop` (caso de $1, pregunta P3) y sin
-   documento en `cashOverdueNotices/{orderId}`.
-3. Agrupa por lider (caso limite "muchos pedidos del mismo lider") y compone **un solo mensaje por
-   corrida**: una seccion por lider con total, numero de pedidos y el mas antiguo; "Sin lider" como grupo
-   propio (caso de la spec 017).
-4. Envia por el canal (2.5). **Solo si el envio responde 2xx**, escribe en lote
-   `cashOverdueNotices/{orderId}` = `{ orderId, leaderId, outstandingCop, ageDays, notifiedAt, runId }`.
-   Si falla, no escribe nada, registra el error con `console.error` (estructurado) y la siguiente corrida
-   lo reintenta. Nunca `catch` vacio.
-5. Escribe `cashOverdueRuns/{runId}` con el resultado (enviados, omitidos por umbral, error) para poder
-   auditar que el aviso corre.
+**"Una sola vez por pedido" = al menos una vez** — decision aceptada (spec, seccion 9): si el envio sale y
+el marcado cae, se repite (`mark_failed`). El texto visible de `HU_01.plazo` conserva "una vez por pedido"
+porque la repeticion solo ocurre ante un fallo del marcado.
 
-"Una sola vez por pedido" es al menos una vez: si el envio sale y la escritura del lote cae, el pedido se
-repite al dia siguiente. Se acepta y se documenta; lo contrario (escribir antes de enviar) puede perder
-un aviso, que es peor.
+### 2.5 Canal: webhook con `fetch` nativo
 
-**Primera corrida:** avisaria de todo el atraso actual (los 24 de mas de 30 dias y los de 8–30 dias) en un
-solo mensaje agrupado. Es deseable, pero se confirma en P5.
+`ops-notify.ts` (sin `firebase-functions`): `isOpsChannelConfigured(url)` (`""`, espacios, `none` = no) y
+`sendOpsNotice(text, { url, fetchImpl?, timeoutMs? }): Promise<OpsNoticeResult>`, nunca lanza. El secreto
+`OPS_NOTICE_WEBHOOK_URL` (`defineSecret` en `cash-outstanding-api.ts`) se crea **siempre** antes del
+despliegue (URL o `none`); si no existe, el despliegue falla antes de tocar nada y se crea.
 
-### 2.5 Canal: un webhook HTTP con `fetch` nativo, sin dependencias
+### 2.6 Plazo y umbral (RF_04)
 
-Node 20 trae `fetch`. El modulo `functions/src/ops-notify.ts` expone
-`sendOpsNotice(text: string): Promise<OpsNoticeResult>` y lee la URL de un secreto de Firebase
-(`defineSecret("OPS_NOTICE_WEBHOOK_URL")`), igual que `shopify.ts` lee los suyos. Sirve para un webhook
-entrante de Discord (el responsable ya opera con Discord), de Slack o de Google Chat: los tres aceptan un
-POST JSON. Telegram requeriria token + chat id; correo requeriria SMTP y una dependencia (descartado por
-principio 2).
-
-- La composicion del texto es pura (`cash-overdue-notice.ts`) y se prueba; el envio es delgado.
-- La spec 010 puede reutilizar `ops-notify.ts` cuando se implemente. No se generaliza mas alla de eso
-  (YAGNI).
-- **Bloqueante:** que servicio y que destino (pregunta P2). Sin esa respuesta T9–T10 no empiezan; el
-  resto del plan si.
-
-### 2.6 El plazo y el umbral son configuracion del admin (RF_04)
-
-Documento `settings/cashAlerts`, **no** `settings/global` (evita disparar `onSettingsFloorRaise`).
-Escritura por callable `updateCashAlertSettings` (Zod + auditoria en `auditLogs`), no por escritura directa:
-es configuracion que decide avisos de dinero y queda rastro de quien la cambio. Lectura en servidor con
-Zod y valores por defecto; un documento invalido usa los defectos y lo registra.
+`settings/cashAlerts` por `updateCashAlertSettings` (Zod + `auditLogs`); defectos 7 dias y $20.000.
 
 ### 2.7 Alcance por rol (RF_06)
 
-- `admin`: todo; filtro opcional `driverId`.
-- `driver` (lider logistico): el `driverId` se **impone desde el claim**, venga lo que venga en la
-  peticion (patron de `getOrderStats`). La respuesta del lider **omite** el desglose por proveedor
-  (`supplierWithheld`, `bySupplier`): hoy el lider no puede leer la wallet de las tiendas y no se le abre
-  por esta via.
-- Cualquier otro rol: `permission-denied`.
+`resolveCashOutstandingScope(auth, input)` (T12): admin → `{ kind: "admin", includeReconciliation }`;
+`driver` con `token.driverId` → `{ kind: "leader", driverId }` (sin conciliacion, sin proveedor); driver sin
+claim, otro rol o sin sesion → `permission-denied`.
 
-La consulta del lider anade `where("driverId","==", claim)`; sigue sin ventana de fecha.
+### 2.8 Toda escritura nueva pasa por `stripUndefined`
+
+`buildCashAlertSettingsDoc`, `buildCashAlertAuditDoc` (T5), `buildNoticeDocs`, `buildRunDoc` (T10);
+documentos planos, prueba profunda; guarda en T13.
+
+### 2.9 Cubierto por compensacion (RF_09, decidido por el responsable 2026-10-02)
+
+Predicado puro en `settlement-math.ts` (T4), junto a `settlementCashReceivedCop`:
+
+```ts
+/** Corte de domiciliario cerrado con el efectivo TOTAL saldado. Ausencia de cashPendingCop = 0, como la
+ *  posicion. No mira cashAllocations: no es la regla de recibido, y no la cambia (spec 027). */
+export function isDriverSettlementCashSettled(settlement: SettlementDoc): boolean;
+// kind === "driver" && (status === "paid" || status === "reconciled")
+// && (cashPendingCop ?? 0) === 0
+// && typeof cashExpectedCop === "number" && settlementCashReceivedCop(settlement) >= cashExpectedCop
+```
+
+Se usa `>=` (un corte con excedente tambien esta saldado). En los 29 cortes medidos es igualdad; T1 cuenta
+cuantos tienen excedente.
+
+`location` (precedencia, sobre los cortes de domiciliario que contienen al pedido):
+
+1. alguno `pending` → `in_settlement_open`;
+2. si no, alguno con `isDriverSettlementCashSettled` → **`covered_by_netting`**;
+3. si no, alguno `paid`/`reconciled` → `settlement_paid_short`;
+4. ninguno → `outside_settlement`.
+
+Un pedido `covered_by_netting` va a `report.nettedRows`, no a `report.rows`: no entra en `byLeader`,
+`bySupplier`, ni en los totales de efectivo no recibido ni vencidos; `isOverdue = false`; no es candidato
+de aviso. Tiene sus propios totales (`totals.netted*`). No cambia ningun saldo ni la regla de RF_01.
 
 ## 3. Arbol de modulos
 
-| Archivo | Cambio | Responsabilidad |
-|---|---|---|
-| `functions/src/cash-outstanding.ts` | nuevo, **puro** | `buildCashOutstandingReport`: filas, antiguedad, vencidos, agrupaciones, desglose por proveedor, reconciliacion con la posicion. Importa `buildCodReceivedSet` |
-| `functions/src/cash-outstanding-schemas.ts` | nuevo, puro | esquemas Zod de entrada del callable, de `settings/cashAlerts` y de los documentos leidos (pedido, corte, asiento, nombres) |
-| `functions/src/driver-receivable.ts` | nuevo, puro | `computeDriverReceivable(settlements, codEntries, driverEarnings)`: la formula de `driverReceivableCop` extraida de `computePlatformPosition` para que la 026 la **use** y no la copie (4.4) |
-| `functions/src/platform-position.ts` | toca | `computePlatformPosition` delega las tres cifras de "por cobrar al domiciliario" en `computeDriverReceivable`. Sin cambio de resultado (lo vigila `platform-position.test.ts`) |
-| `functions/src/cash-overdue-notice.ts` | nuevo, puro | `selectNoticeCandidates`, `composeOverdueNotice` (texto en espanol, agrupado por lider) |
-| `functions/src/ops-notify.ts` | nuevo | `sendOpsNotice` por `fetch` al webhook del secreto; devuelve `{ ok, status, error? }`, no lanza silencioso |
-| `functions/src/cash-outstanding-api.ts` | nuevo | `loadCashOutstandingInput(db, scope, now)`, callables `getCashOutstanding` y `updateCashAlertSettings`, programador `notifyOverdueCash` |
-| `functions/src/index.ts` | toca | exporta las tres funciones nuevas |
-| `src/lib/firebase/auth.ts` | toca | `getFirebaseCashOutstanding()` y `updateFirebaseCashAlertSettings()` |
-| `src/lib/types.ts` | toca | reexporta (por `import type` desde `functions/src`) `CashOutstandingReport` y `CashAlertSettings` para la UI |
-| `src/components/...` | **pendiente de `/sdd-design`** | lista del admin, total vencido en la pantalla principal, vista del lider, ajuste del plazo |
-| `src/lib/cash-outstanding.test.ts` | nuevo | RF_01–RF_03, RF_06–RF_08, casos limite, RNF_02 |
-| `src/lib/driver-receivable.test.ts` | nuevo | la extraccion no cambia ninguna cifra; atadura con el cliente |
-| `src/lib/cash-overdue-notice.test.ts` | nuevo | RF_05: umbral, una vez por pedido, agrupacion, texto |
-| `src/lib/spec-026-guards.test.ts` | nuevo | guardas de fuente (2.2, 2.7, sin ventana de fecha, orden enviar→marcar, sin `catch` vacio) |
-| `scripts/verify-026.js` | nuevo, solo lectura | `baseline`, `query-check`, `compare` contra produccion via `functions/lib` (ver 5.3) |
-| `docs/rendimiento.md` | toca | lecturas por llamada medidas y umbral de la Fase 2 |
+| Archivo | Cambio | Responsabilidad | Tarea |
+|---|---|---|---|
+| `scripts/verify-026.js` | nuevo, solo lectura | `baseline`, `query-check`, `compare`, `compare --deployed` | T1, T2, T18 |
+| `docs/rendimiento.md` | toca | coste por modo, umbrales | T2 |
+| `firestore.indexes.json` | toca solo si `query-check` pide indice | se **anade**, nunca se reemplaza | T2 |
+| `functions/src/driver-receivable.ts` | nuevo, puro | `computeDriverReceivable` y predicados | T3 |
+| `functions/src/supplier-withheld.ts` | nuevo, puro | clave y agrupacion de proveedor | T3 |
+| `functions/src/platform-position.ts` | toca | delega sin cambio de resultado | T3 |
+| `functions/src/seller-ledger.ts` | toca | `codPartialReceivedCop` | T4 |
+| `functions/src/settlement-math.ts` | toca | `isDriverSettlementCashSettled` (2.9) | T4 |
+| `functions/src/cash-outstanding-schemas.ts` | nuevo, puro | Zod (con `cashPendingCop` opcional), ajustes, asientos, constructores (T5); `resolveCashOutstandingScope` (T12) | T5, T12 |
+| `functions/src/cash-outstanding.ts` | nuevo, **puro** | informe y conciliacion | T6-T9 |
+| `functions/src/cash-overdue-notice.ts` | nuevo, puro | candidatas, mensaje, constructores | T10 |
+| `functions/src/ops-notify.ts` | nuevo | canal | T11 |
+| `functions/src/cash-outstanding-api.ts` | nuevo | cargador, callables, programada, secreto | T12, T13 |
+| `functions/src/index.ts` | toca | exporta | T12, T13 |
+| `src/lib/firebase/auth.ts` | toca | `getFirebaseCashOutstanding`, `updateFirebaseCashAlertSettings` | T14 |
+| `src/lib/types.ts` | toca | reexporta tipos | T14 |
+| `src/lib/cash-outstanding-view.ts` | nuevo, puro | modelo de vista, rotulos | T14 |
+| `src/lib/cash-outstanding-loads.ts` | nuevo, puro (llamadas inyectadas) | `createCashOutstandingSummaryCache` (T14), `reloadAfterCashAlertSave` (T16) | T14, T16 |
+| `src/components/cash-outstanding-admin.tsx` | nuevo | instancia de la cache, tarjeta, pestana, dialogo, linea de proveedor | T15, T16 |
+| `src/components/cash-outstanding-leader.tsx` | nuevo | panel del lider | T17 |
+| `src/components/operations-app.tsx` | toca | solo montaje | T15, T16, T17 |
+| `src/lib/driver-receivable.test.ts` | nuevo | | T3 |
+| `src/lib/seller-ledger.test.ts`, `src/lib/settlement-math.test.ts` | tocan | `codPartialReceivedCop`, `isDriverSettlementCashSettled` | T4 |
+| `src/lib/cash-outstanding-schemas.test.ts` | nuevo | | T5 |
+| `src/lib/cash-outstanding.test.ts` | nuevo | | T6-T9 |
+| `src/lib/cash-overdue-notice.test.ts` | nuevo | | T10 |
+| `src/lib/ops-notify.test.ts` | nuevo | | T11 |
+| `src/lib/cash-outstanding-view.test.ts` | nuevo | | T14 |
+| `src/lib/cash-outstanding-loads.test.ts` | nuevo | cache (T14), recarga (T16) | T14, T16 |
+| `src/lib/spec-026-guards.test.ts` | nuevo | un bloque por tarea | T1, T6, T12, T13, T15, T16, T17 |
+| `EV/*` | nuevo | linea base (con ids), query-check, mutacion, compare | T1, T2, T6, T18 |
 
-Sin cambios en `firestore.rules`: `cashOverdueNotices` y `cashOverdueRuns` solo se tocan con Admin SDK y
-la regla por defecto ya niega al cliente; `settings/cashAlerts` cae en la regla existente de `settings`.
+Sin cambios en `firestore.rules`.
 
 ## 4. Modelo de datos y algoritmos
 
-### 4.1 Tipos (en `cash-outstanding.ts`; nada de `any`)
+### 4.1 Tipos (en `cash-outstanding.ts`)
 
 ```ts
-export type CashSettlementLocation = "outside_settlement" | "in_settlement";
+export type CashSettlementLocation =
+  | "outside_settlement" | "in_settlement_open" | "settlement_paid_short"
+  | "covered_by_netting";               // RF_09: corte cerrado y saldado en total (2.9)
 export type DeliveredAtSource = "closedAt" | "evidence" | "cod_entry" | "updatedAt";
 
 export type CashOutstandingOrder = {
-  id: string;
-  trackingCode?: string;
-  shopifyOrderId?: string;
-  sellerId: string;
-  driverId: string | null;          // lider logistico; null = sin lider (spec 017)
-  messengerId: string | null;
-  status: "delivered" | "liquidated";
-  paymentMethod: "cod";
-  totalCop: number;
-  closedAt?: string;
-  updatedAt?: string;
-  evidence: Array<{ type: string; createdAt: string }>;
-};
-
-export type CashSettlement = {
-  id: string;
-  kind: "driver";
-  ownerId: string;
-  status: "pending" | "paid" | "reconciled";
-  orderIds: string[];
-  cashPendingCop?: number;
-  cashAllocations?: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }>;
-  createdAt: string;
-};
-
-export type CashWalletEntry = {
-  id: string;
-  ownerType: "seller" | "driver";
-  orderId: string;
-  type: "cod_revenue" | "cod_remittance" | "driver_earning" | "product_cost";
-  amountCop: number;
-  createdAt: string;
-  supplierId?: string;
-  supplierName?: string;
-  supplierSettlementId?: string;
+  id: string; trackingCode?: string; sellerId: string;
+  driverId: string | null; messengerId: string | null;
+  status: string; paymentMethod: string; totalCop: number;
+  closedAt?: string; updatedAt?: string; evidence: Array<{ type: string; createdAt: string }>;
 };
 
 export type CashAlertSettings = { overdueDays: number; notifyMinCop: number };
 
 export type CashOutstandingInput = {
   orders: CashOutstandingOrder[];
-  settlements: CashSettlement[];          // TODOS los cortes de domiciliario (la regla los necesita todos)
-  entriesByOrderId: Map<string, CashWalletEntry[]>; // solo de los pedidos que quedan como no recibidos
+  settlements: SettlementDoc[];               // kind "driver"; cashPendingCop puede faltar (= 0)
+  receivableEntries: WalletEntryDoc[];
+  coverage: "full" | "targeted";
+  productCostEntries: WalletEntryDoc[];
   names: { sellers: Map<string, string>; leaders: Map<string, string>; messengers: Map<string, string> };
-  settings: CashAlertSettings;
-  scope: { kind: "admin"; driverId?: string } | { kind: "leader"; driverId: string };
+  settings: CashAlertSettings; settingsInvalid: boolean;
+  channelConfigured: boolean | null;
+  scope: { kind: "admin"; includeReconciliation: boolean } | { kind: "leader"; driverId: string };
   now: string;
-  unreadableOrderIds: string[];
-  unreadableSettlementIds: string[];
+  unreadableOrderIds: string[]; unreadableSettlementIds: string[]; unreadableEntryIds: string[];
 };
 
 export type SupplierWithheld = { supplierId: string; supplierName: string; amountCop: number };
+export type CashRowSettlement = { id: string; status: "pending" | "paid" | "reconciled"; createdAt: string; cashSettled: boolean };
 
 export type CashOutstandingRow = {
-  orderId: string;
-  trackingCode: string;
+  orderId: string; trackingCode: string;
   sellerId: string; sellerName: string;
   leaderId: string | null; leaderName: string | null;
   messengerId: string | null; messengerName: string | null;
   deliveredAt: string; deliveredAtSource: DeliveredAtSource;
-  ageDays: number;
-  isOverdue: boolean;
-  collectedCop: number;                     // recaudo: Σ cod_revenue + cod_remittance (neteado)
-  collectedSource: "wallet" | "order_total"; // order_total = el pedido no tiene asientos COD
-  driverPayCop: number;
-  expectedCashCop: number;                  // max(0, collectedCop − driverPayCop)
-  receivedCop: number;                      // parcial imputado en un corte; 0 fuera de corte
-  outstandingCop: number;                   // expectedCashCop − receivedCop
+  ageDays: number; isOverdue: boolean;        // false si covered_by_netting
+  collectedCop: number; collectedSource: "wallet" | "order_total";
+  driverPayCop: number; expectedCashCop: number; receivedCop: number; outstandingCop: number;
   location: CashSettlementLocation;
-  settlementIds: string[];                  // cortes de domiciliario que lo contienen sin cubrirlo
-  supplierWithheld: SupplierWithheld[];     // RF_08; [] en la respuesta del lider
+  settlements: CashRowSettlement[];           // createdAt desc
+  attributedSettlementId: string | null;
+  supplierWithheld: SupplierWithheld[];
 };
 
 export type CashOutstandingGroup = {
-  leaderId: string | null; leaderName: string | null;
-  orderCount: number; outstandingCop: number;
-  overdueCount: number; overdueCop: number;
-  oldestDeliveredAt: string;
+  leaderId: string | null; leaderName: string | null;   // null = "Sin lider"
+  orderCount: number; collectedCop: number; outstandingCop: number;
+  overdueCount: number; overdueCop: number; oldestDeliveredAt: string;
 };
 
 export type CashOutstandingReport = {
-  generatedAt: string;
-  settings: CashAlertSettings;
-  rows: CashOutstandingRow[];               // orden: deliveredAt ascendente, empate por orderId
-  byLeader: CashOutstandingGroup[];         // orden: overdueCop desc
-  bySupplier: Array<SupplierWithheld & { overdueAmountCop: number }>; // [] para el lider
+  generatedAt: string; mode: "summary" | "with_reconciliation";
+  settings: CashAlertSettings; settingsInvalid: boolean; channelConfigured: boolean | null;
+  rows: CashOutstandingRow[];                 // efectivo que falta; deliveredAt asc
+  nettedRows: CashOutstandingRow[];           // RF_09, aparte; deliveredAt asc
+  byLeader: CashOutstandingGroup[];           // solo `rows`; orden overdueCop desc (empate: outstandingCop, id)
+  bySupplier: Array<SupplierWithheld & { overdueAmountCop: number }>; // solo `rows`; [] para el lider
   totals: {
-    orderCount: number;
-    collectedCop: number;                   // lo que mide la tabla de la spec (DoD 3)
-    outstandingCop: number;                 // Σ filas
-    outsideSettlementCop: number;
-    inSettlementCop: number;
+    orderCount: number; collectedCop: number; outstandingCop: number;
+    outsideSettlementCop: number; inOpenSettlementCop: number; paidShortCop: number;
     overdueCount: number; overdueCop: number;
+    nettedCount: number; nettedCollectedCop: number; nettedSettlementCount: number;
   };
-  reconciliation: PositionReconciliation | null; // solo admin sin filtro (4.4)
-  unreadableOrderIds: string[];
-  unreadableSettlementIds: string[];
+  reconciliation: PositionReconciliation | null;
+  isIncomplete: boolean;
+  unreadableOrderIds: string[]; unreadableSettlementIds: string[]; unreadableEntryIds: string[];
 };
 ```
 
-Entrada del callable (Zod): `z.object({ driverId: z.string().trim().min(1).optional() }).strict()`.
-Ajustes (Zod): `z.object({ overdueDays: z.number().int().min(1).max(120).default(7), notifyMinCop:
-z.number().int().min(0).default(<P3>) })`.
+Zod (T5): entrada `{ includeReconciliation: boolean = false }.strict()`; ajustes 1..120 / >= 0, defectos 7
+y 20.000; corte de domiciliario con `cashPendingCop`, `cashExpectedCop`, `cashReceivedCop` **opcionales**
+(`buildSettlement` los crea sin `cashPendingCop`; ausente = 0); asiento con `amountCop` finito.
+
+**Rotulos (mapa de `cash-outstanding-view.ts`, T14; README decisiones 4, 5 y 12):**
+
+| `location` | Admin | Lider |
+|---|---|---|
+| `in_settlement_open` | "En corte abierto" | "En el corte del <fecha>, abierto" (el `pending` mas reciente) |
+| `settlement_paid_short` | "Pagado con faltante" | "Corte del <fecha> pagado con faltante" (el mas reciente) |
+| `outside_settlement` | "Fuera de todo corte" | "No esta en ningun corte" |
+| `covered_by_netting` | "Cubierto por compensacion" | "Cubierto en el corte del <fecha>" (el saldado mas reciente) |
+
+Grupo con `leaderId: null`: "Sin lider", con el texto "no hay a quien cobrarle". Tarjeta de Operacion: "el
+lider con mas efectivo vencido" = `byLeader[0]` (orden por `overdueCop`).
 
 ### 4.2 `buildCashOutstandingReport(input)`
 
-1. `received = buildCodReceivedSet(input.settlements)` — **la** regla (RF_01).
-2. `candidates = input.orders` filtrados por alcance y por `!received.has(order.id)`. No hay filtro de
-   fecha en ningun punto (RF_07).
-3. Para cada candidato, con `entries = entriesByOrderId.get(id) ?? []`:
-   - `collectedCop` = Σ `cod_revenue` + `cod_remittance` de tienda; si no hay ninguno, `totalCop` y
-     `collectedSource = "order_total"` (se ve, no se esconde).
-   - `driverPayCop` = Σ `driver_earning`.
-   - `expectedCashCop = max(0, collectedCop − driverPayCop)` — misma formula por pedido que
-     `computeDriverCashSummary`.
-   - `settlementIds` = cortes de domiciliario cuyo `orderIds` lo contiene. `location` =
-     `in_settlement` si hay alguno, si no `outside_settlement`.
-   - `receivedCop` = Σ `receivedCop` de sus `cashAllocations` (caso limite "cubierto en parte": sigue en
-     la lista con lo que falta). Sin asignaciones, 0.
-   - `outstandingCop = max(0, expectedCashCop − receivedCop)`.
-   - `deliveredAt` segun 2.3; `ageDays`; `isOverdue = ageDays > settings.overdueDays`.
-   - `supplierWithheld` = por proveedor, `−Σ product_cost` de tienda con `supplierSettlementId` vacio
-     (RF_08). En alcance de lider, `[]`.
-4. Agrupa por lider (`null` = "sin lider") y por proveedor; suma totales.
-5. Si el alcance es admin sin filtro, calcula `reconciliation` (4.4).
+1. `received`, `partial` (`./seller-ledger`).
+2. Filtro propio: `cod`, `delivered|liquidated`, alcance, `!received.has(id)`. Sin fecha.
+3. Por candidato: importes con los predicados de `./driver-receivable`; `settlements` con `cashSettled =
+   isDriverSettlementCashSettled(s)`; `location` por la precedencia de 2.9; `deliveredAt`, `ageDays`,
+   `isOverdue` (falso si `covered_by_netting`); `supplierWithheld`.
+4. `covered_by_netting` → `nettedRows`; el resto → `rows`. Agrupaciones (una fila con `driverId: null`
+   forma el grupo `leaderId: null`) y totales; `isIncomplete`.
+5. `reconciliation` solo con admin + `includeReconciliation` + `full`.
 
-Un pedido corregido de entregado a fallido sale solo: deja de cumplir `status in [delivered,
-liquidated]` en la consulta (caso limite 1).
+Invariante (T6): `rows` y `nettedRows` identicos con `full` y `targeted`.
 
-### 4.3 Cargador `loadCashOutstandingInput(db, scope, now)`
+### 4.3 Cargador y coste
 
-1. `orders` con `paymentMethod == "cod"` y `status in ["delivered","liquidated"]` (+ `driverId == x`
-   si hay alcance), `.select(...)` de los campos de 4.1. **Sin rango de fecha.**
-2. `settlements` con `kind == "driver"` (todos).
-3. Calcula `received` y descarta los recibidos **antes** de leer asientos.
-4. `walletEntries` con `where("orderId","in", lote de 30)` sobre los no recibidos (~153 → 6 consultas,
-   ~800 lecturas). Solo se conservan los tipos de 4.1.
-5. Nombres: `sellers`, `drivers`, `messengers` por `getAll` de los ids que aparecen.
-6. `settings/cashAlerts` con Zod y defectos.
-7. Para la reconciliacion (solo admin sin filtro): asientos `driver_earning` con `settlementId == ""`
-   (convencion de `withOpenSettlementFlags`, `wallet-entries.ts:271`). T1 comprueba que el campo esta
-   presente en todos los asientos de domiciliario; si falta en alguno, la consulta lo perderia y T1 lo
-   reporta antes de seguir.
+`coverage = "full"` solo con admin e `includeReconciliation`.
 
-Lecturas estimadas por llamada del admin: N(COD entregados) + cortes + ~800 + nombres. T1 lo mide.
+1. `orders` (`cod`, `delivered|liquidated`, + `driverId` del claim), `select`, sin fecha ni `limit`.
+2. `settlements` `kind == "driver"`.
+3. `received` y descarte.
+4. `full`: `walletEntries` de tienda `cod_revenue|cod_remittance` y de domiciliario `driver_earning`,
+   enteras. `targeted`: `orderId in` por lotes de 30 sobre los no recibidos.
+5. `product_cost` (admin). 6. Zod por asiento (`unreadableEntryIds`), nombres, ajustes, canal.
 
-### 4.4 RNF_02: por que la suma por pedido NO es `driverReceivableCop`, y como se ata
-
-`driverReceivableCop` de la posicion **no** es "Σ de lo que falta por pedido". Diferencias de definicion,
-todas leidas en `platform-position.ts`:
-
-| # | La posicion | La lista por pedido | Efecto |
+| Modo | Estimacion hoy | Crece | Cuando |
 |---|---|---|---|
-| a | fuera de corte: `max(0, Σcod − Σpago)` **agregado**, y `Σpago` incluye el pago de **visitas fallidas** y entregas prepago fuera de corte | solo contraentregas entregadas, `max(0, ...)` por pedido | la posicion es **menor** por el pago de fallidos sin cortar |
-| b | un pedido de $1 resta su pago (−$5.999) del total | ese pedido aporta 0 | la posicion es menor |
-| c | en corte: `Σ cashPendingCop` del corte guardado | Σ (esperado − recibido) de las asignaciones no cubiertas | iguales si el corte cuadra; distintas en cortes viejos sin `cashPendingCop` o con cifras guardadas antes de una correccion |
-| d | COD de cualquier pedido con asientos fuera de corte | solo `delivered`/`liquidated` | distintas si hay asientos COD de pedidos en otro estado sin reversa |
+| resumen | ~4.000-6.000 lecturas | ~1.800/mes | una por sesion de admin, por Finanzas del lider, una al dia |
+| con conciliacion | ~12.000-16.000 | ~2.500/mes | pestana, "Actualizar" en ella, guardar ajustes con ella abierta |
 
-O sea, **literalmente** RNF_02 no se cumple con datos reales: (a) y (b) las mueve el propio diseno de la
-posicion. El plan propone (P1):
+Umbrales: con conciliacion > 30.000 docs o > 3 s → conciliacion diaria guardada **con decision del
+responsable**; resumen > 20.000 o > 3 s → Fase 2. T1 mide, T2 cronometra y documenta.
 
-- La formula de "por cobrar al domiciliario" sale de `computePlatformPosition` a
-  `computeDriverReceivable` (puro, `driver-receivable.ts`). La posicion la llama; la 026 tambien. Una
-  sola formula, ninguna copia (principios 3 y 9). `platform-position.test.ts` sigue atando el cliente.
-- El informe devuelve `reconciliation`:
+### 4.4 RNF_02: conciliacion por causas que no absorbe un pedido perdido
+
+Ninguna causa es residuo. Cada pedido con asientos "por cobrar" se clasifica **independientemente de
+`rows`/`nettedRows`**:
+
+| Razon | Como se decide |
+|---|---|
+| `listed` | esta en `rows` |
+| `outside_universe` | no esta en `input.orders` |
+| `received` | esta en `buildCodReceivedSet(settlements)` |
+| `covered_by_netting` | universo, no recibido, sin corte `pending`, y algun corte que lo contiene cumple `isDriverSettlementCashSettled` (calculado desde los cortes, no desde `nettedRows`) |
+| `unreadable_order` | esta en `unreadableOrderIds` |
+| `attributed_elsewhere` | (solo por corte) es fila atribuida a otro corte |
+| **sin razon** | universo, no recibido, legible, ni listado ni compensado → `unexplainedCop`, `unexplainedOrderIds` |
+
+**Fuera de corte:** `posicionFuera − listaFuera = Σ_U(cod − pago) − T − N + K` (U = no listados por razon;
+T = filas `order_total`; N = netos negativos; K = `max(0, P − C)`).
+
+**Por corte** `s`, con `R_s = max(0, expectedCop_s − settlementCashReceivedCop(s))` recalculado con
+`computeDriverCashSummary` sobre los mismos asientos, y `G_s = s.cashPendingCop ?? 0`:
+
+`G_s − A_s = (G_s − R_s) + Σ_{O_s no atribuidos}(cod − pago) − T_s − N_s + K1_s + K2_s − (Rec_s − P_s) − Q_s`
+
+- `G_s − R_s` es la **unica causa propia del corte**: `settlement_cash_pending_stale` si el campo existe y
+  difiere; `settlement_cash_pending_missing` si el campo falta.
+- `Σ_{O_s no atribuidos}` por razon (incluida `covered_by_netting`); "sin razon" → `unexplainedCop`.
+- `T_s`, `N_s`, `K1_s` (tope a 0 del esperado), `K2_s` (excedente), `Rec_s − P_s` (recibido no imputado a
+  filas atribuidas), `Q_s` (imputacion por encima del esperado actual).
 
 ```ts
+export type ReconciliationCause =
+  | "outside_orders_outside_universe" | "outside_unreadable_orders"
+  | "outside_order_total_without_cod" | "outside_negative_net" | "outside_aggregate_clamp"
+  | "settlement_cash_pending_stale" | "settlement_cash_pending_missing"
+  | "settlement_orders_received" | "settlement_orders_covered_by_netting"
+  | "settlement_orders_outside_universe" | "settlement_unreadable_orders"
+  | "settlement_orders_attributed_elsewhere"
+  | "settlement_order_total_without_cod" | "settlement_negative_net"
+  | "settlement_expected_clamp" | "settlement_excess_received"
+  | "settlement_cash_received" | "settlement_allocation_over_expected";
+
 export type PositionReconciliation = {
-  driverReceivableCop: number;          // computeDriverReceivable sobre los mismos documentos
-  listOutstandingCop: number;           // totals.outstandingCop
-  deltaCop: number;                     // driverReceivableCop − listOutstandingCop
-  causes: Array<{
-    cause: "driver_pay_outside_not_listed" | "negative_net_order" | "settlement_cash_pending_mismatch" | "cod_entries_outside_list";
-    amountCop: number;
-    orderIds: string[];                 // o ids de corte para la causa c
-  }>;
-  unexplainedCop: number;               // deltaCop − Σ causes; DEBE ser 0
+  driverReceivableCop: number; listOutstandingCop: number; deltaCop: number;
+  causes: Array<{ cause: ReconciliationCause; amountCop: number; orderIds: string[]; settlementId?: string }>;
+  staleSettlementsCop: number;
+  missingPendingSettlementsCop: number;
+  unexplainedCop: number;         // deltaCop − Σ causes (todas, incluidas stale y missing)
+  unexplainedOrderIds: string[];
 };
 ```
 
-- La prueba de RNF_02 fija **dos** cosas: (1) sin fallidos ni pedidos de neto negativo ni cortes
-  descuadrados, `deltaCop === 0`; (2) con cada causa sembrada, `unexplainedCop === 0` y la causa nombra
-  los pedidos. DoD 4 en produccion se da por cumplido con `unexplainedCop === 0`.
-- Coste de (a) para la reconciliacion: asientos `driver_earning` abiertos (4.3 paso 7) y los `orderIds`
-  de cortes ya cargados; no se lee el ledger entero.
+**Regla de paso (DoD 4):** `unexplainedCop === 0` es la **unica condicion de paso**.
+`staleSettlementsCop` y `missingPendingSettlementsCop` forman parte de la descomposicion, pero **se
+reportan** por corte como hallazgo; distintos de 0 **no fallan**. `unexplainedCop` mide si la lista pierde
+pedidos; "stale/missing" miden si los cortes guardados estan al dia, que es otro problema.
 
-### 4.5 Pedidos sin efectivo esperado (hallazgo)
+**Pruebas (T9):** sin causas `deltaCop === 0`; cada causa sola y todas juntas → `unexplainedCop === 0`;
+propiedad con semilla fija; fila quitada de `rows` (fuera y en corte) → `unexplainedCop !== 0` con su id;
+fila quitada de `nettedRows` no cambia nada; corte con campo viejo → `stale`; sin campo → `missing`.
 
-Si `collectedCop <= driverPayCop`, `computeDriverCashSummary` no le crea asignacion, asi que
-`buildCodReceivedSet` **nunca** lo da por recibido mientras su corte tenga asignaciones. Consecuencias:
-aparece siempre en la lista (correcto segun RF_01, aporta $0) y su asiento de tienda queda bloqueado para
-siempre por la compuerta de la 018. Esta spec **no** cambia la regla (fuera de alcance: "como se cubren
-los cortes"); la fila sale con `expectedCashCop = 0`, no entra al aviso (umbral) y T1 cuenta cuantos hay
-para que el responsable decida si abre una spec aparte (pregunta P7).
+**T18** compara contra `getPlatformPosition` desplegado; DoD 4 = igualdad de `driverReceivableCop` +
+`unexplainedCop === 0`; lista aparte `stale` y `missing` por corte.
 
-### 4.6 `selectNoticeCandidates(report, alreadyNotified, settings)` y `composeOverdueNotice`
+### 4.5 Pedidos sin efectivo esperado
 
-- Candidata = `isOverdue && outstandingCop >= notifyMinCop && !alreadyNotified.has(orderId)`.
-- Grupos por lider ordenados por importe; dentro, pedidos por antiguedad. Un mensaje por corrida.
-- Texto plano en espanol, sin datos del cliente final (nombre/telefono) — solo guia, tienda, dias e
-  importe. Limite de longitud del canal (Discord: 2.000 caracteres): si se excede, se trunca por grupo con
-  "y N pedidos mas" y el total se conserva. Probado.
+`collectedCop <= driverPayCop`: aparece con `expectedCashCop = 0`, no avisa; P7 fuera de alcance.
+
+### 4.6 Aviso
+
+Candidata = fila de `rows` con `isOverdue && outstandingCop >= notifyMinCop` no avisada. Mensaje por lider,
+2.000 caracteres, "cifras incompletas" si `isIncomplete`. Constructores planos.
 
 ## 5. Estrategia de testing
 
-Vitest solo recoge `src/**/*.test.ts`; todo `functions/src` se importa como `../../functions/src/<modulo>`
-(principio 4). Fixtures locales, `now` inyectado, sin red.
+### 5.1 Mapa requisito → prueba → tarea
 
-### 5.1 Mapa requisito → modulo → prueba
-
-| Req. | Modulo | Prueba |
+| Req. | Prueba | Tarea |
 |---|---|---|
-| RF_01 | `cash-outstanding.ts` (importa `buildCodReceivedSet`) | `cash-outstanding.test.ts`: para cada pedido de un conjunto de fixtures (asignacion cubierta, no cubierta, parcial, corte pagado sin asignaciones, pendiente sin asignaciones, fuera de corte, prepago), `aparece en la lista` ⇔ `!isSellerEntryEligible(asientoCod, ...)`. Guarda: el archivo importa `buildCodReceivedSet` de `./seller-ledger` y no contiene `cashAllocations`/`covered` fuera de la lectura de `receivedCop`. **Mutacion:** pegar una copia inline de la regla rompe la guarda (DoD 1) |
-| RF_02 | idem | campos de la fila: lider, mensajero, tienda, `deliveredAt`, `ageDays`, recaudo, `location` |
-| RF_03 | idem | dia 7 no vencido, dia 8 vencido; `totals.overdueCop` |
-| RF_04 | `cash-outstanding-schemas.ts`, `cash-outstanding-api.ts` | Zod: defecto 7, rechaza 0 y no enteros; guarda: el callable de ajustes exige admin y audita |
-| RF_05 | `cash-overdue-notice.ts`, `ops-notify.ts` | umbral, una vez por pedido, agrupacion por lider, "sin lider", truncado; guarda: en `notifyOverdueCash` la escritura de `cashOverdueNotices` va **despues** de comprobar `ok` |
-| RF_06 | `cash-outstanding.ts`, `cash-outstanding-api.ts` | alcance lider: solo sus filas y sin desglose de proveedor; guarda: `driverId` sale del claim para `role === "driver"` |
-| RF_07 | idem | pedido con `closedAt` 2026-06-01 y `now` 2026-10-02 aparece con `ageDays` 123 (DoD 2); guarda: la consulta de `orders` del cargador no tiene `where` sobre `createdAt`/`closedAt` ni `limit` |
-| RF_08 | `cash-outstanding.ts` | `supplierWithheld` por proveedor, excluye `product_cost` ya liquidado al proveedor |
-| RNF_01 | `cash-outstanding-api.ts` | guarda: ningun archivo de `src/components` ni `state-store.ts` llama a `buildCodReceivedSet` para esta lista; la UI solo consume el callable |
-| RNF_02 | `driver-receivable.ts`, `cash-outstanding.ts` | `driver-receivable.test.ts`: `computePlatformPosition` da lo mismo antes y despues de la extraccion (fixtures de `platform-position.test.ts`). `cash-outstanding.test.ts`: 4.4, `deltaCop === 0` sin causas y `unexplainedCop === 0` con cada causa |
-| Casos limite | `cash-outstanding.ts` | corregido a fallido sale; parcial cuenta lo que falta; $1 aparece con $0 y no avisa; sin lider agrupado aparte; `deliveredAtSource` en las cuatro fuentes |
+| RF_01 | equivalencia con `isSellerEntryEligible`; guarda anti-copia con lista fija y mutacion | T4, T6, T17 |
+| RF_02 | campos, ubicaciones, `row.settlements`, rotulos | T7, T14 |
+| RF_03 | dia 7/8; vencido nunca `covered_by_netting`; tarjeta "mas efectivo vencido" | T7, T8, T14, T15 |
+| RF_04 | Zod; admin + auditoria; recarga | T5, T13, T16 |
+| RF_05 | umbral, una vez, agrupacion, canal, marca tras `ok`; `nettedRows` nunca candidatos | T10, T11, T13 |
+| RF_06 | filtro de lider; `token.driverId`; sin claim → denegado | T8, T12 |
+| RF_07 | pedido de junio; sin fecha ni `limit` | T6, T12 |
+| RF_08 | clave de proveedor de la posicion; linea de Por pagar | T3, T8, T16 |
+| RF_09 | `isDriverSettlementCashSettled`; precedencia; `nettedRows` fuera de totales, vencidos y aviso; rotulo; produccion | T4, T7, T8, T10, T14, T15, T17, T18 |
+| RNF_01 | guarda limitada a archivos nuevos; conteo de `buildCodReceivedSet` en `operations-app.tsx` congelado (medido al escribir la guarda) | T12, T15, T16, T17 |
+| RNF_02 | extraccion; subconjunto = ledger; causas sin residuo; `compare` | T3, T9, T18 |
+| Caso limite "sin lider" | fila con `driverId: null` → grupo `leaderId: null` (T8); "Sin lider" con "no hay a quien cobrarle" (T14) | T8, T14 |
 
-### 5.2 Lo que no se prueba en Vitest
+### 5.2 Archivos compartidos
 
-El cargador y el envio son delgados y se cubren con guardas y con `verify-026.js`.
+Un bloque `describe("T<n> · ...")` por tarea en `spec-026-guards.test.ts` (T1, T6, T12, T13, T15, T16,
+T17), `cash-outstanding.test.ts` (T6-T9) y `cash-outstanding-loads.test.ts` (T14, T16).
+`operations-app.tsx`: cada tarea en su punto de montaje. `cash-outstanding-schemas.ts`: T5 lo crea; T12
+anade `resolveCashOutstandingScope`. `cash-outstanding-loads.ts`: T14 crea la cache; T16 anade
+`reloadAfterCashAlertSave`.
 
-### 5.3 `scripts/verify-026.js` (solo lectura, JS sobre `functions/lib`, ADC)
+### 5.3 `scripts/verify-026.js`
 
-- `baseline` (T1): numero de contraentregas entregadas y liquidadas (`count()`), cortes de domiciliario,
-  filas no recibidas, fuentes de `deliveredAt`, pedidos de neto ≤ 0, asientos de domiciliario sin campo
-  `settlementId`, y la tabla de antiguedad de la spec recalculada.
-- `query-check`: ejecuta las consultas exactas del cargador (admin y una de lider) contra produccion; si
-  alguna pide indice, lo imprime.
-- `compare` (DoD 3 y 4): informe del cargador frente a `computePlatformPosition` sobre el ledger entero;
-  imprime los 24 pedidos de mas de 30 dias, el total recaudado y la reconciliacion. Exige
-  `unexplainedCop === 0`.
+- `baseline` (T1): conteos; fuentes de fecha; neto <= 0; asientos sin `settlementId`; cortes sin
+  `cashPendingCop`; cortes con pendiente viejo; **cortes saldados por compensacion y sus pedidos**, medidos
+  con **la misma metrica que la spec** (cortes, pedidos e importe como el 2026-10-02) y con la **unidad
+  nombrada** del importe (recaudo, efectivo esperado o pendiente), mas el recaudo de esos pedidos; cortes
+  con excedente; coste de los dos modos; antiguedad. Guarda los ids en `EV/t1-linea-base-ids.json`:
+  `{ over30Days, coveredByNetting, rows }`.
+- `query-check` (T2): consultas con `limit(1)`, cargas completas cronometradas.
+- `compare` (T18): cargador `full` + `computePlatformPosition`; exige `unexplainedCop === 0` e igualdad;
+  lista `stale` y `missing`; compara contra `EV/t1-linea-base-ids.json`: por cada id que cambio de grupo
+  imprime el motivo comprobado (recibido ahora, compensado, corregido de estado, ilegible, nuevo pedido). Un
+  id sin motivo hace fallar.
+- `compare --deployed` (T18, `/sdd-verify`): callables desplegados con sesion real de admin.
+
+### 5.4 Compuertas (T1, T2)
+
+| Medicion | Si sale mal | Bloquea |
+|---|---|---|
+| Filas >30 dias por `updatedAt` | se reporta | T7 |
+| Compensados distintos de 29 cortes / 36 pedidos / $1.151.997, **comparados en la misma metrica** (la unidad que T1 nombre) | se reporta la diferencia y su causa antes de seguir | T7 |
+| Con conciliacion > 30.000 docs | decision del responsable | T12 |
+| Resumen > 20.000 docs o > 3 s | Fase 2 | T12 |
+| Alguna consulta pide indice | se **anade** (T2) y se despliega primero | T12 |
 
 ## 6. Dependencias nuevas
 
-**Ninguna.** `fetch` es nativo en Node 20; Zod ya esta. Se anade un **secreto** de Firebase
-(`OPS_NOTICE_WEBHOOK_URL`), no un paquete; lo crea el responsable con
-`firebase functions:secrets:set OPS_NOTICE_WEBHOOK_URL`.
+Ninguna. Un secreto (`OPS_NOTICE_WEBHOOK_URL`).
 
-## 7. Indices de Firestore
+## 7. Indices
 
-- **Previstos: ninguno.** Las consultas son de igualdad + `in` sin `orderBy` (`paymentMethod`, `status`,
-  y `driverId` para el lider), que Firestore resuelve con los indices de un campo; `walletEntries` por
-  `orderId in` tambien. `settlements` por `kind` igual.
-- `query-check` (T2) lo confirma contra produccion. Si pidiera uno, se **anade** a
-  `firestore.indexes.json` tras comparar con `firebase firestore:indexes` (desplegar borra los que falten),
-  se despliega primero y se espera `READY`.
+Previstos: ninguno. `query-check` lo confirma; si pide uno, se anade a `firestore.indexes.json` tras
+comparar con prod.
 
 ## 8. Orden de despliegue
 
-1. Indices: solo si T2 lo exige (y entonces primero, esperando `READY`).
-2. Secreto `OPS_NOTICE_WEBHOOK_URL` creado por el responsable (antes de functions: sin el, el despliegue
-   de `notifyOverdueCash` falla).
-3. Functions (`getCashOutstanding`, `updateCashAlertSettings`, `notifyOverdueCash`, y
-   `getPlatformPosition` por la extraccion) con `ALLOW_FUNCTIONS_DEPLOY=1`, tras `cd functions && npm run
-   build` y confirmar set local == prod (`firebase functions:list`). Lo despliega un humano (principio 7).
-4. Aviso de prueba: `gcloud scheduler jobs run firebase-schedule-notifyOverdueCash-us-central1 --location
-   us-central1` y captura del mensaje recibido.
-5. Hosting, despues de `/sdd-design` y de las tareas de interfaz, con `ALLOW_FUNCTIONS_DEPLOY=1 npm run
-   deploy:hosting`, `npm run lint` en verde.
+1. Indices (si T2 lo exige). 2. Secreto creado por el responsable (URL o `none`). 3. Functions
+(`getCashOutstanding`, `updateCashAlertSettings`, `notifyOverdueCash`, `getPlatformPosition`) con
+`ALLOW_FUNCTIONS_DEPLOY=1` tras build y `functions:list`; humano. 4. Aviso de prueba por `gcloud scheduler
+jobs run`. 5. Hosting (`lint`, `static{` = 0). 6. `compare --deployed`.
 
-## 9. Pendiente de /sdd-design
+## 9. Diseno
 
-Sin entregables en `specs/design/026/`. Antes de las tareas de interfaz hace falta decidir: donde va el
-total vencido en la pantalla principal del admin (RF_03); la lista agrupada por lider y su orden (HU_01);
-como se distingue "fuera de todo corte" de "en un corte pendiente" y la fecha aproximada
-(`deliveredAtSource`); como se muestra el bloqueo por proveedor (RF_08) en la liquidacion; la vista del
-lider y su relacion con "Pendiente por entregar" (HU_02, P6); el control del plazo y el umbral (RF_04);
-como se muestran `unreadable*` y la reconciliacion. El contrato de datos de 4.1 es el que esas pantallas
-consumen.
+Las once pantallas estan redibujadas y observadas tras la enmienda (incluidos ajustes de cifras en
+`HU_01.ilegibles` y `HU_02.al-dia`). El README fija: decision 2 ("el lider con mas efectivo vencido"), 3
+(solo `unexplainedCop` decide; cortes viejos o sin pendiente para revisar), 4 ("Sin lider" con "no hay a
+quien cobrarle"), 5 y 12 ("Cubierto por compensacion"), 11 (dos cargas). Los E2E de HU_01 y HU_02 los hace
+`/sdd-verify`.
 
 ## 10. Riesgos
 
 | Riesgo | Mitigacion |
 |---|---|
-| RNF_02 no cuadra literalmente (4.4) | reconciliacion explicita por causas; DoD 4 = `unexplainedCop 0`; P1 lo pone ante el responsable antes de T4 |
-| La extraccion de `computeDriverReceivable` mueve la posicion | `platform-position.test.ts` y `driver-receivable.test.ts` en verde antes y despues; comparacion en `verify-026.js` |
-| Lecturas crecen con el historico (opcion A) | medidas en T1; umbral de Fase 2 en 2.1 anotado en `docs/rendimiento.md` |
-| `deliveredAt` aproximado en pedidos anteriores a la spec 001 | la fila dice su fuente; T1 cuenta cuantos |
-| Asientos de domiciliario sin `settlementId` escapan a la consulta de reconciliacion | T1 los cuenta; si hay, compuerta |
-| Aviso duplicado si cae la escritura tras enviar | al menos una vez, documentado; `cashOverdueRuns` permite auditarlo |
-| Aviso que no sale (secreto mal puesto, webhook revocado) | `cashOverdueRuns` con error; aviso de prueba en el despliegue; P4 sobre un segundo canal |
-| La primera corrida avisa todo el atraso | un solo mensaje agrupado; confirmar en P5 |
-| Dos cifras distintas para el lider (esta lista vs "Pendiente por entregar") | P6 y `/sdd-design` antes de construir HU_02 |
-| Pedidos de neto ≤ 0 bloqueados para siempre por la regla | visibles con $0; P7, spec aparte si procede |
-| Un documento invalido haria desaparecer una fila | Zod con `unreadable*` visibles, nunca descarte silencioso |
+| Presentar como perdido dinero que el corte ya saldo | `covered_by_netting` aparte (2.9); spec 027 para la correccion de fondo |
+| `covered_by_netting` esconde un faltante real | exige corte cerrado, pendiente 0 y recibido >= esperado; T18 compara contra la linea base con motivo por id |
+| Comparar la cifra de compensados en otra unidad | T1 nombra la unidad y la compuerta compara en la misma metrica (5.4) |
+| Corte sin `cashPendingCop` | opcional = 0 como la posicion; causa `missing`; T1 los cuenta |
+| Una causa absorbe un pedido perdido | ninguna es residuo; razones independientes de las filas; prueba de fila quitada |
+| "stale/missing" leidos como explicados | regla de paso explicita (4.4) |
+| Coste de los modos | 4.3 |
+| Cifras de dos momentos | `prime` |
+| Cache no probable por `vi.mock` | factoria con llamada inyectada (2.1) |
+| Guardas rojas desde el dia uno o verdes sin mirar | 5.1, 2.2 |
+| Aviso repetido | "al menos una vez" aceptado (spec, seccion 9) |
+| `undefined` en escrituras | 2.8 |
 
-## 11. Preguntas abiertas (bloqueantes marcadas)
+## 11. Preguntas abiertas
 
-- **P1 (bloqueante, RNF_02):** la posicion netea en agregado el pago de visitas fallidas y de pedidos de
-  $1, asi que "por cobrar al domiciliario" no es la suma por pedido de lo no recibido. ¿Se acepta
-  enmendar RNF_02 a "coincide salvo diferencias explicadas por causa, con residuo 0" (propuesta del
-  plan), o se quiere que la posicion cambie de definicion? Ademas: DoD 3 mide **recaudo bruto**
-  ($14.557.721) y DoD 4 una cifra **neta del pago al domiciliario**; ¿cual es "el total" que ve el admin?
-- **P2 (bloqueante para RF_05):** ¿por que canal y a que destino llega el aviso? Propuesta: webhook
-  entrante de Discord (o Slack/Google Chat) con `fetch`, sin dependencias. Correo implicaria dependencia
-  nueva.
-- **P3 (bloqueante para RF_05):** umbral minimo para avisar (caso de $1). Propuesta: $20.000 de efectivo
-  pendiente (`outstandingCop`), configurable junto al plazo.
-- **P4:** ¿el plazo es global o por lider? El plan lo hace global (RF_04 lo nombra en singular); por lider
-  exigiria otro campo y otra pantalla.
-- **P5:** hora de la corrida diaria (propuesta 08:00 Bogota), y si la primera corrida debe avisar todo el
-  atraso actual o empezar desde cero marcando lo existente como avisado.
-- **P6:** la vista del lider (HU_02) ¿sustituye, complementa o se reconcilia con su "Pendiente por
-  entregar" actual? No van a coincidir exactamente (este ultimo usa `totalCop` y `cashPendingCop`).
-- **P7:** los pedidos cuyo recaudo no supera el pago al domiciliario nunca se dan por recibidos con la
-  regla actual y bloquean para siempre ese asiento de la tienda. ¿Spec aparte?
-- **P8:** ¿se incluyen los pedidos en estado `liquidated`? El plan si (misma compuerta que la tienda); la
-  medicion de la spec uso solo `delivered`, asi que las cifras pueden subir algo.
+Ninguna bloqueante. Condicional: conciliacion diaria si se supera el umbral (4.3). La 027 (borrador) tiene
+las suyas.
+
+## 12. Revisiones tras `/sdd-analyze` (2026-10-02)
+
+**1a:** mismos documentos que la posicion; compuertas tempranas; `codPartialReceivedCop`; filtro de estado
+en el nucleo; nombres; secreto; tres ubicaciones; bloques por tarea; E2E en `/sdd-verify`;
+`stripUndefined`. **2a:** dos modos; `row.settlements`; `token.driverId`; filtro en cliente;
+`supplier-withheld.ts`. **3a:** RNF_01 limitada; conciliacion sin residuo; cuadre sin filtro;
+`unreadableEntryIds`; indices en T2; recarga al guardar; lista fija anti-copia; evidencia unificada.
+**4a:** compensacion (RF_09, decidido por el responsable) y spec 027 en borrador; cortes sin
+`cashPendingCop`; regla de paso; ids de la linea base; cache con llamada inyectada; "al menos una vez";
+lider de la tarjeta por importe.
+
+**5a pasada (coherente; retoques de texto)**
+
+| Retoque | Donde |
+|---|---|
+| Caso limite "pedido sin lider" verificado | 4.1, 4.2, 5.1; T8 y T14 |
+| Redibujo hecho y observado | cabecera y 9; sin dependencia de T15/T17 |
+| Unidad de $1.151.997 | 1, 5.3, 5.4; T1; spec "(unidad por confirmar en T1)" |
+| Seccion 9 de la spec tras la 8; texto visible "una vez" | spec; 2.4 |

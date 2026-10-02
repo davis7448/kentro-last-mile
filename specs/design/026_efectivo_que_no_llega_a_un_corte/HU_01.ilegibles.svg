@@ -36,7 +36,7 @@
   <text x="212" y="279" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Plazo y aviso</text>
 
   <!-- Region "Documentos ilegibles" -->
-  <rect x="16" y="312" width="343" height="196" rx="24" fill="#191e25" stroke="#ff8b7c" stroke-opacity="0.35"/>
+  <rect x="16" y="312" width="343" height="198" rx="24" fill="#191e25" stroke="#ff8b7c" stroke-opacity="0.35"/>
   <circle cx="48" cy="344" r="18" fill="#ff8b7c" fill-opacity="0.14"/>
   <text x="48" y="350" text-anchor="middle" font-size="17" font-weight="800" fill="#ff8b7c">!</text>
   <text x="76" y="350" font-size="16" font-weight="700" fill="#f4f6f8">Cifras incompletas</text>
@@ -44,24 +44,25 @@
   <text x="32" y="402" font-size="13" fill="#cbd3dc">entran en el total: 2 pedidos y 1 corte.</text>
   <text x="32" y="426" font-size="13" fill="#9aa5b3">Un corte ilegible puede dejar aqui pedidos</text>
   <text x="32" y="444" font-size="13" fill="#9aa5b3">que en realidad ya estan cubiertos.</text>
-  <rect x="32" y="456" width="226" height="40" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <rect x="32" y="454" width="226" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
   <text x="145" y="481" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Ver documentos ilegibles</text>
 
-  <!-- Franja de cifras -->
+  <!-- Franja de cifras (sin los cubiertos por compensacion ni los 2 pedidos ilegibles) -->
   <rect x="16" y="524" width="343" height="132" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
   <line x1="187.5" y1="540" x2="187.5" y2="604" stroke="#ffffff" stroke-opacity="0.08"/>
   <text x="32" y="550" font-size="12" fill="#9aa5b3">Sin llegar</text>
-  <text x="32" y="578" class="n" font-size="21" font-weight="800" fill="#f4f6f8" letter-spacing="-0.5">$14.398.221</text>
-  <text x="32" y="598" font-size="12" fill="#9aa5b3">151 pedidos</text>
+  <text x="32" y="578" class="n" font-size="21" font-weight="800" fill="#f4f6f8" letter-spacing="-0.5">$11.039.381</text>
+  <text x="32" y="598" font-size="12" fill="#9aa5b3">115 pedidos</text>
   <text x="203" y="550" font-size="12" fill="#9aa5b3">Vencido, mas de 7 dias</text>
-  <text x="203" y="578" class="n" font-size="21" font-weight="800" fill="#ff8b7c" letter-spacing="-0.5">$2.954.111</text>
-  <text x="203" y="598" font-size="12" fill="#9aa5b3">34 pedidos</text>
+  <text x="203" y="578" class="n" font-size="21" font-weight="800" fill="#ff8b7c" letter-spacing="-0.5">$707.471</text>
+  <text x="203" y="598" font-size="12" fill="#9aa5b3">10 pedidos</text>
   <line x1="32" y1="616" x2="343" y2="616" stroke="#ffffff" stroke-opacity="0.06"/>
-  <text x="32" y="640" font-size="12" fill="#cbd3dc">83 fuera de todo corte · 68 en corte pendiente</text>
+  <text x="32" y="640" font-size="12" fill="#cbd3dc">83 fuera de todo corte · 32 en un corte sin cubrir</text>
 
   <text x="16" y="684" font-size="12" font-weight="600" fill="#cbd3dc">Lider</text>
   <rect x="16" y="692" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
   <text x="36" y="719" font-size="14" fill="#f4f6f8">Todos los lideres</text>
+  <path d="M331 710 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
   <rect x="0" y="748" width="375" height="64" fill="#141920"/>
   <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>

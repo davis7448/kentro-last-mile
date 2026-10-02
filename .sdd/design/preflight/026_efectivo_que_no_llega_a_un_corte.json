@@ -1,0 +1,26 @@
+{
+  "hosts": {
+    "srv995537": {
+      "at": "2026-10-02T15:21:42.212Z",
+      "probe": true,
+      "capabilities": {
+        "design.render": {
+          "status": "available",
+          "reason": "servidor playwright_design declarado y npx en el PATH"
+        },
+        "design.observe": {
+          "status": "available",
+          "reason": "sdd-observe.mjs declarado en la navegacion y la captura del servidor de diseno"
+        },
+        "verify.visual": {
+          "status": "available",
+          "reason": "npx en /usr/bin/npx"
+        },
+        "verify.a11y": {
+          "status": "unavailable",
+          "reason": "no se encuentra node_modules/axe-core/axe.min.js ni en el producto ni en el plugin; instalalo con npm i -D axe-core"
+        }
+      }
+    }
+  }
+}

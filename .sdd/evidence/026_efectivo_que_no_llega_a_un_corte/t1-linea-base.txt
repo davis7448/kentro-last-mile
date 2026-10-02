@@ -1,0 +1,89 @@
+Spec 026 · T1 · linea base contra produccion (SOLO LECTURA)
+Generado: 2026-10-02T16:49:33.210Z  ·  comando: node scripts/verify-026.js baseline
+Logica: functions/lib (buildCodReceivedSet, computeDriverCashSummary, settlementCashReceivedCop, computePlatformPosition);
+        isDriverSettlementCashSettled reproducido localmente hasta que T4 lo cree (plan 2.9).
+
+1. Universo
+  Contraentregas delivered|liquidated: 3361 (delivered 3361)
+  Recibidas segun buildCodReceivedSet: 3191
+  Sin efectivo recibido (rows + nettedRows): 170, recaudo $16.236.091
+    rows (efectivo que falta): 133, recaudo $13.043.180, esperado $11.625.180
+    nettedRows (cubiertos por compensacion): 37, recaudo $3.192.911, esperado $2.870.910
+  Por ubicacion: covered_by_netting 37, outside_settlement 101, in_settlement_open 32
+  Recaudo por ubicacion: covered_by_netting $3.192.911, outside_settlement $9.916.310, in_settlement_open $3.126.870
+  Fuente del recaudo: wallet 170
+  Neto <= 0 (recaudo <= pago del domiciliario): 1
+
+2. Fuente de deliveredAt (plan 2.3)
+  evidence 28, closedAt 142
+
+3. Antiguedad desde la entrega (deliveredAt)
+  Todos los no recibidos (comparable con la tabla de la spec: 153 / $14.557.721):
+  | Antiguedad | Pedidos | Recaudo | Efectivo esperado |
+  | 7 dias o menos | 136 | $13.281.980 | $11.833.980 |
+  | 8 a 30 dias | 10 | $707.471 | $628.470 |
+  | 31 a 60 dias | 16 | $1.526.140 | $1.383.140 |
+  | Mas de 60 dias | 8 | $720.500 | $650.500 |
+  | Total | 170 | $16.236.091 | $14.496.090 |
+  Solo rows (sin los cubiertos por compensacion):
+  | Antiguedad | Pedidos | Recaudo | Efectivo esperado |
+  | 7 dias o menos | 133 | $13.043.180 | $11.625.180 |
+  | 8 a 30 dias | 0 | $0 | $0 |
+  | 31 a 60 dias | 0 | $0 | $0 |
+  | Mas de 60 dias | 0 | $0 | $0 |
+  | Total | 133 | $13.043.180 | $11.625.180 |
+
+4. Compuerta: filas de mas de 30 dias (plan 5.4)
+  No recibidos > 30 dias por deliveredAt: 24 ($2.246.640 recaudo); de ellos covered_by_netting 24
+  rows > 30 dias por deliveredAt: 0 ($0)
+  rows > 30 dias por updatedAt: 0 ($0)
+  Lideres de los no recibidos > 30 dias: Domiciliario 24
+  COMPUERTA >30 dias (rows por updatedAt): CUMPLE (0 filas)
+
+5. Cubiertos por compensacion
+  a) Misma metrica que la spec (cortes paid|reconciled con recibido == esperado y cashPendingCop 0;
+     asignaciones covered:false):
+     cortes que cumplen: 41; con alguna asignacion sin cubrir: 29
+     pedidos sin cubrir: 36 (asignaciones 36)
+     efectivo esperado por pedido (cashAllocations.expectedCop): $2.870.910
+     pendiente sin asignar por pedido (expectedCop - receivedCop de la asignacion): $1.151.997
+     recaudo (cod_revenue + cod_remittance): $3.192.910
+     efectivo esperado recalculado de los asientos (cod - pago): $2.870.910
+     UNIDAD de $1.151.997: pendiente sin asignar por pedido (expectedCop - receivedCop de la asignacion)
+     COMPUERTA 29 / 36 / $1.151.997: CUMPLE
+  b) Criterio del plan 2.9 (isDriverSettlementCashSettled, >=) sobre el universo no recibido:
+     cortes saldados en total: 41; con excedente (recibido > esperado): 0
+     cortes que contienen algun pedido covered_by_netting: 29 (con excedente: 0)
+     pedidos covered_by_netting: 37; recaudo $3.192.911; esperado $2.870.910
+     diferencia de conjuntos a) vs b): solo en a) 0; solo en b) 1 [ord-knt-005242]
+       ord-knt-005242: recaudo $1, esperado $0 — efectivo esperado 0 (neto <= 0): sin asignacion en cashAllocations, nunca 'covered'
+
+6. Cortes de domiciliario (42; reconciled 41, pending 1)
+  Sin cashPendingCop (hallazgo B): 0; recalculado $0
+  Con cashPendingCop distinto del recalculado (computeDriverCashSummary): 2; guardado $0 vs recalculado $211.800
+    stl-1786630129293-driver-driver-1778271901513 · reconciled · Domiciliario · guardado $0 · recalculado $129.900
+    stl-1787066544779-driver-driver-1778271901513 · reconciled · Domiciliario · guardado $0 · recalculado $81.900
+  Asientos driver_earning sin settlementId: 109 ($1.142.000)
+  driverReceivableCop de la posicion (computePlatformPosition con los mismos asientos): $11.418.029
+    efectivo esperado de rows: $11.625.180 (la conciliacion por causas es T9/T18)
+
+7. Coste de lectura (plan 4.3; T2 cronometra la carga completa)
+  orders cod delivered|liquidated (select): 3361 docs, 1316 ms
+  settlements kind==driver: 42 docs, 351 ms
+  walletEntries cod_revenue|cod_remittance|driver_earning (full): 6901 docs, 626 ms
+  walletEntries orderId in (lote 1): 118 docs, 165 ms
+  walletEntries orderId in (lote 6): 76 docs, 272 ms
+  walletEntries orderId in (lote 3): 118 docs, 290 ms
+  walletEntries orderId in (lote 2): 120 docs, 296 ms
+  walletEntries orderId in (lote 5): 120 docs, 302 ms
+  walletEntries orderId in (lote 4): 118 docs, 303 ms
+  drivers (nombres): 2 docs, 212 ms
+  messengers (nombres): 7 docs, 224 ms
+  sellers (nombres): 29 docs, 332 ms
+  product_cost (count() de la coleccion, no descargado): 3196; de los no recibidos: 159
+  Modo resumen (targeted): 4111 docs (orders + settlements + nombres + asientos por orderId en 6 lotes, 304 ms en paralelo)
+  Modo con conciliacion (full): 10501 docs (orders + settlements + nombres + cod/driver_earning enteros 6901 + product_cost de los no recibidos)
+  Lectura secuencial medida: orders 1316 ms, settlements 351 ms, asientos full 626 ms
+  COMPUERTA coste: resumen CUMPLE (<= 20000 docs); con conciliacion CUMPLE (<= 30000 docs); los 3 s los mide T2
+
+Ids en t1-linea-base-ids.json: over30Days 24, coveredByNetting 37, rows 133

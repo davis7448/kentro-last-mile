@@ -1,0 +1,579 @@
+{
+  "observations": [
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.aviso-operacion.svg",
+      "sha256": "647762767b1ec378990a9b9cebb91034f43bc1cd255e9d4f37f335dd9e4e097e",
+      "observedAt": "2026-10-02T15:40:58.192Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.aviso-operacion/647762767b1ec378990a9b9cebb91034f43bc1cd255e9d4f37f335dd9e4e097e-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.lista.svg",
+      "sha256": "24885e6cc3989527a27aeaaaf8c96212e54e1800644e2eb92d5dc4426fcb8371",
+      "observedAt": "2026-10-02T15:41:01.789Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.lista/24885e6cc3989527a27aeaaaf8c96212e54e1800644e2eb92d5dc4426fcb8371-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.plazo.svg",
+      "sha256": "2b11b860ac6e69afa484b4b533420d29eb5df2b367e777e3772b0922cafa80e8",
+      "observedAt": "2026-10-02T15:41:05.051Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.plazo/2b11b860ac6e69afa484b4b533420d29eb5df2b367e777e3772b0922cafa80e8-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.cargando.svg",
+      "sha256": "706d98de8201d30abb3cc221670dd1aebc639ce5b1036cd102a81af6611b4f49",
+      "observedAt": "2026-10-02T15:41:08.395Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.cargando/706d98de8201d30abb3cc221670dd1aebc639ce5b1036cd102a81af6611b4f49-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.vacio.svg",
+      "sha256": "faead5d550fb996fa32e82b5322952e0c07d0aa03605f4929b071816b9bacb71",
+      "observedAt": "2026-10-02T15:41:11.590Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.vacio/faead5d550fb996fa32e82b5322952e0c07d0aa03605f4929b071816b9bacb71-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.error.svg",
+      "sha256": "916aca4d6ad373416c2556815c1517049c27f770a0a8f171de223d04e56df2aa",
+      "observedAt": "2026-10-02T15:41:14.976Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.error/916aca4d6ad373416c2556815c1517049c27f770a0a8f171de223d04e56df2aa-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.ilegibles.svg",
+      "sha256": "976a1f31c10e3f4afcf5c8bbf4280777e10614b2d9d99f6c9879d99fe8cd9c19",
+      "observedAt": "2026-10-02T15:41:18.338Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.ilegibles/976a1f31c10e3f4afcf5c8bbf4280777e10614b2d9d99f6c9879d99fe8cd9c19-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.finanzas.svg",
+      "sha256": "b46465d0fb7494712b2c8c060275813851d25bec53947c595813a79b17eededd",
+      "observedAt": "2026-10-02T15:41:21.427Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.finanzas/b46465d0fb7494712b2c8c060275813851d25bec53947c595813a79b17eededd-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.al-dia.svg",
+      "sha256": "ab17993f2584e985eb0b528a1282b5d2df76231b96028b954ab39406a584d317",
+      "observedAt": "2026-10-02T15:41:24.656Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.al-dia/ab17993f2584e985eb0b528a1282b5d2df76231b96028b954ab39406a584d317-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.error.svg",
+      "sha256": "86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3",
+      "observedAt": "2026-10-02T15:41:27.772Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.error/86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.lista-escritorio.svg",
+      "sha256": "b943b5eca70a2ee8f7789b695b425171f225ee89d54e37efbde7946b795641c2",
+      "observedAt": "2026-10-02T15:41:32.015Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 800
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.lista-escritorio/b943b5eca70a2ee8f7789b695b425171f225ee89d54e37efbde7946b795641c2-1280x800@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.lista.svg",
+      "sha256": "7bf72f663389606ba46c01af0fda8a40e20d7d4e917560caa7e6ff658564e9a4",
+      "observedAt": "2026-10-02T16:34:32.352Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 1892
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 1892
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 1892
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.lista/7bf72f663389606ba46c01af0fda8a40e20d7d4e917560caa7e6ff658564e9a4-375x1892@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.lista-escritorio.svg",
+      "sha256": "86067c4a90a2e71a1cfe14d8d7f5eb41935ad748e7061c0fc2063454d8ec0da1",
+      "observedAt": "2026-10-02T16:35:57.642Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 1428
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 1428
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 1428
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.lista-escritorio/86067c4a90a2e71a1cfe14d8d7f5eb41935ad748e7061c0fc2063454d8ec0da1-1280x1428@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.lista-escritorio.svg",
+      "sha256": "afb112f6790a9a29e6f4dadaa2f0f9009cea03f889b8cabd1f827f909cbc4e5c",
+      "observedAt": "2026-10-02T16:37:27.860Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 1450
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 1450
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 1450
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.lista-escritorio/afb112f6790a9a29e6f4dadaa2f0f9009cea03f889b8cabd1f827f909cbc4e5c-1280x1450@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.aviso-operacion.svg",
+      "sha256": "f2be63ac548807f84c49b1a94a2f6441758986e97bd9d480bfdd5ef46adb8a03",
+      "observedAt": "2026-10-02T16:38:40.592Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.aviso-operacion/f2be63ac548807f84c49b1a94a2f6441758986e97bd9d480bfdd5ef46adb8a03-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.finanzas.svg",
+      "sha256": "47a562dc6ac116151fb870ddf43ceec24db5eeaed08de92f9104afd34253b4c3",
+      "observedAt": "2026-10-02T16:38:44.133Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.finanzas/47a562dc6ac116151fb870ddf43ceec24db5eeaed08de92f9104afd34253b4c3-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.plazo.svg",
+      "sha256": "2b11b860ac6e69afa484b4b533420d29eb5df2b367e777e3772b0922cafa80e8",
+      "observedAt": "2026-10-02T16:38:58.109Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.plazo/2b11b860ac6e69afa484b4b533420d29eb5df2b367e777e3772b0922cafa80e8-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.cargando.svg",
+      "sha256": "706d98de8201d30abb3cc221670dd1aebc639ce5b1036cd102a81af6611b4f49",
+      "observedAt": "2026-10-02T16:39:02.315Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.cargando/706d98de8201d30abb3cc221670dd1aebc639ce5b1036cd102a81af6611b4f49-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.vacio.svg",
+      "sha256": "faead5d550fb996fa32e82b5322952e0c07d0aa03605f4929b071816b9bacb71",
+      "observedAt": "2026-10-02T16:39:05.643Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.vacio/faead5d550fb996fa32e82b5322952e0c07d0aa03605f4929b071816b9bacb71-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.error.svg",
+      "sha256": "916aca4d6ad373416c2556815c1517049c27f770a0a8f171de223d04e56df2aa",
+      "observedAt": "2026-10-02T16:39:09.076Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.error/916aca4d6ad373416c2556815c1517049c27f770a0a8f171de223d04e56df2aa-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.ilegibles.svg",
+      "sha256": "976a1f31c10e3f4afcf5c8bbf4280777e10614b2d9d99f6c9879d99fe8cd9c19",
+      "observedAt": "2026-10-02T16:39:12.737Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.ilegibles/976a1f31c10e3f4afcf5c8bbf4280777e10614b2d9d99f6c9879d99fe8cd9c19-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_01.ilegibles.svg",
+      "sha256": "821eb3505da1a5f420922eeab7c8597ef892c9c752cbf9e6c2940d242d8bcdc6",
+      "observedAt": "2026-10-02T16:39:44.037Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_01.ilegibles/821eb3505da1a5f420922eeab7c8597ef892c9c752cbf9e6c2940d242d8bcdc6-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.al-dia.svg",
+      "sha256": "ab17993f2584e985eb0b528a1282b5d2df76231b96028b954ab39406a584d317",
+      "observedAt": "2026-10-02T16:39:47.349Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.al-dia/ab17993f2584e985eb0b528a1282b5d2df76231b96028b954ab39406a584d317-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.al-dia.svg",
+      "sha256": "fe6535c24cbd747ce7d10e090b51e3f79a065429f171fa5907216dd4a17c4832",
+      "observedAt": "2026-10-02T16:40:08.841Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.al-dia/fe6535c24cbd747ce7d10e090b51e3f79a065429f171fa5907216dd4a17c4832-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/026_efectivo_que_no_llega_a_un_corte/HU_02.error.svg",
+      "sha256": "86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3",
+      "observedAt": "2026-10-02T16:40:12.391Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.error/86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3-375x812@1x.png"
+    }
+  ]
+}

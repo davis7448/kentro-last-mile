@@ -8,6 +8,7 @@
     { "role": "heading", "name": "Efectivo sin llegar a Kentro" },
     { "role": "button", "name": "Actualizar" },
     { "role": "button", "name": "Que incluye esta cifra" },
+    { "role": "button", "name": "Ver pedidos cubiertos" },
     { "role": "list", "name": "Pedidos con efectivo sin llegar" }
   ],
   "threshold": { "missing": 0 }

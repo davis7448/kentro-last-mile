@@ -26,25 +26,27 @@
   <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Operacion</text>
   <text x="16" y="122" font-size="13" fill="#9aa5b3">Administrador · jueves 2 de octubre</text>
 
-  <!-- NUEVO: tarjeta de efectivo vencido (region "Efectivo vencido") -->
-  <rect x="16" y="142" width="343" height="236" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <!-- Tarjeta de efectivo vencido (region "Efectivo vencido"), sin los cubiertos por compensacion -->
+  <rect x="16" y="142" width="343" height="280" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
   <circle cx="48" cy="176" r="18" fill="#ff8b7c" fill-opacity="0.14"/>
   <text x="48" y="182" text-anchor="middle" font-size="17" font-weight="800" fill="#ff8b7c">!</text>
   <text x="76" y="172" font-size="16" font-weight="700" fill="#f4f6f8">Efectivo vencido</text>
-  <text x="76" y="190" font-size="12" fill="#9aa5b3">Contraentregas con mas de 7 dias sin corte</text>
-  <text x="32" y="238" class="n" font-size="32" font-weight="800" fill="#ff8b7c" letter-spacing="-1">$2.954.111</text>
-  <text x="32" y="262" font-size="14" fill="#cbd3dc">34 pedidos sin llegar a un corte</text>
-  <text x="32" y="284" font-size="13" fill="#9aa5b3">26 de Jhon Fredy Ruiz</text>
-  <text x="32" y="302" font-size="13" fill="#9aa5b3">El mas antiguo lleva 93 dias</text>
-  <rect x="32" y="318" width="311" height="44" rx="22" fill="#c6f24e"/>
-  <text x="187.5" y="345" text-anchor="middle" font-size="15" font-weight="700" fill="#10140c">Ver efectivo sin llegar</text>
+  <text x="76" y="190" font-size="12" fill="#9aa5b3">Mas de 7 dias sin que el efectivo llegue</text>
+  <text x="32" y="238" class="n" font-size="32" font-weight="800" fill="#ff8b7c" letter-spacing="-1">$707.471</text>
+  <text x="32" y="262" font-size="14" fill="#cbd3dc">10 contraentregas sin su efectivo</text>
+  <text x="32" y="286" font-size="13" fill="#9aa5b3">El lider con mas efectivo vencido:</text>
+  <text x="32" y="304" class="n" font-size="13" font-weight="600" fill="#cbd3dc">Carolina Mesa, $388.471 en 6 pedidos</text>
+  <text x="32" y="326" font-size="13" fill="#9aa5b3">El mas antiguo lleva 21 dias</text>
+  <text x="32" y="346" font-size="12" fill="#9aa5b3">No cuenta 36 cubiertos por compensacion</text>
+  <rect x="32" y="362" width="311" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="389" text-anchor="middle" font-size="15" font-weight="700" fill="#10140c">Ver efectivo sin llegar</text>
 
   <!-- Contenido actual de Operacion, sin cambios (marcador) -->
-  <rect x="16" y="394" width="343" height="150" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
-  <text x="187.5" y="464" text-anchor="middle" font-size="13" fill="#9aa5b3">Indicadores actuales de Operacion</text>
-  <text x="187.5" y="484" text-anchor="middle" font-size="13" fill="#9aa5b3">(sin cambios)</text>
-  <rect x="16" y="560" width="343" height="172" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
-  <text x="187.5" y="650" text-anchor="middle" font-size="13" fill="#9aa5b3">Pedidos de hoy (sin cambios)</text>
+  <rect x="16" y="438" width="343" height="136" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <text x="187.5" y="500" text-anchor="middle" font-size="13" fill="#9aa5b3">Indicadores actuales de Operacion</text>
+  <text x="187.5" y="520" text-anchor="middle" font-size="13" fill="#9aa5b3">(sin cambios)</text>
+  <rect x="16" y="590" width="343" height="142" rx="24" fill="#191e25" stroke="#9aa5b3" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <text x="187.5" y="666" text-anchor="middle" font-size="13" fill="#9aa5b3">Pedidos de hoy (sin cambios)</text>
 
   <!-- Navegacion inferior del admin -->
   <rect x="0" y="748" width="375" height="64" fill="#141920"/>

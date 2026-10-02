@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
-  <title>HU_01 - Efectivo sin llegar, pestana de Liquidaciones (admin, movil)</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1892" viewBox="0 0 375 1892">
+  <title>HU_01 - Efectivo sin llegar, pestana de Liquidaciones (admin, movil, pagina completa)</title>
   <defs>
     <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.14"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
     <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
@@ -9,9 +9,10 @@
     text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
     .n{font-variant-numeric:tabular-nums}
   </style>
-  <rect width="375" height="812" fill="#0e1116"/>
+  <rect width="375" height="1892" fill="#0e1116"/>
   <circle cx="30" cy="160" r="190" fill="url(#ga)"/>
   <circle cx="360" cy="460" r="200" fill="url(#gb)"/>
+  <circle cx="40" cy="1500" r="220" fill="url(#gb)"/>
 
   <!-- Barra superior -->
   <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
@@ -26,11 +27,9 @@
   <!-- Pestanas (se desplazan en horizontal) -->
   <g clip-path="url(#tabsclip)">
     <rect x="12" y="112" width="440" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
-    <rect x="16" y="116" width="96" height="44" rx="22" fill="none"/>
     <text x="64" y="143" text-anchor="middle" font-size="14" font-weight="600" fill="#cbd3dc">Por pagar</text>
     <rect x="116" y="116" width="164" height="44" rx="22" fill="#f4f6f8"/>
     <text x="198" y="143" text-anchor="middle" font-size="14" font-weight="700" fill="#0e1116">Efectivo sin llegar</text>
-    <circle cx="270" cy="124" r="0" fill="none"/>
     <text x="294" y="143" font-size="14" font-weight="600" fill="#cbd3dc">Cortes cerrados</text>
   </g>
 
@@ -45,53 +44,154 @@
   <rect x="146" y="252" width="132" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
   <text x="212" y="279" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Plazo y aviso</text>
 
-  <!-- Franja de cifras -->
-  <rect x="16" y="312" width="343" height="132" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <!-- Franja de cifras: sin los cubiertos por compensacion -->
+  <rect x="16" y="312" width="343" height="156" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
   <line x1="187.5" y1="328" x2="187.5" y2="392" stroke="#ffffff" stroke-opacity="0.08"/>
   <text x="32" y="338" font-size="12" fill="#9aa5b3">Sin llegar</text>
-  <text x="32" y="366" class="n" font-size="21" font-weight="800" fill="#f4f6f8" letter-spacing="-0.5">$14.557.721</text>
-  <text x="32" y="386" font-size="12" fill="#9aa5b3">153 pedidos</text>
+  <text x="32" y="366" class="n" font-size="21" font-weight="800" fill="#f4f6f8" letter-spacing="-0.5">$11.198.881</text>
+  <text x="32" y="386" font-size="12" fill="#9aa5b3">117 pedidos</text>
   <text x="203" y="338" font-size="12" fill="#9aa5b3">Vencido, mas de 7 dias</text>
-  <text x="203" y="366" class="n" font-size="21" font-weight="800" fill="#ff8b7c" letter-spacing="-0.5">$2.954.111</text>
-  <text x="203" y="386" font-size="12" fill="#9aa5b3">34 pedidos</text>
+  <text x="203" y="366" class="n" font-size="21" font-weight="800" fill="#ff8b7c" letter-spacing="-0.5">$707.471</text>
+  <text x="203" y="386" font-size="12" fill="#9aa5b3">10 pedidos</text>
   <line x1="32" y1="404" x2="343" y2="404" stroke="#ffffff" stroke-opacity="0.06"/>
-  <text x="32" y="428" font-size="12" fill="#cbd3dc">84 fuera de todo corte · 69 en corte pendiente</text>
+  <text x="32" y="428" font-size="12" fill="#cbd3dc">84 fuera de todo corte · 33 en un corte sin cubrir</text>
+  <text x="32" y="450" font-size="12" fill="#9aa5b3">Aparte, al final: 36 cubiertos por compensacion</text>
 
   <!-- Filtro por lider -->
-  <text x="16" y="468" font-size="12" font-weight="600" fill="#cbd3dc">Lider</text>
-  <rect x="16" y="476" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
-  <text x="36" y="503" font-size="14" fill="#f4f6f8">Todos los lideres</text>
-  <path d="M331 494 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="16" y="492" font-size="12" font-weight="600" fill="#cbd3dc">Lider</text>
+  <rect x="16" y="500" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="36" y="527" font-size="14" fill="#f4f6f8">Todos los lideres</text>
+  <path d="M331 518 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Grupo por lider: el de mayor importe vencido primero -->
-  <rect x="16" y="536" width="343" height="300" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
-  <text x="32" y="564" font-size="16" font-weight="700" fill="#f4f6f8">Jhon Fredy Ruiz</text>
-  <text x="343" y="564" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$2.884.300</text>
-  <text x="32" y="584" font-size="12" fill="#9aa5b3">31 pedidos · desde el 1 jul</text>
-  <text x="343" y="584" text-anchor="end" class="n" font-size="12" font-weight="600" fill="#ff8b7c">26 vencidos · $2.401.140</text>
-  <line x1="32" y1="598" x2="343" y2="598" stroke="#ffffff" stroke-opacity="0.06"/>
+  <!-- Grupo 1, desplegado: el lider con mas efectivo vencido -->
+  <rect x="16" y="560" width="343" height="690" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M30 580 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="588" font-size="16" font-weight="700" fill="#f4f6f8">Carolina Mesa</text>
+  <text x="343" y="588" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$4.587.721</text>
+  <text x="52" y="608" font-size="12" fill="#9aa5b3">49 pedidos · desde el 12 sep</text>
+  <text x="52" y="626" class="n" font-size="12" font-weight="600" fill="#ff8b7c">6 vencidos · $388.471</text>
+  <line x1="32" y1="640" x2="343" y2="640" stroke="#ffffff" stroke-opacity="0.06"/>
 
-  <!-- Fila 1 -->
-  <text x="32" y="622" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-003921</text>
-  <text x="343" y="622" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$89.900</text>
-  <text x="32" y="641" font-size="12" fill="#9aa5b3">DANDA · Kevin Rios · 1 jul</text>
-  <rect x="32" y="651" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
-  <text x="65" y="667" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">93 dias</text>
-  <rect x="104" y="651" width="134" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
-  <text x="171" y="667" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
-  <path d="M335 660 l-5 5 l5 5" transform="rotate(-90 335 665)" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="32" y1="688" x2="343" y2="688" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g transform="translate(0,640)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005402</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$59.900</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">DANDA · Andres Lopez · 12 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">20 dias</text>
+    <rect x="104" y="53" width="134" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="171" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="32" y1="90" x2="343" y2="90" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,730)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005437</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$72.000</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">Kovia · Andres Lopez · 14 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">18 dias</text>
+    <rect x="104" y="53" width="134" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.16"/>
+    <text x="171" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Pagado con faltante</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="32" y1="90" x2="343" y2="90" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,820)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005488</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$48.500</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">ADMA LAB · Yesid Mora · 17 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">15 dias</text>
+    <rect x="104" y="53" width="134" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="171" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="32" y1="90" x2="343" y2="90" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,910)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005519</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$89.900</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">Bella Mujer · Yesid Mora · 19 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">13 dias</text>
+    <rect x="104" y="53" width="116" height="24" rx="12" fill="#7cc4ff" fill-opacity="0.12"/>
+    <text x="162" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#7cc4ff">En corte abierto</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="32" y1="90" x2="343" y2="90" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,1000)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005560</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$63.171</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">DANDA · Andres Lopez · 22 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">10 dias</text>
+    <rect x="104" y="53" width="134" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="171" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="32" y1="90" x2="343" y2="90" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,1090)">
+    <text x="32" y="24" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-005574</text>
+    <text x="343" y="24" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$55.000</text>
+    <text x="32" y="43" font-size="12" fill="#9aa5b3">Kovia · Yesid Mora · 23 sep</text>
+    <rect x="32" y="53" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+    <text x="65" y="69" text-anchor="middle" class="n" font-size="11" font-weight="700" fill="#ff8b7c">9 dias</text>
+    <rect x="104" y="53" width="116" height="24" rx="12" fill="#7cc4ff" fill-opacity="0.12"/>
+    <text x="162" y="69" text-anchor="middle" font-size="11" font-weight="600" fill="#7cc4ff">En corte abierto</text>
+    <path d="M332 39 l6 6 l-6 6" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <rect x="32" y="1190" width="311" height="44" rx="22" fill="#ffffff" fill-opacity="0.06"/>
+  <text x="187.5" y="1217" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Ver los 43 pedidos restantes</text>
 
-  <!-- Fila 2 -->
-  <text x="32" y="712" class="n" font-size="14" font-weight="700" fill="#f4f6f8">KNT-004118</text>
-  <text x="343" y="712" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">$129.000</text>
-  <text x="32" y="731" font-size="12" fill="#9aa5b3">Bella Mujer · Kevin Rios · 9 jul</text>
-  <rect x="32" y="741" width="66" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.14"/>
+  <!-- Grupos plegados -->
+  <g transform="translate(0,1262)">
+    <rect x="16" y="0" width="343" height="84" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <path d="M34 22 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="52" y="30" font-size="15" font-weight="700" fill="#f4f6f8">Sin lider</text>
+    <text x="343" y="30" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$164.500</text>
+    <text x="52" y="50" font-size="12" fill="#ff8b7c">2 pedidos · no hay a quien cobrarle</text>
+    <text x="52" y="68" class="n" font-size="12" font-weight="600" fill="#ff8b7c">2 vencidos · $164.500</text>
+  </g>
+  <g transform="translate(0,1358)">
+    <rect x="16" y="0" width="343" height="84" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <path d="M34 22 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="52" y="30" font-size="15" font-weight="700" fill="#f4f6f8">Jhon Fredy Ruiz</text>
+    <text x="343" y="30" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$348.660</text>
+    <text x="52" y="50" font-size="12" fill="#9aa5b3">4 pedidos · desde el 11 sep</text>
+    <text x="52" y="68" class="n" font-size="12" font-weight="600" fill="#ff8b7c">2 vencidos · $154.500</text>
+  </g>
+  <g transform="translate(0,1454)">
+    <rect x="16" y="0" width="343" height="84" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <path d="M34 22 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="52" y="30" font-size="15" font-weight="700" fill="#f4f6f8">Wilmer Ospina</text>
+    <text x="343" y="30" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$3.120.500</text>
+    <text x="52" y="50" font-size="12" fill="#9aa5b3">34 pedidos · desde el 25 sep</text>
+    <text x="52" y="68" font-size="12" fill="#9aa5b3">sin vencidos</text>
+  </g>
+  <g transform="translate(0,1550)">
+    <rect x="16" y="0" width="343" height="84" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <path d="M34 22 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="52" y="30" font-size="15" font-weight="700" fill="#f4f6f8">Diana Cardona</text>
+    <text x="343" y="30" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$2.977.500</text>
+    <text x="52" y="50" font-size="12" fill="#9aa5b3">28 pedidos · desde el 26 sep</text>
+    <text x="52" y="68" font-size="12" fill="#9aa5b3">sin vencidos</text>
+  </g>
+
+  <!-- Seccion aparte, plegada: Cubiertos por compensacion (RF_09) -->
+  <g transform="translate(0,1650)">
+    <rect x="16" y="0" width="343" height="162" rx="24" fill="#141920" stroke="#9aa5b3" stroke-opacity="0.30"/>
+    <path d="M34 20 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="52" y="31" font-size="16" font-weight="700" fill="#f4f6f8">Cubiertos por compensacion</text>
+    <text x="52" y="52" class="n" font-size="12" fill="#cbd3dc">36 pedidos · $3.358.840 · 29 cortes saldados</text>
+    <rect x="52" y="62" width="188" height="24" rx="12" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+    <path d="M63 74 l3 3 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="78" y="78" font-size="11" font-weight="600" fill="#cbd3dc">Cubierto por compensacion</text>
+    <text x="52" y="112" font-size="12" fill="#9aa5b3">El lider entrego todo lo que debia en estos</text>
+    <text x="52" y="130" font-size="12" fill="#9aa5b3">cortes. La regla por pedido no los marca como</text>
+    <text x="52" y="148" font-size="12" fill="#9aa5b3">recibidos; se corrige en la spec 027.</text>
+  </g>
 
   <!-- Navegacion inferior del admin -->
-  <rect x="0" y="748" width="375" height="64" fill="#141920"/>
-  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
-  <g font-size="10" text-anchor="middle">
+  <rect x="0" y="1828" width="375" height="64" fill="#141920"/>
+  <line x1="0" y1="1828.5" x2="375" y2="1828.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="10" text-anchor="middle" transform="translate(0,1080)">
     <rect x="21" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
     <text x="31" y="796" fill="#9aa5b3">Operacion</text>
     <rect x="84" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/>
