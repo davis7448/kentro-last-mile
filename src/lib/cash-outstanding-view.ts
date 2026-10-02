@@ -107,6 +107,11 @@ export interface CashOutstandingCard {
   nettedText: string | null;
   /** Hay documentos sin leer (mismo criterio que `incomplete`): la cifra puede quedarse corta. */
   isIncomplete: boolean;
+  /**
+   * Hacia donde puede estar mal la cifra; null con datos completos. Un corte ilegible puede INFLARLA
+   * (pedidos ya cubiertos siguen en la lista); un pedido o asiento ilegible puede dejarla CORTA (R3-RF_03-1).
+   */
+  incompleteText: string | null;
   /** Nunca true con datos incompletos: un $0 a medias no es "al dia". */
   isAllClear: boolean;
   /** "Efectivo vencido: $0 · al dia" con vencido $0 y datos completos; null en otro caso. */
@@ -295,6 +300,7 @@ function buildCard(report: CashOutstandingReport): CashOutstandingCard {
     nettedCount,
     nettedText: nettedCount > 0 ? `No cuenta ${nettedCount} cubiertos por compensacion` : null,
     isIncomplete,
+    incompleteText: buildCardIncompleteText(report),
     isAllClear,
     allClearText: isAllClear ? `Efectivo vencido: ${formatCop(0)} · al dia` : null,
   };
@@ -374,6 +380,22 @@ function hasIncompleteData(report: CashOutstandingReport): boolean {
   );
 }
 
+/** Un corte ilegible puede dejar en la lista pedidos ya cubiertos. Lo comparten la tarjeta y la pestana. */
+function hasUnreadableSettlement(report: CashOutstandingReport): boolean {
+  return report.unreadableSettlementIds.length > 0;
+}
+
+function buildCardIncompleteText(report: CashOutstandingReport): string | null {
+  if (!hasIncompleteData(report)) return null;
+  const inflated = hasUnreadableSettlement(report);
+  // Sin ids concretos no se sabe que falta: se asume lo prudente, que la cifra se queda corta.
+  const short = report.unreadableOrderIds.length > 0 || report.unreadableEntryIds.length > 0 || !inflated;
+  const parts: string[] = [];
+  if (inflated) parts.push("un corte no se pudo leer: la cifra puede incluir pedidos ya cubiertos");
+  if (short) parts.push("faltan documentos por leer: puede faltar efectivo en la cifra");
+  return `${parts.join("; ")}.`;
+}
+
 function buildIncomplete(report: CashOutstandingReport, role: CashViewRole): CashOutstandingIncomplete | null {
   if (!hasIncompleteData(report)) return null;
   if (role === "leader") {
@@ -384,7 +406,7 @@ function buildIncomplete(report: CashOutstandingReport, role: CashViewRole): Cas
       settlementWarning: false,
     };
   }
-  const settlementWarning = report.unreadableSettlementIds.length > 0;
+  const settlementWarning = hasUnreadableSettlement(report);
   return {
     title: INCOMPLETE_TITLE,
     text: settlementWarning

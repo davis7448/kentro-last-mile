@@ -2581,3 +2581,36 @@ describe("T23 · lo retenido a proveedores se ve aunque todo este compensado (R2
     expect(branch).not.toMatch(/pueden cobrar todo/);
   });
 });
+
+describe("T24 · el aviso de la tarjeta dice hacia donde puede estar mal la cifra (R3-RF_03-1, RF_03)", () => {
+  /*
+   * Guarda de fuente sobre `CashOutstandingOverdueCard`. Contrato:
+   *  - Pinta `card.incompleteText` (el texto lo decide el modelo de vista).
+   *  - No contiene el literal fijo "la cifra puede ser mayor": con un corte ilegible la cifra puede estar
+   *    inflada, no corta.
+   */
+  const ADMIN = "src/components/cash-outstanding-admin.tsx";
+  const admin = () => (existsSync(absolute(ADMIN)) ? sourceWithoutComments(ADMIN) : "");
+
+  function topLevelBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[(<]`, "m"));
+    if (start < 0) return "";
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s|\n(?:export\s+)?const\s|\n(?:export\s+)?(?:type|interface)\s/);
+    return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+  }
+
+  const cardBody = () => topLevelBody(admin(), "CashOutstandingOverdueCard");
+
+  it("CashOutstandingOverdueCard existe", () => {
+    expect(cardBody()).not.toBe("");
+  });
+
+  it("pinta card.incompleteText", () => {
+    expect(cardBody()).toMatch(/\{\s*card\??\.incompleteText\s*\}/);
+  });
+
+  it("no contiene el literal fijo 'la cifra puede ser mayor'", () => {
+    expect(cardBody()).not.toContain("la cifra puede ser mayor");
+  });
+});

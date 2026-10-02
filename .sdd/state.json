@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "phase": "implement",
-  "activeTask": "T24",
+  "phase": "audit",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
@@ -300,8 +299,8 @@
     "T24": {
       "requirements": ["RF_03"],
       "files": ["src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx", "src/lib/spec-026-guards.test.ts"],
-      "testWritten": false,
-      "done": false
+      "testWritten": true,
+      "done": true
     }
   },
   "testCommand": "npm test",

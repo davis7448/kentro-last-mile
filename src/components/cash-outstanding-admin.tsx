@@ -154,7 +154,7 @@ export function CashOutstandingOverdueCard({ uid, onOpen }: { uid: string; onOpe
           {card.nettedText && <p className="text-xs text-ink-60">{card.nettedText}</p>}
           {card.isIncomplete && (
             <p className="mt-1 rounded-2xl border border-rust/20 bg-rust/10 px-3 py-2 text-sm text-ink-70" role="note">
-              <span className="font-semibold text-rust">Cifras incompletas:</span> faltan documentos por leer; la cifra puede ser mayor.
+              <span className="font-semibold text-rust">Cifras incompletas:</span> {card.incompleteText}
             </p>
           )}
           <button

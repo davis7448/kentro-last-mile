@@ -785,3 +785,89 @@ describe("T23 · lo retenido a proveedores se ve aunque todo este compensado (R2
     expect(t23(buildCashOutstandingView(build(), { viewport: "mobile", role: "leader" })).showSupplierWithheld).toBe(false);
   });
 });
+
+describe("T24 · el aviso de la tarjeta dice hacia donde puede estar mal la cifra (R3-RF_03-1, RF_03)", () => {
+  /**
+   * Contrato que fija este bloque (el texto lo decide el modelo de vista, no el componente):
+   *   card.incompleteText: string | null
+   *     - null si los datos estan completos (mismo criterio que `card.isIncomplete`).
+   *     - corte ilegible: contiene "pedidos ya cubiertos" (la cifra puede estar inflada).
+   *     - solo pedido o asiento ilegible (o `isIncomplete` sin ids): contiene "puede faltar" (cifra corta).
+   *     - corte + pedido ilegibles: contiene las dos ideas.
+   *   Mismo criterio que la pestana: (incompleteText contiene "pedidos ya cubiertos") <=>
+   *   view.incomplete.settlementWarning, para el admin.
+   */
+  type CardT24 = { isIncomplete?: boolean; incompleteText?: string | null };
+  const cardOf = (view: { card: unknown }) => view.card as CardT24;
+  type Unreadable = Partial<Pick<CashOutstandingReport, "isIncomplete" | "unreadableOrderIds" | "unreadableSettlementIds" | "unreadableEntryIds">>;
+  const viewWith = async (unreadable: Unreadable) => {
+    const { buildCashOutstandingView } = await loadView();
+    return buildCashOutstandingView(makeReport({ rows: [makeRow({ orderId: "r1" })], isIncomplete: true, ...unreadable }), {
+      viewport: "mobile",
+      role: "admin",
+    });
+  };
+
+  it("datos completos: incompleteText es null", async () => {
+    const { buildCashOutstandingView } = await loadView();
+    const view = buildCashOutstandingView(makeReport({ rows: [makeRow({ orderId: "r1" })] }), { viewport: "mobile", role: "admin" });
+    expect(cardOf(view).incompleteText).toBeNull();
+  });
+
+  it("corte ilegible: incompleteText avisa de 'pedidos ya cubiertos' (cifra inflada)", async () => {
+    const view = await viewWith({ unreadableSettlementIds: ["s-bad"] });
+    expect(cardOf(view).incompleteText).toMatch(/pedidos ya cubiertos/);
+  });
+
+  it("corte ilegible: incompleteText NO dice que la cifra puede ser mayor", async () => {
+    const view = await viewWith({ unreadableSettlementIds: ["s-bad"] });
+    expect(cardOf(view).incompleteText ?? "").not.toMatch(/puede ser mayor/);
+  });
+
+  it.each([
+    ["pedido", { unreadableOrderIds: ["o-bad"] }],
+    ["asiento", { unreadableEntryIds: ["e-bad"] }],
+  ] as Array<[string, Unreadable]>)("solo %s ilegible: incompleteText dice 'puede faltar'", async (_kind, unreadable) => {
+    const view = await viewWith(unreadable);
+    expect(cardOf(view).incompleteText).toMatch(/puede faltar/);
+  });
+
+  it.each([
+    ["pedido", { unreadableOrderIds: ["o-bad"] }],
+    ["asiento", { unreadableEntryIds: ["e-bad"] }],
+  ] as Array<[string, Unreadable]>)("solo %s ilegible: incompleteText no habla de pedidos ya cubiertos", async (_kind, unreadable) => {
+    const view = await viewWith(unreadable);
+    expect(cardOf(view).incompleteText ?? "").not.toMatch(/pedidos ya cubiertos/);
+  });
+
+  it("isIncomplete sin ids: incompleteText dice 'puede faltar'", async () => {
+    const view = await viewWith({});
+    expect(cardOf(view).incompleteText).toMatch(/puede faltar/);
+  });
+
+  it("corte y pedido ilegibles: incompleteText trae las dos ideas", async () => {
+    const view = await viewWith({ unreadableSettlementIds: ["s-bad"], unreadableOrderIds: ["o-bad"] });
+    const text = cardOf(view).incompleteText ?? "";
+    expect({ cubiertos: /pedidos ya cubiertos/.test(text), faltar: /puede faltar/.test(text) }).toEqual({ cubiertos: true, faltar: true });
+  });
+
+  it.each([
+    ["completo", {}, false],
+    ["corte", { unreadableSettlementIds: ["s-bad"] }, true],
+    ["pedido", { unreadableOrderIds: ["o-bad"] }, true],
+    ["asiento", { unreadableEntryIds: ["e-bad"] }, true],
+    ["corte+pedido", { unreadableSettlementIds: ["s-bad"], unreadableOrderIds: ["o-bad"] }, true],
+  ] as Array<[string, Unreadable, boolean]>)(
+    "coherencia con la pestana (%s): 'pedidos ya cubiertos' en la tarjeta <=> view.incomplete.settlementWarning",
+    async (_case, unreadable, incomplete) => {
+      const { buildCashOutstandingView } = await loadView();
+      const report = makeReport({ rows: [makeRow({ orderId: "r1" })], isIncomplete: incomplete, ...unreadable });
+      const view = buildCashOutstandingView(report, { viewport: "mobile", role: "admin" });
+      const text = cardOf(view).incompleteText;
+      expect({
+        hasText: typeof text === "string" && text.length > 0,
+        cubiertos: /pedidos ya cubiertos/.test(text ?? ""),
+      }).toEqual({ hasText: incomplete, cubiertos: view.incomplete?.settlementWarning ?? false });
+    },
+  );
+});

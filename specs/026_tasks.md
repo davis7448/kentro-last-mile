@@ -303,7 +303,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
 
 ## Correccion de la revision adversarial (ronda 3, 2026-10-02)
 
-- [ ] **T24: El aviso de la tarjeta dice hacia donde puede estar mal la cifra (R3-RF_03-1)**
+- [x] **T24: El aviso de la tarjeta dice hacia donde puede estar mal la cifra (R3-RF_03-1)**
   * Requisitos cubiertos: RF_03
   * Archivos: src/lib/cash-outstanding-view.ts, src/lib/cash-outstanding-view.test.ts, src/components/cash-outstanding-admin.tsx, src/lib/spec-026-guards.test.ts
   * Accion: un corte ilegible devuelve a la lista pedidos ya cubiertos (total inflado); un pedido o asiento
