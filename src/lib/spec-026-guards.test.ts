@@ -181,3 +181,105 @@ describe("T2 · query-check: consultas, indices y coste de los dos modos", () =>
     expect(missing).toEqual([]);
   });
 });
+
+describe("T6 · RF_01: la regla de recibido no se copia", () => {
+  /*
+   * RF_01 (plan 2.2): la lista usa LA regla de "recibido" de la liquidacion de tienda
+   * (`buildCodReceivedSet`, `functions/src/seller-ledger.ts`) importandola. Ningun archivo de la 026
+   * puede leer `cashAllocations` ni `covered`, que es la materia prima de esa regla: si aparecen, hay
+   * una segunda copia esperando divergir.
+   *
+   * Lista FIJA de cuatro archivos. Los que todavia no existen se nombran aqui como pendientes (los
+   * crean T10, T12 y T14); T17 exige que existan los cuatro.
+   */
+  const CORE = "functions/src/cash-outstanding.ts";
+  const WATCHED = [
+    CORE,
+    "functions/src/cash-outstanding-api.ts",
+    "functions/src/cash-overdue-notice.ts",
+    "src/lib/cash-outstanding-view.ts",
+  ] as const;
+  const PENDING_UNTIL_LATER_TASKS = new Set<string>([
+    "functions/src/cash-outstanding-api.ts", // T12
+    "functions/src/cash-overdue-notice.ts", // T10
+    "src/lib/cash-outstanding-view.ts", // T14
+  ]);
+  const FORBIDDEN = ["cashAllocations", "covered"] as const;
+
+  function stripComments(text: string): string {
+    return text.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, "")).replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  }
+
+  /** Apariciones de la materia prima de la regla, fuera de comentarios: `"<token> (linea N)"`. */
+  function findReceivedRuleCopies(source: string): string[] {
+    const found: string[] = [];
+    stripComments(source)
+      .split("\n")
+      .forEach((line, index) => {
+        for (const token of FORBIDDEN) {
+          if (new RegExp(`\\b${token}\\b`).test(line)) found.push(`${token} (linea ${index + 1})`);
+        }
+      });
+    return found;
+  }
+
+  function receivedRuleBody(): string {
+    const ledger = readFileSync(absolute("functions/src/seller-ledger.ts"), "utf8");
+    const match = ledger.match(/export function buildCodReceivedSet\([\s\S]*?\n}\n/);
+    if (!match) throw new Error("no se encontro buildCodReceivedSet en seller-ledger.ts");
+    return match[0];
+  }
+
+  it("el nucleo existe", () => {
+    expect(existsSync(absolute(CORE))).toBe(true);
+  });
+
+  it("el nucleo importa buildCodReceivedSet y codPartialReceivedCop de ./seller-ledger", () => {
+    const source = sourceWithoutComments(CORE);
+    const imports = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']\.\/seller-ledger["']/g)].map((match) => match[1]).join(",");
+    expect(imports).toMatch(/\bbuildCodReceivedSet\b/);
+    expect(imports).toMatch(/\bcodPartialReceivedCop\b/);
+  });
+
+  it("el nucleo llama a buildCodReceivedSet (no solo lo importa)", () => {
+    const source = sourceWithoutComments(CORE).replace(/import\s*\{[^}]*\}\s*from\s*["'][^"']+["'];?/g, "");
+    expect(source).toMatch(/\bbuildCodReceivedSet\s*\(/);
+  });
+
+  it("el nucleo no define su propia funcion de recibido", () => {
+    const source = sourceWithoutComments(CORE);
+    expect(source).not.toMatch(/function\s+buildCodReceivedSet\b/);
+    expect(source).not.toMatch(/function\s+codPartialReceivedCop\b/);
+  });
+
+  it("en el nucleo la unica comparacion de estado de corte es 'pending' (el saldado lo decide isDriverSettlementCashSettled)", () => {
+    const source = sourceWithoutComments(CORE);
+    expect(source).not.toMatch(/[!=]==?\s*["'](paid|reconciled)["']/);
+    expect(source).not.toMatch(/["'](paid|reconciled)["']\s*[!=]==?/);
+    expect(source).toMatch(/\bisDriverSettlementCashSettled\b/);
+  });
+
+  it.each(WATCHED)("%s: sin copia de la regla (o pendiente de su tarea, nombrado)", (file) => {
+    if (!existsSync(absolute(file))) {
+      expect(PENDING_UNTIL_LATER_TASKS.has(file), `${file} falta y no es de una tarea posterior`).toBe(true);
+      return;
+    }
+    expect(findReceivedRuleCopies(readFileSync(absolute(file), "utf8"))).toEqual([]);
+  });
+
+  it("mutacion: el nucleo con el cuerpo de buildCodReceivedSet pegado es detectado", () => {
+    const mutated = `${readFileSync(absolute(CORE), "utf8")}\n${receivedRuleBody().replace("export function buildCodReceivedSet", "function receivedCopy")}`;
+    const copies = findReceivedRuleCopies(mutated);
+    expect(copies.some((hit) => hit.startsWith("cashAllocations"))).toBe(true);
+    expect(copies.some((hit) => hit.startsWith("covered"))).toBe(true);
+  });
+
+  it("mutacion de control: el mismo cuerpo dentro de un comentario no se cuenta", () => {
+    const commented = `${readFileSync(absolute(CORE), "utf8")}\n/*\n${receivedRuleBody()}\n*/\n`;
+    expect(findReceivedRuleCopies(commented)).toEqual([]);
+  });
+
+  it("la guarda no confunde covered_by_netting con covered", () => {
+    expect(findReceivedRuleCopies(`const location = "covered_by_netting";`)).toEqual([]);
+  });
+});

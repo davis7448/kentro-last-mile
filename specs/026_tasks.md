@@ -82,7 +82,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     rechazos de ajustes; corte sin `cashPendingCop` pasa (no va a ilegibles); asiento `NaN` o sin `orderId`
     → `unreadableEntryIds`; constructores sin ningun `undefined`.
 
-- [ ] **T6: Pertenencia a la lista e importes (nucleo)**
+- [x] **T6: Pertenencia a la lista e importes (nucleo)**
   * Requisitos cubiertos: RF_01, RF_07
   * Archivos: functions/src/cash-outstanding.ts, src/lib/cash-outstanding.test.ts, src/lib/spec-026-guards.test.ts, .sdd/evidence/026_efectivo_que_no_llega_a_un_corte/mutacion-rf01.txt
   * Accion: `buildCashOutstandingReport` (plan 4.2 pasos 1-3): regla importada, filtro propio, importes,
