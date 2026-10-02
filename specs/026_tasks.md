@@ -71,7 +71,7 @@ cuatro archivos (plan 2.2); `covered_by_netting` va a `nettedRows`, nunca vence 
     → **no**; sin `cashPendingCop` y recibido = esperado → saldado; sin `cashExpectedCop` → no; kind
     distinto de driver → no.
 
-- [ ] **T5: Esquemas, ajustes de alerta y sus escrituras**
+- [x] **T5: Esquemas, ajustes de alerta y sus escrituras**
   * Requisitos cubiertos: RF_04
   * Archivos: functions/src/cash-outstanding-schemas.ts, src/lib/cash-outstanding-schemas.test.ts
   * Accion: Zod de entrada `{ includeReconciliation: boolean = false }.strict()`; ajustes (7 y 20.000,
