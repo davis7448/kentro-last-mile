@@ -2,7 +2,8 @@
 
 - **Estado:** aprobada (2026-10-04, con las respuestas propuestas por Claude y aceptadas por el responsable; el
   mismo dia el responsable ratifico la precision de la decision 2, acoto el historial a API y panel (decision 6) y
-  metio en esta spec que la tienda no vea identidades de Kentro en el historial (decision 7))
+  metio en esta spec que la tienda no vea identidades de Kentro en el historial (decision 7); precisada tras
+  `/sdd-analyze` el mismo dia, seccion 10)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-10-02 (aprobada y contrastada contra el codigo el 2026-10-04)
 - **Origen:** peticion de CENTRAL (plataforma de operacion de Kovia y ONEP), "Spec · Confirmar y corregir pedidos
@@ -129,9 +130,11 @@ tienda deje de ver identidades de quien opera en Kentro.
 - **RF_05 (estado):** **Mientras** el pedido ya este en `ready_to_assign` o en un estado posterior, sin estar
   cancelado, confirmar MUST responder exito con el pedido tal como esta, sin cambiar nada ni anadir historial.
 - **RF_06 (error):** **Si** el pedido esta `cancelled`, confirmar MUST responder 409 con `code: "order_cancelled"`.
-- **RF_21 (error):** **Si** el pedido esta en `address_risk`, confirmar MUST responder 409 con
-  `code: "address_review_pending"` y sin cambiar nada: primero se corrige la direccion (RF_22) y despues se
-  confirma. Es la misma regla que hoy tiene la tienda en el panel, que no puede aceptar una direccion en revision.
+- **RF_21 (error):** **Si** el pedido esta en `address_risk`, **tenga o no lider**, confirmar MUST responder 409
+  con `code: "address_review_pending"` y sin cambiar nada: primero se corrige la direccion (RF_22) y despues se
+  confirma. Al confirmar, este codigo prevalece sobre `order_not_editable`: un `address_risk` con lider tambien
+  responde `address_review_pending` (aunque no sea corregible por API, RF_08). Es la misma regla que hoy tiene la
+  tienda en el panel, que no puede aceptar una direccion en revision.
 
 ### Corregir datos de entrega
 
@@ -143,7 +146,9 @@ tienda deje de ver identidades de quien opera en Kentro.
   `code: "order_not_editable"` y su estado actual, sin aplicar ningun campo.
 - **RF_09 (error):** **Si** algun campo es invalido (vacio, demasiado largo, telefono que no da un numero
   colombiano de 10 digitos ni un E.164, o un campo que no es dato de entrega), el sistema MUST responder 422
-  nombrando **cada** campo invalido, sin aplicar ninguno (todo o nada).
+  nombrando **cada** campo invalido, sin aplicar ninguno (todo o nada). **Unica excepcion a "vacio = invalido":**
+  `deliveryNotes` enviado como `""` o `null` MUST borrar las indicaciones del pedido (es la forma de quitarlas).
+  Cualquier otro campo de entrega enviado vacio o `null` MUST responder 422.
 - **RF_10 (error):** **Si** la ciudad enviada no es una ciudad cubierta, el sistema MUST responder 422 con
   `code: "out_of_coverage"`, sin aplicar ningun campo. La API valida campos (RF_09) y ciudad, y **no juzga la
   direccion**: no geocodifica ni la puntua. Una direccion que pasa RF_09 en una ciudad cubierta se acepta.
@@ -173,10 +178,19 @@ tienda deje de ver identidades de quien opera en Kentro.
 ### Historial
 
 - **RF_16 (ubicua):** A partir del despliegue de esta spec, todo cambio de estado o de datos de entrega de un
-  pedido hecho **por la API o desde el panel** (las callables que usa la app: confirmar, editar, ajustar, cancelar,
-  reintentar y las transiciones de `applyOrderTransition`) MUST quedar registrado con fecha y hora, origen, campo,
-  valor anterior y valor nuevo. Un registro MUST NOT reescribirse ni borrarse. Los cambios que hacen ChatBy y las
-  cinco vias de importacion quedan fuera de este requisito (spec 031).
+  pedido hecho **por la API o desde el panel** MUST quedar registrado con fecha y hora, origen, campo, valor
+  anterior y valor nuevo (en el ajuste del admin, ademas producto y valor a cobrar). Las callables del panel
+  cubiertas son exactamente las de la tabla 2.6 del plan:
+  - `confirmImportedOrder`, `updateImportedOrder` y `cancelOrder` (por el nucleo compartido con la API);
+  - `confirmRetryOrder`, `updateOrderAdjustments`, `applyOrderTransition` y `closeOrder`;
+  - `assignMessengerToOrders` y `unassignMessengerFromOrders` (asignar y quitar mensajero; solo `status`);
+  - `createOrUpdatePickupBatch` (paso a `picked_up`; hoy no audita y gana el evento `order.picked_up`);
+  - `correctOrderStatus` (`order-corrections.ts`).
+
+  Un registro MUST NOT reescribirse ni borrarse. **Unica excepcion:** el `cleanup` de la verificacion contra
+  produccion (DoD 3) MUST borrar el historial solo de los pedidos de prueba que la propia verificacion creo, y de
+  ningun otro. Los cambios que hacen ChatBy y las cinco vias de importacion quedan fuera de este requisito
+  (spec 031).
 - **RF_17 (ubicua):** El sistema MUST exponer `GET /orders/{id}/history` con esos registros, del mas viejo al
   mas nuevo. La respuesta MUST incluir `historySince` y MUST decir de forma explicita, en un campo estable y en el
   indice de la API, que el historial **no incluye** los cambios hechos por importaciones (Shopify y webhooks de
@@ -189,7 +203,11 @@ tienda deje de ver identidades de quien opera en Kentro.
   `seller_logistics`), `getOrderAuditTrail` MUST NOT devolver el uid, el nombre ni el correo de quien actuo, y
   "Historial del pedido" MUST NOT pintarlos. Cada evento MUST llevar solo la etiqueta de actor para la tienda:
   "Kentro", "Tu tienda" o "API". Aplica a todos los eventos, tambien a los anteriores a esta spec. El admin
-  sigue viendo nombre y correo como hoy.
+  sigue viendo nombre y correo como hoy. **Mitigacion hasta la spec 032** (que cierra la creacion de
+  `auditEvents` desde el cliente; decision P3 del plan): a la tienda MUST llegarle solo un evento verificable
+  (con un registro de `orderHistory` que lo apunte) o cuya accion este en la lista permitida del plan (2.7). Los
+  demas MUST dejar de mostrarse a la tienda, tambien los anteriores a esta spec que hoy ve; el admin los sigue
+  viendo.
 
 ### Key de escritura
 
@@ -206,17 +224,25 @@ tienda deje de ver identidades de quien opera en Kentro.
   (estado y lider) MUST evaluarse dentro de la misma transaccion que escribe; si el pedido cambio de estado o tomo
   lider, MUST fallar con 409 y no aplicar nada. Las escrituras MAY traer `expectedStatus`; si viene y no coincide
   con el estado real, MUST responder 409 con `code: "status_changed"` (constitucion, principio 5).
-- **RF_20 (ubicua):** Las rutas de lectura existentes (`/resumen`, `/kpis`, `/orders`, `/settlements` y el indice)
-  MUST seguir respondiendo igual para las integraciones actuales, con la key de lectura o con la de escritura,
-  incluida la forma de sus errores (`{ ok: false, error }`). El indice solo gana las rutas nuevas.
+- **RF_20 (ubicua):** Las rutas de lectura existentes (`/resumen`, `/kpis`, `/orders` y `/settlements`) MUST
+  seguir respondiendo igual para las integraciones actuales, con la key de lectura o con la de escritura,
+  incluida la forma de sus errores (`{ ok: false, error }`). El indice de la raiz MUST conservar sin cambios
+  todas sus claves actuales y MUST ganar solo claves nuevas: las rutas nuevas y su documentacion (lo que el
+  historial no incluye, los codigos de error, los estados editables y `historySince`), como exigen RF_17 y el
+  DoD 5. La comparacion antes/despues del indice se hace sobre sus claves actuales. La unica respuesta nueva en
+  una ruta existente es el 401 a una key de escritura enviada por query (RNF_01), que ninguna integracion actual
+  puede estar usando porque esa key no existe hoy.
 
 ## 5. Requisitos no funcionales
 
 - **RNF_01 (seguridad):**
-  - Las escrituras MUST exigir la **key de escritura**. Una key de lectura que intente escribir MUST recibir 403
-    con `code: "read_only_key"`.
-  - La key de escritura MUST ir solo en la cabecera `Authorization: Bearer`. Una key por parametro de consulta
-    en una ruta de escritura MUST rechazarse (401), aunque sea valida.
+  - Las escrituras MUST exigir la **key de escritura** en la cabecera `Authorization: Bearer`. Una key de
+    lectura enviada **en esa cabecera** a una escritura MUST recibir 403 con `code: "read_only_key"`; es el unico
+    caso de 403.
+  - Una key enviada por parametro de consulta (`key=`) a una ruta de escritura MUST rechazarse **siempre** con
+    401, sea de lectura o de escritura, valida o no, y aunque tambien venga una cabecera valida. Nunca 403.
+  - Una key de escritura (prefijo `kw_`) enviada por parametro de consulta MUST rechazarse con 401 tambien en las
+    rutas de lectura, nuevas y existentes (en las existentes, con su forma de error de hoy, RF_20).
   - Escribir o leer un pedido de otra tienda MUST responder 404, igual que uno inexistente.
 - **RNF_02 (errores):** Toda respuesta fallida de las rutas nuevas MUST llevar su codigo HTTP real y el cuerpo
   `{ ok: false, code, message, fields? }`. Los `code` son estables: se agregan, no se renombran. Las rutas
@@ -236,7 +262,8 @@ tienda deje de ver identidades de quien opera en Kentro.
 - **Correccion que llega justo cuando un lider toma el pedido:** la condicion se evalua en la transaccion
   (RF_19) y responde 409. No se corrige un pedido que ya tiene lider.
 - **`address_risk` con lider** (un lider tomo un pedido marcado "revisar"): no es editable ni cancelable por API
-  (RF_08, RF_14); sigue siendo cosa del admin.
+  (RF_08, RF_14: `order_not_editable`); confirmarlo responde `address_review_pending` (RF_21), igual que sin
+  lider. Sigue siendo cosa del admin.
 - **Pedido en `address_risk` corregido por API:** vuelve a `imported` (RF_22) y la confirmacion es un paso aparte
   (RF_04). Confirmar sin corregir da 409 `address_review_pending` (RF_21). Ninguna escritura por API produce un
   `address_risk`.
@@ -254,6 +281,10 @@ tienda deje de ver identidades de quien opera en Kentro.
   logistico) como "Tu tienda"; uno de la key de escritura como "API". Los eventos historicos, que solo traen
   `summary`, se muestran con su `summary` pero sin nombre ni correo (RF_27). Un `summary` que nombre a una
   persona de Kentro se trata en el plan (no se reescriben registros, RF_16).
+- **Eventos que la tienda deja de ver (mitigacion P3, RF_27):** un evento no verificable (sin registro de
+  `orderHistory` que lo apunte) cuya accion no esta en la lista permitida deja de mostrarse a la tienda, aunque
+  hoy lo vea (por ejemplo, un evento historico de reasignacion de mensajero). Es deliberado: mientras cualquier
+  sesion pueda crear `auditEvents`, la tienda no ve lo que no se puede verificar. Lo revisa la spec 032.
 - **Numero de Shopify repetido entre tiendas:** el filtro por `shopifyOrderId` queda siempre limitado a la
   tienda de la key.
 - **Pedido con varias lineas:** la correccion no toca `lineItems` (RF_12), asi que no aplica el riesgo de
@@ -283,36 +314,40 @@ tienda deje de ver identidades de quien opera en Kentro.
 1. **Pruebas, una por grupo de comportamiento:**
    - RF_04 y RF_05: confirmar `imported` lo deja en `ready_to_assign` con `confirmedVia: "api"`, y confirmar dos
      veces deja un solo registro de historial.
-   - RF_21 y RF_22: confirmar un `address_risk` da 409; corregirlo lo deja en `imported` con `review`; confirmarlo
-     despues lo deja en `ready_to_assign`; ninguna escritura por API deja un pedido en `address_risk`.
+   - RF_21 y RF_22: confirmar un `address_risk` da 409 `address_review_pending`, con y sin lider; corregirlo (sin
+     lider) lo deja en `imported` con `review`; confirmarlo despues lo deja en `ready_to_assign`; ninguna
+     escritura por API deja un pedido en `address_risk`.
    - RF_08: corregir un pedido en `in_route`, en `call_pending` o en `address_risk` con lider responde 409 y no
      cambia nada.
    - RF_09 y RF_10: un telefono valido con una ciudad no cubierta responde 422 nombrando la ciudad, y el telefono
-     no cambia.
+     no cambia; `deliveryNotes: ""` y `deliveryNotes: null` borran las indicaciones; otro campo vacio da 422.
    - RF_23: corregir la direccion borra `normalizedAddress`, `lat`, `lng` y `geoProvider`.
    - RF_11: una reimportacion de Shopify despues de un PATCH conserva la direccion corregida.
    - RF_13 a RF_15: cancelar un editable lo anula y libera inventario reservado; cancelar un `assigned` da 409;
      cancelar dos veces no duplica historial.
    - RF_16 y RF_18: una correccion por API y una edicion desde el panel dejan cada una su registro con origen,
-     campo y valores; el de la API no trae uid, nombre ni correo.
+     campo y valores; el de la API no trae uid, nombre ni correo; cada callable de la lista de RF_16 registra.
    - RF_17: la respuesta de `/orders/{id}/history` trae `historySince` y el aviso de que no incluye importaciones
      ni ChatBy; el indice de la API lo dice tambien.
    - RF_27: `getOrderAuditTrail` llamado con una sesion `seller` y otra `seller_logistics` no devuelve uid,
-     nombre ni correo en ningun evento (tambien en uno anterior a la spec) y trae la etiqueta correcta; con sesion
-     `admin` sigue trayendo nombre y correo. Guarda de fuente: `OrderAuditTrail` no pinta `actorEmail` para la
-     tienda.
+     nombre ni correo en ningun evento (tambien en uno anterior a la spec) y trae la etiqueta correcta; un evento
+     no verificable fuera de la lista permitida no llega a la tienda y si al admin; con sesion `admin` sigue
+     trayendo nombre y correo. Guarda de fuente: `OrderAuditTrail` no pinta `actorEmail` para la tienda.
    - RF_25 y RF_26: la key de escritura se muestra una vez, se guarda solo su huella y rotarla no toca la de
      lectura.
-   - RNF_01 y RNF_02: la key de lectura recibe 403 `read_only_key`; un pedido de otra tienda da 404; la key por
-     query en una escritura se rechaza.
+   - RNF_01 y RNF_02: la key de lectura en la cabecera de una escritura recibe 403 `read_only_key`; un pedido de
+     otra tienda da 404; cualquier key por query en una escritura da 401 (tambien la de lectura y aunque sea
+     valida); una key `kw_` por query en una ruta de lectura da 401.
    - RNF_03: la misma `Idempotency-Key` no aplica dos veces.
-   - RF_20: las respuestas de `/resumen`, `/kpis`, `/orders` y `/settlements` no cambian (comparacion antes/despues).
+   - RF_20: las respuestas de `/resumen`, `/kpis`, `/orders` y `/settlements`, y las claves actuales del indice,
+     no cambian (comparacion antes/despues).
 2. **Guardas de fuente:** las escrituras por API reutilizan el nucleo de confirmar, editar y cancelar sin copiarlo
    (RF_19), y la guarda de la spec 017 (`spec-017-guards.test.ts`) sigue en verde: si el codigo nuevo escribe en
    `orders` fuera de `orders.ts`, se declara en `IMPORT_WRITE_EXEMPTIONS` con su razon.
 3. **Recorrido real contra produccion** con una tienda de pruebas: los criterios de aceptacion CA_01 a CA_12 de
    CENTRAL, con CA_03 corregido para confirmar un pedido `imported`. Con evidencia. Incluye abrir "Historial del
    pedido" con una sesion real de tienda y comprobar que no aparece ningun nombre ni correo de Kentro (RF_27).
+   El `cleanup` final borra solo lo creado por la verificacion (RF_16, excepcion).
 4. **Calidad:** `npm test`, `npx tsc --noEmit` (raiz y `functions/`) y `npm run lint` en verde.
 5. **Documentacion:** la de `/storeApi` (el indice de la raiz y `/api-tiendas`) describe las rutas nuevas, los
    codigos de error, los estados editables, `historySince` y lo que el historial no incluye, y que la key de
@@ -345,6 +380,14 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 7. **Identidades en el historial de la tienda (2026-10-04):** entra en esta spec. `getOrderAuditTrail` y
    "Historial del pedido" no muestran a una tienda nombre ni correo de quien opero en Kentro; la tienda ve solo
    "Kentro", "Tu tienda" o "API". → RF_27, HU_05.
+8. **Precisiones tras `/sdd-analyze` (2026-10-04, orquestador):** (a) confirmar un `address_risk` da siempre
+   `address_review_pending`, tambien con lider (RF_21); (b) cualquier key por query en una escritura es 401, y el
+   403 `read_only_key` es solo para la key de lectura en la cabecera; una key `kw_` por query tambien es 401 en las
+   rutas de lectura viejas (RNF_01); (c) `deliveryNotes` vacio o `null` borra las indicaciones (RF_09); (d) la
+   lista de callables de RF_16 es la de la tabla 2.6 del plan, y el `cleanup` de la verificacion es la unica
+   excepcion a "no se borra"; (e) el indice gana claves nuevas sin cambiar las actuales (RF_20); (f) la tienda deja
+   de ver eventos no verificables fuera de la lista permitida (RF_27, caso limite). → RF_09, RF_16, RF_20, RF_21,
+   RF_27, RNF_01.
 
 ## 10. Historial de cambios
 
@@ -355,3 +398,4 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 | 2026-10-04 | Aprobada. Seccion 9 pasa a "Decisiones" con las 5 respuestas; nuevos RF_21 (confirmar `address_risk` da 409), RF_22 (corregir `address_risk` → `imported`), RF_24 (historial sin reconstruir), RF_25 y RF_26 (key de escritura) | Respuestas aceptadas por el responsable |
 | 2026-10-04 | Contraste con el codigo, correcciones: (a) "editable" exige ademas `driverId` vacio — un lider puede tomar un pedido "revisar" y dejarlo en `address_risk` con lider; (b) RF_04 decia que confirmar acepta `address_risk`, pero `confirmImportedOrder` solo acepta `imported`; (c) RF_10 decia que la importacion manda a `address_risk` una direccion dudosa: ninguna importacion lo hace (todas crean `imported` + `review`) y no existe detector; (d) "detalle de direccion" y "franja de entrega" no existen como datos de la tienda: se quitan de RF_07 y se nombran los campos reales; (e) RF_23 nuevo: cambiar la direccion borra lo derivado, como la 017; (f) RF_03 limitado a rutas nuevas, porque `/orders` hoy ignora parametros y RF_20 obliga a no romperlo; (g) RF_13 alineado con `cancelOrder` (motivo en `callNote`, libera inventario) y RF_14 declarado mas estricto que el panel; (h) RF_19: confirmar/editar/cancelar no reciben `expectedStatus`, validan el estado dentro de su transaccion; se dice asi y `expectedStatus` queda opcional; (i) RF_16: hoy la edicion no guarda campos ni valores y las importaciones de Shopify no auditan — se declara como trabajo nuevo; (j) caso limite de Shopify cancelado: la reimportacion conserva siempre `status`; (k) RNF_02 solo para rutas nuevas, porque las existentes responden `{ ok, error }`; (l) RNF_05: `GET /orders` lee todos los pedidos de la tienda | Constitucion, principio 1: una spec que miente es peor que no tener spec |
 | 2026-10-04 | Decisiones 6 y 7 y ratificacion de la 2: RF_16 acotado a API y panel (ChatBy e importaciones a la spec 031, en fuera de alcance); RF_17 obliga a decir que el historial no los incluye; RF_27 nuevo (la tienda no ve uid, nombre ni correo de Kentro en `getOrderAuditTrail` ni en "Historial del pedido"), ligado a HU_05, que pasa a admin y tienda; glosario (origen, etiqueta de actor, `historySince`), casos limite y DoD ajustados | Decisiones del responsable sobre las tres preguntas del contraste |
+| 2026-10-04 | Precisiones de `/sdd-analyze` (decision 8): RF_21 gana sobre `order_not_editable` al confirmar un `address_risk` con lider; RNF_01 separa el 401 (cualquier key por query en escritura; `kw_` por query en cualquier ruta, tambien las viejas) del 403 (solo key de lectura en la cabecera); RF_09 declara la excepcion de `deliveryNotes` vacio o `null`; RF_16 enumera las callables igual que la tabla 2.6 del plan y declara la excepcion del `cleanup` de verificacion; RF_20 reescrito para no contradecir RF_17 y DoD 5 (el indice gana claves nuevas y conserva las actuales); RF_27 y casos limite declaran que la tienda deja de ver eventos no verificables fuera de la lista permitida (mitigacion P3 hasta la 032); DoD ajustado | Hallazgos de `/sdd-analyze`: requisitos que se contradecian entre si o con el plan |
