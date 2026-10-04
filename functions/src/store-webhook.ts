@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { existingFactsFrom, mergeImportedOrder } from "./order-import-merge";
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
@@ -324,7 +325,10 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
       createdAt: order.created_at ?? now,
       updatedAt: now
     });
-    transaction.create(orderRef, orderDoc);
+    // Spec 017 (RNF_01): hasta hoy esta via era segura por accidente de su forma —sale antes si el
+    // pedido existe—, no por una regla. Ahora la regla es la misma que la de todas.
+    const merged = mergeImportedOrder({ incoming: orderDoc, existing: existingFactsFrom(existing), now });
+    transaction.create(orderRef, merged.doc);
     transaction.set(db.collection("auditEvents").doc(`audit-${sampleRef.id}`), {
       id: `audit-${sampleRef.id}`,
       actorId: "store-order-webhook",

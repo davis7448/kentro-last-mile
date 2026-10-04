@@ -19,6 +19,13 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 - `functions/src/` — backend: `orders.ts` (callables de ciclo de vida: confirm/close/cancel/adjust/**applyOrderTransition**…), `roles.ts`, `shopify.ts`, `index.ts` (webhook Shopify; tiene su PROPIA copia de helpers `summarizeShopifyLineItems`/offers), `onstock-webhook.ts`, `store-webhook.ts`, `uchat-pull.ts` (**confirmación de pedidos vía ChatBy/UChat, enfoque PULL**: callable `setStoreUchatConfig` guarda token en `storeUchatSecrets` (sin acceso cliente); scheduled `pullUchatConfirmations` **cada 2 horas** (a las :32 UTC; antes decía "cada 3 min" y era falso) consulta la API de UChat por teléfono E.164 y pasa `imported`→`ready_to_assign` los pedidos con `lead_status=CONFIRMADO` o tag `PED-Confirmado`. Toma TODOS los `imported` sin ventana de fecha, hasta 500 por corrida. Para adelantarlo: `gcloud scheduler jobs run firebase-schedule-pullUchatConfirmations-us-central1 --location us-central1`), `uchat-webhook.ts` (`uchatConfirmWebhook`: webhook entrante alternativo/secundario).
 - `functions/src/order-stats.ts` — callable `getOrderStats`: indicadores de un periodo **agregando en Firestore**, sin descargar pedidos. Lo usa la UI cuando el rango elegido se sale de la ventana descargada (atajos "Mes pasado"/"Acumulado"). Devuelve solo contadores exactos; el embudo por mensajero y el recaudo neto siguen en cliente porque no son agregables (ver el comentario del archivo).
 - `functions/src/platform-position.ts` — callable `getPlatformPosition` + `computePlatformPosition` (puro): las quince cifras de caja, activos, pasivos y utilidad de la plataforma, calculadas EN SERVIDOR. Existe para que el admin deje de bajarse `walletEntries` entera (10.452 asientos, 3,58 MB, el 68% de su carga) solo para derivarlas. **La suscripción todavía no se recorta**: ver "Pendiente" en `docs/rendimiento.md`. `src/lib/platform-position.test.ts` ata su aritmética a la del cliente para que no puedan divergir.
+- `functions/src/order-import-merge.ts` — **la unica regla sobre que se conserva cuando una importacion
+  se encuentra un pedido que YA existe** (spec 017). Puro. Cinco fases (`new` / `unconfirmed` / `edited` /
+  `open` / `closed`) y una tabla de politica por grupo de campos. Lo usan las cinco vias de entrada
+  (`shopify.ts`, `index.ts`, `store-webhook.ts`, `onstock-webhook.ts`, `contact-form.ts`); las cuatro
+  exenciones estan declaradas en `IMPORT_WRITE_EXEMPTIONS`, dentro del propio modulo, y la guarda
+  `src/lib/spec-017-guards.test.ts` las vigila. Companeros: `import-run-summary.ts` (el resumen por
+  corrida, en `importRuns`) y `manual-edit-backfill.ts` (el relleno de la marca de edicion).
 - `functions/src/wallet-entries.ts` — **la unica fuente de verdad sobre cuanta plata genera un pedido**: `buildWalletEntries`, `resolveTariffs`, costo de producto y las reglas de tarifa de DANDA. Puro (sin firebase-admin) para que lo reusen el cierre y las correcciones sin copiarlo.
 - `functions/src/settlement-math.ts` — aritmetica de cortes sin Firestore: `computeDriverCashSummary` (cuanto efectivo debe un domiciliario), `settlementTotals`. `orders.ts` conserva `loadDriverCashInputs`, que es la parte que lee. Se separo para poder responder "como queda el corte DESPUES del cambio" sin escribir primero.
 - `functions/src/order-corrections-plan.ts` + `order-corrections.ts` — **correccion administrativa de estados terminales desde la UI** (callable `correctOrderStatus`): fallido→entregado, entregado→fallido, anulado→operativo, fallido→nueva visita. Sustituye a los ocho scripts one-off que se corrian a mano (`correct-*.js`, `clawback-*.js`, `reopen-order-for-retry.js`), cuyo razonamiento esta recogido en la cabecera del planificador. El planificador es PURO, asi que `dryRun: true` devuelve exactamente lo que se va a escribir: la previsualizacion y la aplicacion no pueden divergir. Regla central: un corte ya pagado o conciliado NO se toca — se compensa con asientos `-correction-reverse-*` en el periodo abierto; uno pendiente si se recalcula. Usa batch con precondiciones `lastUpdateTime` (no transaccion) porque recalcular un corte necesita las colecciones de asientos completas.
@@ -34,12 +41,21 @@ Next.js 16 + React 19 + Firebase (Hosting/Functions/Firestore/Storage) + Shopify
 3. **No re-introducir dependencias de cálculo frágiles** (ej. el viejo `unitsPerSoldUnit` del 2x1 de Kovia se eliminó).
 4. **`failedCategory` tiene CINCO valores, no cuatro**: `failed_visit`, `no_coverage`, `bad_order_or_no_contact`, `bad_phone` y `pending_review`. Cobrable = `failed_visit` **o campo ausente**; despachable excluye solo los tres del medio (`pending_review` SÍ es despachable). Contar cobrables **restando** las no-cobrables es un error: se hizo así y `pending_review` desviaba 44 pedidos. Contar `failed_visit` en positivo, que además absorbe categorías futuras sin tocar nada.
 
-5. **Al acotar una descarga, comprobar primero qué cifras de dinero dependen de lo que se recorta.**
+5. **Una importacion nunca cambia de dueno a un pedido.** Lo que entra de una tienda actualiza lo que la
+   tienda sabe; no toca lider, mensajero, direccion corregida, sello de comunidad ni los productos de un
+   pedido cerrado o editado a mano. Dos corolarios que costaron caro: **`driverId: null` en un `merge` no
+   es "no tocar", es "borrar"** (conservar = omitir la clave), pero en la CREACION ese `null` tiene que
+   estar, porque un documento sin el campo no empareja `where("driverId","==",null)` y el pedido no
+   aparece en el pozo del lider. Y **el estado no dice si alguien toco el pedido**: hay dos callables que
+   editan a mano sin cambiarlo, una de ellas el recaudo de pedidos en la calle, asi que una edicion
+   manual deja marca (`MANUAL_EDIT_STAMP`).
+
+6. **Al acotar una descarga, comprobar primero qué cifras de dinero dependen de lo que se recorta.**
    El saldo "Pendiente por entregar" del líder sale de pedidos entregados en efectivo aún sin cortar,
    que pueden ser muy anteriores a la ventana: acotar sin rescatarlos por id le bajaba el saldo
    **$1.135.720 en silencio** (medido forzando una ventana de un día). No falla, no avisa: solo
    muestra menos dinero del que se debe.
-6. **Leer pedidos por id: el admin puede por lotes, el líder y el mensajero NO.** Comprobado con una
+7. **Leer pedidos por id: el admin puede por lotes, el líder y el mensajero NO.** Comprobado con una
    sesión real contra producción: `where(documentId(), "in", [...])` **sí** pasa las reglas para un
    domiciliario mientras todos los ids sean suyos, pero un solo id ajeno o inexistente devuelve 403 y
    **tumba el lote entero** — y `getDocumentsByIds` se traga el error, así que la pérdida sería

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { existingFactsFrom, mergeImportedOrder } from "./order-import-merge";
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { getFirestore, type Transaction } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -270,7 +271,10 @@ export const mercadotiendaContactFormWebhook = onRequest(
         createdAt: now,
         updatedAt: now
       });
-      transaction.create(orderRef, orderDoc);
+      // Spec 017 (RNF_01): esta via SI puede pasar `null` de verdad — su id es nuevo siempre
+      // (`cf7-${sampleId}`), asi que no hay snapshot que derivar.
+      const merged = mergeImportedOrder({ incoming: orderDoc, existing: null, now });
+      transaction.create(orderRef, merged.doc);
       transaction.set(db.collection("auditEvents").doc(`audit-${sampleRef.id}`), {
         id: `audit-${sampleRef.id}`,
         actorId: "contact-form-7",

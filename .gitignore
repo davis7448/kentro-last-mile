@@ -22,3 +22,4 @@ backups/
 /pendientes-recoger.csv
 /pendientes-recoger.pdf
 /danda-pendientes.pdf
+.sdd/evidence/017/backup-*.json
