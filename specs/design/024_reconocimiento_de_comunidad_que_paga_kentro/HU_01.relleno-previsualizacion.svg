@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="1268" viewBox="0 0 375 1268" role="img" aria-labelledby="t">
+  <title id="t">HU_01 movil: dialogo para poner al dia el reconocimiento de ADMA, con pago manual y previsualizacion que cuadra</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.info{fill:#7cc4ff}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="1268" fill="#191e25"/>
+
+  <!-- Barra del dialogo -->
+  <text x="16" y="42" font-size="19" class="b" letter-spacing="-0.4">Poner al dia: ADMA</text>
+  <circle cx="337" cy="36" r="22" fill="#212832"/>
+  <path d="M330 29 L344 43 M344 29 L330 43" stroke="#f4f6f8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="0" y1="68" x2="375" y2="68" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <text x="16" y="96" font-size="13" class="m">Causa el reconocimiento de pedidos ya</text>
+  <text x="16" y="114" font-size="13" class="m">cerrados de las tiendas actuales de ADMA.</text>
+  <text x="16" y="132" font-size="13" class="m">Nada se escribe hasta que confirmes.</text>
+
+  <!-- Rango -->
+  <text x="16" y="164" class="sb m">Desde</text>
+  <rect x="16" y="172" width="163" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="34" y="199" font-size="14" class="tab">27/04/2026</text>
+  <text x="196" y="164" class="sb m">Hasta</text>
+  <rect x="196" y="172" width="163" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="214" y="199" font-size="14" class="tab">29/09/2026</text>
+  <text x="16" y="240" class="m">Se causa con el valor de hoy: <tspan class="tab sb" fill="#f4f6f8">$1.000</tspan> por pedido.</text>
+
+  <!-- Pago manual -->
+  <rect x="16" y="262" width="22" height="22" rx="7" fill="#c6f24e"/>
+  <polyline points="21,273 25.5,278 33,268" fill="none" stroke="#10140c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="48" y="278" font-size="14" class="sb">Ya se pago a mano</text>
+  <text x="48" y="300" class="m">Se registra como un corte ya pagado. Si</text>
+  <text x="48" y="316" class="m">no cuadra exacto, no se escribe nada.</text>
+
+  <rect x="16" y="334" width="343" height="252" rx="16" fill="#212832"/>
+  <text x="28" y="360" class="sb m">Pedidos pagados</text>
+  <rect x="28" y="368" width="148" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="46" y="395" font-size="14" class="tab">144</text>
+  <text x="188" y="360" class="sb m">Valor pagado (COP)</text>
+  <rect x="188" y="368" width="159" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="206" y="395" font-size="14" class="tab">$ 144.000</text>
+  <text x="28" y="438" class="sb m">Fecha del pago</text>
+  <rect x="28" y="446" width="148" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="46" y="473" font-size="14" class="tab">30/09/2026</text>
+  <text x="28" y="516" class="sb m">Nota</text>
+  <rect x="28" y="524" width="319" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="46" y="551" font-size="13">Liquidacion manual 29/09, hoja ADMA</text>
+
+  <rect x="16" y="602" width="343" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="187.5" y="629" text-anchor="middle" font-size="13" class="sb">Previsualizar</text>
+
+  <!-- Previsualizacion -->
+  <rect x="16" y="664" width="343" height="440" rx="16" fill="#212832"/>
+  <text x="28" y="694" font-size="15" class="b">Previsualizacion</text>
+  <rect x="199" y="677" width="148" height="26" rx="13" fill="#c6f24e" fill-opacity="0.12"/>
+  <circle cx="212" cy="690" r="3.5" fill="#c6f24e"/>
+  <text x="221" y="694" font-size="11" class="b mint">Cuadra con lo pagado</text>
+  <text x="28" y="728" class="m">Pedidos a reconocer</text>
+  <text x="28" y="758" font-size="26" class="b tab">144</text>
+  <text x="196" y="728" class="m">Total</text>
+  <text x="196" y="758" font-size="26" class="b tab">$144.000</text>
+  <text x="28" y="784" class="m">Quedan en un corte pagado el 30/09/2026.</text>
+  <line x1="28" y1="802" x2="347" y2="802" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="28" y="826" font-size="13" class="sb">No se reconocen</text>
+  <g font-size="12">
+    <text x="28" y="852" class="m">Ya reconocidos antes</text><text x="347" y="852" text-anchor="end" class="tab sb">0</text>
+    <text x="28" y="878" class="m">Tienda excluida (ADMA COMERCIAL)</text><text x="347" y="878" text-anchor="end" class="tab sb">61</text>
+    <text x="28" y="904" class="m">Fallido no cobrable</text><text x="347" y="904" text-anchor="end" class="tab sb">18</text>
+    <text x="28" y="930" class="m">Fallido pendiente de revision</text><text x="347" y="930" text-anchor="end" class="tab sb">2</text>
+    <text x="28" y="956" class="m">Fuera del rango</text><text x="347" y="956" text-anchor="end" class="tab sb">0</text>
+  </g>
+  <rect x="28" y="972" width="319" height="56" rx="12" fill="#191e25"/>
+  <circle cx="46" cy="992" r="8" fill="none" stroke="#7cc4ff" stroke-width="1.6"/>
+  <text x="46" y="996" text-anchor="middle" font-size="11" class="b info">i</text>
+  <text x="62" y="996" class="m">12 pedidos no tienen fecha de cierre:</text>
+  <text x="62" y="1013" class="m">se uso su ultima evidencia.</text>
+  <rect x="28" y="1044" width="180" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="118" y="1070" text-anchor="middle" class="sb">Ver los 144 pedidos</text>
+
+  <!-- Pie fijo -->
+  <line x1="0" y1="1124" x2="375" y2="1124" stroke="#ffffff" stroke-opacity="0.08"/>
+  <rect x="16" y="1140" width="343" height="44" rx="22" fill="#212832"/>
+  <text x="187.5" y="1167" text-anchor="middle" font-size="13" class="sb">Cancelar</text>
+  <rect x="16" y="1196" width="343" height="52" rx="26" fill="#c6f24e"/>
+  <text x="187.5" y="1227" text-anchor="middle" font-size="14" class="b deep">Reconocer 144 pedidos · $144.000</text>
+</svg>

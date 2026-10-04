@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="t">
+  <title id="t">HU_01 escritorio: ficha de ADMA en Ajustes, Comunidades, con el editor del reconocimiento a la derecha</title>
+  <defs>
+    <radialGradient id="g1" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.16"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g2" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g3" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.10"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:13px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="1280" height="900" fill="#0e1116"/>
+  <circle cx="1150" cy="80" r="320" fill="url(#g1)"/>
+  <circle cx="200" cy="820" r="300" fill="url(#g2)"/>
+  <circle cx="760" cy="900" r="260" fill="url(#g3)"/>
+
+  <!-- Riel -->
+  <rect x="0" y="0" width="84" height="900" fill="#191e25"/>
+  <g font-size="10" text-anchor="middle">
+    <text x="42" y="110" class="m">Operacion</text>
+    <text x="42" y="180" class="m">Wallet</text>
+    <text x="42" y="250" class="m">Inventario</text>
+    <text x="42" y="320" class="m">Tiendas</text>
+    <text x="42" y="390" class="m">Cortes</text>
+  </g>
+  <rect x="10" y="436" width="64" height="40" rx="20" fill="#c6f24e"/>
+  <text x="42" y="460" text-anchor="middle" font-size="10" class="b deep">Ajustes</text>
+
+  <text x="116" y="62" font-size="36" class="xb" letter-spacing="-1.2">Ajustes</text>
+
+  <rect x="116" y="88" width="1132" height="790" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="140" y="122" font-size="16" class="b">Comunidades</text>
+  <text x="140" y="142" font-size="12" class="m">2 con enlace propio</text>
+
+  <rect x="140" y="160" width="1084" height="700" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <!-- Columna izquierda: lo de hoy + resumen -->
+  <text x="160" y="192" font-size="16" class="b">ADMA</text>
+  <text x="620" y="192" text-anchor="end" font-size="12" class="m">/registro/adma</text>
+  <text x="160" y="214" class="m">ADMA COMERCIAL · 9 tiendas · enlace activo · lider activo</text>
+  <text x="160" y="240" class="m">Entrega <tspan class="tab sb" fill="#f4f6f8">$12.000</tspan> (base)  ·  Fallido <tspan class="tab sb" fill="#f4f6f8">$12.000</tspan> (base)  ·  Manejo <tspan class="tab sb" fill="#f4f6f8">$2.000</tspan> (base)</text>
+  <text x="160" y="264" class="m">Cashback causado <tspan class="tab sb" fill="#f4f6f8">$0</tspan> · pagado <tspan class="tab sb" fill="#f4f6f8">$0</tspan></text>
+  <rect x="160" y="282" width="460" height="104" rx="16" fill="#212832"/>
+  <text x="178" y="310" font-size="14" class="sb">Reconocimiento de Kentro</text>
+  <text x="602" y="310" text-anchor="end" font-size="14" class="b tab">$1.000/pedido</text>
+  <text x="178" y="334" class="m">Causado <tspan class="tab sb" fill="#f4f6f8">$167.000</tspan> · pagado <tspan class="tab sb" fill="#f4f6f8">$144.000</tspan></text>
+  <text x="178" y="354" class="m">Lo paga Kentro: la tienda no paga mas.</text>
+  <text x="178" y="374" class="m">No causa: ADMA COMERCIAL</text>
+  <g font-size="12">
+    <rect x="160" y="404" width="128" height="44" rx="22" fill="#212832"/><text x="224" y="430" text-anchor="middle" class="sb">Revocar enlace</text>
+    <rect x="296" y="404" width="138" height="44" rx="22" fill="#212832"/><text x="365" y="430" text-anchor="middle" class="sb">Desactivar lider</text>
+    <rect x="442" y="404" width="178" height="44" rx="22" fill="#212832"/><text x="531" y="430" text-anchor="middle" class="sb rust">Contener enlace filtrado</text>
+    <rect x="160" y="456" width="188" height="44" rx="22" fill="#212832" stroke="#c6f24e" stroke-opacity="0.45"/><text x="246" y="482" text-anchor="middle" class="sb">Editar reconocimiento</text>
+    <rect x="356" y="456" width="226" height="44" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.12"/><text x="469" y="482" text-anchor="middle" class="sb">Poner al dia pedidos cerrados</text>
+  </g>
+  <rect x="160" y="524" width="460" height="300" rx="16" fill="#212832"/>
+  <text x="178" y="552" font-size="14" class="sb">Historial de cambios (2)</text>
+  <line x1="178" y1="568" x2="602" y2="568" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="178" y="592" font-size="12" class="tab">02/10/2026 09:14</text><text x="300" y="592" font-size="12">Exclusiones: + ADMA COMERCIAL</text>
+  <text x="300" y="610" font-size="11" class="m">admin@kentro.co</text>
+  <line x1="178" y1="624" x2="602" y2="624" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="178" y="648" font-size="12" class="tab">02/10/2026 09:10</text><text x="300" y="648" font-size="12">Sin valor → <tspan class="tab">$1.000</tspan></text>
+  <text x="300" y="666" font-size="11" class="m">admin@kentro.co</text>
+  <text x="178" y="806" font-size="11" class="m">El historial no se edita: cada cambio queda con quien y cuando.</text>
+
+  <!-- Columna derecha: editor -->
+  <rect x="644" y="182" width="560" height="642" rx="16" fill="#212832"/>
+  <text x="668" y="214" font-size="16" class="b">Reconocimiento por pedido</text>
+  <text x="668" y="240" font-size="12" class="m">Kentro le reconoce este valor a la comunidad por cada pedido entregado o fallido con</text>
+  <text x="668" y="258" font-size="12" class="m">flete cobrado. La tienda sigue pagando lo mismo. Un cambio vale para lo que se cierre</text>
+  <text x="668" y="276" font-size="12" class="m">despues: no recalcula nada.</text>
+  <text x="668" y="310" font-size="12" class="sb m">Valor por pedido (COP)</text>
+  <rect x="668" y="318" width="240" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="688" y="345" font-size="15" class="tab">$ 1.000</text>
+  <text x="924" y="345" font-size="11" class="m">Entero, entre $1 y $12.000 por pedido.</text>
+  <text x="668" y="396" font-size="12" class="sb m">Tiendas que no causan reconocimiento</text>
+  <g font-size="13">
+    <rect x="668" y="412" width="22" height="22" rx="7" fill="#c6f24e"/>
+    <polyline points="673,423 677.5,428 685,418" fill="none" stroke="#10140c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="700" y="428">ADMA COMERCIAL</text><text x="822" y="428" font-size="11" class="m">tienda del lider</text>
+    <rect x="937" y="413" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="968" y="428">Casa Nativa</text>
+    <rect x="669" y="457" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="700" y="472">Glowy Skin</text>
+    <rect x="937" y="457" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="968" y="472">Vitta Natural</text>
+    <rect x="669" y="501" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="700" y="516">Raiz Botanica</text>
+    <rect x="937" y="501" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="968" y="516">Dulce Hogar</text>
+    <rect x="669" y="545" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="700" y="560">Mundo Mascota</text>
+    <rect x="937" y="545" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="968" y="560">Sol de Cali</text>
+    <rect x="669" y="589" width="20" height="20" rx="7" fill="none" stroke="#9aa5b3" stroke-width="1.5"/><text x="700" y="604">Tienda Kiara</text>
+  </g>
+  <text x="668" y="650" font-size="12" class="m">La tienda del lider no se deduce sola: se marca aqui, a mano.</text>
+  <rect x="668" y="752" width="220" height="48" rx="24" fill="#c6f24e"/>
+  <text x="778" y="781" text-anchor="middle" font-size="13" class="b deep">Guardar reconocimiento</text>
+  <rect x="900" y="752" width="200" height="48" rx="24" fill="#191e25" stroke="#ff8b7c" stroke-opacity="0.3"/>
+  <text x="1000" y="781" text-anchor="middle" font-size="13" class="sb rust">Quitar reconocimiento</text>
+</svg>

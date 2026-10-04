@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1000" viewBox="0 0 1280 1000" role="img" aria-labelledby="t">
+  <title id="t">HU_02 estados del panel del lider: cargando, error, sin reconocimiento, periodo vacio, acreedor y correccion que descuenta</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.info{fill:#7cc4ff}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="1280" height="1000" fill="#0e1116"/>
+  <text x="38" y="44" font-size="22" class="xb" letter-spacing="-0.6">HU_02 · Estados del panel del lider</text>
+  <text x="38" y="66" class="m">Fragmentos moviles (375 px) de HU_02.panel-reconocimiento.</text>
+
+  <!-- A: cargando -->
+  <g transform="translate(38 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Cargando</text>
+    <rect x="12" y="44" width="351" height="56" rx="16" fill="#212832"/>
+    <text x="28" y="77" class="m" font-size="13">Cargando las cifras de tu comunidad...</text>
+    <rect x="12" y="116" width="351" height="140" rx="16" fill="#212832"/>
+    <rect x="28" y="136" width="180" height="14" rx="7" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="28" y="170" width="319" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="28" y="196" width="319" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="28" y="222" width="319" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <text x="16" y="292" class="m">Esqueleto, no ceros: un panel vacio se lee</text>
+    <text x="16" y="308" class="m">como "no me deben nada".</text>
+  </g>
+
+  <!-- B: error -->
+  <g transform="translate(453 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Error</text>
+    <rect x="12" y="44" width="351" height="176" rx="16" fill="#212832"/>
+    <text x="28" y="74" font-size="14" class="sb">No se pudieron cargar tus cifras</text>
+    <text x="28" y="98" class="m">Sin respuesta del servidor. Tu comunidad</text>
+    <text x="28" y="114" class="m">sigue siendo tuya: revisa tu conexion y</text>
+    <text x="28" y="130" class="m">vuelve a intentarlo.</text>
+    <rect x="28" y="152" width="120" height="44" rx="22" fill="#c6f24e"/>
+    <text x="88" y="179" text-anchor="middle" font-size="13" class="b deep">Reintentar</text>
+    <text x="16" y="256" class="m">Ni cashback ni reconocimiento a medias:</text>
+    <text x="16" y="272" class="m">si una de las dos cifras falta, no se pinta</text>
+    <text x="16" y="288" class="m">ninguna.</text>
+  </g>
+
+  <!-- C: comunidad sin reconocimiento -->
+  <g transform="translate(868 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Vacio · comunidad sin reconocimiento</text>
+    <rect x="12" y="44" width="351" height="160" rx="16" fill="#212832"/>
+    <text x="28" y="74" font-size="16" class="b">Tu cashback</text>
+    <text x="28" y="106" class="m">Causado (fecha de cierre)</text><text x="347" y="107" text-anchor="end" font-size="17" class="b tab">$46.000</text>
+    <text x="28" y="138" class="m">Ya pagado</text><text x="347" y="139" text-anchor="end" font-size="17" class="b tab">$30.000</text>
+    <text x="28" y="170" class="m">Pendiente</text><text x="347" y="171" text-anchor="end" font-size="17" class="b tab mint">$16.000</text>
+    <rect x="12" y="220" width="351" height="44" rx="16" fill="none" stroke="#9aa5b3" stroke-opacity="0.5" stroke-dasharray="6 6"/>
+    <text x="187.5" y="247" text-anchor="middle" class="m">(aqui no hay tarjeta de reconocimiento)</text>
+    <text x="16" y="296" class="m">Sin valor configurado la tarjeta no existe:</text>
+    <text x="16" y="312" class="m">nada de "Reconocimiento $0" (caso limite).</text>
+  </g>
+
+  <!-- D: periodo sin pedidos reconocidos -->
+  <g transform="translate(38 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Vacio · nada reconocido en el periodo</text>
+    <rect x="12" y="44" width="351" height="190" rx="16" fill="#212832"/>
+    <text x="28" y="74" font-size="16" class="b">Reconocimiento de Kentro</text>
+    <circle cx="335" cy="69" r="16" fill="#191e25"/><text x="335" y="74" text-anchor="middle" font-size="14" class="b">?</text>
+    <text x="28" y="96" class="m">Kentro te reconoce <tspan class="tab sb" fill="#f4f6f8">$1.000</tspan> por cada pedido</text>
+    <text x="28" y="112" class="m">entregado o fallido cobrado de tus tiendas.</text>
+    <line x1="28" y1="128" x2="347" y2="128" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="28" y="156" font-size="13" class="sb">Ningun pedido causo reconocimiento</text>
+    <text x="28" y="174" font-size="13" class="sb">entre el 01/10/2026 y el 02/10/2026.</text>
+    <text x="28" y="200" class="m">Cuenta al cerrarse cada pedido: los que</text>
+    <text x="28" y="216" class="m">siguen en la calle aun no suman.</text>
+  </g>
+
+  <!-- E: acreedor -->
+  <g transform="translate(453 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Acreedor · ya no gobierna</text>
+    <rect x="12" y="44" width="351" height="262" rx="16" fill="#212832"/>
+    <text x="28" y="74" font-size="15" class="sb">Ya no gobiernas esta comunidad</text>
+    <text x="28" y="98" class="m">Otra cuenta lidera ahora esta comunidad.</text>
+    <text x="28" y="114" class="m">Lo que se te debe de los cortes ya hechos</text>
+    <text x="28" y="130" class="m">sigue siendo tuyo y se te paga igual.</text>
+    <text x="28" y="160" class="m">Pendiente de pago</text>
+    <text x="28" y="190" font-size="24" class="b tab">$23.000</text>
+    <text x="28" y="218" class="m">Cashback</text><text x="347" y="218" text-anchor="end" class="tab sb">$0</text>
+    <text x="28" y="240" class="m">Reconocimiento de Kentro</text><text x="347" y="240" text-anchor="end" class="tab sb">$23.000</text>
+    <text x="28" y="272" font-size="11" class="m">Aqui solo aparece lo ya cortado: lo causado</text>
+    <text x="28" y="287" font-size="11" class="m">que aun no tiene corte no se muestra.</text>
+  </g>
+
+  <!-- F: correccion que descuenta -->
+  <g transform="translate(868 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" class="b info">Correccion de un pedido ya pagado</text>
+    <rect x="12" y="44" width="351" height="250" rx="16" fill="#212832"/>
+    <text x="28" y="74" font-size="16" class="b">Reconocimiento de Kentro</text>
+    <text x="28" y="106" class="m">Pedidos reconocidos (fecha de cierre)</text><text x="347" y="107" text-anchor="end" font-size="17" class="b tab">−1</text>
+    <text x="28" y="138" class="m">Causado</text><text x="347" y="139" text-anchor="end" font-size="17" class="b tab">−$1.000</text>
+    <text x="28" y="170" class="m">Ya pagado</text><text x="347" y="171" text-anchor="end" font-size="17" class="b tab">$0</text>
+    <text x="28" y="202" class="m">Pendiente</text><text x="347" y="203" text-anchor="end" font-size="17" class="b tab rust">−$1.000</text>
+    <rect x="28" y="218" width="319" height="60" rx="12" fill="#191e25"/>
+    <text x="40" y="240" class="m">KNT-004120 se corrigio a fallido no</text>
+    <text x="40" y="256" class="m">cobrable despues de pagarse: se descuenta</text>
+    <text x="40" y="272" class="m">del proximo pago.</text>
+    <text x="16" y="326" class="m">Negativo en rojo, sin recortar a cero: esconder</text>
+    <text x="16" y="342" class="m">la reversa bajaria el saldo en silencio.</text>
+  </g>
+</svg>

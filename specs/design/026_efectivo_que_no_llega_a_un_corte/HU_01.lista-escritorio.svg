@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1450" viewBox="0 0 1280 1450">
+  <title>HU_01 - Efectivo sin llegar, pestana de Liquidaciones (admin, escritorio, pagina completa)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.10"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.08"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="1280" height="1450" fill="#0e1116"/>
+  <circle cx="220" cy="120" r="320" fill="url(#ga)"/>
+  <circle cx="1180" cy="200" r="360" fill="url(#gb)"/>
+  <circle cx="640" cy="760" r="340" fill="url(#gc)"/>
+  <circle cx="1100" cy="1260" r="320" fill="url(#gb)"/>
+
+  <!-- Riel -->
+  <rect x="0" y="0" width="84" height="1450" fill="#12161c"/>
+  <line x1="84" y1="0" x2="84" y2="1450" stroke="#ffffff" stroke-opacity="0.05"/>
+  <circle cx="42" cy="40" r="18" fill="#c6f24e"/>
+  <text x="42" y="46" text-anchor="middle" font-size="16" font-weight="800" fill="#10140c">K</text>
+  <g font-size="10" text-anchor="middle">
+    <rect x="31" y="100" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="140" fill="#9aa5b3">Operacion</text>
+    <rect x="31" y="166" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="206" fill="#9aa5b3">Wallet</text>
+    <rect x="31" y="232" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="272" fill="#9aa5b3">Inventario</text>
+    <rect x="31" y="298" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="338" fill="#9aa5b3">Tiendas</text>
+    <rect x="12" y="356" width="60" height="58" rx="18" fill="#ffffff" fill-opacity="0.06"/>
+    <rect x="31" y="364" width="22" height="22" rx="7" fill="#c6f24e"/><text x="42" y="404" fill="#f4f6f8" font-weight="700">Cortes</text>
+    <rect x="31" y="430" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="470" fill="#9aa5b3">Ajustes</text>
+  </g>
+
+  <!-- Titulo y pestanas -->
+  <text x="116" y="66" font-size="34" font-weight="800" fill="#f4f6f8" letter-spacing="-1.2">Liquidaciones</text>
+  <rect x="116" y="84" width="636" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="175" y="115" text-anchor="middle" font-size="14" font-weight="600" fill="#cbd3dc">Por pagar</text>
+  <rect x="236" y="88" width="172" height="44" rx="22" fill="#f4f6f8"/>
+  <text x="322" y="115" text-anchor="middle" font-size="14" font-weight="700" fill="#0e1116">Efectivo sin llegar</text>
+  <text x="488" y="115" text-anchor="middle" font-size="14" font-weight="600" fill="#cbd3dc">Cortes cerrados</text>
+  <text x="652" y="115" text-anchor="middle" font-size="14" font-weight="600" fill="#cbd3dc">Resumen del periodo</text>
+
+  <!-- Encabezado de la pestana y controles -->
+  <text x="116" y="184" font-size="22" font-weight="700" fill="#f4f6f8">Efectivo sin llegar</text>
+  <text x="116" y="206" font-size="13" fill="#9aa5b3">Contraentregas entregadas cuyo efectivo Kentro aun no recibe en un corte. Misma regla</text>
+  <text x="116" y="224" font-size="13" fill="#9aa5b3">que decide si una tienda o un proveedor pueden cobrar. Calculado hoy a las 10:42.</text>
+  <text x="116" y="242" font-size="13" fill="#9aa5b3">Los 36 pedidos cubiertos por compensacion van aparte, al final.</text>
+  <text x="784" y="193" text-anchor="end" font-size="13" font-weight="600" fill="#cbd3dc">Lider</text>
+  <rect x="794" y="166" width="200" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="814" y="193" font-size="14" fill="#f4f6f8">Todos los lideres</text>
+  <path d="M968 185 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="1004" y="166" width="106" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1057" y="193" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Actualizar</text>
+  <rect x="1118" y="166" width="130" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1183" y="193" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Plazo y aviso</text>
+
+  <!-- Franja de cifras (region "Resumen del efectivo sin llegar"), sin los compensados -->
+  <rect x="116" y="262" width="820" height="92" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <line x1="321" y1="278" x2="321" y2="338" stroke="#ffffff" stroke-opacity="0.08"/>
+  <line x1="526" y1="278" x2="526" y2="338" stroke="#ffffff" stroke-opacity="0.08"/>
+  <line x1="731" y1="278" x2="731" y2="338" stroke="#ffffff" stroke-opacity="0.08"/>
+  <g>
+    <text x="136" y="290" font-size="12" fill="#9aa5b3">Sin llegar</text>
+    <text x="136" y="320" class="n" font-size="24" font-weight="800" fill="#f4f6f8" letter-spacing="-0.6">$11.198.881</text>
+    <text x="136" y="340" font-size="12" fill="#9aa5b3">117 pedidos</text>
+    <text x="341" y="290" font-size="12" fill="#9aa5b3">Vencido, mas de 7 dias</text>
+    <text x="341" y="320" class="n" font-size="24" font-weight="800" fill="#ff8b7c" letter-spacing="-0.6">$707.471</text>
+    <text x="341" y="340" font-size="12" fill="#9aa5b3">10 pedidos</text>
+    <text x="546" y="290" font-size="12" fill="#9aa5b3">Fuera de todo corte</text>
+    <text x="546" y="320" class="n" font-size="24" font-weight="800" fill="#f4f6f8" letter-spacing="-0.6">$7.902.410</text>
+    <text x="546" y="340" font-size="12" fill="#9aa5b3">84 pedidos</text>
+    <text x="751" y="290" font-size="12" fill="#9aa5b3">En un corte, sin cubrir</text>
+    <text x="751" y="320" class="n" font-size="24" font-weight="800" fill="#f4f6f8" letter-spacing="-0.6">$3.296.471</text>
+    <text x="751" y="340" font-size="12" fill="#9aa5b3">33 pedidos</text>
+  </g>
+
+  <!-- Producto retenido a proveedores (RF_08), solo de la lista principal -->
+  <rect x="952" y="262" width="296" height="92" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="972" y="288" font-size="12" fill="#9aa5b3">Producto retenido a proveedores</text>
+  <text x="972" y="314" font-size="13" font-weight="600" fill="#f4f6f8">ADMA LABORATORIO</text>
+  <text x="1228" y="314" text-anchor="end" class="n" font-size="13" font-weight="700" fill="#f4f6f8">$1.094.350</text>
+  <text x="972" y="338" font-size="13" font-weight="600" fill="#f4f6f8">Distribuidora Valle</text>
+  <text x="1228" y="338" text-anchor="end" class="n" font-size="13" font-weight="700" fill="#f4f6f8">$188.900</text>
+
+  <!-- Cuadre con la posicion (divulgacion plegada, 44 px) -->
+  <rect x="116" y="362" width="1132" height="44" rx="22" fill="#ffffff" fill-opacity="0.04"/>
+  <circle cx="138" cy="384" r="9" fill="#c6f24e" fill-opacity="0.16"/>
+  <path d="M133.5 384 l3 3 l6 -6" fill="none" stroke="#c6f24e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="156" y="389" font-size="13" font-weight="600" fill="#f4f6f8">Cuadre con la posicion de la plataforma</text>
+  <text x="430" y="389" class="n" font-size="13" fill="#9aa5b3">Por cobrar al domiciliario $11.402.100 · lista neta del pago $9.233.760 · sin explicar $0</text>
+  <path d="M1224 380 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Tabla agrupada por lider -->
+  <rect x="116" y="414" width="1132" height="610" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="12" fill="#9aa5b3">
+    <text x="140" y="439">Guia</text>
+    <text x="280" y="439">Tienda</text>
+    <text x="420" y="439">Mensajero</text>
+    <text x="570" y="439">Entregado</text>
+    <text x="730" y="439" text-anchor="end">Dias</text>
+    <text x="780" y="439">Efectivo</text>
+    <text x="1224" y="439" text-anchor="end">Recaudo</text>
+  </g>
+  <line x1="116" y1="450" x2="1248" y2="450" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Grupo 1 desplegado: el de mas efectivo vencido -->
+  <rect x="117" y="451" width="1130" height="44" fill="#212832"/>
+  <path d="M140 469 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="164" y="478" font-size="15" font-weight="700" fill="#f4f6f8">Carolina Mesa</text>
+  <text x="300" y="478" font-size="13" fill="#9aa5b3">49 pedidos · desde el 12 sep</text>
+  <text x="1080" y="478" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#ff8b7c">6 vencidos · $388.471</text>
+  <text x="1224" y="478" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$4.587.721</text>
+
+  <g transform="translate(0,495)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005402</text>
+    <text x="280" y="28">DANDA</text>
+    <text x="420" y="28">Andres Lopez</text>
+    <text x="570" y="28" class="n">12 sep 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">20</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$59.900</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,539)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005437</text>
+    <text x="280" y="28">Kovia</text>
+    <text x="420" y="28">Andres Lopez</text>
+    <text x="570" y="28" class="n">14 sep 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">18</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="#ff8b7c" fill-opacity="0.16"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Pagado con faltante</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$72.000</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,583)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005488</text>
+    <text x="280" y="28">ADMA LAB</text>
+    <text x="420" y="28">Yesid Mora</text>
+    <text x="570" y="28" class="n">17 sep 2026</text>
+    <text x="652" y="28" font-size="11" fill="#9aa5b3">aprox.</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">15</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$48.500</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,627)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005519</text>
+    <text x="280" y="28">Bella Mujer</text>
+    <text x="420" y="28">Yesid Mora</text>
+    <text x="570" y="28" class="n">19 sep 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">13</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="#7cc4ff" fill-opacity="0.12"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#7cc4ff">En corte abierto</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$89.900</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,671)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005560</text>
+    <text x="280" y="28">DANDA</text>
+    <text x="420" y="28">Andres Lopez</text>
+    <text x="570" y="28" class="n">22 sep 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">10</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#ff8b7c">Fuera de todo corte</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$63.171</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,715)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-005574</text>
+    <text x="280" y="28">Kovia</text>
+    <text x="420" y="28">Yesid Mora</text>
+    <text x="570" y="28" class="n">23 sep 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" font-weight="700" fill="#ff8b7c">9</text>
+    <rect x="780" y="12" width="138" height="24" rx="12" fill="#7cc4ff" fill-opacity="0.12"/>
+    <text x="849" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#7cc4ff">En corte abierto</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700">$55.000</text>
+  </g>
+  <!-- Las 19 filas restantes de la pagina de 25 (sin vencer), omitidas en el dibujo -->
+  <line x1="140" y1="773" x2="1224" y2="773" stroke="#ffffff" stroke-opacity="0.10" stroke-dasharray="3 5"/>
+  <rect x="572" y="763" width="292" height="20" fill="#191e25"/>
+  <text x="718" y="778" text-anchor="middle" font-size="12" fill="#9aa5b3">19 pedidos mas, sin vencer, en esta pagina</text>
+  <rect x="140" y="791" width="230" height="44" rx="22" fill="#ffffff" fill-opacity="0.06"/>
+  <text x="255" y="818" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Ver los 24 pedidos restantes</text>
+
+  <!-- Grupos plegados (orden por importe vencido) -->
+  <line x1="116" y1="842" x2="1248" y2="842" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g transform="translate(0,842)">
+    <path d="M143 15 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="164" y="27" font-size="15" font-weight="700" fill="#f4f6f8">Sin lider</text>
+    <text x="300" y="27" font-size="13" fill="#ff8b7c">2 pedidos · no hay a quien cobrarle</text>
+    <text x="1080" y="27" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#ff8b7c">2 vencidos · $164.500</text>
+    <text x="1224" y="27" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$164.500</text>
+    <line x1="116" y1="44" x2="1248" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,886)">
+    <path d="M143 15 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="164" y="27" font-size="15" font-weight="700" fill="#f4f6f8">Jhon Fredy Ruiz</text>
+    <text x="300" y="27" font-size="13" fill="#9aa5b3">4 pedidos · desde el 11 sep</text>
+    <text x="1080" y="27" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#ff8b7c">2 vencidos · $154.500</text>
+    <text x="1224" y="27" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$348.660</text>
+    <line x1="116" y1="44" x2="1248" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,930)">
+    <path d="M143 15 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="164" y="27" font-size="15" font-weight="700" fill="#f4f6f8">Wilmer Ospina</text>
+    <text x="300" y="27" font-size="13" fill="#9aa5b3">34 pedidos · desde el 25 sep</text>
+    <text x="1080" y="27" text-anchor="end" font-size="13" fill="#9aa5b3">sin vencidos</text>
+    <text x="1224" y="27" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$3.120.500</text>
+    <line x1="116" y1="44" x2="1248" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,974)">
+    <path d="M143 15 l6 6 l-6 6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="164" y="27" font-size="15" font-weight="700" fill="#f4f6f8">Diana Cardona</text>
+    <text x="300" y="27" font-size="13" fill="#9aa5b3">28 pedidos · desde el 26 sep</text>
+    <text x="1080" y="27" text-anchor="end" font-size="13" fill="#9aa5b3">sin vencidos</text>
+    <text x="1224" y="27" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#f4f6f8">$2.977.500</text>
+  </g>
+
+  <!-- Seccion aparte: Cubiertos por compensacion (RF_09), desplegada en este dibujo -->
+  <rect x="116" y="1040" width="1132" height="386" rx="24" fill="#141920" stroke="#9aa5b3" stroke-opacity="0.30"/>
+  <rect x="117" y="1041" width="1130" height="56" rx="23" fill="#ffffff" fill-opacity="0.03"/>
+  <path d="M140 1066 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="164" y="1076" font-size="17" font-weight="700" fill="#f4f6f8">Cubiertos por compensacion</text>
+  <text x="408" y="1075" class="n" font-size="13" fill="#cbd3dc">36 pedidos · 29 cortes saldados</text>
+  <text x="1224" y="1076" text-anchor="end" class="n" font-size="15" font-weight="700" fill="#cbd3dc">$3.358.840</text>
+  <text x="140" y="1118" font-size="13" fill="#9aa5b3">El lider entrego todo lo que debia en estos cortes. La regla por pedido no los marca como recibidos; se corrige en la spec 027. No cuentan como vencidos ni avisan.</text>
+  <g font-size="12" fill="#9aa5b3">
+    <text x="140" y="1148">Guia</text>
+    <text x="280" y="1148">Lider</text>
+    <text x="440" y="1148">Tienda</text>
+    <text x="570" y="1148">Entregado</text>
+    <text x="730" y="1148" text-anchor="end">Dias</text>
+    <text x="780" y="1148">Efectivo</text>
+    <text x="1224" y="1148" text-anchor="end">Recaudo</text>
+  </g>
+  <line x1="140" y1="1158" x2="1224" y2="1158" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <g transform="translate(0,1158)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-003921</text>
+    <text x="280" y="28">Jhon Fredy Ruiz</text>
+    <text x="440" y="28">DANDA</text>
+    <text x="570" y="28" class="n">1 jul 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" fill="#9aa5b3">93</text>
+    <rect x="780" y="12" width="186" height="24" rx="12" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+    <path d="M791 24 l3 3 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="806" y="28" font-size="11" font-weight="600" fill="#cbd3dc">Cubierto por compensacion</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700" fill="#cbd3dc">$89.900</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,1202)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-004118</text>
+    <text x="280" y="28">Jhon Fredy Ruiz</text>
+    <text x="440" y="28">Bella Mujer</text>
+    <text x="570" y="28" class="n">9 jul 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" fill="#9aa5b3">85</text>
+    <rect x="780" y="12" width="186" height="24" rx="12" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+    <path d="M791 24 l3 3 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="806" y="28" font-size="11" font-weight="600" fill="#cbd3dc">Cubierto por compensacion</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700" fill="#cbd3dc">$129.000</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,1246)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-004302</text>
+    <text x="280" y="28">Jhon Fredy Ruiz</text>
+    <text x="440" y="28">ADMA LAB</text>
+    <text x="570" y="28" class="n">18 jul 2026</text>
+    <text x="652" y="28" font-size="11" fill="#9aa5b3">aprox.</text>
+    <text x="730" y="28" text-anchor="end" class="n" fill="#9aa5b3">76</text>
+    <rect x="780" y="12" width="186" height="24" rx="12" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+    <path d="M791 24 l3 3 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="806" y="28" font-size="11" font-weight="600" fill="#cbd3dc">Cubierto por compensacion</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700" fill="#cbd3dc">$74.500</text>
+    <line x1="140" y1="44" x2="1224" y2="44" stroke="#ffffff" stroke-opacity="0.06"/>
+  </g>
+  <g transform="translate(0,1290)" font-size="13" fill="#f4f6f8">
+    <text x="140" y="28" class="n" font-weight="600">KNT-004577</text>
+    <text x="280" y="28">Jhon Fredy Ruiz</text>
+    <text x="440" y="28">DANDA</text>
+    <text x="570" y="28" class="n">2 ago 2026</text>
+    <text x="730" y="28" text-anchor="end" class="n" fill="#9aa5b3">61</text>
+    <rect x="780" y="12" width="186" height="24" rx="12" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+    <path d="M791 24 l3 3 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="806" y="28" font-size="11" font-weight="600" fill="#cbd3dc">Cubierto por compensacion</text>
+    <text x="1224" y="28" text-anchor="end" class="n" font-weight="700" fill="#cbd3dc">$112.000</text>
+  </g>
+  <!-- Las 21 filas restantes de la pagina de 25, omitidas en el dibujo -->
+  <line x1="140" y1="1352" x2="1224" y2="1352" stroke="#ffffff" stroke-opacity="0.10" stroke-dasharray="3 5"/>
+  <rect x="602" y="1342" width="232" height="20" fill="#141920"/>
+  <text x="718" y="1357" text-anchor="middle" font-size="12" fill="#9aa5b3">21 pedidos mas en esta pagina</text>
+  <rect x="140" y="1370" width="230" height="44" rx="22" fill="#ffffff" fill-opacity="0.06"/>
+  <text x="255" y="1397" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Ver los 11 pedidos restantes</text>
+</svg>

@@ -1,0 +1,61 @@
+Spec 026 · T6 · RF_01 — evidencia manual de mutacion de la guarda anti-copia
+Fecha: 2026-10-02
+Guarda: src/lib/spec-026-guards.test.ts, describe("T6 · RF_01: la regla de recibido no se copia")
+Nucleo: functions/src/cash-outstanding.ts
+Regla vigilada: buildCodReceivedSet (functions/src/seller-ledger.ts)
+
+Objetivo: comprobar que, si alguien pega en el nucleo una copia de la regla de "recibido" en vez de
+importarla, la guarda lo detecta; y que el nucleo entregado queda intacto.
+
+====================================================================================================
+1) Logica de la guarda (copia literal de stripComments / findReceivedRuleCopies / receivedRuleBody)
+   ejecutada con `node -` sobre el nucleo y sobre un mutante construido EN MEMORIA
+====================================================================================================
+
+nucleo original: functions/src/cash-outstanding.ts (353 lineas)
+  findReceivedRuleCopies -> []
+mutante en memoria: nucleo + cuerpo de buildCodReceivedSet pegado como "function receivedCopy" (370 lineas)
+  findReceivedRuleCopies -> ["cashAllocations (linea 358)","cashAllocations (linea 359)","covered (linea 360)"]
+  detecta cashAllocations: true; detecta covered: true
+control: el mismo cuerpo dentro de /* ... */
+  findReceivedRuleCopies -> []
+control: const location = "covered_by_netting";
+  findReceivedRuleCopies -> []
+
+====================================================================================================
+2) Mutacion real en disco y suite de la guarda (vitest), despues restauracion
+====================================================================================================
+
+Hash del nucleo antes:   24f3a23be6f24263029a9c1aed76b736233cfe405a6ed9edc6325e34c1eb8a23
+Se anadio al final del nucleo el cuerpo de buildCodReceivedSet renombrado a `function receivedCopy`.
+Hash del nucleo mutado:  9aeafb5cc29dc2fed5305798494cfe6fe9dc192770999e598a1ea942813403c8
+
+$ npx vitest run src/lib/spec-026-guards.test.ts -t "T6"
+   ✓ ... > el nucleo existe
+   ✓ ... > el nucleo importa buildCodReceivedSet y codPartialReceivedCop de ./seller-ledger
+   ✓ ... > el nucleo llama a buildCodReceivedSet (no solo lo importa)
+   ✓ ... > el nucleo no define su propia funcion de recibido
+   × ... > en el nucleo la unica comparacion de estado de corte es 'pending' (el saldado lo decide isDriverSettlementCashSettled)
+   × ... > functions/src/cash-outstanding.ts: sin copia de la regla (o pendiente de su tarea, nombrado)
+   ✓ ... > functions/src/cash-outstanding-api.ts: sin copia de la regla (o pendiente de su tarea, nombrado)
+   ✓ ... > functions/src/cash-overdue-notice.ts: sin copia de la regla (o pendiente de su tarea, nombrado)
+   ✓ ... > src/lib/cash-outstanding-view.ts: sin copia de la regla (o pendiente de su tarea, nombrado)
+   ✓ ... > mutacion: el nucleo con el cuerpo de buildCodReceivedSet pegado es detectado
+   × ... > mutacion de control: el mismo cuerpo dentro de un comentario no se cuenta
+   ✓ ... > la guarda no confunde covered_by_netting con covered
+   Failed Tests 3
+
+Lectura:
+  - "sin copia de la regla" cae: la copia pegada lee cashAllocations y covered fuera de comentarios.
+  - "unica comparacion ... 'pending'" cae tambien: la copia trae `status === "paid" || ... "reconciled"`,
+    asi que la segunda linea de defensa (saldado por isDriverSettlementCashSettled) tambien la ve.
+  - "mutacion de control" cae porque relee el nucleo ya mutado (el cuerpo queda fuera del comentario
+    anadido); es el efecto esperado de mutar el archivo real, no un falso positivo.
+  - "no define su propia funcion de recibido" pasa porque la copia se renombro: esa prueba sola no
+    bastaria, y por eso existe la busqueda de la materia prima de la regla.
+
+Restauracion: se recorto el sufijo anadido.
+Hash del nucleo despues: 24f3a23be6f24263029a9c1aed76b736233cfe405a6ed9edc6325e34c1eb8a23 (identico al de antes)
+
+$ npx vitest run src/lib/spec-026-guards.test.ts -t "T6"
+      Tests  12 passed | 26 skipped (38)

@@ -1,0 +1,14 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "tab", "name": "Costo de producto" },
+    { "role": "combobox", "name": "Tienda" },
+    { "role": "heading", "name": "Productos a $0 con pedidos entregados" },
+    { "role": "heading", "name": "Ningun producto a $0 con pedidos entregados" },
+    { "role": "button", "name": "Corregir costo" },
+    { "role": "button", "name": "Registrar cruce" }
+  ],
+  "threshold": { "missing": 0 }
+}

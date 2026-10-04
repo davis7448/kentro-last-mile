@@ -119,6 +119,21 @@ export function settlementCashReceivedCop(settlement: SettlementDoc) {
 }
 
 /**
+ * Corte de domiciliario con el efectivo total saldado (spec 026, plan 2.9): pagado o conciliado,
+ * sin pendiente y con lo recibido >= lo esperado. No lee cashAllocations: una asignacion sin cubrir
+ * en un corte saldado es un pedido cubierto por compensacion, no un faltante.
+ */
+export function isDriverSettlementCashSettled(settlement: SettlementDoc): boolean {
+  return (
+    settlement.kind === "driver" &&
+    (settlement.status === "paid" || settlement.status === "reconciled") &&
+    (settlement.cashPendingCop ?? 0) === 0 &&
+    typeof settlement.cashExpectedCop === "number" &&
+    settlementCashReceivedCop(settlement) >= settlement.cashExpectedCop
+  );
+}
+
+/**
  * Efectivo que el domiciliario debe entregar por los pedidos de un corte, y como se
  * imputa lo ya recibido pedido por pedido.
  */

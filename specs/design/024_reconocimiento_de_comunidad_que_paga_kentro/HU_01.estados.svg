@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1000" viewBox="0 0 1280 1000" role="img" aria-labelledby="t">
+  <title id="t">HU_01 estados: sin valor, guardando, error al guardar, previsualizando, nada que reconocer y relleno aplicado</title>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f4f6f8;font-size:12px}
+    .m{fill:#9aa5b3}.sb{font-weight:600}.b{font-weight:700}.xb{font-weight:800}
+    .deep{fill:#10140c}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.info{fill:#7cc4ff}
+    .tab{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="1280" height="1000" fill="#0e1116"/>
+  <text x="38" y="44" font-size="22" class="xb" letter-spacing="-0.6">HU_01 · Estados del reconocimiento y del relleno</text>
+  <text x="38" y="66" class="m">Cada marco es un fragmento movil (375 px) de las pantallas HU_01.ficha-reconocimiento y HU_01.relleno-*.</text>
+
+  <!-- A: vacio, comunidad sin valor -->
+  <g transform="translate(38 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Vacio · comunidad sin valor</text>
+    <rect x="12" y="44" width="351" height="298" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="24" y="70" font-size="15" class="b">ADMA LABORATORIO</text>
+    <text x="24" y="92" class="m">Lab Admin · 6 tiendas · enlace activo</text>
+    <text x="24" y="114" class="m">Entrega <tspan class="tab sb" fill="#f4f6f8">$12.000</tspan> (base)</text>
+    <text x="24" y="136" class="m">Cashback causado <tspan class="tab sb" fill="#f4f6f8">$0</tspan> · pagado <tspan class="tab sb" fill="#f4f6f8">$0</tspan></text>
+    <rect x="24" y="152" width="327" height="66" rx="16" fill="#212832"/>
+    <text x="36" y="176" font-size="13" class="sb">Sin reconocimiento de Kentro</text>
+    <text x="36" y="196" class="m">Esta comunidad solo gana por el precio</text>
+    <text x="36" y="211" class="m">de su lider.</text>
+    <rect x="24" y="232" width="184" height="44" rx="22" fill="#212832"/>
+    <text x="108" y="258" text-anchor="middle" class="sb">Editar reconocimiento</text>
+    <polyline points="188,252 193,257 198,252" fill="none" stroke="#f4f6f8" stroke-width="1.6" stroke-linecap="round"/>
+    <text x="24" y="300" class="m">Sin renglones en $0 y sin el boton</text>
+    <text x="24" y="316" class="m">"Poner al dia": no hay valor con que causar.</text>
+  </g>
+
+  <!-- B: cargando, guardando -->
+  <g transform="translate(453 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Cargando · guardando el valor</text>
+    <rect x="12" y="44" width="351" height="300" rx="16" fill="#212832"/>
+    <text x="24" y="72" font-size="14" class="b">Reconocimiento por pedido</text>
+    <text x="24" y="102" class="sb m">Valor por pedido (COP)</text>
+    <rect x="24" y="110" width="327" height="44" rx="22" fill="#191e25" fill-opacity="0.6" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="42" y="137" font-size="15" class="tab m">$ 1.000</text>
+    <text x="24" y="182" class="sb m">Tiendas que no causan reconocimiento</text>
+    <text x="24" y="204" class="m">1 marcada · ADMA COMERCIAL</text>
+    <rect x="24" y="224" width="327" height="44" rx="22" fill="#191e25"/>
+    <circle cx="124" cy="246" r="7" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-dasharray="30 14"/>
+    <text x="140" y="251" font-size="13" class="b m">Guardando...</text>
+    <text x="24" y="296" class="m">Controles deshabilitados mientras dura;</text>
+    <text x="24" y="312" class="m">"Quitar" se oculta para no pulsarlo a la vez.</text>
+  </g>
+
+  <!-- C: error al guardar -->
+  <g transform="translate(868 84)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Error · al guardar</text>
+    <rect x="12" y="44" width="351" height="340" rx="16" fill="#212832"/>
+    <text x="24" y="72" font-size="14" class="b">Reconocimiento por pedido</text>
+    <text x="24" y="102" class="sb m">Valor por pedido (COP)</text>
+    <rect x="24" y="110" width="327" height="44" rx="22" fill="#191e25" stroke="#ff8b7c" stroke-opacity="0.7"/>
+    <text x="42" y="137" font-size="15" class="tab">$ 12.500</text>
+    <text x="24" y="174" class="rust">Tiene que ser un entero entre $1 y $12.000.</text>
+    <rect x="24" y="192" width="327" height="78" rx="12" fill="#ff8b7c" fill-opacity="0.10" stroke="#ff8b7c" stroke-opacity="0.2"/>
+    <text x="36" y="216" class="b rust">No se pudo guardar</text>
+    <text x="36" y="236">Sin respuesta del servidor. El valor de</text>
+    <text x="36" y="254">la comunidad sigue en <tspan class="tab b">$1.000</tspan>.</text>
+    <rect x="24" y="286" width="327" height="44" rx="22" fill="#c6f24e"/>
+    <text x="187.5" y="313" text-anchor="middle" font-size="13" class="b deep">Guardar reconocimiento</text>
+    <text x="24" y="358" class="m">Error de campo bajo el campo; error de</text>
+    <text x="24" y="374" class="m">servidor en caja, con el valor que sigue vigente.</text>
+  </g>
+
+  <!-- D: cargando, previsualizando -->
+  <g transform="translate(38 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Cargando · previsualizando</text>
+    <rect x="12" y="44" width="351" height="44" rx="22" fill="#212832"/>
+    <circle cx="140" cy="66" r="7" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-dasharray="30 14"/>
+    <text x="156" y="71" font-size="13" class="sb m">Calculando...</text>
+    <rect x="12" y="104" width="351" height="250" rx="16" fill="#212832"/>
+    <text x="24" y="134" font-size="15" class="b">Previsualizacion</text>
+    <rect x="24" y="152" width="120" height="12" rx="6" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="24" y="172" width="80" height="26" rx="8" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="192" y="152" width="80" height="12" rx="6" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="192" y="172" width="130" height="26" rx="8" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="24" y="222" width="300" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="24" y="244" width="260" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="24" y="266" width="280" height="10" rx="5" fill="#ffffff" fill-opacity="0.07"/>
+    <text x="24" y="306" class="m">Leyendo los pedidos cerrados de 9 tiendas.</text>
+    <text x="24" y="324" class="m">Todavia no se escribe nada.</text>
+    <text x="16" y="390" class="m">El boton de confirmar no existe hasta que</text>
+    <text x="16" y="406" class="m">llega una previsualizacion completa.</text>
+  </g>
+
+  <!-- E: vacio, nada que reconocer -->
+  <g transform="translate(453 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Vacio · nada que reconocer</text>
+    <rect x="12" y="44" width="351" height="250" rx="16" fill="#212832"/>
+    <text x="24" y="74" font-size="15" class="b">Previsualizacion</text>
+    <text x="24" y="108" font-size="14" class="sb">Nada que reconocer en este rango</text>
+    <text x="24" y="130" class="m">Los 144 pedidos que cumplen ya estaban</text>
+    <text x="24" y="146" class="m">reconocidos. Volver a ejecutar no paga dos</text>
+    <text x="24" y="162" class="m">veces: no hay nada que escribir.</text>
+    <line x1="24" y1="182" x2="351" y2="182" stroke="#ffffff" stroke-opacity="0.08"/>
+    <text x="24" y="206" class="m">Ya reconocidos antes</text><text x="351" y="206" text-anchor="end" class="tab sb">144</text>
+    <text x="24" y="230" class="m">Tienda excluida (ADMA COMERCIAL)</text><text x="351" y="230" text-anchor="end" class="tab sb">61</text>
+    <text x="24" y="254" class="m">Fallido no cobrable</text><text x="351" y="254" text-anchor="end" class="tab sb">18</text>
+    <rect x="12" y="314" width="351" height="44" rx="22" fill="#212832"/>
+    <text x="187.5" y="341" text-anchor="middle" font-size="13" class="sb">Cerrar</text>
+    <text x="16" y="390" class="m">Sin boton de confirmar: no se ofrece una</text>
+    <text x="16" y="406" class="m">escritura vacia.</text>
+  </g>
+
+  <!-- F: exito, relleno aplicado -->
+  <g transform="translate(868 552)">
+    <rect width="375" height="430" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+    <text x="16" y="28" font-size="12" class="b info">Exito · relleno aplicado</text>
+    <rect x="12" y="44" width="351" height="124" rx="16" fill="#c6f24e" fill-opacity="0.10"/>
+    <text x="24" y="72" font-size="14" class="b mint">Listo</text>
+    <text x="24" y="96"><tspan class="tab b">144</tspan> pedidos reconocidos por <tspan class="tab b">$144.000</tspan></text>
+    <text x="24" y="116">y registrados como pagados el 30/09/2026.</text>
+    <text x="24" y="146" class="m">Corte de lider en Cortes cerrados.</text>
+    <rect x="12" y="184" width="351" height="128" rx="16" fill="#212832"/>
+    <text x="24" y="210" font-size="13" class="sb">Si se corta a mitad</text>
+    <text x="24" y="232" class="m">"Se escribieron 400 de 504 pedidos.</text>
+    <text x="24" y="248" class="m">Vuelve a previsualizar: lo ya escrito se</text>
+    <text x="24" y="264" class="m">omite y el corte pagado ya incluye todos."</text>
+    <text x="24" y="292" class="m">Va en caja de error (rojo), no de exito.</text>
+    <rect x="12" y="328" width="351" height="44" rx="22" fill="#212832"/>
+    <text x="187.5" y="355" text-anchor="middle" font-size="13" class="sb">Volver a la comunidad</text>
+  </g>
+</svg>

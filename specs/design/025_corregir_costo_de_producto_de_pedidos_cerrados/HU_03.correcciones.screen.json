@@ -1,0 +1,15 @@
+{
+  "story": "HU_03",
+  "route": null,
+  "viewport": { "width": 1280, "height": 800 },
+  "expect": [
+    { "role": "heading", "name": "Liquidaciones" },
+    { "role": "tab", "name": "Costo de producto" },
+    { "role": "combobox", "name": "Tienda" },
+    { "role": "table", "name": "Correcciones aplicadas" },
+    { "role": "columnheader", "name": "Estado" },
+    { "role": "button", "name": "Revertir correccion de Lemme del 02 oct 10:14" },
+    { "role": "button", "name": "Revertir cruce Envios que asume ADMA LAB del 02 oct 10:20" }
+  ],
+  "threshold": { "missing": 0 }
+}

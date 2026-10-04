@@ -1,0 +1,17 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 1180 },
+  "expect": [
+    { "role": "heading", "name": "Liquidaciones" },
+    { "role": "tablist", "name": "Secciones de liquidaciones" },
+    { "role": "tab", "name": "Por pagar" },
+    { "role": "tab", "name": "Cortes cerrados" },
+    { "role": "tab", "name": "Resumen del periodo" },
+    { "role": "button", "name": "Posicion de la plataforma" },
+    { "role": "heading", "name": "Resultado de la plataforma" },
+    { "role": "term", "name": "Reconocido a comunidades" },
+    { "role": "term", "name": "Utilidad acumulada" }
+  ],
+  "threshold": { "missing": 1 }
+}

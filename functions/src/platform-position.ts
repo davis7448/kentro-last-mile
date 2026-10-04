@@ -21,7 +21,9 @@
  */
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { computeDriverReceivable } from "./driver-receivable";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
+import { groupWithheldBySupplier } from "./supplier-withheld";
 
 export type PlatformPosition = {
   cashCop: number;
@@ -66,33 +68,16 @@ export function computePlatformPosition(wallet: WalletEntryDoc[], settlements: S
   const cashCop = receivedFromDriverCop - paidToSellersCop;
 
   // Por cobrar al domiciliario: lo pendiente en cortes MAS el COD de pedidos entregados que
-  // todavia no entraron a ningun corte.
-  const driverPendingInSettlementsCop = settlements
-    .filter((settlement) => settlement.kind === "driver")
-    .reduce((total, settlement) => total + Math.round(Number(settlement.cashPendingCop) || 0), 0);
-  const orderIdsInDriverSettlements = new Set(
-    settlements.filter((settlement) => settlement.kind === "driver").flatMap((settlement) => settlement.orderIds ?? [])
-  );
-  const outsideCod = sum(sellerEntries.filter((entry) =>
-    (entry.type === "cod_revenue" || entry.type === "cod_remittance") && entry.orderId && !orderIdsInDriverSettlements.has(entry.orderId)
-  ));
-  const outsidePay = sum(driverEarnings.filter((entry) => entry.orderId && !orderIdsInDriverSettlements.has(entry.orderId)));
-  const driverCodOutsideSettlementsCop = Math.max(0, outsideCod - outsidePay);
-  const driverReceivableCop = driverPendingInSettlementsCop + driverCodOutsideSettlementsCop;
+  // todavia no entraron a ningun corte. La formula vive en driver-receivable.ts (spec 026) para que
+  // la lista de efectivo no recibido cuadre con esta cifra sin una segunda copia.
+  const { driverReceivableCop, driverPendingInSettlementsCop, driverCodOutsideSettlementsCop } =
+    computeDriverReceivable(wallet, settlements);
 
   const payableToSellersCop = sum(sellerEntries.filter((entry) => !entry.settlementId));
 
   // Costo de producto retenido: descontado a la tienda y aun no liquidado al proveedor.
   const withheldEntries = sellerEntries.filter((entry) => entry.type === "product_cost" && !entry.supplierSettlementId);
   const withheldForSuppliersCop = -sum(withheldEntries);
-  const bySupplier = new Map<string, { supplierId: string; supplierName: string; amountCop: number }>();
-  for (const entry of withheldEntries) {
-    const supplierId = entry.supplierId ?? "(sin proveedor)";
-    const current = bySupplier.get(supplierId) ?? { supplierId, supplierName: entry.supplierName ?? supplierId, amountCop: 0 };
-    current.amountCop += -Math.round(entry.amountCop);
-    if (entry.supplierName) current.supplierName = entry.supplierName;
-    bySupplier.set(supplierId, current);
-  }
 
   const feesCop = -sum(sellerEntries.filter((entry) => SELLER_FEE_TYPES.includes(entry.type)));
   const driverPayCop = sum(driverEarnings);
@@ -110,7 +95,7 @@ export function computePlatformPosition(wallet: WalletEntryDoc[], settlements: S
     driverCodOutsideSettlementsCop,
     payableToSellersCop,
     withheldForSuppliersCop,
-    withheldBySupplier: [...bySupplier.values()].filter((row) => row.amountCop !== 0).sort((left, right) => right.amountCop - left.amountCop),
+    withheldBySupplier: groupWithheldBySupplier(withheldEntries),
     feesCop,
     driverPayCop,
     profitCop,

@@ -5,6 +5,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import type { BulkSignupDisableReport } from "../../../functions/src/community-containment";
 import type { SellerBalance } from "../../../functions/src/seller-balance";
+import type { CashAlertSettings, CashOutstandingReport } from "../../../functions/src/cash-outstanding";
 import { validateLogo } from "../../../functions/src/community-pricing";
 import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { clearFirebaseLocalCache, getFirebaseClient } from "./client";
@@ -469,6 +470,30 @@ export function warmFirebaseSellerBalance(): void {
   callable({}).catch(() => {
     // Rechazo esperado (sin sesion): no hay nada que mostrar ni que reintentar.
   });
+}
+
+/**
+ * Spec 026: efectivo entregado que la liquidacion de tienda todavia no da por recibido. El admin ve
+ * toda la flota (y el cuadre si pide `includeReconciliation`); el lider, solo lo suyo, y el servidor
+ * decide el alcance por los reclamos de la sesion.
+ */
+export async function getFirebaseCashOutstanding(input: { includeReconciliation?: boolean } = {}): Promise<CashOutstandingReport> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "getCashOutstanding");
+  const result = await callable(input.includeReconciliation ? { includeReconciliation: true } : {});
+  return result.data as CashOutstandingReport;
+}
+
+/** Spec 026 RF_04: plazo y umbral del aviso de efectivo vencido. Solo admin; los dos campos van siempre. */
+export async function updateFirebaseCashAlertSettings(input: CashAlertSettings): Promise<{ settings: CashAlertSettings }> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "updateCashAlertSettings");
+  const result = await callable({ overdueDays: input.overdueDays, notifyMinCop: input.notifyMinCop });
+  return result.data as { settings: CashAlertSettings };
 }
 
 export async function createFirebaseSettlement(input: {

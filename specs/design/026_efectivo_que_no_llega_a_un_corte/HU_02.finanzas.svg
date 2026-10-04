@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_02 - Efectivo sin llegar a Kentro en Finanzas (lider logistico, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.14"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.10"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="30" cy="140" r="190" fill="url(#ga)"/>
+  <circle cx="350" cy="560" r="200" fill="url(#gc)"/>
+
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">JR</text>
+
+  <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Finanzas</text>
+  <text x="16" y="124" font-size="15" fill="#9aa5b3">Efectivo por entregar, cortes y abonos.</text>
+
+  <!-- Panel: "Efectivo sin llegar a Kentro" (sin los cubiertos por compensacion) -->
+  <rect x="16" y="142" width="343" height="318" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="178" font-size="18" font-weight="700" fill="#f4f6f8">Efectivo sin llegar a Kentro</text>
+  <!-- Actualizar (icono, 56px) -->
+  <circle cx="253" cy="226" r="28" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <path d="M245 228 a8 8 0 1 0 8 -9" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M250 214 l4 5 l-6 2" fill="none" stroke="#f4f6f8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Que incluye esta cifra (icono, 56px) -->
+  <circle cx="315" cy="226" r="28" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="315" y="233" text-anchor="middle" font-size="20" font-weight="800" fill="#f4f6f8">?</text>
+  <text x="32" y="232" class="n" font-size="34" font-weight="800" fill="#ff8b7c" letter-spacing="-1.1">$320.660</text>
+  <text x="32" y="270" font-size="17" fill="#cbd3dc">Por entregar en 4 pedidos</text>
+  <text x="32" y="294" font-size="17" font-weight="600" fill="#ff8b7c">2 llevan mas de 7 dias</text>
+  <text x="32" y="316" font-size="15" fill="#9aa5b3">Tu pago por entrega ya esta descontado</text>
+
+  <!-- Linea muda: cubiertos por compensacion, fuera de la cifra -->
+  <line x1="32" y1="332" x2="343" y2="332" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="356" font-size="15" fill="#cbd3dc">27 pedidos cubiertos en cortes</text>
+  <text x="32" y="376" font-size="15" fill="#9aa5b3">ya saldados: no debes nada por ellos.</text>
+  <rect x="32" y="388" width="311" height="56" rx="28" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="56" y="421" font-size="15" font-weight="600" fill="#f4f6f8">Ver pedidos cubiertos</text>
+  <path d="M313 413 l6 6 l6 -6" fill="none" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="16" y="492" font-size="15" font-weight="600" fill="#cbd3dc">Del mas antiguo al mas reciente</text>
+
+  <!-- Tarjeta 1 -->
+  <rect x="16" y="506" width="343" height="128" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="536" class="n" font-size="18" font-weight="700" fill="#f4f6f8">KNT-005391</text>
+  <text x="343" y="536" text-anchor="end" class="n" font-size="18" font-weight="700" fill="#f4f6f8">$73.000</text>
+  <text x="32" y="560" font-size="15" fill="#9aa5b3">DANDA · Kevin Rios</text>
+  <text x="32" y="584" font-size="15" fill="#cbd3dc">Entregado el 11 sep ·</text>
+  <text x="184" y="584" font-size="15" font-weight="700" fill="#ff8b7c">hace 21 dias</text>
+  <rect x="32" y="594" width="186" height="28" rx="14" fill="none" stroke="#ff8b7c" stroke-opacity="0.6"/>
+  <text x="125" y="613" text-anchor="middle" font-size="13" font-weight="600" fill="#ff8b7c">No esta en ningun corte</text>
+
+  <!-- Tarjeta 2 (sigue bajo la navegacion al desplazar) -->
+  <rect x="16" y="646" width="343" height="128" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="676" class="n" font-size="18" font-weight="700" fill="#f4f6f8">KNT-005468</text>
+  <text x="343" y="676" text-anchor="end" class="n" font-size="18" font-weight="700" fill="#f4f6f8">$68.500</text>
+  <text x="32" y="700" font-size="15" fill="#9aa5b3">Bella Mujer · Duvan Pena</text>
+  <text x="32" y="724" font-size="15" fill="#cbd3dc">Entregado el 16 sep ·</text>
+  <text x="184" y="724" font-size="15" font-weight="700" fill="#ff8b7c">hace 16 dias</text>
+  <rect x="32" y="734" width="270" height="28" rx="14" fill="#ff8b7c" fill-opacity="0.16"/>
+  <text x="167" y="753" text-anchor="middle" font-size="13" font-weight="600" fill="#ff8b7c">Corte del 30 sep pagado con faltante</text>
+
+  <!-- Navegacion inferior del lider -->
+  <rect x="0" y="748" width="375" height="64" fill="#141920"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="11" text-anchor="middle">
+    <rect x="27" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="37" y="796" fill="#9aa5b3">Operacion</text>
+    <rect x="102" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="112" y="796" fill="#9aa5b3">Despacho</text>
+    <rect x="177" y="758" width="20" height="20" rx="6" fill="#c6f24e"/><text x="187" y="796" fill="#f4f6f8" font-weight="700">Finanzas</text>
+    <rect x="252" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="262" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="327" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="337" y="796" fill="#9aa5b3">Historico</text>
+  </g>
+</svg>

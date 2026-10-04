@@ -1,0 +1,19 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 1280, "height": 900 },
+  "expect": [
+    { "role": "heading", "name": "Ajustes" },
+    { "role": "button", "name": "Comunidades" },
+    { "role": "button", "name": "Editar reconocimiento" },
+    { "role": "button", "name": "Poner al dia pedidos cerrados" },
+    { "role": "heading", "name": "Reconocimiento por pedido" },
+    { "role": "textbox", "name": "Valor por pedido (COP)" },
+    { "role": "group", "name": "Tiendas que no causan reconocimiento" },
+    { "role": "checkbox", "name": "ADMA COMERCIAL" },
+    { "role": "button", "name": "Guardar reconocimiento" },
+    { "role": "button", "name": "Quitar reconocimiento" },
+    { "role": "button", "name": "Historial de cambios (2)" }
+  ],
+  "threshold": { "missing": 0 }
+}

@@ -1,68 +1,316 @@
 {
-  "version": 1,
+  "version": 2,
   "phase": "release",
   "activeSpec": {
-    "file": "specs/022_ningun_pedido_vale_mil_millones.md",
+    "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
+  },
+  "ui": {
+    "exposesUi": true,
+    "by": "codex@local@srv995537",
+    "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04"
+        "RNF_01",
+        "RNF_02",
+        "RF_07",
+        "RF_09"
       ],
       "files": [
-        "functions/src/order-amount.ts",
-        "functions/src/order-amount.test.ts"
+        "scripts/verify-026.js",
+        "src/lib/spec-026-guards.test.ts",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base.txt",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t1-linea-base-ids.json"
       ],
       "testWritten": true,
       "done": true
     },
     "T2": {
       "requirements": [
-        "RF_01",
-        "RF_03"
+        "RNF_01",
+        "RF_07"
       ],
       "files": [
-        "functions/src/orders.ts",
-        "src/lib/spec-022-guards.test.ts"
+        "scripts/verify-026.js",
+        "firestore.indexes.json",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t2-query-check.txt",
+        "docs/rendimiento.md",
+        "src/lib/spec-026-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T3": {
       "requirements": [
-        "RF_05"
+        "RNF_02",
+        "RF_08"
       ],
       "files": [
-        "src/components/operations-app.tsx",
-        "src/lib/spec-022-guards.test.ts"
+        "functions/src/driver-receivable.ts",
+        "functions/src/supplier-withheld.ts",
+        "functions/src/platform-position.ts",
+        "src/lib/driver-receivable.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T4": {
       "requirements": [
-        "RF_06",
-        "RNF_03"
+        "RF_01",
+        "RF_09"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "functions/src/order-import-merge.test.ts"
+        "functions/src/seller-ledger.ts",
+        "src/lib/seller-ledger.test.ts",
+        "functions/src/settlement-math.ts",
+        "src/lib/settlement-math.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T5": {
       "requirements": [
+        "RF_04"
+      ],
+      "files": [
+        "functions/src/cash-outstanding-schemas.ts",
+        "src/lib/cash-outstanding-schemas.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T6": {
+      "requirements": [
+        "RF_01",
+        "RF_07"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts",
+        "src/lib/spec-026-guards.test.ts",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/mutacion-rf01.txt"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T7": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T8": {
+      "requirements": [
+        "RF_06",
+        "RF_08",
+        "RF_03",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T9": {
+      "requirements": [
+        "RNF_02",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-outstanding.ts",
+        "src/lib/cash-outstanding.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T10": {
+      "requirements": [
+        "RF_05",
+        "RF_09"
+      ],
+      "files": [
+        "functions/src/cash-overdue-notice.ts",
+        "src/lib/cash-overdue-notice.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T11": {
+      "requirements": [
+        "RF_05"
+      ],
+      "files": [
+        "functions/src/ops-notify.ts",
+        "src/lib/ops-notify.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T12": {
+      "requirements": [
+        "RF_06",
+        "RF_07",
+        "RNF_01",
         "RNF_02"
       ],
       "files": [
-        "scripts/verify-022.js",
-        ".sdd/evidence/022/barrido.txt"
+        "functions/src/cash-outstanding-schemas.ts",
+        "functions/src/cash-outstanding-api.ts",
+        "functions/src/index.ts",
+        "src/lib/spec-026-guards.test.ts"
       ],
+      "testWritten": true,
+      "done": true
+    },
+    "T13": {
+      "requirements": [
+        "RF_04",
+        "RF_05"
+      ],
+      "files": [
+        "functions/src/cash-outstanding-api.ts",
+        "functions/src/index.ts",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T14": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_06",
+        "RF_08",
+        "RF_09"
+      ],
+      "files": [
+        "src/lib/firebase/auth.ts",
+        "src/lib/types.ts",
+        "src/lib/cash-outstanding-view.ts",
+        "src/lib/cash-outstanding-view.test.ts",
+        "src/lib/cash-outstanding-loads.ts",
+        "src/lib/cash-outstanding-loads.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T15": {
+      "requirements": [
+        "RF_02",
+        "RF_03",
+        "RF_09",
+        "RNF_01"
+      ],
+      "files": [
+        "src/components/cash-outstanding-admin.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T16": {
+      "requirements": [
+        "RF_04",
+        "RF_08",
+        "RNF_01"
+      ],
+      "files": [
+        "src/lib/cash-outstanding-loads.ts",
+        "src/lib/cash-outstanding-loads.test.ts",
+        "src/components/cash-outstanding-admin.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T17": {
+      "requirements": [
+        "RF_06",
+        "RF_09",
+        "RF_01",
+        "RNF_01"
+      ],
+      "files": [
+        "src/components/cash-outstanding-leader.tsx",
+        "src/components/operations-app.tsx",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T18": {
+      "requirements": [
+        "RNF_02",
+        "RF_07",
+        "RF_09",
+        "RNF_01"
+      ],
+      "files": [
+        "scripts/verify-026.js",
+        ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/t18-compare.txt",
+        "src/lib/spec-026-guards.test.ts"
+      ],
+      "testWritten": true,
+      "done": true
+    },
+    "T19": {
+      "requirements": ["RF_03"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx"],
+      "testWritten": true,
+      "done": true
+    },
+    "T20": {
+      "requirements": ["RF_05"],
+      "files": ["functions/src/ops-notify.ts", "src/lib/ops-notify.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T21": {
+      "requirements": ["RF_08", "RF_09"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T22": {
+      "requirements": ["RF_03"],
+      "files": ["src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx", "src/lib/spec-026-guards.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T23": {
+      "requirements": ["RF_08", "RF_09"],
+      "files": ["src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx", "src/lib/spec-026-guards.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T24": {
+      "requirements": ["RF_03"],
+      "files": ["src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx", "src/lib/spec-026-guards.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T25": {
+      "requirements": ["RNF_02"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts"],
+      "testWritten": true,
+      "done": true
+    },
+    "T26": {
+      "requirements": ["RNF_02"],
+      "files": ["functions/src/cash-outstanding.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-view.ts", "src/lib/cash-outstanding-view.test.ts", "src/components/cash-outstanding-admin.tsx"],
       "testWritten": true,
       "done": true
     }
@@ -245,9 +493,99 @@
       "approved": "2026-09-19",
       "note": "functions + hosting desplegados el 2026-09-19; comprobado contra produccion: la callable rechaza $11.770.047.900 con HTTP 400 y el formulario avisa antes de enviar.",
       "deployed": "2026-09-19"
+    },
+    "024": {
+      "file": "specs/024_reconocimiento_de_comunidad_que_paga_kentro.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "liquidaciones de ADMA y ADMA LABORATORIO del 2026-09-29/30"
+    },
+    "025": {
+      "file": "specs/025_corregir_costo_de_producto_de_pedidos_cerrados.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "correcciones de costo de producto a mano del 2026-09-30"
+    },
+    "026": {
+      "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
+      "status": "aprobada",
+      "approved": "2026-10-02",
+      "origen": "producto de LAB sin poder pagarse por efectivo con el domiciliario (2026-09-30)",
+      "enmienda": "2026-10-02: RF_09 cubierto por compensacion (decidido por el responsable)",
+      "secretCreated": "2026-10-04: OPS_NOTICE_WEBHOOK_URL = none (sin canal; el aviso solo en la app)",
+      "functionsDeployed": "2026-10-04 (commit 7f53e14; nuevas: getCashOutstanding, updateCashAlertSettings, notifyOverdueCash 08:00 America/Bogota)",
+      "hostingDeployed": "2026-10-04 (commit 7f53e14; 0 static{ en chunks)",
+      "smokeDeployed": "2026-10-04: compare --deployed PASA (driverReceivable igual, sin explicar 0, 0 stale, 0 missing)"
+    },
+    "027": {
+      "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
+      "status": "borrador",
+      "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
     }
   },
   "archivedTasks": {
+    "022": {
+      "T1": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03",
+          "RF_04"
+        ],
+        "files": [
+          "functions/src/order-amount.ts",
+          "functions/src/order-amount.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_01",
+          "RF_03"
+        ],
+        "files": [
+          "functions/src/orders.ts",
+          "src/lib/spec-022-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_05"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-022-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_06",
+          "RNF_03"
+        ],
+        "files": [
+          "functions/src/order-import-merge.ts",
+          "functions/src/order-import-merge.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RNF_02"
+        ],
+        "files": [
+          "scripts/verify-022.js",
+          ".sdd/evidence/022/barrido.txt"
+        ],
+        "testWritten": true,
+        "done": true
+      }
+    },
     "002": {
       "T1": {
         "requirements": [
@@ -2183,7 +2521,7 @@
       }
     }
   },
-  "activeTask": null,
-  "plan": "specs/022_plan.md",
-  "tasksFile": "specs/022_tasks.md"
+  "plan": "specs/026_plan.md",
+  "tasksFile": "specs/026_tasks.md",
+  "migrations": []
 }

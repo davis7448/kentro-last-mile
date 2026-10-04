@@ -1,0 +1,47 @@
+Spec 026 · T18 · compare contra produccion (SOLO LECTURA)
+Generado: 2026-10-02T21:36:09.455Z  ·  comando: node scripts/verify-026.js compare
+Fuente: local (functions/lib compilado + ADC, solo lectura)
+Lecturas: walletEntries 13891, settlements 75 (posicion); pedidos del universo 3373
+Linea base: t1-linea-base-ids.json (generada 2026-10-02T16:49:33.210Z; rows 133, coveredByNetting 37, over30Days 24)
+
+VEREDICTO: PASA
+
+1. Regla de paso (DoD 4, plan 4.4)
+  driverReceivableCop posicion (computePlatformPosition / getPlatformPosition): $12.596.829 (12596829)
+  driverReceivableCop conciliacion: $12.596.829 (12596829) -> IGUAL
+  listOutstandingCop (lista): $12.668.829; deltaCop: $-72.000
+  unexplainedCop: 0
+  Causas (suma por tipo):
+    outside_orders_outside_universe: $-72.000 (1 partidas)
+    settlement_later_correction: $-79.900 (1 partidas)
+    settlement_orders_received: $290.477.909 (42 partidas)
+    settlement_orders_outside_universe: $-749.500 (31 partidas)
+    settlement_cash_received: $-292.713.222 (42 partidas)
+    settlement_excess_received: $201.802 (5 partidas)
+    settlement_orders_covered_by_netting: $2.862.911 (29 partidas)
+  unreadableOrderIds: 0
+  unreadableSettlementIds: 0
+  unreadableEntryIds: 0
+
+2. Cortes con pendiente guardado viejo o ausente (se reportan, NO fallan)
+  stale (settlement_cash_pending_stale): 0; total $0
+  missing (settlement_cash_pending_missing): 0; total $0
+
+3. Lista actual
+  rows: 145; nettedRows: 37 (vencidos entre los compensados: 0)
+
+4. Cambios de grupo contra t1-linea-base-ids.json (DoD 3): 12
+  por motivo: new_order 12
+  | Pedido | Seguimiento | De | A | Motivo |
+  | shopify-18918677184625 | KNT-005935 | absent | rows | new_order |
+  | shopify-18916095000726 | KNT-005906 | absent | rows | new_order |
+  | shopify-18915501146262 | KNT-005879 | absent | rows | new_order |
+  | shopify-8144783638678 | KNT-005685 | absent | rows | new_order |
+  | shopify-18917071028374 | KNT-005941 | absent | rows | new_order |
+  | shopify-18917055889558 | KNT-005940 | absent | rows | new_order |
+  | shopify-18913736523926 | KNT-005830 | absent | rows | new_order |
+  | shopify-18917050318998 | KNT-005939 | absent | rows | new_order |
+  | shopify-8139430101142 | KNT-005521 | absent | rows | new_order |
+  | shopify-18915404841110 | KNT-005877 | absent | rows | new_order |
+  | shopify-8147786825878 | KNT-005792 | absent | rows | new_order |
+  | shopify-8146939674774 | KNT-005759 | absent | rows | new_order |

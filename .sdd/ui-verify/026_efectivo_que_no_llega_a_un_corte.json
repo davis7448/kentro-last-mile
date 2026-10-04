@@ -1,0 +1,601 @@
+{
+  "runs": [
+    {
+      "screen": "HU_01.aviso-operacion",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:28.889Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "capture-failed",
+        "detail": "navegacion: ### Error\nError: browserBackend.callTool: net::ERR_CONNECTION_REFUSED at http://localhost:3100/\nCall log:\n  - navigating to \"http://localhost:3100/\", waiting until \"domcontentloaded\"",
+        "designSha": "f2be63ac548807f84c49b1a94a2f6441758986e97bd9d480bfdd5ef46adb8a03",
+        "contractSha": "d7d45c277da7d9c1648e5a65ec469386434c9f926cdcc5050ea2493f87f0ca09",
+        "evidence": {
+          "screenshot": null,
+          "snapshot": null
+        }
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "navegacion: ### Error\nError: browserBackend.callTool: net::ERR_CONNECTION_REFUSED at http://localhost:3100/\nCall log:\n  - navigating to \"http://localhost:3100/\", waiting until \"domcontentloaded\"",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.cargando",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.597Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "706d98de8201d30abb3cc221670dd1aebc639ce5b1036cd102a81af6611b4f49",
+        "contractSha": "2ccc511952ad77a716935575f564e1d313f9e28b2b2cb3c31fc398d2e80bdf05",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.error",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.598Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "916aca4d6ad373416c2556815c1517049c27f770a0a8f171de223d04e56df2aa",
+        "contractSha": "fe374699a3e39a7e560126732354f3cf953c526e4557df1c203fb751aa0d89d4",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.ilegibles",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.599Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "821eb3505da1a5f420922eeab7c8597ef892c9c752cbf9e6c2940d242d8bcdc6",
+        "contractSha": "8e26c1f42a0427b0b13cabbf5407ac37c1b326b31719f69f4b48d99c1027af2f",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.lista-escritorio",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.600Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 1280,
+          "height": 1450
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "afb112f6790a9a29e6f4dadaa2f0f9009cea03f889b8cabd1f827f909cbc4e5c",
+        "contractSha": "7cd5e4f15413ac68313fbd22372039e82e68a93f94a1c07747209655f73c161c",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.lista",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.601Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 1892
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "7bf72f663389606ba46c01af0fda8a40e20d7d4e917560caa7e6ff658564e9a4",
+        "contractSha": "ae1e2ba5fa35eb015a8aff181f597aa3c38399c3968d61a4ccab7ab73efe25f4",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.plazo",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.602Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "2b11b860ac6e69afa484b4b533420d29eb5df2b367e777e3772b0922cafa80e8",
+        "contractSha": "8c5e2f2562f415459c64e04282e3241753d61ac7a1f5e511c4cb0dae8d09ad1a",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_01.vacio",
+      "story": "HU_01",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.602Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "faead5d550fb996fa32e82b5322952e0c07d0aa03605f4929b071816b9bacb71",
+        "contractSha": "df93473b3a39ef98499e3356ec2f023de46d6e83754120424a2624f0f86f2ccb",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_02.al-dia",
+      "story": "HU_02",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.603Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "fe6535c24cbd747ce7d10e090b51e3f79a065429f171fa5907216dd4a17c4832",
+        "contractSha": "ef373950cf80a395f1d16df89930a04a915edf4929b807dceae53ca83666f70f",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_02.error",
+      "story": "HU_02",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.604Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3",
+        "contractSha": "57d19737053a5fd0718315ca4ee11ad6a5690c9981f31a5362aea33d4bd2865c",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_02.finanzas",
+      "story": "HU_02",
+      "commit": "8e2eb4e96983d7ebc8a9789879c345a9954a36fa",
+      "host": "srv995537",
+      "at": "2026-10-02T20:59:31.604Z",
+      "baseUrl": "http://localhost:3100",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "47a562dc6ac116151fb870ddf43ceec24db5eeaed08de92f9104afd34253b4c3",
+        "contractSha": "9d4ca644e3e16ed059f54f4ab46d46e572958a1fe5c7962529400a3cabae7585",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    }
+  ]
+}

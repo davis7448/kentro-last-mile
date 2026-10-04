@@ -1,0 +1,29 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 1280, "height": 1450 },
+  "expect": [
+    { "role": "heading", "name": "Liquidaciones" },
+    { "role": "tab", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Efectivo sin llegar" },
+    { "role": "combobox", "name": "Lider" },
+    { "role": "button", "name": "Actualizar" },
+    { "role": "button", "name": "Plazo y aviso" },
+    { "role": "region", "name": "Resumen del efectivo sin llegar" },
+    { "role": "region", "name": "Producto retenido a proveedores" },
+    { "role": "button", "name": "Cuadre con la posicion de la plataforma" },
+    { "role": "table", "name": "Efectivo sin llegar por lider" },
+    { "role": "columnheader", "name": "Guia" },
+    { "role": "columnheader", "name": "Tienda" },
+    { "role": "columnheader", "name": "Mensajero" },
+    { "role": "columnheader", "name": "Entregado" },
+    { "role": "columnheader", "name": "Dias" },
+    { "role": "columnheader", "name": "Efectivo" },
+    { "role": "columnheader", "name": "Recaudo" },
+    { "role": "heading", "name": "Cubiertos por compensacion" },
+    { "role": "button", "name": "Cubiertos por compensacion" },
+    { "role": "table", "name": "Pedidos cubiertos por compensacion" },
+    { "role": "columnheader", "name": "Lider" }
+  ],
+  "threshold": { "missing": 0 }
+}

@@ -1,0 +1,15 @@
+{
+  "accepted": [
+    { "kind": "a11y-unverified", "screen": "HU_01.aviso-operacion", "unverifiedReason": "navegacion: ### Error\nError: browserBackend.callTool: net::ERR_CONNECTION_REFUSED at http://localhost:3100/\nCall log:\n  - navigating to \"http://localhost:3100/\", waiting until \"domcontentloaded\"", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.cargando", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.error", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.ilegibles", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.lista-escritorio", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.lista", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.plazo", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_01.vacio", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_02.al-dia", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_02.error", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" },
+    { "kind": "a11y-unverified", "screen": "HU_02.finanzas", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imagenes", "at": "2026-10-04T22:05:37Z" }
+  ]
+}

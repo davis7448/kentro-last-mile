@@ -1,0 +1,16 @@
+{
+  "story": "HU_03",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Revertir correccion" },
+    { "role": "heading", "name": "Revertir correccion" },
+    { "role": "list", "name": "Que pasa con cada movimiento" },
+    { "role": "textbox", "name": "Motivo de la reversion (queda en la auditoria)" },
+    { "role": "checkbox", "name": "Entiendo que esto mueve dinero real y queda registrado en la auditoria" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Revertir" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

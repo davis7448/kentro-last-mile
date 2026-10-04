@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-label="Dialogo Corregir costo de producto, fase 2: vista previa por tienda, proveedor y pedido antes de aplicar">
+<title>HU_02 - Vista previa (escritorio)</title>
+<defs>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#000" flood-opacity=".45"/></filter>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:20px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.info{fill:#7cc4ff}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ln{stroke:#ffffff;stroke-opacity:.06;stroke-width:1}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<rect width="1280" height="800" fill="#0e1116"/>
+<rect x="0" y="0" width="84" height="800" fill="#191e25"/>
+<rect width="1280" height="800" fill="#000000" fill-opacity=".55"/>
+
+<rect x="160" y="20" width="960" height="760" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity=".06" filter="url(#sh)"/>
+<text x="188" y="58" class="h">Corregir costo de producto</text>
+<text x="188" y="80" class="s m">Nambu · Lung Cleansing y Chest Relief · cerrados del 01/09/2026 al 30/09/2026</text>
+<rect x="890" y="36" width="140" height="44" rx="22" class="ol"/><text x="960" y="63" class="c s sb">Editar seleccion</text>
+<circle cx="1072" cy="58" r="22" class="ol"/>
+<path d="M1065 51 l14 14 M1079 51 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+
+<!-- Resumen: una superficie con separadores -->
+<rect x="188" y="96" width="904" height="84" rx="16" fill="#212832"/>
+<g class="num">
+<text x="208" y="122" class="xs m">Se le cobra a Nambu</text>
+<text x="208" y="152" class="b rust" font-size="22">-$926.000</text>
+<line x1="408" y1="108" x2="408" y2="168" class="ln"/>
+<text x="428" y="122" class="xs m">Se le debe a ADMA LABORATORIO</text>
+<text x="428" y="152" class="b" font-size="22">+$926.000</text>
+<line x1="636" y1="108" x2="636" y2="168" class="ln"/>
+<text x="656" y="122" class="xs m">Pagable ahora al proveedor</text>
+<text x="656" y="150" class="b" font-size="18">$853.000</text>
+<text x="656" y="168" class="xxs m">Espera efectivo: $73.000 (2)</text>
+<line x1="846" y1="108" x2="846" y2="168" class="ln"/>
+<text x="866" y="122" class="xs m">Saldo abierto de Nambu</text>
+<text x="866" y="150" class="b" font-size="16">$1.240.500 → $314.500</text>
+</g>
+
+<text x="188" y="204" class="s fg2"><tspan class="b">37</tspan> pedidos con diferencia · <tspan class="b">2</tspan> sin movimiento · <tspan class="b">0</tspan> bloqueados · 39 escrituras</text>
+
+<rect x="188" y="216" width="904" height="40" rx="14" fill="#7cc4ff" fill-opacity=".07" stroke="#7cc4ff" stroke-opacity=".25"/>
+<text x="206" y="241" class="xs"><tspan class="b info">Reconocido: </tspan><tspan class="fg2">KNT-004421 ya tiene -$25.000 escritos a mano el 30 sep. Cuenta como cobrado y no se repite.</tspan></text>
+
+<g class="xs sb m">
+<text x="188" y="282">Pedido</text>
+<text x="298" y="282">Producto</text>
+<text x="438" y="282">Emparejo por</text>
+<text x="574" y="282" class="r">Uds</text>
+<text x="680" y="282" class="r">Cobrado</text>
+<text x="796" y="282" class="r">Corresponde</text>
+<text x="910" y="282" class="r">Diferencia</text>
+<text x="934" y="282">Queda</text>
+</g>
+<line x1="188" y1="292" x2="1092" y2="292" class="ln"/>
+
+<g class="s num">
+<text x="188" y="316" class="sb">KNT-004398</text><text x="298" y="316">Lung Cleansing</text><text x="438" y="316" class="m">SKU</text>
+<text x="574" y="316" class="r">1</text><text x="680" y="316" class="r">$0</text><text x="796" y="316" class="r">-$25.000</text><text x="910" y="316" class="r b rust">-$25.000</text>
+<text x="934" y="316" class="fg2">Pagable</text>
+<line x1="188" y1="328" x2="1092" y2="328" class="ln"/>
+
+<text x="188" y="352" class="sb">KNT-004402</text><text x="298" y="352">Chest Relief</text><text x="438" y="352" class="m">SKU</text>
+<text x="574" y="352" class="r">2</text><text x="680" y="352" class="r">$0</text><text x="796" y="352" class="r">-$48.000</text><text x="910" y="352" class="r b rust">-$48.000</text>
+<text x="934" y="352" class="fg2">Esperando efectivo</text>
+<line x1="188" y1="364" x2="1092" y2="364" class="ln"/>
+
+<text x="188" y="388" class="sb">KNT-004415</text><text x="298" y="388">Lung Cleansing</text><text x="438" y="388" class="m">SKU</text>
+<text x="574" y="388" class="r">1</text><text x="680" y="388" class="r">$0</text><text x="796" y="388" class="r">-$25.000</text><text x="910" y="388" class="r b rust">-$25.000</text>
+<text x="934" y="388" class="fg2">Proximo corte</text>
+<text x="934" y="402" class="xxs m">el suyo (S-0912) ya se pago</text>
+<line x1="188" y1="412" x2="1092" y2="412" class="ln"/>
+
+<text x="188" y="436" class="sb">KNT-004421</text><text x="298" y="436">Lung Cleansing</text><text x="438" y="436" class="m">SKU</text>
+<text x="574" y="436" class="r">1</text><text x="680" y="436" class="r">-$25.000</text><text x="796" y="436" class="r">-$25.000</text><text x="910" y="436" class="r m">$0</text>
+<text x="934" y="436" class="m">Sin movimiento</text>
+<line x1="188" y1="448" x2="1092" y2="448" class="ln"/>
+
+<text x="188" y="472" class="sb">KNT-004447</text><text x="298" y="472">Chest Relief</text><text x="438" y="472" class="m">Nombre</text>
+<text x="574" y="472" class="r">1</text><text x="680" y="472" class="r">$0</text><text x="796" y="472" class="r">-$24.000</text><text x="910" y="472" class="r b rust">-$24.000</text>
+<text x="934" y="472" class="fg2">Pagable</text>
+<line x1="188" y1="484" x2="1092" y2="484" class="ln"/>
+
+<text x="188" y="508" class="sb">KNT-004460</text><text x="298" y="508">Lung Cleansing</text><text x="438" y="508" class="m">SKU</text>
+<text x="574" y="508" class="r">1</text><text x="680" y="508" class="r">$0</text><text x="796" y="508" class="r">-$25.000</text><text x="910" y="508" class="r b rust">-$25.000</text>
+<text x="934" y="508" class="fg2">Pagable · prepagado</text>
+</g>
+
+<text x="188" y="550" class="xs m">Pedidos 1-6 de 39</text>
+<rect x="878" y="528" width="100" height="40" rx="20" class="ol" stroke-opacity=".06"/><text x="928" y="553" class="c s sb m">Anterior</text>
+<rect x="986" y="528" width="106" height="40" rx="20" class="ol"/><text x="1039" y="553" class="c s sb">Siguiente</text>
+
+<text x="188" y="596" class="xs m">Cada movimiento es nuevo y nace abierto: entra en el proximo corte de Nambu y en el de ADMA LABORATORIO.</text>
+<text x="188" y="614" class="xs m">Ningun corte existente se reescribe. Un pedido contra entrega se paga al proveedor cuando llega su efectivo.</text>
+
+<rect x="188" y="636" width="18" height="18" rx="5" fill="#c6f24e"/><path d="M191 645 l4 4 l8 -9" fill="none" stroke="#10140c" stroke-width="2.2"/>
+<text x="216" y="650" class="s sb">Entiendo que esto mueve dinero real y queda registrado en la auditoria</text>
+
+<line x1="160" y1="700" x2="1120" y2="700" class="ln"/>
+<text x="188" y="744" class="xs m">Si alguien cambia estos pedidos antes de aplicar, se pide una vista previa nueva.</text>
+<rect x="808" y="720" width="110" height="44" rx="22" class="ol"/><text x="863" y="747" class="c s sb">Cancelar</text>
+<rect x="926" y="720" width="166" height="44" rx="22" fill="#ff8b7c"/><text x="1009" y="747" class="c s b deep">Aplicar correccion</text>
+</svg>

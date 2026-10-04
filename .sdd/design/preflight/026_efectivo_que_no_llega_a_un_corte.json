@@ -1,0 +1,26 @@
+{
+  "hosts": {
+    "srv995537": {
+      "at": "2026-10-02T20:59:11.672Z",
+      "probe": true,
+      "capabilities": {
+        "design.render": {
+          "status": "available",
+          "reason": "servidor playwright_design declarado y npx en el PATH"
+        },
+        "design.observe": {
+          "status": "unavailable",
+          "reason": "hooks.json no declara sdd-observe.mjs en PreToolUse y PostToolUse de la navegacion y en PostToolUse de la captura del servidor de diseno"
+        },
+        "verify.visual": {
+          "status": "available",
+          "reason": "npx en /usr/bin/npx"
+        },
+        "verify.a11y": {
+          "status": "available",
+          "reason": "axe-core 4.13.0 en /root/kentro-last-mile/node_modules/axe-core/axe.min.js"
+        }
+      }
+    }
+  }
+}

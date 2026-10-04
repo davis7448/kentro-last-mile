@@ -294,3 +294,100 @@ describe("T33 · el corte del lider convierte el cashback causado en pagado", ()
     expect(conAsientosDeTienda.codCop).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Spec 026 · T4 (RF_09, plan 2.9). Import aparte para no tocar el bloque de imports existente.
+// ---------------------------------------------------------------------------------------------
+import { isDriverSettlementCashSettled } from "../../functions/src/settlement-math";
+
+function driverSettlement(over: Partial<SettlementDoc> = {}): SettlementDoc {
+  return {
+    id: "s-1",
+    kind: "driver",
+    ownerId: "lider-1",
+    ownerName: "Lider 1",
+    startDate: "",
+    endDate: "",
+    walletEntryIds: [],
+    orderIds: ["o-1", "o-2", "o-3"],
+    codCop: 300_000,
+    feesCop: 0,
+    driverPayCop: 30_000,
+    platformMarginCop: 0,
+    netCop: 0,
+    status: "paid",
+    cashExpectedCop: 270_000,
+    cashReceivedCop: 270_000,
+    cashPendingCop: 0,
+    createdAt: "2026-09-01T10:00:00.000Z",
+    ...over
+  };
+}
+
+describe("T4 · isDriverSettlementCashSettled: corte de domiciliario con el efectivo total saldado (plan 2.9)", () => {
+  it("pagado con recibido exactamente igual al esperado y pendiente 0 -> saldado", () => {
+    expect(isDriverSettlementCashSettled(driverSettlement())).toBe(true);
+  });
+
+  it("conciliado con excedente (recibido > esperado) -> saldado", () => {
+    expect(isDriverSettlementCashSettled(driverSettlement({ status: "reconciled", cashReceivedCop: 280_000, cashExcessCop: 10_000 }))).toBe(true);
+  });
+
+  it("pagado con cashPendingCop > 0 -> no saldado (faltante real)", () => {
+    expect(isDriverSettlementCashSettled(driverSettlement({ cashReceivedCop: 270_000, cashPendingCop: 5_000 }))).toBe(false);
+  });
+
+  it("corte pending con pendiente 0 y recibido = esperado -> NO saldado (solo paid|reconciled cierran)", () => {
+    expect(isDriverSettlementCashSettled(driverSettlement({ status: "pending" }))).toBe(false);
+  });
+
+  it("sin cashPendingCop (ausente = 0, como la posicion) y recibido = esperado -> saldado", () => {
+    const settlement = driverSettlement();
+    delete settlement.cashPendingCop;
+    expect(isDriverSettlementCashSettled(settlement)).toBe(true);
+  });
+
+  it("sin cashExpectedCop -> no saldado, aunque el resto cuadre", () => {
+    const settlement = driverSettlement();
+    delete settlement.cashExpectedCop;
+    expect(isDriverSettlementCashSettled(settlement)).toBe(false);
+  });
+
+  it("kind distinto de driver (seller, supplier, community_leader) -> no saldado", () => {
+    for (const kind of ["seller", "supplier", "community_leader"] as const) {
+      expect(isDriverSettlementCashSettled(driverSettlement({ kind }))).toBe(false);
+    }
+  });
+
+  it("recibido < esperado con pendiente 0 (campo viejo) -> no saldado", () => {
+    expect(isDriverSettlementCashSettled(driverSettlement({ cashReceivedCop: 260_000, cashPendingCop: 0 }))).toBe(false);
+  });
+
+  it("usa settlementCashReceivedCop: sin cashReceivedCop suma cashReceipts", () => {
+    const settlement = driverSettlement({ cashReceipts: [{ amountCop: 200_000, receivedAt: "2026-09-02" }, { amountCop: 70_000, receivedAt: "2026-09-03" }] });
+    delete settlement.cashReceivedCop;
+    expect(isDriverSettlementCashSettled(settlement)).toBe(true);
+    const short = driverSettlement({ cashReceipts: [{ amountCop: 200_000, receivedAt: "2026-09-02" }] });
+    delete short.cashReceivedCop;
+    expect(isDriverSettlementCashSettled(short)).toBe(false);
+  });
+
+  it("no lee cashAllocations: el caso real de la linea base (pagado exacto con asignaciones covered:false) esta saldado", () => {
+    // T1: 41 cortes saldados en total, ninguno con excedente; los pedidos sin cubrir en esos cortes
+    // son los "cubiertos por compensacion". La asignacion sin cubrir no cambia el veredicto del corte.
+    const settlement = driverSettlement({
+      cashAllocations: [
+        { orderId: "o-1", expectedCop: 150_000, receivedCop: 150_000, covered: true },
+        { orderId: "o-2", expectedCop: 120_000, receivedCop: 120_000, covered: true },
+        { orderId: "o-3", expectedCop: 30_000, receivedCop: 0, covered: false }
+      ]
+    });
+    expect(isDriverSettlementCashSettled(settlement)).toBe(true);
+    // Y al reves: asignaciones todas cubiertas no salvan un corte con pendiente.
+    expect(
+      isDriverSettlementCashSettled(
+        driverSettlement({ cashPendingCop: 1_000, cashAllocations: [{ orderId: "o-1", expectedCop: 1, receivedCop: 1, covered: true }] })
+      )
+    ).toBe(false);
+  });
+});

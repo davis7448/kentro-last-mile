@@ -1,0 +1,19 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 1290 },
+  "expect": [
+    { "role": "heading", "name": "Mi comunidad" },
+    { "role": "textbox", "name": "Desde" },
+    { "role": "textbox", "name": "Hasta" },
+    { "role": "heading", "name": "Tu cashback" },
+    { "role": "heading", "name": "Reconocimiento de Kentro" },
+    { "role": "button", "name": "Que es el reconocimiento" },
+    { "role": "term", "name": "Pedidos reconocidos (fecha de cierre)" },
+    { "role": "term", "name": "Causado" },
+    { "role": "term", "name": "Ya pagado" },
+    { "role": "term", "name": "Pendiente" },
+    { "role": "heading", "name": "Como va cada tienda" }
+  ],
+  "threshold": { "missing": 1 }
+}

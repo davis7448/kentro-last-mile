@@ -1,0 +1,13 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "tab", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Todo el efectivo llego" },
+    { "role": "button", "name": "Actualizar" },
+    { "role": "button", "name": "Plazo y aviso" }
+  ],
+  "threshold": { "missing": 0 }
+}

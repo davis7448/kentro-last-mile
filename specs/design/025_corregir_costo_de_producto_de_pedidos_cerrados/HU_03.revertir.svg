@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812" role="img" aria-label="Movil: vista previa de revertir una correccion, movimiento por movimiento">
+<title>HU_03 - Revertir correccion (movil 375)</title>
+<defs>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:18px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.mint{fill:#c6f24e}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ln{stroke:#ffffff;stroke-opacity:.06;stroke-width:1}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<rect width="375" height="812" fill="#191e25"/>
+<text x="16" y="42" class="h">Revertir correccion</text>
+<circle cx="337" cy="36" r="22" class="ol"/>
+<path d="M330 29 l14 14 M344 29 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="66" class="xs m">Lemme · LuminXP · 02 oct 10:14 por Davis</text>
+
+<!-- Resultado -->
+<rect x="16" y="80" width="343" height="72" rx="16" fill="#212832"/>
+<line x1="187" y1="92" x2="187" y2="140" class="ln"/>
+<g class="num">
+<text x="30" y="104" class="xxs m">LuminXP</text>
+<text x="30" y="128" class="b rust" font-size="17">-$69.000</text>
+<text x="201" y="104" class="xxs m">ADMA LABORATORIO</text>
+<text x="201" y="128" class="b" font-size="17">+$69.000</text>
+</g>
+<text x="16" y="172" class="xs fg2">Quedan como antes de la correccion.</text>
+
+<text x="16" y="200" class="xs sb m">Que pasa con cada movimiento</text>
+<g class="num">
+<rect x="16" y="208" width="343" height="62" rx="14" fill="#212832"/>
+<text x="32" y="232" class="s sb">KNT-004480</text><text x="343" y="232" class="r s">+$23.000</text>
+<text x="32" y="254" class="xs m">Se borra: sigue abierto en las dos cuentas</text>
+<rect x="16" y="278" width="343" height="62" rx="14" fill="#212832"/>
+<text x="32" y="302" class="s sb">KNT-004493</text><text x="343" y="302" class="r s">+$23.000</text>
+<text x="32" y="324" class="xs m">Se compensa: ya esta en el corte CP-0930 (pagado)</text>
+<rect x="16" y="348" width="343" height="62" rx="14" fill="#212832"/>
+<text x="32" y="372" class="s sb">KNT-004501</text><text x="343" y="372" class="r s">+$23.000</text>
+<text x="32" y="394" class="xs m">Se compensa: una parte esta en el corte C-1001</text>
+</g>
+
+<rect x="16" y="422" width="343" height="74" rx="16" fill="#ff8b7c" fill-opacity=".06" stroke="#ff8b7c" stroke-opacity=".25"/>
+<text x="32" y="446" class="xs b rust">Hay una correccion posterior en KNT-004493</text>
+<text x="32" y="466" class="xs fg2">(02 oct 11:02, Lemme). Revertir esta no la</text>
+<text x="32" y="484" class="xs fg2">deshace.</text>
+
+<text x="16" y="520" class="xs sb m">Motivo de la reversion (queda en la auditoria)</text>
+<rect x="16" y="528" width="343" height="78" rx="16" fill="#212832" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="32" y="552" class="s">El acuerdo con LuminXP cambio: vuelve</text>
+<text x="32" y="572" class="s">a descontarse el producto.</text>
+
+<rect x="16" y="624" width="18" height="18" rx="5" fill="#c6f24e"/><path d="M19 633 l4 4 l8 -9" fill="none" stroke="#10140c" stroke-width="2.2"/>
+<text x="44" y="637" class="s sb">Entiendo que esto mueve dinero real y</text>
+<text x="44" y="655" class="s sb">queda registrado en la auditoria</text>
+
+<rect x="0" y="738" width="375" height="74" fill="#191e25"/>
+<line x1="0" y1="738" x2="375" y2="738" class="ln"/>
+<rect x="16" y="754" width="120" height="44" rx="22" class="ol"/><text x="76" y="781" class="c s sb">Cancelar</text>
+<rect x="144" y="754" width="215" height="44" rx="22" fill="#ff8b7c"/><text x="251" y="781" class="c s b deep">Revertir</text>
+</svg>

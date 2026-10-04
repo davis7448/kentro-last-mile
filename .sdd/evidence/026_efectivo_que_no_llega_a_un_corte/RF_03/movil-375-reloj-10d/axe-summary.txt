@@ -1,0 +1,12 @@
+# axe-core 4.13 · RF_03 · movil-375 (reloj-10d)
+  estados analizados: final (1 contenedores 026), pestana-abierta (1 contenedores 026)
+  nodos unicos con violacion (regla + selector), por impacto:
+                critical   serious  moderate     minor
+    026                0         0         0         0
+    resto app          0         0         1         0
+
+## Dentro de los componentes de la 026
+  (ninguna)
+
+## Resto de la app
+  [moderate] region — .border-t — All page content should be contained by landmarks (estados: pestana-abierta)

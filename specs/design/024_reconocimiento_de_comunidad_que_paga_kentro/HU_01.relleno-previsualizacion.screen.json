@@ -1,0 +1,24 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 1268 },
+  "expect": [
+    { "role": "dialog", "name": "Poner al dia: ADMA" },
+    { "role": "heading", "name": "Poner al dia: ADMA" },
+    { "role": "button", "name": "Cerrar" },
+    { "role": "textbox", "name": "Desde" },
+    { "role": "textbox", "name": "Hasta" },
+    { "role": "checkbox", "name": "Ya se pago a mano" },
+    { "role": "spinbutton", "name": "Pedidos pagados" },
+    { "role": "textbox", "name": "Valor pagado (COP)" },
+    { "role": "textbox", "name": "Fecha del pago" },
+    { "role": "textbox", "name": "Nota" },
+    { "role": "button", "name": "Previsualizar" },
+    { "role": "heading", "name": "Previsualizacion" },
+    { "role": "status", "name": "Cuadra con lo pagado" },
+    { "role": "button", "name": "Ver los 144 pedidos" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Reconocer 144 pedidos · $144.000" }
+  ],
+  "threshold": { "missing": 1 }
+}

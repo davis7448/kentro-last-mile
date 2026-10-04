@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812" role="img" aria-label="Movil: error al revisar el catalogo, sin lista a medias y con boton Reintentar">
+<title>HU_01 - Error (movil 375)</title>
+<defs>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.t{font-size:24px;font-weight:800;letter-spacing:-.8px}
+.h3{font-size:16px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.c{text-anchor:middle}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+</style>
+</defs>
+<rect width="375" height="812" fill="#0e1116"/>
+<text x="16" y="40" class="t">Liquidaciones</text>
+<rect x="16" y="56" width="343" height="64" rx="24" fill="#c6f24e"/>
+<text x="32" y="80" class="xs deep sb">Total por pagar</text>
+<text x="32" y="106" class="deep b" font-size="22">$12.480.300</text>
+
+<rect x="16" y="132" width="96" height="44" rx="22" class="ol"/><text x="64" y="159" class="c s sb m">Por pagar</text>
+<rect x="120" y="132" width="140" height="44" rx="22" class="ol"/><text x="190" y="159" class="c s sb m">Cortes cerrados</text>
+<rect x="16" y="184" width="170" height="44" rx="22" class="ol"/><text x="101" y="211" class="c s sb m">Resumen del periodo</text>
+<rect x="194" y="184" width="160" height="44" rx="22" fill="#c6f24e"/><text x="274" y="211" class="c s sb deep">Costo de producto</text>
+
+<text x="16" y="254" class="xs sb m">Tienda</text>
+<rect x="16" y="262" width="343" height="44" rx="22" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/>
+<text x="36" y="289" class="s">Nambu</text>
+<path d="M332 281 l6 6 l6 -6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<rect x="16" y="318" width="200" height="44" rx="22" fill="#c6f24e"/><text x="116" y="345" class="c s b deep">Corregir costo</text>
+<rect x="224" y="318" width="135" height="44" rx="22" fill="#ffffff" fill-opacity=".06" stroke="#ffffff" stroke-opacity=".14"/><text x="291" y="345" class="c s sb">Registrar cruce</text>
+
+<text x="16" y="394" class="h3">Productos a $0 con pedidos entregados</text>
+
+<!-- role=alert, nombre por aria-labelledby al titulo -->
+<rect x="16" y="410" width="343" height="196" rx="16" fill="#ff8b7c" fill-opacity=".06" stroke="#ff8b7c" stroke-opacity=".25"/>
+<circle cx="42" cy="440" r="12" fill="none" stroke="#ff8b7c" stroke-width="2"/>
+<text x="42" y="445" class="c b rust" font-size="14">!</text>
+<text x="64" y="445" class="b rust" font-size="15">No se pudo revisar el catalogo</text>
+<text x="32" y="476" class="s fg2">El servidor no respondio a tiempo.</text>
+<text x="32" y="496" class="s fg2">No mostramos una lista a medias: con</text>
+<text x="32" y="516" class="s fg2">datos incompletos pareceria que no falta</text>
+<text x="32" y="536" class="s fg2">ningun costo.</text>
+<rect x="32" y="550" width="132" height="44" rx="22" fill="#ffffff" fill-opacity=".06" stroke="#ffffff" stroke-opacity=".14"/>
+<text x="98" y="577" class="c s sb">Reintentar</text>
+<text x="176" y="577" class="xs m">Codigo: deadline-exceeded</text>
+
+<rect x="0" y="764" width="375" height="48" fill="#191e25"/>
+<g class="xxs c">
+<text x="31" y="793" class="m">Operacion</text><text x="93" y="793" class="m">Wallet</text><text x="156" y="793" class="m">Inventario</text><text x="218" y="793" class="m">Tiendas</text>
+<rect x="255" y="774" width="52" height="28" rx="14" fill="#c6f24e"/><text x="281" y="793" class="b deep">Cortes</text>
+<text x="343" y="793" class="m">Ajustes</text>
+</g>
+</svg>

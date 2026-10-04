@@ -1,0 +1,17 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Corregir costo de producto" },
+    { "role": "heading", "name": "Corregir costo de producto" },
+    { "role": "button", "name": "Editar seleccion" },
+    { "role": "heading", "name": "No se puede aplicar: 1 pedido bloqueado" },
+    { "role": "button", "name": "Excluir KNT-004618" },
+    { "role": "button", "name": "Quitar la ficha elegida" },
+    { "role": "heading", "name": "Cobro doble evitado: KNT-004603" },
+    { "role": "button", "name": "Aplicar correccion" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

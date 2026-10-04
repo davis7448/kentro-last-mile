@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812" role="img" aria-label="Movil: formulario Registrar cruce, el proveedor ADMA LABORATORIO asume los envios de LuminXP por pedido">
+<title>HU_02 - Registrar cruce (movil 375)</title>
+<defs>
+<style>
+text{font-family:'Plus Jakarta Sans',Arial,sans-serif;fill:#f4f6f8;font-size:14px}
+.h{font-size:18px;font-weight:700}
+.s{font-size:13px}.xs{font-size:12px}.xxs{font-size:11px}
+.m{fill:#9aa5b3}.fg2{fill:#cbd3dc}.rust{fill:#ff8b7c}.deep{fill:#10140c}
+.b{font-weight:700}.sb{font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.r{text-anchor:end}.c{text-anchor:middle}
+.ol{fill:none;stroke:#ffffff;stroke-opacity:.14;stroke-width:1}
+.fld{fill:#212832;stroke:#ffffff;stroke-opacity:.1}
+</style>
+</defs>
+<rect width="375" height="812" fill="#191e25"/>
+<text x="16" y="42" class="h">Registrar cruce</text>
+<circle cx="337" cy="36" r="22" class="ol"/>
+<path d="M330 29 l14 14 M344 29 l-14 14" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="66" class="xs m">El proveedor asume cargos de la tienda. Va por</text>
+<text x="16" y="82" class="xs m">pedido: sin pedido, el corte de la tienda se bloquea.</text>
+
+<text x="16" y="110" class="xs sb m">Tienda</text>
+<rect x="16" y="118" width="343" height="44" rx="22" class="fld"/><text x="36" y="145" class="s">LuminXP</text>
+<path d="M332 137 l6 6 l6 -6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="184" class="xs sb m">Proveedor que asume</text>
+<rect x="16" y="192" width="343" height="44" rx="22" class="fld"/><text x="36" y="219" class="s">ADMA LABORATORIO</text>
+<path d="M332 211 l6 6 l6 -6" fill="none" stroke="#9aa5b3" stroke-width="2"/>
+<text x="16" y="258" class="xs sb m">Concepto</text>
+<rect x="16" y="266" width="343" height="44" rx="22" class="fld"/><text x="36" y="293" class="s">Envios que asume ADMA LAB</text>
+
+<!-- Pedidos -->
+<text x="16" y="336" class="xs sb m">Pedidos e importes</text>
+<g class="num">
+<rect x="16" y="344" width="343" height="52" rx="16" fill="#212832"/>
+<text x="32" y="375" class="s sb">KNT-004480</text>
+<rect x="150" y="352" width="140" height="36" rx="18" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/><text x="276" y="375" class="r s">$12.000</text>
+<circle cx="321" cy="370" r="22" class="ol"/><path d="M315 364 l12 12 M327 364 l-12 12" stroke="#9aa5b3" stroke-width="2"/>
+<rect x="16" y="404" width="343" height="52" rx="16" fill="#212832"/>
+<text x="32" y="435" class="s sb">KNT-004493</text>
+<rect x="150" y="412" width="140" height="36" rx="18" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/><text x="276" y="435" class="r s">$12.000</text>
+<circle cx="321" cy="430" r="22" class="ol"/><path d="M315 424 l12 12 M327 424 l-12 12" stroke="#9aa5b3" stroke-width="2"/>
+<rect x="16" y="464" width="343" height="52" rx="16" fill="#212832"/>
+<text x="32" y="495" class="s sb">KNT-004501</text>
+<rect x="150" y="472" width="140" height="36" rx="18" fill="#191e25" stroke="#ffffff" stroke-opacity=".1"/><text x="276" y="495" class="r s">$12.000</text>
+<circle cx="321" cy="490" r="22" class="ol"/><path d="M315 484 l12 12 M327 484 l-12 12" stroke="#9aa5b3" stroke-width="2"/>
+</g>
+<rect x="16" y="524" width="150" height="44" rx="22" class="ol"/><text x="91" y="551" class="c s sb">Agregar pedido</text>
+<text x="359" y="544" class="r s b num">+$36.000</text>
+<text x="359" y="560" class="r xxs m">a favor de LuminXP</text>
+
+<rect x="16" y="580" width="343" height="56" rx="16" fill="#ff8b7c" fill-opacity=".06" stroke="#ff8b7c" stroke-opacity=".25"/>
+<text x="32" y="603" class="xs b rust">KNT-004480 ya tiene un cruce de ADMA LAB</text>
+<text x="32" y="622" class="xs fg2">(30 sep, +$12.000). Revisa que no sea el mismo.</text>
+
+<text x="16" y="660" class="xs sb m">Motivo (queda en la auditoria)</text>
+<rect x="16" y="668" width="343" height="56" rx="16" class="fld"/>
+<text x="32" y="692" class="s">Acuerdo de liquidacion del 30 sep con LuminXP.</text>
+
+<rect x="0" y="738" width="375" height="74" fill="#191e25"/>
+<line x1="0" y1="738" x2="375" y2="738" stroke="#ffffff" stroke-opacity=".06"/>
+<rect x="16" y="754" width="120" height="44" rx="22" class="ol"/><text x="76" y="781" class="c s sb">Cancelar</text>
+<rect x="144" y="754" width="215" height="44" rx="22" fill="#c6f24e"/><text x="251" y="781" class="c s b deep">Previsualizar cruce</text>
+</svg>

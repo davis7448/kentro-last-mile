@@ -1,0 +1,12 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Finanzas" },
+    { "role": "heading", "name": "Efectivo sin llegar a Kentro" },
+    { "role": "alert", "name": "No se pudo cargar" },
+    { "role": "button", "name": "Reintentar" }
+  ],
+  "threshold": { "missing": 0 }
+}

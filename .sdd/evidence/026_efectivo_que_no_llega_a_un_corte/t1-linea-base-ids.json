@@ -1,0 +1,2717 @@
+{
+  "generatedAt": "2026-10-02T16:49:33.210Z",
+  "over30Days": [
+    {
+      "orderId": "onstock-6747964342454",
+      "trackingCode": "KNT-004116",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-29T16:28:26.141Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 34,
+      "updatedAgeDays": 34,
+      "collectedCop": 179800,
+      "expectedCashCop": 171800,
+      "settlementIds": [
+        "stl-1788035608642-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-001425",
+      "trackingCode": "KNT-001425",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-04T14:07:50.946Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 90,
+      "updatedAgeDays": 90,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1783196445263-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-002172",
+      "trackingCode": "KNT-002172",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-16T21:54:20.741Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 77,
+      "updatedAgeDays": 77,
+      "collectedCop": 40000,
+      "expectedCashCop": 32000,
+      "settlementIds": [
+        "stl-1784266035603-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-002830",
+      "trackingCode": "KNT-002830",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-31T15:09:26.225Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 63,
+      "updatedAgeDays": 63,
+      "collectedCop": 41000,
+      "expectedCashCop": 33000,
+      "settlementIds": [
+        "stl-1785550355590-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003330",
+      "trackingCode": "KNT-003330",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-13T14:05:02.897Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 50,
+      "updatedAgeDays": 50,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1786630129293-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003595",
+      "trackingCode": "KNT-003595",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-20T00:05:17.631Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 43,
+      "updatedAgeDays": 43,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003637",
+      "trackingCode": "KNT-003637",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-19T20:55:35.488Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 43,
+      "updatedAgeDays": 43,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-6719759450225",
+      "trackingCode": "KNT-002399",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-23T13:59:04.543Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 71,
+      "updatedAgeDays": 71,
+      "collectedCop": 139900,
+      "expectedCashCop": 128900,
+      "settlementIds": [
+        "stl-1784815971823-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7368620834988",
+      "trackingCode": "KNT-000616",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-01T00:33:31.758Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 93,
+      "updatedAgeDays": 93,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1781929513446-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7418377765153",
+      "trackingCode": "KNT-002753",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-29T21:03:19.694Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 64,
+      "updatedAgeDays": 64,
+      "collectedCop": 89930,
+      "expectedCashCop": 81930,
+      "settlementIds": [
+        "stl-1785372780712-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7421727244577",
+      "trackingCode": "KNT-002766",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-30T14:02:38.157Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 64,
+      "updatedAgeDays": 64,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1785460031076-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7438733148449",
+      "trackingCode": "KNT-003023",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-04T15:51:32.634Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 59,
+      "updatedAgeDays": 59,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1785891185852-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7458098905377",
+      "trackingCode": "KNT-003239",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-11T14:55:10.295Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 52,
+      "updatedAgeDays": 52,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1786553864199-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7458448081185",
+      "trackingCode": "KNT-003241",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-11T18:48:10.136Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 51,
+      "updatedAgeDays": 51,
+      "collectedCop": 59900,
+      "expectedCashCop": 51900,
+      "settlementIds": [
+        "stl-1786553864199-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7835133378720",
+      "trackingCode": "KNT-003154",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-08T14:07:34.732Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 55,
+      "updatedAgeDays": 55,
+      "collectedCop": 139800,
+      "expectedCashCop": 131800,
+      "settlementIds": [
+        "stl-1786200241794-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7844969775264",
+      "trackingCode": "KNT-003327",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-13T03:43:18.756Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 50,
+      "updatedAgeDays": 50,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1786630129293-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7852231360672",
+      "trackingCode": "KNT-003447",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-18T15:01:01.219Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 45,
+      "updatedAgeDays": 45,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1787066544779-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7857725440160",
+      "trackingCode": "KNT-003591",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-19T14:53:05.455Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 44,
+      "updatedAgeDays": 44,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7940685725846",
+      "trackingCode": "KNT-001608",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-08T01:42:43.514Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 86,
+      "updatedAgeDays": 86,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1783515090552-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8031570854038",
+      "trackingCode": "KNT-003016",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-04T16:31:37.847Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 59,
+      "updatedAgeDays": 59,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1785891185852-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8034126463126",
+      "trackingCode": "KNT-003068",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-05T14:32:10.072Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 58,
+      "updatedAgeDays": 58,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1785973758462-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8051419840662",
+      "trackingCode": "KNT-003366",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-14T16:11:53.213Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 49,
+      "updatedAgeDays": 49,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1786735151867-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8067040346262",
+      "trackingCode": "KNT-003710",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-22T20:05:51.151Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 40,
+      "updatedAgeDays": 40,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1787516403972-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8077983809686",
+      "trackingCode": "KNT-004019",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-28T13:18:12.500Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 35,
+      "updatedAgeDays": 35,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1787927672982-driver-driver-1778271901513"
+      ]
+    }
+  ],
+  "coveredByNetting": [
+    {
+      "orderId": "onstock-6747964342454",
+      "trackingCode": "KNT-004116",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-29T16:28:26.141Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 34,
+      "updatedAgeDays": 34,
+      "collectedCop": 179800,
+      "expectedCashCop": 171800,
+      "settlementIds": [
+        "stl-1788035608642-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-001425",
+      "trackingCode": "KNT-001425",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-04T14:07:50.946Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 90,
+      "updatedAgeDays": 90,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1783196445263-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-002172",
+      "trackingCode": "KNT-002172",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-16T21:54:20.741Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 77,
+      "updatedAgeDays": 77,
+      "collectedCop": 40000,
+      "expectedCashCop": 32000,
+      "settlementIds": [
+        "stl-1784266035603-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-002830",
+      "trackingCode": "KNT-002830",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-31T15:09:26.225Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 63,
+      "updatedAgeDays": 63,
+      "collectedCop": 41000,
+      "expectedCashCop": 33000,
+      "settlementIds": [
+        "stl-1785550355590-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003330",
+      "trackingCode": "KNT-003330",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-13T14:05:02.897Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 50,
+      "updatedAgeDays": 50,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1786630129293-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003595",
+      "trackingCode": "KNT-003595",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-20T00:05:17.631Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 43,
+      "updatedAgeDays": 43,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-003637",
+      "trackingCode": "KNT-003637",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-19T20:55:35.488Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 43,
+      "updatedAgeDays": 43,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-004551",
+      "trackingCode": "KNT-004551",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-04T21:49:36.987Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 27,
+      "updatedAgeDays": 27,
+      "collectedCop": 70000,
+      "expectedCashCop": 61000,
+      "settlementIds": [
+        "stl-1788615767933-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-004744",
+      "trackingCode": "KNT-004744",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-12T16:59:06.207Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 19,
+      "updatedAgeDays": 19,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1789393428506-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-005137",
+      "trackingCode": "KNT-005137",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-17T17:44:00.883Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 14,
+      "updatedAgeDays": 14,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1789686589616-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-005242",
+      "trackingCode": "KNT-005242",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-18T13:03:49.130Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 14,
+      "updatedAgeDays": 14,
+      "collectedCop": 1,
+      "expectedCashCop": 0,
+      "settlementIds": [
+        "stl-1789853385905-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "ord-knt-005758",
+      "trackingCode": "KNT-005758",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-29T17:00:06.152Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": [
+        "stl-1790731858795-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-6719759450225",
+      "trackingCode": "KNT-002399",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-23T13:59:04.543Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 71,
+      "updatedAgeDays": 71,
+      "collectedCop": 139900,
+      "expectedCashCop": 128900,
+      "settlementIds": [
+        "stl-1784815971823-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-6795956093041",
+      "trackingCode": "KNT-004486",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-03T14:28:03.095Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 29,
+      "updatedAgeDays": 29,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1788475648115-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7368620834988",
+      "trackingCode": "KNT-000616",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-01T00:33:31.758Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 93,
+      "updatedAgeDays": 93,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1781929513446-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7418377765153",
+      "trackingCode": "KNT-002753",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-29T21:03:19.694Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 64,
+      "updatedAgeDays": 64,
+      "collectedCop": 89930,
+      "expectedCashCop": 81930,
+      "settlementIds": [
+        "stl-1785372780712-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7421727244577",
+      "trackingCode": "KNT-002766",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-30T14:02:38.157Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 64,
+      "updatedAgeDays": 64,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1785460031076-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7438733148449",
+      "trackingCode": "KNT-003023",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-04T15:51:32.634Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 59,
+      "updatedAgeDays": 59,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1785891185852-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7458098905377",
+      "trackingCode": "KNT-003239",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-11T14:55:10.295Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 52,
+      "updatedAgeDays": 52,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1786553864199-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7458448081185",
+      "trackingCode": "KNT-003241",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-11T18:48:10.136Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 51,
+      "updatedAgeDays": 51,
+      "collectedCop": 59900,
+      "expectedCashCop": 51900,
+      "settlementIds": [
+        "stl-1786553864199-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7538739478817",
+      "trackingCode": "KNT-004426",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-02T15:17:32.150Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 30,
+      "updatedAgeDays": 30,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": [
+        "stl-1788362393099-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7542370861228",
+      "trackingCode": "KNT-004609",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-08T19:48:15.766Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 23,
+      "updatedAgeDays": 23,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1788958475665-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7563336515873",
+      "trackingCode": "KNT-004721",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-11T17:08:46.294Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 20,
+      "updatedAgeDays": 20,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": [
+        "stl-1789147301740-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7580896231713",
+      "trackingCode": "KNT-005156",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-17T15:27:29.056Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 15,
+      "updatedAgeDays": 15,
+      "collectedCop": 99900,
+      "expectedCashCop": 91900,
+      "settlementIds": [
+        "stl-1789686589616-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7835133378720",
+      "trackingCode": "KNT-003154",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-08T14:07:34.732Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 55,
+      "updatedAgeDays": 55,
+      "collectedCop": 139800,
+      "expectedCashCop": 131800,
+      "settlementIds": [
+        "stl-1786200241794-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7844969775264",
+      "trackingCode": "KNT-003327",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-13T03:43:18.756Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 50,
+      "updatedAgeDays": 50,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1786630129293-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7852231360672",
+      "trackingCode": "KNT-003447",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-18T15:01:01.219Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 45,
+      "updatedAgeDays": 45,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1787066544779-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7857725440160",
+      "trackingCode": "KNT-003591",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-19T14:53:05.455Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 44,
+      "updatedAgeDays": 44,
+      "collectedCop": 113400,
+      "expectedCashCop": 105400,
+      "settlementIds": [
+        "stl-1787187618619-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7940685725846",
+      "trackingCode": "KNT-001608",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-07-08T01:42:43.514Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 86,
+      "updatedAgeDays": 86,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1783515090552-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8031570854038",
+      "trackingCode": "KNT-003016",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-04T16:31:37.847Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 59,
+      "updatedAgeDays": 59,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1785891185852-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8034126463126",
+      "trackingCode": "KNT-003068",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-05T14:32:10.072Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 58,
+      "updatedAgeDays": 58,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": [
+        "stl-1785973758462-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8051419840662",
+      "trackingCode": "KNT-003366",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-14T16:11:53.213Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 49,
+      "updatedAgeDays": 49,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1786735151867-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8067040346262",
+      "trackingCode": "KNT-003710",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-22T20:05:51.151Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 40,
+      "updatedAgeDays": 40,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1787516403972-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8077983809686",
+      "trackingCode": "KNT-004019",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-08-28T13:18:12.500Z",
+      "deliveredAtSource": "evidence",
+      "ageDays": 35,
+      "updatedAgeDays": 35,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1787927672982-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8123452653718",
+      "trackingCode": "KNT-005223",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-18T13:59:31.181Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 14,
+      "updatedAgeDays": 14,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1789853385905-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8139435016342",
+      "trackingCode": "KNT-005522",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-26T14:12:23.965Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 6,
+      "updatedAgeDays": 6,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790434946414-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8146504581270",
+      "trackingCode": "KNT-005746",
+      "location": "covered_by_netting",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-29T17:05:20.698Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790731858795-driver-driver-1778271901513"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "orderId": "ord-knt-005724",
+      "trackingCode": "KNT-005724",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T11:30:46.358Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 27000,
+      "expectedCashCop": 19000,
+      "settlementIds": []
+    },
+    {
+      "orderId": "ord-knt-005823",
+      "trackingCode": "KNT-005823",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:41:46.000Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 39000,
+      "expectedCashCop": 31000,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18909942546545",
+      "trackingCode": "KNT-005648",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:11:04.423Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 169900,
+      "expectedCashCop": 158900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-18910883315825",
+      "trackingCode": "KNT-005669",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:52:17.634Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18912730349681",
+      "trackingCode": "KNT-005750",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T16:37:14.807Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-18913179926678",
+      "trackingCode": "KNT-005817",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:44:07.958Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913349763222",
+      "trackingCode": "KNT-005819",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:02:22.748Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913485193329",
+      "trackingCode": "KNT-005761",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:59:41.810Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913719320726",
+      "trackingCode": "KNT-005828",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:39:11.941Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913743011953",
+      "trackingCode": "KNT-005766",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T13:06:52.464Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-18913788199062",
+      "trackingCode": "KNT-005832",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:57:09.195Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913816084630",
+      "trackingCode": "KNT-005833",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:08:08.151Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18913880408214",
+      "trackingCode": "KNT-005836",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T00:42:52.838Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914003845270",
+      "trackingCode": "KNT-005842",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T14:47:42.035Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914053849201",
+      "trackingCode": "KNT-005773",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:09:57.409Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-18914314649713",
+      "trackingCode": "KNT-005787",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:09:21.562Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914566209686",
+      "trackingCode": "KNT-005847",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:40:56.767Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914583740529",
+      "trackingCode": "KNT-005797",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:37:33.530Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914617000086",
+      "trackingCode": "KNT-005849",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:46:08.261Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914629615766",
+      "trackingCode": "KNT-005850",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:51:05.225Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914810429590",
+      "trackingCode": "KNT-005859",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:27:47.745Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914842083441",
+      "trackingCode": "KNT-005803",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:51:23.735Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18914936684657",
+      "trackingCode": "KNT-005807",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:36:03.053Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915182805105",
+      "trackingCode": "KNT-005816",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:34:12.904Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915268427926",
+      "trackingCode": "KNT-005873",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:01:29.267Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915330621590",
+      "trackingCode": "KNT-005875",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:35:54.198Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915339829398",
+      "trackingCode": "KNT-005876",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:37:12.357Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915608133782",
+      "trackingCode": "KNT-005881",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:31:37.549Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915650109590",
+      "trackingCode": "KNT-005885",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:49:28.700Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915656794262",
+      "trackingCode": "KNT-005886",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:31:37.101Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915675898006",
+      "trackingCode": "KNT-005889",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:40:27.481Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915728261233",
+      "trackingCode": "KNT-005826",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:43:16.473Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915747365014",
+      "trackingCode": "KNT-005894",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:31:04.768Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915753558166",
+      "trackingCode": "KNT-005895",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:28:53.999Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915804643441",
+      "trackingCode": "KNT-005829",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:03:01.558Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915931619478",
+      "trackingCode": "KNT-005898",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:36:34.147Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915945742486",
+      "trackingCode": "KNT-005900",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:36:57.155Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18915976577137",
+      "trackingCode": "KNT-005837",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:56:06.885Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916014358641",
+      "trackingCode": "KNT-005840",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:41:23.265Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916064395414",
+      "trackingCode": "KNT-005905",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:39:18.385Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916256710769",
+      "trackingCode": "KNT-005844",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:56:18.134Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 129900,
+      "expectedCashCop": 118900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916426776689",
+      "trackingCode": "KNT-005846",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:12:29.945Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 139900,
+      "expectedCashCop": 128900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916573642865",
+      "trackingCode": "KNT-005852",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:05:25.717Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916625023089",
+      "trackingCode": "KNT-005855",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T14:20:48.196Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916636164209",
+      "trackingCode": "KNT-005856",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T19:00:22.945Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 99900,
+      "expectedCashCop": 88900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916695670934",
+      "trackingCode": "KNT-005923",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:19:30.417Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916782080113",
+      "trackingCode": "KNT-005861",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:59:40.538Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18916977770609",
+      "trackingCode": "KNT-005869",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:17:28.819Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18917050876017",
+      "trackingCode": "KNT-005872",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:10:49.873Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18917583880305",
+      "trackingCode": "KNT-005883",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:23:39.614Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18917636046961",
+      "trackingCode": "KNT-005891",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:43:48.285Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18917815222385",
+      "trackingCode": "KNT-005896",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:31:37.391Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18918106595441",
+      "trackingCode": "KNT-005917",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:07:32.068Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 169900,
+      "expectedCashCop": 158900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18918640582769",
+      "trackingCode": "KNT-005932",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T14:41:46.899Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-18918885818481",
+      "trackingCode": "KNT-005948",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:19:12.284Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7608862179617",
+      "trackingCode": "KNT-005642",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:49:27.877Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7609040535841",
+      "trackingCode": "KNT-005647",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:31:25.828Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7609239372065",
+      "trackingCode": "KNT-005653",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:43:35.439Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7609969639713",
+      "trackingCode": "KNT-005662",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:56:07.505Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 99970,
+      "expectedCashCop": 91970,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-7615610323233",
+      "trackingCode": "KNT-005799",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:39:01.817Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 134970,
+      "expectedCashCop": 126970,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7617615757601",
+      "trackingCode": "KNT-005838",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:30:35.287Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89970,
+      "expectedCashCop": 81970,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7618848424225",
+      "trackingCode": "KNT-005857",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:08:53.108Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 79900,
+      "expectedCashCop": 71900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7618882306337",
+      "trackingCode": "KNT-005858",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:35:30.469Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7619114500385",
+      "trackingCode": "KNT-005864",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:51:02.797Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 101900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7619128754465",
+      "trackingCode": "KNT-005865",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:59:14.993Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7619366355233",
+      "trackingCode": "KNT-005870",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:13:41.319Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7619397255457",
+      "trackingCode": "KNT-005871",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:13:06.006Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 134970,
+      "expectedCashCop": 126970,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-7620595450145",
+      "trackingCode": "KNT-005904",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:10:33.369Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 81900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8141130793110",
+      "trackingCode": "KNT-005555",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T17:12:33.688Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8142769815702",
+      "trackingCode": "KNT-005635",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:43:52.156Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8143241904278",
+      "trackingCode": "KNT-005651",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:54:18.070Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8143364587670",
+      "trackingCode": "KNT-005654",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T17:12:13.566Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8143535767702",
+      "trackingCode": "KNT-005658",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:09:08.552Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8143579873430",
+      "trackingCode": "KNT-005660",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:28:20.680Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8144163831958",
+      "trackingCode": "KNT-005663",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:23:43.234Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144167207062",
+      "trackingCode": "KNT-005665",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T16:54:07.937Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144221569174",
+      "trackingCode": "KNT-005666",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:35:46.929Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144240672918",
+      "trackingCode": "KNT-005668",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:36:47.298Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144331079830",
+      "trackingCode": "KNT-005675",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T12:57:35.452Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8144375185558",
+      "trackingCode": "KNT-005676",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:39:32.458Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144828301462",
+      "trackingCode": "KNT-005686",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:01:06.518Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8144977821846",
+      "trackingCode": "KNT-005689",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:33:09.654Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145051746454",
+      "trackingCode": "KNT-005690",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:46:05.317Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8145054138518",
+      "trackingCode": "KNT-005691",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:01:04.616Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145054826646",
+      "trackingCode": "KNT-005692",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:32:08.327Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8145242456214",
+      "trackingCode": "KNT-005700",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:18:39.864Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145257300118",
+      "trackingCode": "KNT-005703",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:28:08.441Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145274470550",
+      "trackingCode": "KNT-005704",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T00:41:39.841Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145312186518",
+      "trackingCode": "KNT-005706",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:36:47.397Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145317298326",
+      "trackingCode": "KNT-005707",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T01:41:05.090Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8145331912854",
+      "trackingCode": "KNT-005708",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T13:23:49.465Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8145560010902",
+      "trackingCode": "KNT-005722",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T13:57:35.134Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8145656086678",
+      "trackingCode": "KNT-005727",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:24:46.193Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8145892278422",
+      "trackingCode": "KNT-005730",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T17:24:13.266Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146095177878",
+      "trackingCode": "KNT-005733",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:37:02.713Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146179195030",
+      "trackingCode": "KNT-005737",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:42:58.944Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146322751638",
+      "trackingCode": "KNT-005739",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:35:28.319Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8146497601686",
+      "trackingCode": "KNT-005745",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:34:47.412Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146737660054",
+      "trackingCode": "KNT-005751",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:00:27.470Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146746933398",
+      "trackingCode": "KNT-005753",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:43:28.724Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146803130518",
+      "trackingCode": "KNT-005755",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T18:01:00.616Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146848186518",
+      "trackingCode": "KNT-005756",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:24:14.348Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8146963071126",
+      "trackingCode": "KNT-005760",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:35:06.931Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147017760918",
+      "trackingCode": "KNT-005762",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:41:40.705Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147044040854",
+      "trackingCode": "KNT-005763",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:37:12.441Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147071107222",
+      "trackingCode": "KNT-005764",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:16:56.161Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147149291670",
+      "trackingCode": "KNT-005765",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T16:14:46.767Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147274072214",
+      "trackingCode": "KNT-005767",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:32:10.372Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147292455062",
+      "trackingCode": "KNT-005768",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T16:20:40.033Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147307167894",
+      "trackingCode": "KNT-005770",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T16:31:09.401Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147395543190",
+      "trackingCode": "KNT-005771",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:12:34.051Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147445219478",
+      "trackingCode": "KNT-005772",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T17:11:20.947Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147457474710",
+      "trackingCode": "KNT-005774",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:00:47.853Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147457573014",
+      "trackingCode": "KNT-005775",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T16:44:54.750Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147473072278",
+      "trackingCode": "KNT-005776",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:35:38.659Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147486146710",
+      "trackingCode": "KNT-005777",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:42:52.781Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 99900,
+      "expectedCashCop": 88900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147526844566",
+      "trackingCode": "KNT-005779",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T14:15:17.042Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147541622934",
+      "trackingCode": "KNT-005780",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T12:57:41.733Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147594346646",
+      "trackingCode": "KNT-005782",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T15:46:48.252Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147682623638",
+      "trackingCode": "KNT-005785",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T14:51:55.944Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8147702382742",
+      "trackingCode": "KNT-005786",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-02T15:38:04.337Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147737444502",
+      "trackingCode": "KNT-005789",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T00:41:54.957Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8147765493910",
+      "trackingCode": "KNT-005790",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:16:13.824Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148173029526",
+      "trackingCode": "KNT-005800",
+      "location": "in_settlement_open",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-09-30T13:58:40.145Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 2,
+      "updatedAgeDays": 2,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": [
+        "stl-1790788103594-driver-driver-1778271901513"
+      ]
+    },
+    {
+      "orderId": "shopify-8148270022806",
+      "trackingCode": "KNT-005802",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T13:55:34.907Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148419281046",
+      "trackingCode": "KNT-005806",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T16:48:49.682Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148489437334",
+      "trackingCode": "KNT-005808",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T14:33:03.934Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 79900,
+      "expectedCashCop": 68900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148532068502",
+      "trackingCode": "KNT-005809",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T19:33:07.792Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148585709718",
+      "trackingCode": "KNT-005810",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:36:34.973Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 119900,
+      "expectedCashCop": 108900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148600815766",
+      "trackingCode": "KNT-005811",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T19:07:19.276Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148602880150",
+      "trackingCode": "KNT-005812",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T17:50:34.497Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 109900,
+      "expectedCashCop": 98900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148646232214",
+      "trackingCode": "KNT-005814",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T15:20:48.524Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 1,
+      "updatedAgeDays": 1,
+      "collectedCop": 79900,
+      "expectedCashCop": 68900,
+      "settlementIds": []
+    },
+    {
+      "orderId": "shopify-8148653637782",
+      "trackingCode": "KNT-005815",
+      "location": "outside_settlement",
+      "leaderId": "driver-1778271901513",
+      "deliveredAt": "2026-10-01T18:15:18.415Z",
+      "deliveredAtSource": "closedAt",
+      "ageDays": 0,
+      "updatedAgeDays": 0,
+      "collectedCop": 89900,
+      "expectedCashCop": 78900,
+      "settlementIds": []
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "tab", "name": "Efectivo sin llegar" },
+    { "role": "heading", "name": "Efectivo sin llegar" },
+    { "role": "alert", "name": "No se pudo calcular el efectivo sin llegar" },
+    { "role": "heading", "name": "No se pudo calcular el efectivo sin llegar" },
+    { "role": "button", "name": "Reintentar" }
+  ],
+  "threshold": { "missing": 0 }
+}

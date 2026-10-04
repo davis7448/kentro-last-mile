@@ -1,0 +1,16 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Politica de costo de Lemme" },
+    { "role": "heading", "name": "Politica de costo de Lemme" },
+    { "role": "checkbox", "name": "$0 a proposito" },
+    { "role": "checkbox", "name": "La tienda le paga este producto al proveedor por fuera de Kentro" },
+    { "role": "textbox", "name": "Motivo (queda en la auditoria)" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Guardar politica" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}

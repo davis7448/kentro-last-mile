@@ -1,0 +1,22 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 1280, "height": 800 },
+  "expect": [
+    { "role": "dialog", "name": "Corregir costo de producto" },
+    { "role": "heading", "name": "Corregir costo de producto" },
+    { "role": "button", "name": "Editar seleccion" },
+    { "role": "table", "name": "Pedidos de la correccion" },
+    { "role": "columnheader", "name": "Cobrado" },
+    { "role": "columnheader", "name": "Corresponde" },
+    { "role": "columnheader", "name": "Diferencia" },
+    { "role": "columnheader", "name": "Queda" },
+    { "role": "button", "name": "Anterior" },
+    { "role": "button", "name": "Siguiente" },
+    { "role": "checkbox", "name": "Entiendo que esto mueve dinero real y queda registrado en la auditoria" },
+    { "role": "button", "name": "Cancelar" },
+    { "role": "button", "name": "Aplicar correccion" },
+    { "role": "button", "name": "Cerrar" }
+  ],
+  "threshold": { "missing": 0 }
+}
