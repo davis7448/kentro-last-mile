@@ -1,9 +1,9 @@
 # Plan tecnico — Spec 029: una tienda confirma, corrige y cancela sus pedidos por API, sin pisar lo operado
 
-- **Spec:** `specs/029_store_api_confirma_y_corrige_pedidos.md` — **aprobada el 2026-10-04** (decisiones 1-9,
+- **Spec:** `specs/029_store_api_confirma_y_corrige_pedidos.md` — **aprobada el 2026-10-04** (decisiones 1-10,
   seccion 9).
 - **Fecha:** 2026-10-04. Preguntas del plan resueltas el mismo dia por el orquestador, por delegacion del
-  responsable (seccion 12). Precisado tras tres pasadas de `/sdd-analyze` el mismo dia (seccion 13).
+  responsable (seccion 12). Precisado tras cuatro pasadas de `/sdd-analyze` el mismo dia (seccion 13).
 - **Diseno:** `specs/design/029_store_api_confirma_y_corrige_pedidos/` (README + 14 pantallas observadas):
   - HU_04 (clave de escritura): `HU_04.tienda-sin-clave`, `HU_04.tienda-recien-generada`, `HU_04.tienda-activa`,
     `HU_04.tienda-rotar`, `HU_04.tienda-error`, `HU_04.admin-lista`, `HU_04.admin-lista-movil`,
@@ -11,7 +11,8 @@
   - HU_05 (historial): `HU_05.tienda`, `HU_05.tienda-escritorio`, `HU_05.admin`, `HU_05.admin-escritorio`,
     `HU_05.vacio`, `HU_05.error`.
   Este plan no decide textos ni disposicion: los toma del README. Sus tres pendientes "fuera del diseno" se
-  resuelven aqui (2.10 → 2.4, 2.3 y T23).
+  resuelven aqui (2.10 → 2.4, 2.3 y T23). Lo que el README aun no nombra va a la compuerta de `sdd-uxui`
+  (seccion 12).
 - **Tareas:** `specs/029_tasks.md` (T1-T27, con T6 partida en T6 y T6b). Toda referencia a una tarea en este
   plan usa esa numeracion.
 - **Evidencia:** `.sdd/evidence/029_store_api_confirma_y_corrige_pedidos/` (abajo `EV/`).
@@ -25,7 +26,7 @@
 | Pregunta | Respuesta aplicada |
 |---|---|
 | P1 — `address_risk` corregido con valores identicos | Vuelve a `imported` igual: es la unica forma de que CENTRAL lo desbloquee (confirmarlo da 409). Historial con accion `order.address_reviewed` ("direccion revisada"), solo el cambio de `status`, sin campos de entrega (4.1) |
-| P2 — Kovia y RF_11 | Fixture con la forma de un pedido real de Kovia (datos sinteticos) + replay firmado de un webhook de Shopify, con tienda de Shopify e id **sinteticos**, hacia la tienda de pruebas (5.3) |
+| P2 — Kovia y RF_11 | Fixture con la forma de un pedido real de Kovia (datos sinteticos) + replay firmado de un webhook de Shopify, con tienda de Shopify e id **sinteticos** y salvaguardas obligatorias, hacia la tienda de pruebas (5.3) |
 | P3 — `auditEvents` con `create` abierto | Spec aparte de prioridad alta: 032 (borrador). En la 029, mitigacion explicita: a la tienda solo le llegan eventos con actor verificable o de accion permitida (2.7); los demas dejan de verse para la tienda (RF_27) |
 | P4 — ciudades | Manual con las ciudades activas; el 422 `out_of_coverage` trae la lista de ciudades activas (4.3) |
 | P5 — limite de tasa | 120 escrituras/minuto por tienda, constante con nombre en un solo modulo (2.9); "a confirmar con CENTRAL" en riesgos |
@@ -36,10 +37,11 @@
 |---|---|---|
 | `functions/src/store-api.ts` `storeApi` | `onRequest`, solo `GET`; autentica `sellerId` + key (query o Bearer) contra `storeApiConfigs.apiKey` en claro con `safeEqual`; **lee todos los pedidos de la tienda** antes de mirar la ruta (salvo `docs`); `/orders` lee ademas `walletEntries` de la tienda y **`settlements` entera** | Las rutas nuevas no pueden pasar por esa carga (RNF_05). Las existentes no se tocan por dentro (RF_20): se extraen sus funciones de forma sin cambiar su salida, y su autenticacion pasa por `resolveStoreCredentials` (T10) |
 | `store-api.ts` `orderPayload`, `classifyOrder`, `buildPaymentInfo` | forma de un elemento de `GET /orders` | RF_01 exige el mismo esquema: se mueven a un modulo puro y las dos rutas las llaman (no se copian) |
+| `store-api.ts` indice (`docs`) | objeto con claves de primer nivel (rutas, autenticacion...) | RF_20: la documentacion nueva va **solo en claves nuevas de primer nivel**; los valores de las actuales no cambian (2.1) |
 | `store-api.ts` `createStoreApiKey` | `admin`/`seller`; devuelve la key de lectura completa cada vez; audita `store_api_key.viewed/created` | Se queda igual (RF_26). La de escritura va por callables nuevas |
 | `orders.ts` `confirmImportedOrder` | transaccion; solo `imported`; `addressRisk: "accepted"`, `confirmedVia: "manual"`, audita `order.seller_confirmed` con `fromStatus/toStatus` | Nucleo compartido de confirmar (2.2) |
 | `orders.ts` `updateImportedOrder` | solo `imported`; pedido entero (cliente, direccion, pago, modo, valor, producto/`lineItems`, zona...); `[MANUAL_EDIT_STAMP]: now`; **conserva** `normalizedAddress` si no viene (spec 013) y las indicaciones si vienen en blanco; audita sin campos ni valores | Nucleo compartido de datos de entrega con politica `panel` que acepta esos campos extra (2.2, 4.1); el panel sigue con su precondicion y sus campos (seccion 7 de la spec) |
-| `orders.ts` `cancelOrder` | cualquier no cerrado; la tienda no puede si esta recogido; libera inventario si reservo y no es `imported`; motivo opcional a `callNote`; error si ya `cancelled` | Nucleo compartido de cancelar con dos politicas (panel / api) |
+| `orders.ts` `cancelOrder` | cualquier no cerrado; la tienda no puede si esta recogido; libera inventario si reservo y no es `imported`; motivo opcional a `callNote`; error si ya `cancelled`; su parche escribe `driverId: current.driverId ?? null`; tiene su propia lista literal `["delivered", "failed", "cancelled", "liquidated"]` | Nucleo compartido de cancelar con dos politicas (panel / api); el parche conserva `driverId: current.driverId ?? null` (4.1); al delegar, su literal sale de `orders.ts` (T6b) |
 | `orders.ts` `confirmRetryOrder`, `updateOrderAdjustments`, `applyOrderTransition`, `closeOrder`, `assignMessengerToOrders`, `unassignMessengerFromOrders`, `createOrUpdatePickupBatch`; `order-corrections.ts` `correctOrderStatus` | cambian estado (o, el ajuste, producto/recaudo). `createOrUpdatePickupBatch` **no audita** | Todas escriben historial (RF_16, 2.6) |
 | `orders.ts` `getOrderAuditTrail` | lee `auditEvents` por `entityId`; resuelve uid → nombre y correo con `getUsers` **para cualquier rol**; al `seller_logistics` le filtra acciones financieras | RF_27: el filtrado de identidades va en el servidor (2.7) |
 | `firestore.rules` `auditEvents` | `allow create: if signedIn()` | **Cualquier sesion puede crear un evento con el `entityId` de un pedido ajeno.** No sirve como historial que la API ensena a una tienda (RF_18): el historial campo a campo va a una coleccion nueva solo de servidor (2.5); el cierre de la regla es la spec 032 |
@@ -47,9 +49,10 @@
 | `firestore.rules` `settings/{settingId}` (l. ~145) | `allow read: if signedIn(); allow write: if isAdmin();` | Un admin podria escribir `settings/storeApi` desde el cliente y mover `historySince`. Se acota a `allow write: if isAdmin() && settingId != "storeApi"` (2.4, 7, T7) |
 | `firestore.rules` `storeApiConfigs` | `allow read, write: if false` | La huella de la key de escritura vive ahi (2.3) |
 | `order-import-merge.ts` | `MANUAL_EDIT_STAMP`, `CLOSED_STATUSES`, `IMPORT_WRITE_EXEMPTIONS` (cuatro) | RF_11 usa la constante; el ejecutor nuevo es la quinta exencion (2.2, T6) |
-| `src/lib/spec-017-guards.test.ts` | guarda 1 (quien escribe `orders`), guarda 3 (**exactamente cuatro** exenciones), guarda 7 (**exactamente dos** `[MANUAL_EDIT_STAMP]:` en `orders.ts`) | T6 actualiza guarda 3 (cinco, al nacer el ejecutor) y T6b guarda 7 (cuenta en `orders.ts` + nucleo, al delegar `updateImportedOrder`), con la razon en el propio test |
+| `src/lib/spec-017-guards.test.ts` | guarda 1 (quien escribe `orders`, con `writesOrders`), guarda 3 (**exactamente cuatro** exenciones), guarda 7 con dos pruebas: **exactamente dos** `[MANUAL_EDIT_STAMP]:` en `orders.ts`, y **exactamente dos** literales `["delivered", "failed", "cancelled", "liquidated"]` en `orders.ts` (anulacion e inventario) | T6 actualiza guarda 3 (cinco, al nacer el ejecutor). T6b actualiza las dos pruebas de la guarda 7 al delegar: el sello pasa a 1 en `orders.ts` + 1 en el nucleo, y el literal de estados cerrados pasa de 2 a 1 en `orders.ts` (el de `cancelOrder` desaparece porque delega en el nucleo, que usa `CLOSED_STATUSES`; queda el de inventario), con su razon. T16 reutiliza `writesOrders` (2.6) |
 | `src/components/operations-app.tsx` `CollapsiblePanel` (l. 1105), `OrderAuditTrail` (l. 2091), `AUDIT_ACTION_LABELS` (l. 2053), `StoreApiKeyCard` (l. 11162) | el "?" mide `h-8 w-8`; el historial pinta `actorLabel`/`actorEmail`/`actorRole` a todos y no reintenta | HU_04 y HU_05 (T18 adapta el uso de `fetchFirebaseOrderAuditTrail`; T20-T23) |
 | `cities` | `{ active }`; todas las importaciones escriben `cityId: "city-cali"` | RF_10 lee `cities/{cityId}` dentro de la transaccion; el 422 lista las activas |
+| Contador de `trackingCode` | cada pedido creado por una via de importacion consume un numero | Los pedidos de prueba creados por webhook (5.3) consumen numeros del contador real: **aceptado** (no se rebobina) |
 
 ## 2. Decisiones de diseno
 
@@ -65,11 +68,18 @@
 | `POST /orders/{id}/cancel` | **escritura**, solo Bearer | `{ reason, expectedStatus? }` | 200 `{ ok: true, changed, pedido }` |
 
 `sellerId` sigue por query en todas (no es secreto, y asi la autenticacion es una lectura por id, sin buscar
-la huella en toda la coleccion). `changed: false` es la respuesta de RF_05, RF_15 y de una correccion cuyos
-valores ya eran los guardados (salvo el caso `address_risk`, 4.1).
+la huella en toda la coleccion). `changed: false` es la respuesta de un no-op (glosario de la spec: RF_05, RF_15
+y una correccion cuyos valores ya eran los guardados, salvo el caso `address_risk`, 4.1), **tambien con un
+`expectedStatus` que no coincide** (RF_19).
 
 `storeApi` deja de responder 405 a todo lo que no es `GET`: `Allow` pasa a ser por ruta. Las rutas existentes
 siguen solo `GET` y con su 405 de hoy (`{ ok: false, error: "method_not_allowed" }`).
+
+**Indice de la raiz (RF_17, RF_20, DoD 5).** La documentacion nueva (rutas nuevas, `HISTORY_EXCLUDES` con su
+aviso, codigos de error, estados editables, `historySince`, key de escritura solo por cabecera) va **solo en
+claves nuevas de primer nivel** del objeto del indice (p. ej. `writeEndpoints`, `history`, `errorCodes`,
+`editableStatuses`). Las claves actuales (rutas, autenticacion y el resto) **conservan su valor identico**: no
+se anade nada dentro de ellas. `compare-reads` compara las claves actuales **por valor** (T13, T24, T27).
 
 **Orden de evaluacion de una peticion nueva** (pura en `store-api-request.ts`, T8): ruta y metodo → parametros
 de consulta (RF_03, 400 `unknown_parameter`, nombrando cada uno) → credenciales (2.3) → limite de tasa en
@@ -105,14 +115,14 @@ Tres piezas, para que ninguna regla exista dos veces:
    API). **Ningun adaptador escribe en el pedido**, ni el sello ni ningun otro campo.
 
 **Que se comparte y que no.** El panel y la API comparten: el chequeo de tienda, el parche de confirmar, el
-constructor de datos de entrega (recorte, sello `MANUAL_EDIT_STAMP`, diff para el historial), la liberacion
-de inventario, la auditoria y el historial. Lo que difiere es **politica declarada en una tabla del nucleo**
-(4.1), no codigo duplicado: precondiciones (panel: confirmar/editar solo `imported`; API: editable segun el
-glosario), `confirmedVia` (`manual` / `api`), RF_05/RF_15 (no-op en API, error en panel como hoy), RF_23 (la
-API borra lo derivado de la direccion; el panel conserva `normalizedAddress` como hoy, spec 013), las
-indicaciones en blanco (`deliveryNotes` `""`/`null` **borra solo con politica `api`**; en el panel, unas
-indicaciones en blanco se conservan como hoy) y el motivo de cancelar (obligatorio 1-500 en API, opcional en
-panel).
+constructor de datos de entrega (recorte, sello `MANUAL_EDIT_STAMP`, diff para el historial), el parche de
+cancelar (incluido `driverId: current.driverId ?? null`), la liberacion de inventario, la auditoria y el
+historial. Lo que difiere es **politica declarada en una tabla del nucleo** (4.1), no codigo duplicado:
+precondiciones (panel: confirmar/editar solo `imported`; API: editable segun el glosario), `confirmedVia`
+(`manual` / `api`), RF_05/RF_15 (no-op en API, error en panel como hoy), RF_23 (la API borra lo derivado de la
+direccion; el panel conserva `normalizedAddress` como hoy, spec 013), las indicaciones en blanco
+(`deliveryNotes` `""`/`null` **borra solo con politica `api`**; en el panel, unas indicaciones en blanco se
+conservan como hoy) y el motivo de cancelar (obligatorio 1-500 en API, opcional en panel).
 
 **Campos extra del panel.** `updateImportedOrder` edita hoy, ademas de los datos de entrega, producto
 (`lineItems` y sus derivados), pago, modo, valor, zona, `normalizedAddress` y el resto de campos que hoy
@@ -129,15 +139,22 @@ validacion de cuerpo lo rechaza antes (RF_12).
 como **quinta exencion** en `IMPORT_WRITE_EXEMPTIONS`, con la razon: "Confirmar, corregir datos de entrega y
 anular por decision de la tienda o de la plataforma, por panel o por API; nunca crea pedidos ni toca lider,
 mensajero ni catalogo". `store-api*.ts` **no** escribe `orders`: solo llama al ejecutor. Guarda 3 de la 017
-pasa de cuatro a cinco (T6) y guarda 7 cuenta el sello en `orders.ts` (ajustes, 1) + `order-seller-actions.ts`
-(datos de entrega, 1), con constante y sin literal (T6b).
+pasa de cuatro a cinco (T6). Guarda 7 de la 017, sus dos pruebas (T6b): el sello cuenta en `orders.ts`
+(ajustes, 1) + `order-seller-actions.ts` (datos de entrega, 1), con constante y sin literal; y el literal
+`["delivered", "failed", "cancelled", "liquidated"]` pasa de 2 a 1 en `orders.ts`, porque el de `cancelOrder`
+desaparece al delegar (el nucleo usa `CLOSED_STATUSES`) y queda solo el de inventario, con esa razon escrita en
+la guarda.
 
 **Condicion en la transaccion (RF_19).** El planificador se evalua con el pedido leido por
 `transaction.get`; si otro escritor (lider que toma el pedido, ChatBy que confirma) cambio el documento,
 Firestore reintenta la funcion y la segunda evaluacion ve el estado nuevo: o rechaza con 409 o, en confirmar,
-responde no-op (caso limite "ChatBy y API a la vez"). `expectedStatus` opcional: si viene y difiere, 409
-`status_changed`, evaluado antes que cualquier otra regla de estado. T6 lo prueba con una carrera simulada:
-dos planes sobre el mismo pedido, donde el segundo se evalua con el estado que dejo el primero.
+responde no-op (caso limite "ChatBy y API a la vez"). **`expectedStatus` opcional, subordinado a la
+idempotencia:** el planificador mira primero si la accion seria un no-op (confirmar algo en `ready_to_assign` o
+posterior no cancelado; cancelar algo ya `cancelled`; corregir con los mismos valores un editable que no esta en
+`address_risk`) y, si lo es, responde `unchanged` **aunque `expectedStatus` no coincida**. Solo si la accion
+cambiaria algo (o rechazaria por estado) y `expectedStatus` viene y difiere, responde 409 `status_changed`,
+antes que cualquier otra regla de estado. T4 y T6 lo prueban (incluida la carrera simulada: dos planes sobre el
+mismo pedido, donde el segundo se evalua con el estado que dejo el primero).
 
 ### 2.3 Key de escritura (RF_25, RF_26, RNF_01)
 
@@ -230,35 +247,38 @@ del guion de verificacion (T25, T27) borra el historial solo de los pedidos de p
   que permite `operationalOrderUpdateByAssignee` no pasan por ninguna callable y no dejan registro. No se cierra
   aqui: spec 032 (1.1, RF_07 de su borrador).
 
-### 2.6 Que callables del panel escriben historial (RF_16)
+### 2.6 Que callables escriben historial (RF_16)
 
 Un solo constructor, `buildOrderHistoryRecord(before, after, meta)` (en el nucleo puro), que hace el diff de
 los campos de 2.5 y devuelve `null` si no hay cambios. Lo llaman, dentro de su transaccion o batch (esta tabla
 es la misma lista que enumera RF_16 en la spec):
 
-| Callable | Accion | Origen | Tarea |
+| Callable o modulo | Accion | Origen | Tarea |
 |---|---|---|---|
 | `confirmImportedOrder`, `updateImportedOrder`, `cancelOrder` | via el ejecutor (2.2) | `panel` | T6b |
-| `confirmRetryOrder`, `updateOrderAdjustments`, `applyOrderTransition`, `closeOrder` | anaden la escritura del registro junto a su evento | `panel` | T15 |
+| `order-seller-actions-run.ts` (ejecutor) | escribe el registro que le da el plan | `panel` / `api` | T6 |
+| `confirmRetryOrder`, `updateOrderAdjustments`, `applyOrderTransition`, `closeOrder` | anaden la escritura del registro junto a su evento (`updateOrderAdjustments` registra `totalCop`/producto) | `panel` | T15 |
 | `assignMessengerToOrders`, `unassignMessengerFromOrders` | cambian `picked_up`↔`call_pending`; solo `status` | `panel` | T16 |
 | `createOrUpdatePickupBatch` | `→ picked_up`; hoy sin auditoria: se le anade evento `order.picked_up` y registro | `panel` | T16 |
 | `correctOrderStatus` (`order-corrections.ts`) | en su batch | `panel` | T16 |
 | rutas de escritura de la API | via el ejecutor | `api` | T11 |
 
-**Exclusiones explicitas** (no registran historial, cada una con su razon):
+**Exclusiones explicitas** (escriben `orders` pero no registran historial, cada una con su razon):
 
 | Excluida | Razon |
 |---|---|
 | `createManualOrder` | crea el pedido con su `status` inicial; RF_16 cubre cambios de un pedido existente |
 | las cinco vias de importacion: `shopify.ts` (importacion manual y sincronizacion historica), `index.ts` (`shopifyWebhook`), `store-webhook.ts`, `onstock-webhook.ts`, `contact-form.ts` | crean pedidos y, al reimportar, quedan fuera por la spec (031) |
 | `uchat-pull.ts`, `uchat-webhook.ts` | ChatBy, fuera por la spec (031) |
-| `classifyFailedOrder` | no cambia estado ni datos de entrega |
+| `classifyFailedOrder` | escribe `failedCategory`; no cambia estado ni datos de entrega |
+| cualquier otra callable que `writesOrders` detecte y no cambie `status` ni datos de entrega (rotulos, marcas operativas...) | se anade en T16 a la lista de exclusiones, una por una, con su razon; ninguna entra en silencio |
 | escrituras directas del cliente bajo `operationalOrderUpdateByAssignee` | no son codigo de servidor (no las ve la guarda de `functions/src`); limite conocido de RF_16, spec 032 |
 
-Guarda (T16): cada callable de la tabla contiene `buildOrderHistoryRecord(` en su cuerpo; la lista de
-callables y modulos de `functions/src` que escriben `status` en un pedido es igual a **tabla + exclusiones**,
-y las exclusiones viven en la guarda como lista explicita con su razon. Una callable nueva que cambie estado y
-no este en ninguna de las dos pone la suite en rojo.
+**Guarda (T16).** El criterio es el de la 017: **las callables y modulos de `functions/src` que escriben
+`orders`, detectados con `writesOrders`** (reutilizado de `spec-017-guards.test.ts`). Cada uno tiene que estar
+clasificado en **una** de las dos tablas: en la de arriba (y entonces su cuerpo contiene
+`buildOrderHistoryRecord(`) o en la de exclusiones (y entonces no lo contiene), con su razon escrita en la
+guarda. Un escritor de `orders` nuevo que no este en ninguna de las dos pone la suite en rojo.
 
 ### 2.7 Lo que ve la tienda en "Historial del pedido" (RF_27, decisiones 11-12 del diseno)
 
@@ -319,6 +339,9 @@ las respuestas 200 y 409 (las que dependen del estado; en un 409 el registro ide
 politica TTL de Firestore sobre `expiresAt` (se crea con `gcloud firestore fields ttls update`; no va en
 `firestore.indexes.json`). Reglas: `allow read, write: if false`.
 
+Sin `Idempotency-Key`, un reintento de una accion que ya se aplico es un no-op de estado (RF_05, RF_15) y
+responde `changed: false` aunque traiga el `expectedStatus` de antes (2.2).
+
 ### 2.9 Limite de tasa (RNF_04)
 
 Ventana fija por minuto: `storeApiRateLimits/{sellerId}__{YYYYMMDDHHmm}` con `count`, incrementado en una
@@ -362,7 +385,7 @@ Las escrituras devuelven el pedido con la misma forma, armada con la misma funci
 
 | Archivo | Cambio | Responsabilidad | Tarea |
 |---|---|---|---|
-| `scripts/verify-029.js` | nuevo | `baseline` (T1), `query-check` (T2), `capture-reads`/`compare-reads` (RF_20, T24), `kovia-replay` y su limpieza (T25), `set-history-since` (2.4), `smoke` y `cleanup` (DoD 3, T27) | T1, T2, T24, T25, T27 |
+| `scripts/verify-029.js` | nuevo | `baseline` (T1), `query-check` (T2), `capture-reads`/`compare-reads` (RF_20, T24), `kovia-replay` y su limpieza (T25), `set-history-since` (2.4), `smoke`, siembra de eventos con forma historica y `cleanup` (DoD 3, T27); salvaguardas de 5.3 | T1, T2, T24, T25, T27 |
 | `functions/src/order-seller-actions.ts` | nuevo, **puro** | politica, `planConfirm`, `planDeliveryCorrection` (con `panelExtras` en politica `panel`), `planCancel`, `buildOrderHistoryRecord`, `validateDeliveryInput` (reglas de contenido) | T4, T5 |
 | `functions/src/order-seller-actions-run.ts` | nuevo | ejecutor transaccional (2.2); registro idempotente dentro de su transaccion | T6, T12 |
 | `functions/src/order-import-merge.ts` | toca | quinta entrada de `IMPORT_WRITE_EXEMPTIONS` | T6 |
@@ -371,16 +394,16 @@ Las escrituras devuelven el pedido con la misma forma, armada con la misma funci
 | `functions/src/store-api-orders.ts` | nuevo, puro | `orderPayload`, `classifyOrder`, `buildPaymentInfo`, `computeKpis` movidos tal cual desde `store-api.ts` | T9 |
 | `functions/src/store-api-auth.ts` | nuevo, puro | formato de la key, huella, `resolveStoreCredentials` (tabla de 2.3), `planWriteKeyChange` | T3 |
 | `functions/src/store-api-request.ts` | nuevo, puro | enrutado nuevo, parametros permitidos por ruta (RF_03), validador de `shopifyOrderId`, esquemas Zod de forma y tipos, separacion de `expectedStatus`, recogida conjunta de campos no permitidos e invalidos con su prioridad de `code`, motivo de cancelar, catalogo de `code`, `buildErrorBody`, hash de cuerpo, `STORE_API_WRITES_PER_MINUTE` y ventana, `decideIdempotency` | T8, T12 |
-| `functions/src/store-api-history.ts` | nuevo, puro | `toStoreHistoryResponse` (4.3), `storeActorTag`, `storeSafeSummary`, `isStoreVisibleEvent`, `HISTORY_EXCLUDES` | T13, T14 |
+| `functions/src/store-api-history.ts` | nuevo, puro | `toStoreHistoryResponse` (4.3), `storeActorTag`, `storeSafeSummary`, `isStoreVisibleEvent`, `HISTORY_EXCLUDES`, claves nuevas del indice | T13, T14 |
 | `functions/src/store-api-write.ts` | nuevo | handlers HTTP de las rutas nuevas, idempotencia, tasa, carga dirigida (2.10), lista de ciudades activas del 422 | T10, T11, T12, T13 |
 | `functions/src/store-api-keys.ts` | nuevo | callables `rotateStoreWriteKey`, `getStoreApiKeyStatus`, `listStoreApiKeys` | T17 |
-| `functions/src/store-api.ts` | toca | handler con `db` inyectable; delega rutas nuevas a `store-api-write.ts`; autenticacion de todas las rutas via `resolveStoreCredentials`; rutas viejas con su salida identica; filtro `shopifyOrderId` con forma de error vieja; indice con rutas nuevas, codigos, estados editables, `historySince` y `HISTORY_EXCLUDES` | T9, T10, T11, T13 |
+| `functions/src/store-api.ts` | toca | handler con `db` inyectable; delega rutas nuevas a `store-api-write.ts`; autenticacion de todas las rutas via `resolveStoreCredentials`; rutas viejas con su salida identica; filtro `shopifyOrderId` con forma de error vieja; indice: claves actuales con valor identico + claves nuevas de primer nivel (2.1) | T9, T10, T11, T13 |
 | `functions/src/index.ts` | toca | exporta las tres callables nuevas | T17 |
 | `firestore.rules` | toca | `orderHistory`, `storeApiIdempotency`, `storeApiRateLimits`: `allow read, write: if false`; `settings`: `allow write: if isAdmin() && settingId != "storeApi"` | T7 |
 | `src/lib/types.ts` | toca | `OrderAuditEntry` ampliado (4.2), `StoreApiKeyStatus` | T18 |
 | `src/lib/firebase/auth.ts` | toca | `fetchFirebaseOrderAuditTrail` devuelve `{ events, historySince }`; `rotateFirebaseStoreWriteKey`, `getFirebaseStoreApiKeyStatus`, `listFirebaseStoreApiKeys` | T18 |
 | `src/lib/store-api-keys-view.ts` | nuevo, puro | estados de la seccion (sin clave / recien generada / activa / error / cargando / solo lectura para el logistico), partir la key en dos lineas de 24, paginacion y busqueda del admin | T19 |
-| `src/lib/order-audit-trail-view.ts` | nuevo, puro | modelo de vista del historial: pildora de origen, nombres de campo visibles, "Antes/Ahora", nota de alcance desde `historySince` | T19 |
+| `src/lib/order-audit-trail-view.ts` | nuevo, puro | modelo de vista del historial: pildora de origen, nombres de campo visibles (los de entrega y los de producto y valor, ratificados por `sdd-uxui`), "Antes/Ahora", nota de alcance desde `historySince` | T19 |
 | `src/components/store-api-write-key.tsx` | nuevo | seccion "Clave de escritura" y dialogo de rotar (un componente para tienda y admin) | T20 |
 | `src/components/store-api-keys-admin.tsx` | nuevo | panel "Claves de API de tiendas" (tabla / tarjetas) | T21 |
 | `src/components/order-audit-trail.tsx` | nuevo | `OrderAuditTrail` sacado de `operations-app.tsx`, con origen, cambios, nota, vacio, error con "Reintentar" | T22 |
@@ -388,7 +411,7 @@ Las escrituras devuelven el pedido con la misma forma, armada con la misma funci
 | `src/app/api-tiendas/page.tsx` | toca | manual: rutas, codigos, estados editables, `historySince`, exclusiones, key solo por cabecera, ciudades activas | T26 |
 | `src/lib/fixtures/029-kovia-order.json` | nuevo | fixture con la forma de Kovia, datos personales e id de Shopify sinteticos (P2) | T25 |
 | pruebas `src/lib/*.test.ts` | nuevas | ver 5.1; el ejecutor tiene la suya, `src/lib/order-seller-actions-run.test.ts` (T6, T12) | todas |
-| `src/lib/spec-017-guards.test.ts` | toca | guarda 3 (T6) y guarda 7 (T6b) (2.2) | T6, T6b |
+| `src/lib/spec-017-guards.test.ts` | toca | guarda 3 (T6) y las dos pruebas de la guarda 7 (T6b) (2.2) | T6, T6b |
 | `src/lib/spec-029-guards.test.ts` | nuevo | un `describe("T<n> · ...")` por tarea | T1-T27, T6b |
 
 ## 4. Modelo de datos y algoritmos
@@ -423,7 +446,7 @@ export type CityFact = { id: string; active: boolean };
 
 export type SellerActionRejection =
   | { code: "order_not_found" }                                   // inexistente u otra tienda (404)
-  | { code: "status_changed"; status: string }                    // expectedStatus != real (409)
+  | { code: "status_changed"; status: string }                    // expectedStatus != real y la accion cambiaria algo (409)
   | { code: "order_cancelled"; status: "cancelled" }              // RF_06 (409)
   | { code: "address_review_pending"; status: "address_risk" }    // RF_21 (409), con o sin lider
   | { code: "order_not_editable"; status: string; hasLeader: boolean } // RF_04 (imported con lider), RF_08, RF_14 (409)
@@ -449,45 +472,51 @@ export function planCancel(i: PlanInput<{ reason?: string; expectedStatus?: stri
 
 **`isApiEditable`:** estado en `API_EDITABLE_STATUSES` **y** `driverId` nulo, ausente o `""`.
 
+**Orden comun de evaluacion (API):** 1) tienda (`order_not_found`); 2) **no-op** → `unchanged`, sin evento ni
+historial, **sin mirar `expectedStatus`** (la idempotencia gana, RF_05/RF_15/RF_19); 3) `expectedStatus`
+presente y distinto → 409 `status_changed`; 4) reglas de estado de cada accion. El panel no manda
+`expectedStatus` y conserva sus errores de hoy.
+
 **Confirmar** (tienda primero: actor de tienda con `order.sellerId` distinto → `order_not_found` en API,
 `permission-denied` de hoy en panel):
 
-| Estado real | API | Panel (como hoy) |
+| Estado real (en el orden de evaluacion) | API | Panel (como hoy) |
 |---|---|---|
-| `expectedStatus` presente y distinto | 409 `status_changed` | — (el panel no lo manda) |
+| `ready_to_assign` o posterior, no cancelado (incluidos los finales) | 200 `changed: false`, sin evento ni historial (RF_05), **aunque `expectedStatus` no coincida** | error de hoy |
+| `expectedStatus` presente y distinto (cualquier otro estado) | 409 `status_changed` | — (el panel no lo manda) |
 | `imported` sin lider | → `ready_to_assign`, `addressRisk: "accepted"`, `confirmedVia: "api"`, evento `order.seller_confirmed` con `actorRole: "store_api"`, historial `status` | igual con `confirmedVia: "manual"` |
 | `imported` con lider (anomalo) | 409 `order_not_editable`, `hasLeader: true` (RF_04) | aplica como hoy |
 | `address_risk` (con o sin lider) | 409 `address_review_pending` (RF_21 prevalece sobre `order_not_editable`) | error de hoy |
 | `cancelled` | 409 `order_cancelled` | error de hoy |
-| `ready_to_assign` o posterior, no cancelado (incluidos los finales) | 200 `changed: false`, sin evento ni historial (RF_05) | error de hoy |
 
 **Corregir datos de entrega** (`PATCH` en la API; `updateImportedOrder` en el panel):
 
-1. Tienda; `expectedStatus`.
-2. API: `!isApiEditable` → 409 `order_not_editable` con `status` y `hasLeader` (cubre `in_route`,
+1. Tienda.
+2. API: **no-op** (editable, no `address_risk`, sin ningun campo que cambie de valor) → `unchanged`, aunque
+   `expectedStatus` no coincida. Despues, `expectedStatus` presente y distinto → 409 `status_changed`.
+3. API: `!isApiEditable` → 409 `order_not_editable` con `status` y `hasLeader` (cubre `in_route`,
    `call_pending`, `address_risk` con lider, `imported` con lider y finales). Panel: solo `imported` (hoy).
-3. Ciudad (si viene `cityId`): `city` leido en la transaccion; ausente o `active !== true` → 422
+4. Ciudad (si viene `cityId`): `city` leido en la transaccion; ausente o `active !== true` → 422
    `out_of_coverage` con la lista de ciudades activas (RF_10, P4). La validacion por campo (4.4) ya se hizo
    fuera: si alguno falla, 422 con todos y ni se abre la transaccion (todo o nada, RF_09).
-4. Diff campo a campo contra lo guardado, con valores recortados. `deliveryNotes`:
+5. Diff campo a campo contra lo guardado, con valores recortados. `deliveryNotes`:
    - politica `api`: `null` o `""` borra (unica excepcion de RF_09 a "vacio = invalido");
    - politica `panel`: unas indicaciones en blanco **se conservan** como hoy (no entran en el parche ni en el
      diff).
-5. **`address_risk` sin lider (RF_22, P1, solo API):** `status: "imported"`, `addressRisk: "review"`, **aunque
-   ningun campo cambie de valor**: es la unica forma de que la integracion lo desbloquee, porque confirmarlo da
-   409.
+6. **`address_risk` sin lider (RF_22, P1, solo API):** `status: "imported"`, `addressRisk: "review"`, **aunque
+   ningun campo cambie de valor** (por eso no es no-op en el paso 2): es la unica forma de que la integracion lo
+   desbloquee, porque confirmarlo da 409.
    - Sin campos cambiados → evento y historial con accion **`order.address_reviewed`** ("direccion
      revisada"), `fromStatus: "address_risk"`, `toStatus: "imported"`, `changes` con solo `status`.
    - Con campos cambiados → accion `order.delivery_corrected`, `changes` con `status` y cada campo.
    - Nunca se emite `address_risk` (invariante probada: ningun plan de politica `api`, para ningun estado de
      partida ni accion, tiene `patch.status === "address_risk"`).
-6. **Campos extra del panel (`panelExtras`, solo politica `panel`):** se anaden al parche tal cual, siempre,
+7. **Campos extra del panel (`panelExtras`, solo politica `panel`):** se anaden al parche tal cual, siempre,
    como hoy (el panel escribe el pedido entero en cada guardado) y **cuentan como cambio**: con politica
    `panel` el plan es siempre `applied`, con sello y evento `order.imported_updated`, aunque solo cambie el
    producto. El historial lleva los campos registrados (2.5) que cambiaron de valor (`totalCop`,
    `productName`, `sku`, `quantity` y los de entrega); si ninguno cambio, `history: null` pero el sello y el
    evento se escriben igual, como hoy.
-7. Politica `api`: si no hay cambios y no aplica el paso 5 → `unchanged`, sin escribir.
 8. Si cambia `addressRaw` y la politica es `api` → `clear = ADDRESS_DERIVED_FIELDS` presentes en el pedido
    (RF_23). Politica `panel`: conserva como hoy (o aplica el `normalizedAddress` de `panelExtras` si viene).
 9. `patch` = campos cambiados (+ `panelExtras` en politica `panel`) + `[MANUAL_EDIT_STAMP]: now` (RF_11, puesto
@@ -500,11 +529,11 @@ export function planCancel(i: PlanInput<{ reason?: string; expectedStatus?: stri
 
 **Cancelar:**
 
-| Estado real | API | Panel |
+| Estado real (en el orden de evaluacion) | API | Panel |
 |---|---|---|
-| `expectedStatus` distinto | 409 `status_changed` | — |
-| `cancelled` | 200 `changed: false` (RF_15) | error de hoy |
-| editable (`isApiEditable`) | → `cancelled`, `closedAt`, `callNote = reason` (obligatorio, 1-500, validado antes en T8), libera inventario si `orderOwnsInventoryReservation` y no `imported` (misma regla de hoy), evento `order.cancelled`, historial `status` | igual que hoy, con su precondicion por rol (admin cualquiera no cerrado; tienda no recogido) |
+| `cancelled` | 200 `changed: false` (RF_15), **aunque `expectedStatus` no coincida** | error de hoy |
+| `expectedStatus` presente y distinto (cualquier otro estado) | 409 `status_changed` | — |
+| editable (`isApiEditable`) | → `cancelled`, `closedAt`, `callNote = reason` (obligatorio, 1-500, validado antes en T8), **`driverId: current.driverId ?? null` como hoy** (en un editable vale `null`; se conserva la forma del parche de `cancelOrder` para el panel), libera inventario si `orderOwnsInventoryReservation` y no `imported` (misma regla de hoy), evento `order.cancelled`, historial `status` | igual que hoy, con su precondicion por rol (admin cualquiera no cerrado; tienda no recogido) y el mismo parche, incluido `driverId: current.driverId ?? null` |
 | en curso o final no cancelado | 409 `order_not_editable` (RF_14; incluye `assigned`, `imported` con lider y `address_risk` con lider) | como hoy |
 
 ### 4.2 Tipos guardados y de UI
@@ -650,7 +679,7 @@ en la transaccion: el ejemplo del DoD "telefono valido + ciudad no cubierta" da 
 | autenticacion | 1 (`storeApiConfigs/{sellerId}`) | — |
 | `GET /orders/{id}` | 1 pedido + asientos del pedido (≈3-8) + cortes que lo contienen (≈1-3) | — |
 | `GET /orders/{id}/history` | 1 pedido + registros (decenas) + `settings/storeApi` | — |
-| escritura | tasa (1+1) + atajo de idempotencia (0-1) + idempotencia en transaccion (1) + pedido (1) + ciudad (0-1) + inventario de la tienda si libera + payload (≈10); `cities` activas solo en el 422 | pedido, evento, historial, idempotencia (en un 409, solo idempotencia) |
+| escritura | tasa (1+1) + atajo de idempotencia (0-1) + idempotencia en transaccion (1) + pedido (1) + ciudad (0-1) + inventario de la tienda si libera + payload (≈10); `cities` activas solo en el 422 | pedido, evento, historial, idempotencia (en un 409, solo idempotencia; en un no-op, solo idempotencia si trae key) |
 
 Nada depende del numero de pedidos de la tienda. T27 mide p95 en produccion (objetivo < 2 s, contando arranque
 en frio aparte).
@@ -664,23 +693,23 @@ en frio aparte).
 | RF_01 | `GET /orders/{id}` == elemento de `GET /orders` (fixtures, carga dirigida vs completa); 404 ajeno = 404 inexistente (mismo HTTP y cuerpo); recuento en prod de cortes con `cashAllocations` fuera de `orderIds` (esperado 0) | T1, T2, T9, T10 |
 | RF_02 | filtro por `shopifyOrderId` solo de la tienda; ignora `from`/`to`; aplica `status` y `limit`; numero repetido entre tiendas | T10 |
 | RF_03 | parametro desconocido → 400 nombrandolo, en cada ruta nueva; `shopifyOrderId` mal formado → 400 con forma vieja (validador); rutas viejas siguen ignorando | T8, T10 |
-| RF_04, RF_05 | `planConfirm`: `imported` → `ready_to_assign` + `accepted` + `confirmedVia: "api"`; dos veces → un registro; `imported` con lider → `order_not_editable` | T4, T6 |
+| RF_04, RF_05 | `planConfirm`: `imported` → `ready_to_assign` + `accepted` + `confirmedVia: "api"`; dos veces → un registro; `imported` con lider → `order_not_editable`; `ready_to_assign` con `expectedStatus: "imported"` → `unchanged`, no 409 | T4, T6 |
 | RF_06, RF_21 | `cancelled` → `order_cancelled`; `address_risk` con y sin lider → `address_review_pending` | T4 |
 | RF_07, RF_08 | solo campos enviados; corregir no confirma; `in_route`, `call_pending`, `address_risk` con lider → 409 sin cambios | T5 |
 | RF_09, RF_10 | recogida conjunta de no permitidos e invalidos con prioridad de `code` (4.4) y tabla de contenido (incluida la excepcion de `deliveryNotes`, solo API); telefono valido + ciudad inactiva → 422 `cityId` con `activeCities`, telefono intacto | T5, T8, T11 |
 | RF_22 | `address_risk` sin lider → `imported` + `review`, tambien con valores identicos (`order.address_reviewed`); confirmar despues → `ready_to_assign`; invariante "nunca `address_risk`" | T5 |
 | RF_23 | cambio de direccion → `clear` con los cuatro campos; sin cambio de direccion → `clear` vacio | T5 |
-| RF_11 | el plan lleva `MANUAL_EDIT_STAMP` (tambien una edicion del panel solo de producto); `mergeImportedOrder` sobre el resultado conserva cliente y direccion; fixture con forma de Kovia y replay firmado con tienda e id sinteticos (P2) | T5, T6, T25 |
+| RF_11 | el plan lleva `MANUAL_EDIT_STAMP` (tambien una edicion del panel solo de producto); `mergeImportedOrder` sobre el resultado conserva cliente y direccion; fixture con forma de Kovia y replay firmado con tienda e id sinteticos y salvaguardas (P2) | T5, T6, T25 |
 | RF_12 | `not_allowed` para producto, cantidad, valor, pago, modo | T5, T8 |
-| RF_13-RF_15 | cancelar editable con motivo + inventario `release`; `assigned` → 409; dos veces → un registro; sin motivo → 422; motivo de 1 y 500 pasa, de 501 no | T4, T6, T8 |
-| RF_16 | `buildOrderHistoryRecord` (diff, `null` sin cambios, campos de identidad nunca; producto y valor en la edicion del panel); guarda de 2.6 con la lista exacta de RF_16 y exclusiones explicitas; solo el `cleanup` borra `orderHistory` | T5, T7, T15, T16, T25, T27 |
-| RF_17 | respuesta con `historySince`, `excludes` y `aviso`; 503 `history_not_ready`; el indice lo dice; el manual tambien; `settings/storeApi` no escribible desde el cliente | T7, T13, T26 |
+| RF_13-RF_15 | cancelar editable con motivo + inventario `release` y `driverId: current.driverId ?? null`; `assigned` → 409; dos veces → un registro; `cancelled` con `expectedStatus` distinto → `unchanged`; sin motivo → 422; motivo de 1 y 500 pasa, de 501 no | T4, T6, T8 |
+| RF_16 | `buildOrderHistoryRecord` (diff, `null` sin cambios, campos de identidad nunca; producto y valor en la edicion del panel); guarda de 2.6 por `writesOrders` con cada escritor clasificado en la tabla o en exclusiones; solo el `cleanup` borra `orderHistory`, y solo de `seller-test-029` | T5, T7, T15, T16, T25, T27 |
+| RF_17 | respuesta con `historySince`, `excludes` y `aviso`; 503 `history_not_ready`; el indice lo dice en claves nuevas; el manual tambien; `settings/storeApi` no escribible desde el cliente | T7, T13, T26 |
 | RF_18 | `toStoreHistoryResponse` sin `actor`/`uid`/`auditEventId`; historial de pedido ajeno → 404 | T13, T14 |
-| RF_19 | guarda anti-copia (5.2); condicion dentro de la transaccion; `status_changed`; carrera simulada (dos planes sobre el mismo pedido); un rechazo no escribe en `orders`, `auditEvents` ni `orderHistory`; la decision de idempotencia se toma dentro de la transaccion | T4, T6, T6b, T12 |
-| RF_20 | handler viejo con `db` falso tras conectar `resolveStoreCredentials` (key de lectura y de escritura, 400 de `shopifyOrderId` con forma vieja); `compare-reads` antes/despues sobre `/resumen`, `/kpis`, `/orders`, `/settlements` y las claves actuales del indice: **en tiendas reales solo con su key de lectura; con key de escritura, solo en la tienda de pruebas**; errores viejos con `{ ok, error }` | T9, T10, T24, T27 |
+| RF_19 | guarda anti-copia (5.2); condicion dentro de la transaccion; orden no-op → `expectedStatus` → estado; carrera simulada (dos planes sobre el mismo pedido); un rechazo no escribe en `orders`, `auditEvents` ni `orderHistory`; la decision de idempotencia se toma dentro de la transaccion | T4, T6, T6b, T12 |
+| RF_20 | handler viejo con `db` falso tras conectar `resolveStoreCredentials` (key de lectura y de escritura, 400 de `shopifyOrderId` con forma vieja); indice: valores de las claves actuales identicos y documentacion solo en claves nuevas de primer nivel; `compare-reads` **por valor** antes/despues sobre `/resumen`, `/kpis`, `/orders`, `/settlements` y las claves actuales del indice: **en tiendas reales solo con su key de lectura; con key de escritura, solo en la tienda de pruebas**; errores viejos con `{ ok, error }` | T9, T10, T13, T24, T27 |
 | RF_24 | sin relleno: guarda que nada lee `auditEvents` para construir `orderHistory` | T16 |
 | RF_25, RF_26 | `planWriteKeyChange`; atomicidad (transaccion con huella + auditoria); `createStoreApiKey` no toca `writeKey*`; "?" de 44 px del panel de la clave (diseno de HU_04) | T3, T17, T23 |
-| RF_27 | `storeActorTag`, `storeSafeSummary`, `isStoreVisibleEvent` (mitigacion hasta la 032: no verificable fuera de la lista → descartado para la tienda); `getOrderAuditTrail` para `seller`/`seller_logistics` sin identidades y sin `getUsers`; admin igual que hoy mas `apiKeyLast4` y "Clave de escritura de <tienda>"; guarda de pantalla: `order-audit-trail.tsx` no pinta `actorEmail` cuando hay `storeActorTag` | T14, T22 |
+| RF_27 | `storeActorTag`, `storeSafeSummary`, `isStoreVisibleEvent` (mitigacion hasta la 032: no verificable fuera de la lista → descartado para la tienda); `getOrderAuditTrail` para `seller`/`seller_logistics` sin identidades y sin `getUsers`; admin igual que hoy mas `apiKeyLast4` y "Clave de escritura de <tienda>"; en prod, eventos con forma historica sembrados sobre un pedido de `seller-test-029`; guarda de pantalla: `order-audit-trail.tsx` no pinta `actorEmail` cuando hay `storeActorTag` | T14, T22, T27 |
 | RNF_01 | tabla 2.3 completa (cualquier key por query en escritura → 401; `kw_` por query en lectura vieja y nueva → 401; 403 solo para key de lectura en la cabecera); handler viejo conectado; 404 identico | T3, T10 |
 | RNF_02 | catalogo de codigos congelado; forma `{ ok:false, code, message, fields? }` | T8, T11 |
 | RNF_03 | misma key mismo cuerpo → misma respuesta sin aplicar; otro cuerpo → 422; expirado → nuevo; un 409 guarda el registro; el atajo previo no decide `fresh` | T12 |
@@ -697,35 +726,55 @@ en frio aparte).
   `EV/mutacion-rf19.txt`.
 - **Nadie mas escribe `orders`:** guarda 1 de la 017 sigue en verde; `store-api*.ts` y `store-api-keys.ts` no
   escriben pedidos (`writesOrders` de la 017 reutilizado).
-- **Historial (2.6, T15 y T16, con exclusiones explicitas)**, **identidades y mitigacion (2.7, T14)**,
-  **`historySince` sin literal (2.4, T7)**, **reglas** (tres colecciones nuevas con `allow read, write: if
-  false` y `settings` acotada con `settingId != "storeApi"`, T7), **la key no sale** (`store-api-keys.ts` solo
-  devuelve `writeKey` en `rotateStoreWriteKey` y nunca escribe `writeKey:` en Firestore; ningun
-  `console.*`/`logger.*` recibe la key ni la cabecera `authorization`; T17), **limite en un solo sitio** (el
-  literal `120` asociado a escrituras por minuto solo aparece en `STORE_API_WRITES_PER_MINUTE`; T8), **el
-  secreto de Shopify no sale del proceso** (`kovia-replay` no lo escribe en disco ni en logs; T25).
+- **Historial (2.6, T15 y T16, clasificacion por `writesOrders` con exclusiones explicitas)**, **identidades y
+  mitigacion (2.7, T14)**, **`historySince` sin literal (2.4, T7)**, **reglas** (tres colecciones nuevas con
+  `allow read, write: if false` y `settings` acotada con `settingId != "storeApi"`, T7), **la key no sale**
+  (`store-api-keys.ts` solo devuelve `writeKey` en `rotateStoreWriteKey` y nunca escribe `writeKey:` en
+  Firestore; ningun `console.*`/`logger.*` recibe la key ni la cabecera `authorization`; T17), **limite en un
+  solo sitio** (el literal `120` asociado a escrituras por minuto solo aparece en
+  `STORE_API_WRITES_PER_MINUTE`; T8), **el secreto de Shopify no sale del proceso** (`kovia-replay` no lo escribe
+  en disco ni en logs; T25), **salvaguardas de los envios de prueba** (5.3 (a)-(c); T25, T27).
 - **UI:** `operations-app.tsx` solo monta los componentes nuevos (T20-T22); `localStorage` no aparece en
   `store-api-write-key.tsx` (T20); el "?" de `CollapsiblePanel` no usa `h-8 w-8` (T23).
 
 ### 5.3 Canal del cliente: verificacion contra produccion (DoD 3)
 
 Las rutas son HTTP y la UI usa callables: se prueban **por su canal**, no reimplementando la regla en un
-script (memoria "verificar por el canal del cliente").
+script (memoria "verificar por el canal del cliente"). **Toda la verificacion con escrituras se hace sobre la
+tienda de pruebas; no se crea ninguna sesion con permisos sobre una tienda real.**
 
 - **Tienda de pruebas** (OPC_04, operativa): `seller-test-029`, creada por `verify-029.js smoke --setup` con
   un usuario `seller` y uno `seller_logistics` desechables (contrasena aleatoria, nunca en la evidencia), en
   `city-cali` (ya activa), y con **su propia config de webhook de tienda de prueba** (la que usa
   `storeOrderWebhook`; secreto de prueba generado para la ocasion, nunca en la evidencia). La key de escritura la
   genera **la callable** con la sesion `seller`.
+- **Salvaguardas obligatorias de todo envio por webhook o replay** (`storeOrderWebhook` en T27 y
+  `shopifyWebhook` en T25), implementadas en el guion y comprobadas por guardas de fuente (T25, T27):
+  - **(a) Comprobacion previa:** justo antes de **cada** envio, el guion lee el documento que esa via crearia
+    (`orders/shopify-<id>` en Shopify; el id equivalente que deriva `storeOrderWebhook`) y **aborta** si ya
+    existe, sin enviar nada. Un envio nunca puede caer sobre un pedido existente.
+  - **(b) Ids claramente sinteticos:** donde el esquema lo permite, los ids externos llevan prefijo o rango de
+    prueba inconfundible: id de pedido de Shopify numerico en un rango reservado declarado en el guion
+    (p. ej. `9029000000000`-`9029000000999`, fuera del rango de ids reales), numero de pedido con prefijo
+    `TEST-029-`, id externo del webhook de tienda con prefijo `test-029-`, dominio `kentro-test-029.myshopify.com`.
+  - **(c) Limpieza acotada:** el `cleanup` (y `kovia-replay --cleanup`) **solo borra documentos con
+    `sellerId == "seller-test-029"`**, mas el `shopifyStores` de prueba (por su dominio sintetico) y los
+    `importRuns` de esas corridas (por el id de corrida que el propio guion registro). Antes de cada borrado
+    comprueba esa condicion **en el documento leido** y **se niega a borrar** cualquier otro (aborta con error,
+    sin borrar el resto del lote).
+  - **(d) Guardas de fuente** que comprueban (a), (b) y (c) en `scripts/verify-029.js` (T25, T27).
+  - **Contador de `trackingCode`:** cada pedido creado por webhook consume un numero del contador real; los
+    numeros consumidos no se recuperan. **Aceptado** (son pocos y el contador no tiene que ser contiguo).
 - **Lecturas reales** (solo lectura) contra tiendas reales **solo con su key de lectura existente**:
-  `capture-reads` antes del despliegue (T24) y `compare-reads` despues (RF_20, T27). La comparacion con **key de
-  escritura** se hace **solo sobre la tienda de pruebas** (unica tienda con key de escritura durante la
-  verificacion; en unidad, T10 la cubre con el handler viejo y un `db` falso). `GET /orders/{id}` sobre 20
-  pedidos reales de Kovia, ONEP y DANDA comparados con su elemento en `GET /orders` (RF_01), con key de lectura.
+  `capture-reads` antes del despliegue (T24) y `compare-reads` despues (RF_20, T27), **por valor**. La
+  comparacion con **key de escritura** se hace **solo sobre la tienda de pruebas** (unica tienda con key de
+  escritura durante la verificacion; en unidad, T10 la cubre con el handler viejo y un `db` falso).
+  `GET /orders/{id}` sobre 20 pedidos reales de Kovia, ONEP y DANDA comparados con su elemento en `GET /orders`
+  (RF_01), con key de lectura.
 - **Escrituras solo sobre pedidos de la tienda de pruebas:**
   - el pedido **`imported`** para CA_01-CA_04 y RF_04/RF_05 entra **por el `storeOrderWebhook` de
-    `seller-test-029`** (con su config de webhook de prueba), como entran los pedidos reales de esa via, y no
-    con `createManualOrder`;
+    `seller-test-029`** (con su config de webhook de prueba y las salvaguardas de arriba), como entran los
+    pedidos reales de esa via, y no con `createManualOrder`;
   - uno en `address_risk`, creado con el alta manual (`createManualOrder`, sesion de la tienda) marcada
     "revisar" (`addressRisk: "review"`), que es la via que hoy produce ese estado, para RF_21 y RF_22 (con y sin
     cambio de valores);
@@ -735,30 +784,38 @@ script (memoria "verificar por el canal del cliente").
 - **RF_27 con sesion real:**
   - sobre un pedido de prueba con eventos de admin, de lider, de la propia tienda y de la API: `getOrderAuditTrail`
     con la sesion `seller` y con la `seller_logistics` de la tienda de pruebas, y con una de admin;
-  - sobre eventos historicos (anteriores a la spec), que la tienda de pruebas no tiene: un usuario `seller`
-    desechable con el claim de una tienda real llama a `getOrderAuditTrail` sobre pedidos viejos de esa tienda.
-    Es solo lectura (la callable no escribe) y el usuario se borra en `cleanup`;
+  - **eventos con forma historica (anteriores a la spec):** el guion **siembra con el Admin SDK**, sobre un
+    pedido de `seller-test-029`, dos `auditEvents` con la forma de los eventos de antes de la spec (sin
+    `origin`, sin registro en `orderHistory`, con `actorId` de un usuario de Kentro y `summary` de plantilla):
+    uno de **accion permitida** (p. ej. `order.transition`) y otro **fuera de la lista** (p. ej.
+    `order.messenger_reassigned`). Con la sesion `seller` desechable de la tienda de pruebas: el primero llega
+    sin `actorId`/`actorLabel`/`actorEmail`/`actorRole` y con su etiqueta; el segundo no llega. Con la sesion de
+    admin, los dos llegan con nombre y correo. Los eventos sembrados se borran en `cleanup` (son de
+    `seller-test-029`);
   - E2E de `HU_05.tienda` con esa sesion: ningun nombre ni correo de Kentro en el DOM.
 - **RF_11 con la forma de Kovia (P2, T25):**
   - (a) prueba unitaria con un fixture (`src/lib/fixtures/029-kovia-order.json`) copiado en solo lectura de un
     pedido real de Kovia y su payload de Shopify, con nombre, telefono, direccion **e id de Shopify** sustituidos
-    por valores sinteticos de la misma forma, pasado por `planDeliveryCorrection` y despues por
-    `mergeImportedOrder`;
-  - (b) en produccion, `verify-029.js kovia-replay`: crea un documento `shopifyStores` **de prueba** con un
-    dominio **sintetico** (p. ej. `kentro-test-029.myshopify.com`) que apunta a `seller-test-029`, y envia al
-    `shopifyWebhook` un payload con la forma de Kovia y un **id de Shopify sintetico** (nunca el de un pedido real
-    de Kovia). Secuencia: **replay 1** (crea el pedido) → `PATCH` por API (corrige cliente y direccion) →
+    por valores sinteticos de la misma forma (id en el rango reservado), pasado por `planDeliveryCorrection` y
+    despues por `mergeImportedOrder`;
+  - (b) en produccion, `verify-029.js kovia-replay`: crea un documento `shopifyStores` **de prueba** con el
+    dominio **sintetico** que apunta a `seller-test-029`, y envia al `shopifyWebhook` un payload con la forma de
+    Kovia y un **id de Shopify del rango reservado** (nunca el de un pedido real de Kovia), con las salvaguardas
+    (a)-(c). Secuencia: **replay 1** (crea el pedido) → `PATCH` por API (corrige cliente y direccion) →
     **replay 2** (mismo payload, reimporta) → comprobacion de RF_11: cliente y direccion corregidos se conservan,
-    el estado no cambia y el pedido queda en fase `edited`. La firma HMAC se calcula **leyendo el secreto de
+    el estado no cambia y el pedido queda en fase `edited`. La comprobacion previa (a) se hace antes del replay 1
+    (el pedido no debe existir) y, antes del replay 2, se comprueba que el que existe es **el creado por el
+    replay 1** (`sellerId == "seller-test-029"`); si no, aborta. La firma HMAC se calcula **leyendo el secreto de
     Shopify existente solo en memoria**, sin escribirlo en disco, en la evidencia ni en logs. Limpieza propia
     (`kovia-replay --cleanup`, tambien incluida en el `cleanup` general): el documento `shopifyStores` de prueba,
     los `importRuns` de esas corridas, el `orderHistory` y los `auditEvents` del pedido, y el pedido. No se toca
     ninguna tienda ni pedido real de Kovia.
-- **`cleanup` (T27):** borra pedidos de prueba (los del webhook de tienda, los manuales y el de `kovia-replay`),
-  sus `auditEvents`, `orderHistory`, `storeApiIdempotency`, `storeApiRateLimits`, `walletEntries` si los hubiera,
-  `importRuns` de las corridas de prueba, el `shopifyStores` de prueba, la config de webhook de prueba,
-  inventario de prueba, usuarios y la tienda; imprime recuento y falla si queda algo. Es el unico codigo que
-  borra `orderHistory`, y solo por `orderId` de prueba (excepcion declarada en RF_16).
+- **`cleanup` (T27):** borra, con la condicion (c), pedidos de prueba (los del webhook de tienda, los manuales y
+  el de `kovia-replay`), sus `auditEvents` (incluidos los sembrados), `orderHistory`, `storeApiIdempotency`,
+  `storeApiRateLimits`, `walletEntries` si los hubiera, `importRuns` de las corridas de prueba, el `shopifyStores`
+  de prueba, la config de webhook de prueba, inventario de prueba, usuarios y la tienda; imprime recuento y falla
+  si queda algo. Es el unico codigo que borra `orderHistory`, y solo de pedidos con
+  `sellerId == "seller-test-029"` (excepcion declarada en RF_16).
 
 ## 6. Indices
 
@@ -791,8 +848,9 @@ Ver `specs/029_tasks.md` (T1-T27, con T6 partida en T6 —ejecutor y carreras—
 guardas y anti-copia—). T23 resuelve el pendiente 3 del README y se acepta como parte del diseno de HU_04
 (RF_25): el "?" de `CollapsiblePanel` vive en el panel de la clave de API y pasa de `h-8 w-8` (32 px) a un area
 de 44x44 (`h-11 w-11`, icono de 16 px y forma circular sin cambio), con guarda de fuente y `boundingBox()` >= 44
-en el E2E a 375 y 1280. T22 no empieza hasta que `sdd-uxui` ratifique en el README las etiquetas "Direccion
-revisada" y "Recogido" (seccion 12).
+en el E2E a 375 y 1280. **T19 y T22 no empiezan hasta que `sdd-uxui` ratifique en el README** las etiquetas
+"Direccion revisada" y "Recogido" y los nombres visibles de `totalCop`, `productName`, `sku` y `quantity`
+(seccion 12).
 
 ## 10. Orden de despliegue
 
@@ -812,21 +870,26 @@ revisada" y "Recogido" (seccion 12).
 | Riesgo | Mitigacion |
 |---|---|
 | La API confirma o corrige un pedido que ya tomo un lider (clobber) | condicion dentro de la transaccion; `driverId` en la definicion de editable; prueba de carrera simulada con dos planes sobre el mismo pedido (T6) |
+| Un reintento legitimo de CENTRAL con el `expectedStatus` de antes recibe 409 en vez de "sin cambios" | la idempotencia gana: el no-op se evalua antes que `expectedStatus` (4.1, T4) |
 | Copiar la regla de confirmar/cancelar en la API | nucleo + ejecutor unicos; guarda anti-copia con mutacion (T6b) |
-| Regresion del panel al delegar `updateImportedOrder` (perder el sello o borrar indicaciones en blanco) | politica `panel` con `panelExtras` y sello en el nucleo; pruebas "edicion solo de producto sella" e "indicaciones en blanco se conservan" (T5, T6) |
+| Regresion del panel al delegar `updateImportedOrder` o `cancelOrder` (perder el sello, borrar indicaciones en blanco o cambiar el parche de anular) | politica `panel` con `panelExtras` y sello en el nucleo; parche de cancelar con `driverId: current.driverId ?? null`; pruebas "edicion solo de producto sella" e "indicaciones en blanco se conservan" (T5, T6); guarda 7 de la 017 actualizada con razon (T6b) |
 | Historial falsificable | `orderHistory` solo de servidor (2.5) |
 | **Historial con hueco: el lider y el mensajero cambian `status` desde el cliente** (`operationalOrderUpdateByAssignee`) sin registro | declarado en RF_16 como limite conocido; trasladado a la 032 (1.1, RF_07 de su borrador); no se toca aqui para no cambiar la app del mensajero sin su spec |
+| Un escritor de `orders` nuevo que cambia estado sin registrar | guarda de T16 por `writesOrders`: cada escritor clasificado en la tabla o en exclusiones |
 | `historySince` movido desde la app por un admin | regla de `settings` acotada (`settingId != "storeApi"`) y `create` en el guion (2.4, T7) |
 | Evento de `auditEvents` fabricado por un cliente visible para la tienda | mitigacion 2.7 (verificable o accion permitida); riesgo residual hasta la spec 032 (prioridad alta) |
 | La tienda deja de ver eventos historicos que hoy ve (efecto de la mitigacion) | aceptado en RF_27 y en los casos limite de la spec; lo revisa la 032 |
 | Identidades de Kentro a la tienda por `summary` viejos | lista permitida, no prohibida (2.7) |
+| Una sesion de verificacion con permisos sobre una tienda real | descartado: RF_27 historico se comprueba con eventos sembrados sobre `seller-test-029` (5.3) |
 | La key de escritura en logs o en `localStorage` | guardas 5.2; solo cabecera; cualquier key por query en escritura → 401 |
 | El secreto de Shopify filtrado por `kovia-replay` | se lee y se usa solo en memoria; guarda de T25 (sin escritura a disco ni logs) |
-| `kovia-replay` toca una tienda o un pedido real de Kovia | dominio e id de Shopify sinteticos, tienda `shopifyStores` de prueba apuntando a `seller-test-029`; guarda de T25 |
+| Un envio de prueba (replay o webhook) cae sobre un pedido real, o el `cleanup` borra algo real | salvaguardas obligatorias 5.3 (a)-(c): comprobacion previa de existencia y aborto, ids en rango o prefijo sintetico, borrado solo con `sellerId == "seller-test-029"` comprobado en el documento; guardas de fuente (d) en T25 y T27 |
+| `kovia-replay` toca una tienda real de Kovia | dominio sintetico, `shopifyStores` de prueba apuntando a `seller-test-029`; guarda de T25 |
+| Los pedidos de prueba consumen numeros del contador de `trackingCode` | aceptado (5.3) |
 | La carga dirigida pierde un corte que solo referencia el pedido en `cashAllocations` | recuento en prod (T1, T2; esperado 0); si no es 0, se para T9/T10 |
 | Rotacion a medias que deja a la integracion sin key | transaccion huella + auditoria; la key se devuelve tras el commit |
 | `GET /orders/{id}` distinto del elemento de `GET /orders` | misma funcion movida; equivalencia de carga dirigida; comparacion en prod sobre 20 pedidos |
-| Romper integraciones de lectura | rutas viejas sin cambio interno salvo la autenticacion y el filtro nuevo, probados con el handler viejo (T10); `compare-reads` antes/despues con key de lectura; el indice solo gana claves |
+| Romper integraciones de lectura | rutas viejas sin cambio interno salvo la autenticacion y el filtro nuevo, probados con el handler viejo (T10); indice con valores actuales identicos y documentacion solo en claves nuevas; `compare-reads` por valor con key de lectura |
 | Doble aplicacion por reintento de CENTRAL | `Idempotency-Key` decidida dentro de la transaccion; el atajo previo nunca decide `fresh` |
 | ChatBy reescribe una direccion corregida por API | aceptado por la spec (caso limite); advertido en `aviso` y en el manual; spec 031 |
 | `address_risk` desbloqueado por API sin cambiar nada | decidido (P1): queda en `imported` + `review`, con historial `order.address_reviewed`; la confirmacion sigue siendo aparte y explicita |
@@ -836,9 +899,14 @@ revisada" y "Recogido" (seccion 12).
 ## 12. Preguntas abiertas
 
 Todas resueltas el 2026-10-04 (tabla de la cabecera). Pendiente operativo, no bloqueante: confirmar con
-CENTRAL el limite de 120 escrituras/minuto (seccion 11). **Compuerta de diseno para T22:** las etiquetas
-"Direccion revisada" (`order.address_reviewed`) y "Recogido" (`order.picked_up`) no estan en el README; las
-ratifica `sdd-uxui` en el README antes de empezar T22 (lanzado por la sesion principal).
+CENTRAL el limite de 120 escrituras/minuto (seccion 11).
+
+**Compuerta de diseno para T19 y T22** (la lanza la sesion principal): `sdd-uxui` ratifica en el README, antes
+de empezar T19 (modelo de vista) y T22 (pantalla):
+
+- las etiquetas de accion "Direccion revisada" (`order.address_reviewed`) y "Recogido" (`order.picked_up`);
+- los nombres visibles en "Antes/Ahora" de `totalCop`, `productName`, `sku` y `quantity`, que ahora aparecen en
+  el historial por la edicion del panel y el ajuste del admin (RF_16) y no estan en el README.
 
 ## 13. Historial de cambios
 
@@ -848,3 +916,4 @@ ratifica `sdd-uxui` en el README antes de empezar T22 (lanzado por la sesion pri
 | 2026-10-04 | Precisiones de `/sdd-analyze`: (1) confirmar un `address_risk` da siempre 409 `address_review_pending`, tambien con lider (4.1); (2) tabla 2.3 reescrita con orden de evaluacion: cualquier key por query en escritura → 401 `key_in_query` (sustituye a `write_key_in_query`, nunca desplegado), `kw_` por query → 401 tambien en rutas de lectura viejas, 403 `read_only_key` solo para la key de lectura en la cabecera; (3) `deliveryNotes` vacio o `null` borra y el resto de campos vacios dan 422 (4.4); (4) T12 toca `order-seller-actions-run.ts`; (5) T18 toca `operations-app.tsx` para adaptar `fetchFirebaseOrderAuditTrail`; (6) pruebas de RF_02 y del 404 identico en T10, validador de `shopifyOrderId` en T8; (7) todas las referencias a tareas renumeradas a T1-T27 (secciones 1, 2.x, 3, 4.5, 5.x, 9, 10, 12); (8) tabla 2.6 con su tarea y declarada igual a la lista de RF_16; (9) excepcion del `cleanup` en 2.5 y 5.3; (10) consecuencia visible de la mitigacion 2.7 y riesgo nuevo; (11) T23 aceptada como parte del diseno de HU_04 (seccion 9); (12) carrera simulada en T6 (2.2 y riesgos) | Hallazgos de `/sdd-analyze` y decisiones del orquestador del 2026-10-04 |
 | 2026-10-04 | Segunda pasada de `/sdd-analyze` (spec sin cambios): (1) politica `panel` de `planDeliveryCorrection` con `panelExtras` (lo que hoy edita `updateImportedOrder`): cuentan como cambio, se aplican siempre, llevan sello y auditoria, y el sello lo pone el nucleo; el borrado de `deliveryNotes` `""`/`null` es solo de la API y el panel conserva indicaciones en blanco (2.2, 4.1, riesgos); (2) las rutas viejas autentican con `resolveStoreCredentials`, conectado y probado con el handler viejo en T10 (2.3); (3) un rechazo no escribe en `orders`, `auditEvents` ni `orderHistory`; un 409 de la API si guarda el registro idempotente (2.2, 2.8, 4.5); (4) la creacion (`createManualOrder` e importaciones) y ChatBy excluidas de RF_16 con lista explicita en la guarda de T16 (2.6); (5) validacion en dos capas: Zod solo forma y tipos, `expectedStatus` separado antes, prioridad `field_not_allowed` sobre `validation_failed`, reglas de contenido en `validateDeliveryInput` (2.1, 4.4); (6) motivo de cancelar validado en T8 (4.4); (7) T13 prueba 404 de historial ajeno y 503; (8) T14 prueba `apiKeyLast4` y "Clave de escritura de <tienda>" para el admin; (9) T6 partida en T6 y T6b (secciones 1, 2.2, 2.6, 3, 5.1, 5.2, 9, riesgos); (10) compuerta de `sdd-uxui` antes de T22 (secciones 9 y 12) | Hallazgos de la segunda pasada de `/sdd-analyze` y decisiones del orquestador del 2026-10-04 |
 | 2026-10-04 | Tercera pasada de `/sdd-analyze` (spec precisada en texto, decision 9): (1) el pedido `imported` de prueba entra por el `storeOrderWebhook` de `seller-test-029` con su config de webhook de prueba, incluida en el `cleanup` (5.3, T27); (2) `kovia-replay` con `shopifyStores` de prueba de dominio sintetico, id de Shopify sintetico, secuencia replay 1 → `PATCH` → replay 2, comprobacion de RF_11, limpieza propia (`shopifyStores`, `importRuns`, `orderHistory`, pedido) y firma HMAC con el secreto solo en memoria (5.3, riesgos, T25); (3) el 422 lista todos los campos con problema de los dos tipos, con `field_not_allowed` de primer nivel si hay alguno no permitido (2.1, 4.4, T8); (4) regla de `settings` acotada a `settingId != "storeApi"` (1, 2.4, 7, T7); (5) `GET /orders` viejo: 400 de `shopifyOrderId` con forma vieja y `status`/`limit` aplicados con el filtro (2.1, 2.10, 4.3, T10); (6) `compare-reads` con key de escritura solo sobre la tienda de pruebas; tiendas reales solo con key de lectura (5.1, 5.3, T24, T27); (7) recuento en prod de cortes con `cashAllocations[].orderId` fuera de `orderIds` (esperado 0) en T1/T2 (2.10, riesgos); (8) la decision de idempotencia se toma dentro de la transaccion; la lectura previa es solo atajo (2.1, 2.8, 4.5); (9) hueco de `operationalOrderUpdateByAssignee` declarado (1, 2.5, 2.6, 7, riesgos) y anadido al borrador de la 032; (10) `imported` con lider → 409 `order_not_editable` en confirmar (4.1, T4) | Hallazgos de la tercera pasada de `/sdd-analyze` y decisiones del orquestador del 2026-10-04 |
+| 2026-10-04 | Cuarta pasada de `/sdd-analyze` (spec precisada en texto, decision 10): (1) la idempotencia gana sobre `expectedStatus`: orden comun no-op → `expectedStatus` → reglas de estado; confirmar un `ready_to_assign`+ o cancelar un `cancelled` responde sin cambios aunque `expectedStatus` no coincida (2.1, 2.2, 2.8, 4.1, riesgos, T4); (2) salvaguardas obligatorias de los envios de prueba: comprobacion previa de `orders/shopify-<id>` (o equivalente) con aborto, ids en rango o prefijo sintetico, `cleanup` solo de `sellerId == "seller-test-029"` (mas su `shopifyStores`/`importRuns` de prueba) negandose a borrar otro, guardas de fuente; consumo del contador de `trackingCode` aceptado (1, 5.2, 5.3, riesgos, T25, T27); (3) RF_27 sobre eventos con forma historica: sembrados con el Admin SDK sobre un pedido de `seller-test-029` (uno de accion permitida y otro fuera de la lista) y comprobados con la sesion `seller` de la tienda de pruebas; se quita el usuario con claim de una tienda real (5.3, riesgos, T27); (4) guarda 7 de la 017: ademas del sello, el literal de estados cerrados en `orders.ts` pasa de 2 a 1 al delegar `cancelOrder`; el parche de cancelar conserva `driverId: current.driverId ?? null` (1, 2.2, 4.1, T6b); (5) guarda de T16 por `writesOrders`, cada escritor de `orders` clasificado en la tabla 2.6 o en exclusiones explicitas, con `classifyFailedOrder` excluido y el ejecutor y `updateOrderAdjustments` en la tabla (2.6, 5.2); (6) compuerta de `sdd-uxui` ampliada a los nombres visibles de `totalCop`, `productName`, `sku` y `quantity`, y T19 tambien la espera (9, 12); (7) indice: documentacion nueva solo en claves nuevas de primer nivel, valores actuales identicos, `compare-reads` por valor (1, 2.1, 3, 5.1, T13, T24) | Hallazgos de la cuarta pasada de `/sdd-analyze` y decisiones del orquestador del 2026-10-04 |
