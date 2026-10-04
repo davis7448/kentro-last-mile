@@ -1,0 +1,31 @@
+   ✓ spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > el fixture reproduce los agregados reales del corte 1ms
+   ✓ spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_01 · el detalle pinta una fila por cada pedido del corte, tambien las visitas sin cobro 4ms
+   × spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_02 · las visitas sin cobro valen su pago EN NEGATIVO, no cero 42ms
+     → expected +0 to be -120000 // Object.is equality
+   × spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_03 · la suma del detalle es exactamente el efectivo esperado de la cabecera 5ms
+     → expected 14287490 to be 14167490 // Object.is equality
+   ✓ spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_01 · los seis pedidos que el domiciliario reclamo salen con su importe 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/finance.test.ts > spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_02 · las visitas sin cobro valen su pago EN NEGATIVO, no cero
+AssertionError: expected +0 to be -120000 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- -120000[39m
+--
+ FAIL  src/lib/finance.test.ts > spec 019 · T1 · detalle del corte de domiciliario (RF_01, RF_02, RF_03) > RF_03 · la suma del detalle es exactamente el efectivo esperado de la cabecera
+AssertionError: expected 14287490 to be 14167490 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 14167490[39m
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 46 passed (48)
+   Start at  17:39:58
+   Duration  1.19s (transform 389ms, setup 0ms, collect 381ms, tests 106ms, environment 0ms, prepare 201ms)
+

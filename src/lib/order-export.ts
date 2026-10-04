@@ -92,7 +92,7 @@ const failedCategoryLabels: Record<FailedCategory, string> = {
   pending_review: "Pendiente revisar"
 };
 
-function statusLabel(status: OrderStatus) {
+export function statusLabel(status: OrderStatus) {
   return statusLabels[status] ?? status.replaceAll("_", " ");
 }
 

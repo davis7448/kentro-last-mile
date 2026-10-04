@@ -1,34 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Bike,
-  Boxes,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  CreditCard,
-  ExternalLink,
-  FileDown,
-  History,
-  Image as ImageIcon,
-  LogOut,
-  MapPin,
-  PackageCheck,
-  Phone,
-  Printer,
-  QrCode,
-  Route,
-  Settings,
-  ShieldCheck,
-  Store,
-  Truck,
-  Users,
-  Wallet,
-  Wrench,
-  X
-} from "lucide-react";
+import { AlertTriangle, Bike, Boxes, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, CreditCard, ExternalLink, FileDown, History, Image as ImageIcon, LogOut, MapPin, PackageCheck, Phone, Printer, QrCode, Route, Settings, ShieldCheck, Store, Truck, Users, Wallet, Wrench, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { renderCode128Svg } from "@/lib/barcode";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
@@ -83,6 +55,10 @@ import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCom
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
 import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
+import type { FirestoreStateControls, PinOrdersResult } from "@/lib/firebase/state-store";
+import { CONFIRM_ORDER_TOTAL_COP, MAX_ORDER_TOTAL_COP, checkOrderTotalCop, formatAmountCop, needsAmountConfirmation } from "@/lib/order-amount";
+import { NO_AMOUNT_LABEL, UNAVAILABLE_ORDER_LABEL, buildDriverSettlementDetailGroups, settlementDetailNotice, settlementStatusLabel, buildDriverSettlementExportRows, driverSettlementExportColumns, flattenDriverSettlementDetail, formatDetailCop } from "@/lib/driver-settlement-export";
+import type { DriverSettlementDetailGroup } from "@/lib/driver-settlement-export";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
 import { enqueueEvidence, markQueuedEvidenceError, pruneOrphanPhotos, queuedEvidenceToFile, readEvidenceQueue, readQueuedPhoto, removeQueuedEvidence, type QueuedEvidence } from "@/lib/evidence-queue";
 import {
@@ -429,6 +405,10 @@ function useAppState(session: Session | null, historyStart?: string) {
   const [reloadToken, setReloadToken] = useState(0);
   const retryLoad = useCallback(() => setReloadToken((token) => token + 1), []);
   const applyingRemote = useRef(false);
+  // Lo que la suscripcion sabe hacer bajo demanda. Va en una ref, no en estado, porque cambiarla no
+  // tiene que repintar nada. Una ref vieja tras resuscribir es inocua: la clausura muerta choca con
+  // el `stopped` de la suscripcion anterior y no hace nada.
+  const controlsRef = useRef<FirestoreStateControls | null>(null);
 
   useEffect(() => {
     const hydrateLocal = () => {
@@ -475,6 +455,9 @@ function useAppState(session: Session | null, historyStart?: string) {
           // aviso de RF_07 no llega a pintarse nunca. Se marca como hidratada para poder CONTAR que
           // no hay datos, no para fingir que los hay.
           setHydrated(true);
+        },
+        (controls) => {
+          controlsRef.current = controls;
         }
       );
     }
@@ -482,6 +465,24 @@ function useAppState(session: Session | null, historyStart?: string) {
     hydrateLocal();
     return undefined;
   }, [session?.id, session?.profileId, session?.role, session?.ledCommunityId, historyStart, reloadToken]);
+
+  /**
+   * Trae por id los pedidos de un corte que quedaron fuera de la ventana de descarga.
+   *
+   * Se pide al EXPANDIR un corte, no al entrar: las cifras de cabecera salen del corte guardado,
+   * asi que fijar pedidos al montar gastaria lecturas sin mover un solo numero. Un corte plegado no
+   * esta mostrando nada.
+   */
+  const pinSettlementOrders = useCallback(async (orderIds: string[]): Promise<PinOrdersResult> => {
+    const controls = controlsRef.current;
+    if (!controls || orderIds.length === 0) return { requested: 0, fetched: 0, skippedByBudget: 0 };
+    try {
+      return await controls.pinOrders(orderIds);
+    } catch (error) {
+      console.warn("No se pudieron traer los pedidos del corte.", error);
+      return { requested: 0, fetched: 0, skippedByBudget: orderIds.length };
+    }
+  }, []);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -503,7 +504,7 @@ function useAppState(session: Session | null, historyStart?: string) {
   // fallo se leeria como "ok con cero tiendas", que es exactamente la confusion que se viene a matar.
   const loadOutcome: LoadOutcome = loadFailed ? "failed" : hydrated ? "ok" : "loading";
 
-  return { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad };
+  return { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad, pinSettlementOrders };
 }
 
 /** Esqueleto de la primera carga. Antes la app pintaba el panel VACIO y se llenaba de golpe
@@ -5773,12 +5774,16 @@ function ManualOrderPanel({
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "prepaid">("cod");
   const [fulfillmentMode, setFulfillmentMode] = useState<"seller_pickup" | "warehouse">("seller_pickup");
   const [totalCop, setTotalCop] = useState("");
+  // Spec 022: un importe alto no se bloquea, se pregunta. El que costo la spec eran dos sets de
+  // tornillos por $11.770.047.900, pero una venta cara de verdad tiene que poder entrar.
+  const [amountConfirmed, setAmountConfirmed] = useState(false);
   const [lines, setLines] = useState<ManualOrderLineDraft[]>([emptyManualLine("line-0")]);
   const [addressRisk, setAddressRisk] = useState<"accepted" | "review">("accepted");
   const [message, setMessage] = useState<string | null>(null);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const lineKeySeq = useRef(1);
   const productListId = useId();
+  const amountNoticeId = useId();
 
   useEffect(() => {
     if (lockedSellerId && sellerId !== lockedSellerId) setSellerId(lockedSellerId);
@@ -5855,6 +5860,15 @@ function ManualOrderPanel({
     return quantity > free ? [`${item.name}: stock libre ${free}, pediras ${quantity}. El pedido se crea igual.`] : [];
   });
 
+  // El aviso del importe se calcula al escribir, no al enviar: la spec 022 pide que la tienda lo vea
+  // junto al campo y no despues de gastar un viaje al servidor.
+  const parsedAmount = Number(totalCop.replace(/[^\d]/g, ""));
+  const amountIssue = totalCop.trim() === "" ? null : (() => {
+    const check = checkOrderTotalCop(parsedAmount);
+    return check.ok ? null : check.message;
+  })();
+  const amountNeedsConfirmation = needsAmountConfirmation(parsedAmount);
+
   return (
     <Card>
       <h2 className="mb-3 font-bold">Crear pedido</h2>
@@ -5868,8 +5882,13 @@ function ManualOrderPanel({
               setMessage("Crea primero un vendedor.");
               return;
             }
-            if (!amount || amount <= 0) {
-              setMessage("El valor del pedido debe ser mayor a cero.");
+            const amountCheck = checkOrderTotalCop(amount);
+            if (!amountCheck.ok) {
+              setMessage(amountCheck.message);
+              return;
+            }
+            if (needsAmountConfirmation(amount) && !amountConfirmed) {
+              setMessage(`Confirma el valor: ${formatAmountCop(amount)} es mucho mas de lo habitual. Marca la casilla si es correcto.`);
               return;
             }
             if (duplicateSellerReference) {
@@ -5918,6 +5937,7 @@ function ManualOrderPanel({
               setDeliveryNotes("");
               setZoneId("");
               setTotalCop("");
+              setAmountConfirmed(false);
               resetLines();
               setAddressRisk("accepted");
               setMessage("Pedido creado.");
@@ -5990,7 +6010,45 @@ function ManualOrderPanel({
             <option value="warehouse">Bodega</option>
           </select>
         </div>
-        <input className="focus-ring min-h-11 rounded-full border border-white/10 px-3 py-2 text-sm" placeholder="Valor COP" inputMode="numeric" value={totalCop} onChange={(event) => setTotalCop(event.target.value)} required />
+        <div className="grid gap-1.5">
+          <input
+            className={`focus-ring min-h-11 rounded-full border px-3 py-2 text-sm ${amountIssue ? "border-rust" : "border-white/10"}`}
+            placeholder="Valor COP"
+            inputMode="numeric"
+            value={totalCop}
+            onChange={(event) => {
+              setTotalCop(event.target.value);
+              setAmountConfirmed(false);
+            }}
+            aria-invalid={Boolean(amountIssue)}
+            aria-describedby={amountIssue || amountNeedsConfirmation ? amountNoticeId : undefined}
+            required
+          />
+          {amountIssue && (
+            <p className="flex items-start gap-1.5 text-[11px] font-semibold text-rust" id={amountNoticeId} role="status" aria-live="polite">
+              <AlertTriangle className="mt-px shrink-0" size={12} />
+              <span>{amountIssue}</span>
+            </p>
+          )}
+          {!amountIssue && amountNeedsConfirmation && (
+            <div className="grid gap-1.5" id={amountNoticeId}>
+              <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+                <span className="font-semibold text-fg">{formatAmountCop(parsedAmount)}</span> es mucho mas de lo habitual:
+                casi todos los pedidos van por debajo de {formatAmountCop(CONFIRM_ORDER_TOTAL_COP)}. Revisa si sobran digitos.
+              </p>
+              {/* Pildora en vez de casilla: el objetivo del corazon es de 44 px (spec 013, RF_04). */}
+              <button
+                type="button"
+                className={`focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${amountConfirmed ? "border-mint/40 bg-panel text-mint" : "border-white/10 bg-panel text-fg"}`}
+                aria-pressed={amountConfirmed}
+                onClick={() => setAmountConfirmed((current) => !current)}
+              >
+                {amountConfirmed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                {amountConfirmed ? "Valor confirmado" : "Confirmo que el valor es correcto"}
+              </button>
+            </div>
+          )}
+        </div>
         <div className="grid gap-2 rounded-2xl border border-white/10 p-2">
           <p className="text-xs font-semibold text-ink-60">Productos</p>
           <datalist id={productListId}>
@@ -9821,12 +9879,6 @@ function SupplierLiquidationDetail({ row }: { row: SupplierLiquidationRow }) {
   );
 }
 
-function settlementStatusLabel(status: Settlement["status"]) {
-  if (status === "paid") return "pagada";
-  if (status === "reconciled") return "conciliada";
-  return "pendiente";
-}
-
 function settlementKindLabel(kind: Settlement["kind"]) {
   if (kind === "seller") return "Vendedor";
   if (kind === "supplier") return "Proveedor";
@@ -11817,7 +11869,7 @@ const DRIVER_VIEW_TITLES: Partial<Record<AppView, { title: string; hint: string 
   history: { title: "Historico", hint: "Pedidos cerrados y lectura de la flota." }
 };
 
-function DriverView({ state, setState, session, orderSearch, onOrderSearchChange, view, historyStart, onWidenHistory }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; view: AppView; historyStart?: string; onWidenHistory?: (startDate: string) => void }) {
+function DriverView({ state, setState, session, orderSearch, onOrderSearchChange, view, historyStart, onWidenHistory, onPinSettlementOrders }: { state: AppState; setState: (state: AppState) => void; session: Session; orderSearch: string; onOrderSearchChange: (value: string) => void; view: AppView; historyStart?: string; onWidenHistory?: (startDate: string) => void; onPinSettlementOrders?: (orderIds: string[]) => Promise<PinOrdersResult> }) {
   const driver = state.drivers.find((item) => item.id === session.profileId);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [operationTab, setOperationTab] = useState<"all" | "rescheduled" | "failed">("all");
@@ -12020,7 +12072,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
       {view === "finance" && (
       <section id="finanzas" className="scroll-mt-32 grid gap-3">
         <SectionHeader title="Resumen financiero" description="Saldo total abierto, abonos y cortes del domiciliario." />
-        <DriverFinancialSummaryPanel summary={financialSummary} />
+        <DriverFinancialSummaryPanel summary={financialSummary} onPinSettlementOrders={onPinSettlementOrders} />
         <DashboardWalletCard state={state} ownerType="driver" ownerId={driver.id} title="Wallet del lider logistico" collapsible />
       </section>
       )}
@@ -12385,37 +12437,107 @@ function FleetMessengerPanel({ state, setState, driver }: { state: AppState; set
   );
 }
 
-const driverSettlementExportColumns = [
-  "corte", "guia", "shopify", "estado_pedido", "cod_recaudado", "pago_domiciliario", "efectivo_esperado", "estado_corte"
-] as const;
+// Las columnas y el armado del Excel viven en `@/lib/driver-settlement-export`, junto a las filas
+// que pinta la pantalla: mientras estuvieron separados, que coincidieran era una promesa.
 
-function buildDriverSettlementExportRows(summary: DriverFinancialSummary) {
-  const rows: Record<string, string | number>[] = [];
-  for (const settlement of summary.settlementRows) {
-    for (const order of settlement.orders) {
-      rows.push({
-        corte: settlement.label,
-        guia: order.trackingCode,
-        shopify: order.shopifyOrderId,
-        estado_pedido: order.status ? statusLabel(order.status) : "",
-        cod_recaudado: order.totalCop,
-        pago_domiciliario: order.driverPayCop,
-        efectivo_esperado: order.expectedCashCop,
-        estado_corte: settlementStatusLabel(settlement.status)
-      });
-    }
+/**
+ * Una linea que dice si el detalle cuadra con la cabecera, y si no, POR QUE.
+ *
+ * Existe porque un detalle que no suma su cabecera y no lo explica es lo que llevo a un
+ * domiciliario a ofrecer pagar dos veces $533.400 que ya habia pagado. Las dos razones legitimas
+ * —todavia faltan pedidos por llegar, o el corte se corrigio despues de emitirse— se rotulan
+ * distinto, porque significan cosas opuestas: una es provisional y la otra es definitiva.
+ *
+ * Pase lo que pase, la cifra que se liquida es la de la cabecera; nunca esta suma.
+ */
+function SettlementDetailNotice({ group, loading, skippedByBudget }: { group?: DriverSettlementDetailGroup; loading: boolean; skippedByBudget: number }) {
+  if (!group) return null;
+  const notice = settlementDetailNotice(group, { loading, skippedByBudget });
+  if (notice.kind === "loading") {
+    return (
+      <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+        Completando el detalle… faltan {notice.pendingCount} pedido{notice.pendingCount === 1 ? "" : "s"} por descargar.
+      </p>
+    );
   }
-  return rows;
+  if (notice.kind === "incomplete") {
+    return (
+      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-rust" role="status" aria-live="polite">
+        <AlertTriangle className="mt-px shrink-0" size={12} />
+        <span>Detalle incompleto: {notice.unknownAmountCount} pedido{notice.unknownAmountCount === 1 ? "" : "s"} sin importe. La suma parcial no es la cifra a pagar.</span>
+      </p>
+    );
+  }
+  if (notice.kind === "budget") {
+    return (
+      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-rust" role="status" aria-live="polite">
+        <AlertTriangle className="mt-px shrink-0" size={12} />
+        <span>
+          Quedaron {notice.skippedCount} pedido{notice.skippedCount === 1 ? "" : "s"} sin descargar en esta sesion: su importe sale de lo que guardo el corte, sin comprobar contra el pedido. Vuelve a abrir la pagina para completarlo.
+        </span>
+      </p>
+    );
+  }
+  if (notice.kind === "adjusted") {
+    return (
+      <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+        Detalle <span className="tabular font-semibold text-fg">{formatDetailCop(notice.detailCashCop)}</span> · {formatDetailCop(notice.detailDeltaCop)} de ajuste posterior al corte.
+        Se liquida la cifra del corte: <span className="tabular font-semibold text-fg">{formatCop(notice.expectedCashCop)}</span>.
+      </p>
+    );
+  }
+  return (
+    <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+      Detalle <span className="tabular font-semibold text-fg">{formatDetailCop(notice.detailCashCop)}</span> · coincide con el corte.
+    </p>
+  );
 }
 
-function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSummary }) {
+function DriverFinancialSummaryPanel({ summary, onPinSettlementOrders }: { summary: DriverFinancialSummary; onPinSettlementOrders?: (orderIds: string[]) => Promise<PinOrdersResult> }) {
   const [unsettledOpen, setUnsettledOpen] = useState(false);
   const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null);
+  // Cortes cuyo rescate de pedidos esta en vuelo. De aqui sale el "completando el detalle" (RF_08):
+  // el almacen no necesita una bandera, la honestidad vive donde se pinta la suma.
+  const [loadingSettlements, setLoadingSettlements] = useState<string[]>([]);
+  // Cortes cuyo detalle quedo sin bajar del todo porque se agoto el tope de esta carga de pagina.
+  // Sin esto, esas filas caian a su importe guardado en el corte, la resta daba cero y el detalle
+  // se presentaba como "coincide": una suma parcial haciendose pasar por buena (RF_08, RF_11).
+  const [budgetSkipped, setBudgetSkipped] = useState<Record<string, number>>({});
   const unsettledPage = usePaginatedItems(summary.unsettledOrders, 8);
   // Antes se pintaban los 24 cortes y los 71 abonos enteros: 95 filas de golpe en un telefono.
   const settlementPage = usePaginatedItems(summary.settlementRows, 6);
   const receiptPage = usePaginatedItems(summary.receiptRows, 6);
-  const settlementExportRows = buildDriverSettlementExportRows(summary);
+  // Una sola lista para la pantalla y para el Excel.
+  const detailGroups = useMemo(() => buildDriverSettlementDetailGroups(summary), [summary]);
+  const detailBySettlement = useMemo(
+    () => new Map(detailGroups.map((group) => [group.settlementId, group])),
+    [detailGroups]
+  );
+  const settlementExportRows = useMemo(
+    () => buildDriverSettlementExportRows(flattenDriverSettlementDetail(detailGroups)),
+    [detailGroups]
+  );
+
+  /**
+   * Al ABRIR un corte se piden sus pedidos que no estan descargados. No al montar: las cifras de
+   * cabecera salen del corte guardado, asi que rescatar al entrar gastaria lecturas sin mover un
+   * solo numero, y los seis cortes de la pagina se irian por encima del tope.
+   */
+  const toggleSettlement = useCallback((settlementId: string) => {
+    setExpandedSettlement((current) => (current === settlementId ? null : settlementId));
+    const group = detailBySettlement.get(settlementId);
+    if (!group || !onPinSettlementOrders) return;
+    const missing = group.rows.filter((row) => row.unavailable).map((row) => row.orderId);
+    if (missing.length === 0) return;
+    setLoadingSettlements((current) => (current.includes(settlementId) ? current : [...current, settlementId]));
+    void onPinSettlementOrders(missing)
+      .then((result) => {
+        setBudgetSkipped((current) => ({ ...current, [settlementId]: result.skippedByBudget }));
+      })
+      .finally(() => {
+        setLoadingSettlements((current) => current.filter((id) => id !== settlementId));
+      });
+  }, [detailBySettlement, onPinSettlementOrders]);
 
   return (
     <Card className="grid gap-5 p-5">
@@ -12456,7 +12578,7 @@ function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSumm
                     className="focus-ring grid w-full gap-2 rounded-2xl p-3 text-left"
                     type="button"
                     aria-expanded={isOpen}
-                    onClick={() => setExpandedSettlement((current) => (current === row.settlementId ? null : row.settlementId))}
+                    onClick={() => toggleSettlement(row.settlementId)}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -12473,13 +12595,27 @@ function DriverFinancialSummaryPanel({ summary }: { summary: DriverFinancialSumm
                   </button>
                   {isOpen && (
                     <div className="grid gap-1.5 border-t border-white/[0.06] px-3 py-2.5">
-                      {row.orders.length === 0 ? (
+                      <SettlementDetailNotice
+                        group={detailBySettlement.get(row.settlementId)}
+                        loading={loadingSettlements.includes(row.settlementId)}
+                        skippedByBudget={budgetSkipped[row.settlementId] ?? 0}
+                      />
+                      {(detailBySettlement.get(row.settlementId)?.rows.length ?? 0) === 0 ? (
                         <p className="text-xs text-ink-60">Sin pedidos asociados a este corte.</p>
                       ) : (
-                        row.orders.map((order) => (
-                          <div key={order.orderId} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="min-w-0 truncate font-semibold">{order.trackingCode}</span>
-                            <span className="tabular shrink-0 text-ink-60">{formatCop(order.expectedCashCop)}</span>
+                        detailBySettlement.get(row.settlementId)!.rows.map((order) => (
+                          <div key={order.orderId} className="grid gap-0.5 border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <span className={`min-w-0 truncate font-semibold ${order.unavailable ? "italic text-ink-60" : ""}`}>{order.trackingLabel}</span>
+                              <span className={`tabular shrink-0 font-semibold ${order.expectedCashCop === null ? "text-ink-60" : order.noCollection ? "text-mint" : "text-fg"}`}>
+                                {order.expectedLabel}{order.noCollection && order.expectedCashCop !== null ? " a favor" : ""}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-60">
+                              <span className="tabular">COD {formatCop(order.codCop)} · pago {formatCop(order.driverPayCop)}</span>
+                              {order.noCollection && <span className="rounded-full border border-white/10 bg-panel px-2 py-0.5 font-semibold">Sin recaudo</span>}
+                              {order.source === "settlement" && <span className="rounded-full border border-white/10 bg-panel px-2 py-0.5 font-semibold">Importe del corte</span>}
+                            </div>
                           </div>
                         ))
                       )}
@@ -13077,7 +13213,7 @@ export function OperationsApp() {
   // anterior se rehace la suscripcion, pero si vuelve a acortar el rango no se toca (lo ya
   // descargado no estorba y re-suscribir en cada cambio de fecha seria peor que el problema).
   const [historyStart, setHistoryStart] = useState(defaultOrderStartDate);
-  const { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad } = useAppState(session, historyStart);
+  const { state, setState, remoteEnabled, hydrated, loadOutcome, loadReport, retryLoad, pinSettlementOrders } = useAppState(session, historyStart);
 
   // Un cambio MANUAL de fecha si ensancha la ventana: ahi el usuario quiere ver los pedidos.
   // Los atajos de periodo no, porque sus cifras las calcula el servidor y bajar el historico
@@ -13356,10 +13492,10 @@ export function OperationsApp() {
     if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={viewState} setState={setState} />;
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
     if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} loadOutcome={loadOutcome} onRetryLoad={retryLoad} />;
-    if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} />;
+    if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} onPinSettlementOrders={pinSettlementOrders} />;
     if (session.role === "messenger") return <MessengerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} historyStart={historyStart} />;
     return <AdminView view={activeView} state={viewState} setState={setState} session={session} onNavigate={setActiveView} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} sellerFilter={orderSellerFilter} historyStart={historyStart} searchingHistory={searchingServer} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSellerFilter={setOrderSellerFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} />;
-  }, [activeHat, activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow, loadOutcome, loadReport, retryLoad]);
+  }, [activeHat, activeView, applyOrderRange, historyStart, orderEndDate, orderSearch, orderSellerFilter, orderStartDate, orderStatusFilter, periodStats, periodStatsError, searchingServer, session, setOrderEndDateManual, setOrderStartDateManual, viewState, setState, widenHistoryWindow, pinSettlementOrders, loadOutcome, loadReport, retryLoad]);
 
   if (!session) return <AuthScreen onSubmit={handleAuth} needsBootstrap={needsBootstrap} />;
 

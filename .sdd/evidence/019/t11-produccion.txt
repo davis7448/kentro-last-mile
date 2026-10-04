@@ -1,0 +1,22 @@
+Corte stl-1789686589616-driver-driver-1778271901513
+  periodo 2026-09-14 a 2026-09-17 · estado pending
+  pedidos: 185   filas del detalle: 185
+
+  Cabecera (cashExpectedCop, del servidor): $14.167.490
+  Suma del detalle:                         $14.167.490
+  Diferencia:                               $0
+
+  Visitas sin recaudo: 16, a favor $-120.000
+  Filas sin importe conocido: 0
+  Filas resueltas desde el corte (pedido no legible): 0
+
+  Los seis pedidos reclamados el 2026-09-19:
+    KNT-005077  COD $109.900  pago $11.000  efectivo $98.900
+    KNT-005058  COD $89.900  pago $11.000  efectivo $78.900
+    KNT-004892  COD $89.900  pago $11.000  efectivo $78.900
+    KNT-005064  COD $109.900  pago $11.000  efectivo $98.900
+    KNT-005054  COD $109.900  pago $11.000  efectivo $98.900
+    KNT-005060  COD $89.900  pago $11.000  efectivo $78.900
+    suma: $533.400
+
+VERIFICACION OK: el detalle suma la cabecera y ninguna fila con recaudo sale en cero.

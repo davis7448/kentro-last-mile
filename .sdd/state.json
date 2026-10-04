@@ -2,19 +2,20 @@
   "version": 1,
   "phase": "release",
   "activeSpec": {
-    "file": "specs/017_reimportar_no_pisa_lo_operado.md",
-    "status": "released"
+    "file": "specs/022_ningun_pedido_vale_mil_millones.md",
+    "status": "approved"
   },
   "tasks": {
     "T1": {
       "requirements": [
-        "RF_10",
-        "RF_11",
-        "RF_18"
+        "RF_01",
+        "RF_02",
+        "RF_03",
+        "RF_04"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "functions/src/order-amount.ts",
+        "functions/src/order-amount.test.ts"
       ],
       "testWritten": true,
       "done": true
@@ -22,235 +23,45 @@
     "T2": {
       "requirements": [
         "RF_01",
-        "RF_12"
+        "RF_03"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "functions/src/orders.ts",
+        "src/lib/spec-022-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T3": {
       "requirements": [
-        "RF_02",
-        "RF_03",
-        "RF_17",
-        "RF_18"
+        "RF_05"
       ],
       "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "src/components/operations-app.tsx",
+        "src/lib/spec-022-guards.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T4": {
       "requirements": [
-        "RF_04"
+        "RF_06",
+        "RNF_03"
       ],
       "files": [
         "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
+        "functions/src/order-import-merge.test.ts"
       ],
       "testWritten": true,
       "done": true
     },
     "T5": {
       "requirements": [
-        "RF_05",
-        "RF_06",
-        "RF_07"
-      ],
-      "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T6": {
-      "requirements": [
-        "RF_08",
-        "RF_09"
-      ],
-      "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T7": {
-      "requirements": [
-        "RF_13",
-        "RF_14",
-        "RF_15",
-        "RF_16"
-      ],
-      "files": [
-        "functions/src/order-import-merge.ts",
-        "src/lib/order-import-merge.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T8": {
-      "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04",
-        "RF_05",
-        "RF_06",
-        "RF_07",
-        "RF_08",
-        "RF_09",
-        "RF_10",
-        "RF_11",
-        "RF_12",
-        "RF_15",
-        "RF_16",
-        "RNF_01",
-        "RF_17",
-        "RF_18"
-      ],
-      "files": [
-        "functions/src/shopify.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T9": {
-      "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_03",
-        "RF_04",
-        "RF_05",
-        "RF_06",
-        "RF_07",
-        "RF_08",
-        "RF_09",
-        "RF_10",
-        "RF_11",
-        "RF_12",
-        "RF_15",
-        "RF_16",
-        "RNF_01",
-        "RF_17",
-        "RF_18"
-      ],
-      "files": [
-        "functions/src/index.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T10": {
-      "requirements": [
-        "RF_10",
-        "RF_12",
-        "RNF_01",
-        "RF_18"
-      ],
-      "files": [
-        "functions/src/store-webhook.ts",
-        "functions/src/onstock-webhook.ts",
-        "functions/src/contact-form.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T11": {
-      "requirements": [
-        "RF_13",
-        "RF_14"
-      ],
-      "files": [
-        "functions/src/shopify.ts",
-        "functions/src/import-run-summary.ts",
-        "src/lib/import-run-summary.test.ts",
-        "firestore.rules"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T12": {
-      "requirements": [
-        "RF_13",
-        "RF_17",
-        "RF_18",
-        "RF_19",
-        "RNF_01",
-        "RNF_02",
-        "RNF_03"
-      ],
-      "files": [
-        "src/lib/spec-017-guards.test.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T13": {
-      "requirements": [
-        "RF_01",
-        "RF_10",
         "RNF_02"
       ],
       "files": [
-        ".sdd/evidence/017/mutacion-rf01.txt",
-        ".sdd/evidence/017/mutacion-rf10.txt",
-        "functions/src/order-import-merge.ts",
-        "functions/src/shopify.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T14": {
-      "requirements": [
-        "RNF_03"
-      ],
-      "files": [
-        "docs/constitution.md"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T15": {
-      "requirements": [
-        "RF_01",
-        "RF_02",
-        "RF_04",
-        "RF_05",
-        "RF_09",
-        "RF_15",
-        "RF_16"
-      ],
-      "files": [
-        "scripts/verify-017.js"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T16": {
-      "requirements": [
-        "RF_17"
-      ],
-      "files": [
-        "functions/src/orders.ts"
-      ],
-      "testWritten": true,
-      "done": true
-    },
-    "T17": {
-      "requirements": [
-        "RF_19"
-      ],
-      "files": [
-        "functions/src/manual-edit-backfill.ts",
-        "src/lib/manual-edit-backfill.test.ts",
-        "scripts/backfill-manual-edit-stamp.js"
+        "scripts/verify-022.js",
+        ".sdd/evidence/022/barrido.txt"
       ],
       "testWritten": true,
       "done": true
@@ -397,6 +208,43 @@
       "rf26": "2026-09-17: storeApi desplegada; indice y resumen traen avisos con el cambio (probado en produccion)",
       "rnf04": "2026-09-17: cumplido tras T18 (movil 991/1.015 ms, escritorio 1.023/894 ms vs 989/975 ms antes)",
       "released": "2026-09-17: PR #1 unido a main (tras PR #2, que puso main al dia con 48 commits)"
+    },
+    "019": {
+      "file": "specs/019_el_corte_muestra_lo_que_cobra.md",
+      "status": "desplegada",
+      "approved": "2026-09-19",
+      "verify": "2026-09-19 OK: 3 recorridos (HU_01, HU_02, HU_03) con traza, 0 errores de consola inesperados, 0 peticiones 4xx/5xx inesperadas",
+      "audit": "DoD 10/11 — solo falta la firma del responsable",
+      "signedOff": "2026-09-19",
+      "signedBy": "responsable de la plataforma",
+      "pr": "https://github.com/davis7448/kentro-last-mile/pull/4",
+      "branch": "feat/el-corte-muestra-lo-que-cobra (apilada sobre feat/reimportar-no-pisa-lo-operado, PR #3)",
+      "dod": "11/11",
+      "report": "2026-09-19: informe de cierre publicado como Artifact (https://claude.ai/artifact/R8kTtQ7v5n96zarfgh55Zs). 17 requisitos: 10 con evidencia funcional medida, 1 parcial (RF_11), 6 solo con prueba unitaria (RF_07, RF_08, RF_09, RF_12, RF_13, RNF_02). Suite 1588/44, lint 0/3, tsc limpio, sin dependencias nuevas y sin cambios en functions/reglas/indices. Degradacion medida: primer pintado +6,4% movil y +4,0% escritorio, reproducida en dos tandas. Cinco deudas ubicadas (D1-D5). Specs borrador 020-022 creadas.",
+      "pendiente": "desplegar (solo hosting, con ALLOW_FUNCTIONS_DEPLOY=1) y unir el PR #4 DESPUES del PR #3",
+      "deployed": "2026-09-19",
+      "note": "Desplegada junto con la 022 (hosting). Comprobado contra produccion con sesion real de lider: 185 filas, suma = cabecera."
+    },
+    "020": {
+      "file": "specs/020_el_listado_filtra_por_la_fecha_equivocada.md",
+      "status": "borrador",
+      "origen": "informe de cierre 019; fuera de alcance consciente de la 019 (seccion 6) y causa raiz de su sintoma",
+      "prioridad": 2,
+      "nota": "Medido 2026-09-19: 1.060 de 1.062 cierres de septiembre (99,8%) caen en un dia distinto al de creacion."
+    },
+    "021": {
+      "file": "specs/021_un_asiento_de_corte_no_es_un_pedido.md",
+      "status": "borrador",
+      "origen": "informe de cierre 019 (deuda D2): 403 repetido en las tres evidencias funcionales",
+      "prioridad": 3,
+      "nota": "Medido 2026-09-19: 36 asientos de domiciliario con un id de corte en orderId; hasta 36 lecturas denegadas por carga de pagina."
+    },
+    "022": {
+      "file": "specs/022_ningun_pedido_vale_mil_millones.md",
+      "status": "desplegada",
+      "approved": "2026-09-19",
+      "note": "functions + hosting desplegados el 2026-09-19; comprobado contra produccion: la callable rechaza $11.770.047.900 con HTTP 400 y el formulario avisa antes de enviar.",
+      "deployed": "2026-09-19"
     }
   },
   "archivedTasks": {
@@ -2158,7 +2006,184 @@
         "testWritten": true,
         "done": true
       }
+    },
+    "019": {
+      "T1": {
+        "requirements": [
+          "RF_01",
+          "RF_02",
+          "RF_03"
+        ],
+        "files": [
+          "src/lib/finance.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T2": {
+        "requirements": [
+          "RF_02",
+          "RNF_01"
+        ],
+        "files": [
+          "src/lib/finance.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T3": {
+        "requirements": [
+          "RF_09",
+          "RF_10",
+          "RF_06"
+        ],
+        "files": [
+          "src/lib/finance.ts",
+          "src/lib/finance.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T4": {
+        "requirements": [
+          "RF_03",
+          "RF_11",
+          "RF_12"
+        ],
+        "files": [
+          "src/lib/finance.ts",
+          "src/lib/finance.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T5": {
+        "requirements": [
+          "RF_13",
+          "RF_10"
+        ],
+        "files": [
+          "src/lib/driver-settlement-export.ts",
+          "src/lib/driver-settlement-export.test.ts",
+          "src/lib/order-export.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T6": {
+        "requirements": [
+          "RF_07",
+          "RNF_02"
+        ],
+        "files": [
+          "src/lib/firebase/state-store.ts",
+          "src/lib/spec-019-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T7": {
+        "requirements": [
+          "RF_05",
+          "RF_06"
+        ],
+        "files": [
+          "src/lib/firebase/state-store.ts",
+          "src/components/operations-app.tsx",
+          "src/lib/spec-019-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T8": {
+        "requirements": [
+          "RF_05",
+          "RF_08"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/firebase/state-store.ts",
+          "src/lib/spec-019-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T9": {
+        "requirements": [
+          "RF_01",
+          "RF_04",
+          "RF_10",
+          "RNF_03"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-019-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T10": {
+        "requirements": [
+          "RF_11",
+          "RF_12"
+        ],
+        "files": [
+          "src/components/operations-app.tsx",
+          "src/lib/spec-019-guards.test.ts"
+        ],
+        "testWritten": true,
+        "done": true
+      },
+      "T11": {
+        "requirements": [
+          "RNF_01",
+          "RNF_04"
+        ],
+        "files": [
+          "scripts/verify-019.js",
+          "docs/rendimiento.md",
+          ".sdd/evidence/019/t11-produccion.txt"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Reabierta por la auditoria (2026-09-19) y cerrada con scripts/verify-019-session.js: sesion real de lider logistico (cuenta desechable, borrada) leyendo de la PANTALLA, y medicion A/B intercalada contra un worktree del commit anterior."
+      },
+      "T12": {
+        "requirements": [
+          "RF_08",
+          "RF_11"
+        ],
+        "files": [
+          "src/lib/driver-settlement-export.ts",
+          "src/lib/driver-settlement-export.test.ts",
+          "src/components/operations-app.tsx"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "skippedByBudget se produce y nadie lo lee: el caso limite 'el detalle queda incompleto a proposito' es hoy inobservable."
+      },
+      "T13": {
+        "requirements": [
+          "RF_06",
+          "RF_07",
+          "RNF_03"
+        ],
+        "files": [
+          "src/lib/read-each-by-id.ts",
+          "src/lib/read-each-by-id.test.ts",
+          "src/lib/firebase/state-store.ts",
+          "src/lib/spec-019-guards.test.ts",
+          "docs/design-system.md",
+          "specs/019_el_corte_muestra_lo_que_cobra.md"
+        ],
+        "testWritten": true,
+        "done": true,
+        "note": "Segunda auditoria (2026-09-19): DoD 5 sin prueba de comportamiento (el bucle de uno en uno no se ejecuta en la suite), el filtro anti-duplicado de pinOrders sin ninguna asercion, y text-mint sin ratio de contraste verificado."
+      }
     }
   },
-  "activeTask": null
+  "activeTask": null,
+  "plan": "specs/022_plan.md",
+  "tasksFile": "specs/022_tasks.md"
 }

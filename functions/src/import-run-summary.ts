@@ -32,6 +32,10 @@ export type RunTally = {
   preservedCounts: Partial<Record<PreservedGroup, number>>;
   codes: string[];
   truncated: boolean;
+  /** Spec 022: cuantos pedidos entraron con un importe imposible. Entran, pero se cuentan. */
+  amountOutOfRange: number;
+  /** Sus guias, para poder ir a mirarlos sin barrer la coleccion. */
+  amountOutOfRangeCodes: string[];
 };
 
 export type ImportRunSummary = RunTally & {
@@ -46,7 +50,7 @@ export type ImportRunSummary = RunTally & {
 };
 
 export function emptyTally(): RunTally {
-  return { seen: 0, created: 0, existing: 0, preservedCounts: {}, codes: [], truncated: false };
+  return { seen: 0, created: 0, existing: 0, preservedCounts: {}, codes: [], truncated: false, amountOutOfRange: 0, amountOutOfRangeCodes: [] };
 }
 
 /**
@@ -63,8 +67,15 @@ export function tallyOrder(tally: RunTally, order: { trackingCode?: unknown }, m
     created: tally.created + (merged.phase === "new" ? 1 : 0),
     existing: tally.existing + (merged.phase === "new" ? 0 : 1),
     preservedCounts: { ...tally.preservedCounts },
-    codes: [...tally.codes]
+    codes: [...tally.codes],
+    amountOutOfRangeCodes: [...tally.amountOutOfRangeCodes]
   };
+
+  if (merged.amountOutOfRange !== undefined) {
+    next.amountOutOfRange += 1;
+    const marcado = typeof order.trackingCode === "string" ? order.trackingCode : "";
+    if (marcado && next.amountOutOfRangeCodes.length < MAX_AFFECTED_CODES) next.amountOutOfRangeCodes.push(marcado);
+  }
 
   for (const group of merged.preserved) {
     next.preservedCounts[group] = (next.preservedCounts[group] ?? 0) + 1;

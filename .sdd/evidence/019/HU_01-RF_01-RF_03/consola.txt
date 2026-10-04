@@ -1,0 +1,2 @@
+[error] Failed to load resource: the server responded with a status of 403 ()
+[warning] No se pudo leer orders/stl-1789686589616-driver-driver-1778271901513; puede faltar informacion en el saldo. FirebaseError: Missing or insufficient permissions.

@@ -103,3 +103,34 @@ describe("summarizeRun", () => {
     expect(summary.truncated).toBe(false);
   });
 });
+
+/**
+ * Spec 022 — T4: la corrida cuenta los importes imposibles que dejo entrar.
+ *
+ * Una via automatica no rechaza (RF_06), asi que la unica forma de enterarse es contarlos. Sin esto
+ * el pedido de $11.770.047.900 entraria igual de callado que el del 2026-08-06, que tardo seis
+ * semanas en verse.
+ */
+describe("spec 022 · el resumen de corrida cuenta los importes fuera de tope (RF_06, RNF_03)", () => {
+  const merged = (amountOutOfRange?: number) => ({
+    doc: {},
+    clear: [],
+    phase: "new" as const,
+    preserved: [],
+    amountOutOfRange
+  });
+
+  it("empieza en cero", () => {
+    expect(emptyTally().amountOutOfRange).toBe(0);
+  });
+
+  it("suma uno por cada pedido marcado, y guarda su guia", () => {
+    let tally = emptyTally();
+    tally = tallyOrder(tally, { trackingCode: "KNT-000001" }, merged());
+    tally = tallyOrder(tally, { trackingCode: "KNT-009999" }, merged(11770047900));
+
+    expect(tally.seen).toBe(2);
+    expect(tally.amountOutOfRange).toBe(1);
+    expect(tally.amountOutOfRangeCodes).toEqual(["KNT-009999"]);
+  });
+});

@@ -1,0 +1,3 @@
+ FAIL  src/lib/order-amount.test.ts [ src/lib/order-amount.test.ts ]
+Error: Cannot find module '../../functions/src/order-amount' imported from '/root/kentro-last-mile/src/lib/order-amount.test.ts'
+      Tests  no tests

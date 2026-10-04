@@ -383,14 +383,32 @@ export type DriverSettlementCashRow = {
   settlementId: string;
   label: string;
   orderCount: number;
-  orders: DriverUnsettledCashOrderRow[];
+  orders: DriverSettlementOrderRow[];
   expectedCashCop: number;
   receivedCop: number;
   pendingCop: number;
   status: Settlement["status"];
   createdAt: string;
   note?: string;
+  /** Suma del efectivo a entregar de las filas CON importe. Nunca incluye las que no se pudieron
+   *  resolver, para no hacer pasar una suma parcial por total (RF_08). */
+  detailCashCop: number;
+  /** `detailCashCop - expectedCashCop`. Cero cuando el detalle cuadra con la cabecera. */
+  detailDeltaCop: number;
+  /** Por que no cuadra, si no cuadra. Ver `resolveDetailStatus`. */
+  detailStatus: DriverSettlementDetailStatus;
+  /** Filas cuyo pedido no estaba descargado (`source !== "order"`). */
+  unavailableOrderCount: number;
+  /** Filas sin importe conocido (`source === "unknown"`). */
+  unknownAmountCount: number;
+  /** Filas de visitas sin recaudo: su importe va a favor del domiciliario. */
+  noCollectionCount: number;
 };
+
+/** De donde salio el importe de una fila del detalle de un corte. */
+export type DriverSettlementOrderSource = "order" | "settlement" | "unknown";
+
+export type DriverSettlementDetailStatus = "balanced" | "adjusted" | "incomplete";
 
 export type DriverCashReceiptRow = {
   id: string;
@@ -411,6 +429,19 @@ export type DriverUnsettledCashOrderRow = {
   totalCop: number;
   driverPayCop: number;
   expectedCashCop: number;
+};
+
+/**
+ * Fila del detalle de un corte. Es un tipo APARTE de `DriverUnsettledCashOrderRow` a proposito:
+ * aquel tipa tambien `summary.unsettledOrders`, cuyos pedidos estan descargados por definicion.
+ * Aqui no: un pedido de un corte puede ser muy anterior a la ventana de descarga.
+ */
+export type DriverSettlementOrderRow = DriverUnsettledCashOrderRow & {
+  source: DriverSettlementOrderSource;
+  /** `false` solo con `source === "unknown"`: la fila va SIN importe, nunca con cero (RF_09). */
+  amountKnown: boolean;
+  /** Visita sin recaudo (fallida o prepago): el importe va a favor del domiciliario. */
+  noCollection: boolean;
 };
 
 export type DriverFinancialSummary = {
@@ -507,6 +538,96 @@ function orderCollectedCodCop(order: Order | undefined) {
   if (!order || order.paymentMethod !== "cod") return 0;
   if (order.status !== "delivered" && order.status !== "liquidated") return 0;
   return Math.max(0, Number(order.totalCop) || 0);
+}
+
+/**
+ * Cuanto efectivo genero un pedido de un corte, y de donde se sabe.
+ *
+ * El pedido puede no estar descargado: la ventana de cerrados corta por `createdAt` y un pedido
+ * creado el 11 y entregado el 17 queda fuera. Antes eso daba una fila de $0 con el id interno por
+ * etiqueta, indistinguible de una visita sin cobro — y el domiciliario concluia que no le habian
+ * cobrado ese pedido. Cuatro ramas, en orden de fiabilidad:
+ *
+ *   1. El pedido esta en memoria      -> su valor VIGENTE (decision 2 del responsable).
+ *   2. No esta, pero el corte guardo su importe en `cashAllocations` -> ese importe.
+ *   3. No esta y `cashAllocations` existe pero no lo menciona -> el corte registro CERO efectivo
+ *      para el. No es un hueco: `settlement-math.ts` excluye de las asignaciones todo pedido con
+ *      `max(0, cod - pago) <= 0`, asi que la ausencia ES informacion. La fila vale `-pago`.
+ *   4. No esta y el corte no trae `cashAllocations` (cortes anteriores al campo) -> no se sabe.
+ *      Va SIN importe. Colapsar esta rama en la 3 daria un total falso en silencio, que es
+ *      justamente el fallo que la spec 019 existe para eliminar.
+ */
+function settlementOrderRow(
+  orderId: string,
+  order: Order | undefined,
+  driverPayCop: number,
+  allocationByOrderId: Map<string, number> | null
+): DriverSettlementOrderRow {
+  const base = { orderId, driverPayCop };
+  if (order) {
+    const totalCop = orderCollectedCodCop(order);
+    return {
+      ...base,
+      trackingCode: order.trackingCode ?? "",
+      shopifyOrderId: order.shopifyOrderId ?? "",
+      status: order.status,
+      totalCop,
+      // Sin Math.max: una visita sin recaudo vale -pago, que es plata A FAVOR del domiciliario.
+      // Truncarla en cero es lo que impedia que el detalle sumase la cabecera.
+      expectedCashCop: totalCop - driverPayCop,
+      source: "order",
+      amountKnown: true,
+      noCollection: totalCop === 0
+    };
+  }
+  // El pedido no esta descargado. La etiqueta queda VACIA, nunca el id interno (RF_10): el rotulo
+  // visible lo pone el modulo de presentacion, para que pantalla y Excel no puedan divergir.
+  const unresolved = { ...base, trackingCode: "", shopifyOrderId: "", status: undefined };
+  if (!allocationByOrderId) {
+    return { ...unresolved, totalCop: 0, expectedCashCop: 0, source: "unknown", amountKnown: false, noCollection: false };
+  }
+  const allocated = allocationByOrderId.get(orderId);
+  const expectedCashCop = allocated === undefined ? -driverPayCop : allocated;
+  return {
+    ...unresolved,
+    totalCop: expectedCashCop + driverPayCop,
+    expectedCashCop,
+    source: "settlement",
+    amountKnown: true,
+    noCollection: expectedCashCop + driverPayCop === 0
+  };
+}
+
+/**
+ * Importes por pedido que guardo el corte, o `null` si el corte no los tiene.
+ * `null` y "array vacio" NO son lo mismo: el primero significa "este corte no lo registro",
+ * el segundo "no genero efectivo por ningun pedido".
+ */
+function allocationsByOrderId(settlement: Settlement): Map<string, number> | null {
+  const allocations = settlement.cashAllocations;
+  if (!Array.isArray(allocations)) return null;
+  const byOrderId = new Map<string, number>();
+  for (const allocation of allocations) {
+    const orderId = allocation?.orderId;
+    const expectedCop = Number(allocation?.expectedCop);
+    if (orderId && Number.isFinite(expectedCop)) byOrderId.set(orderId, expectedCop);
+  }
+  return byOrderId;
+}
+
+/**
+ * Por que el detalle no cuadra con la cabecera. El orden importa: una fila sin importe hace el
+ * detalle INCOMPLETO aunque la resta diese cero por casualidad.
+ *
+ * Una fila resuelta desde `cashAllocations` lleva la cifra del propio corte y por tanto no puede
+ * generar diferencia; asi que un delta solo puede venir de un pedido vivo cuyo valor cambio
+ * DESPUES de emitirse el corte (una correccion administrativa). Eso es un ajuste posterior, no un
+ * detalle incompleto, y se rotula distinto: la cabecera sigue siendo lo que se liquida.
+ */
+function resolveDetailStatus(unknownAmountCount: number, detailDeltaCop: number): DriverSettlementDetailStatus {
+  if (unknownAmountCount > 0) return "incomplete";
+  if (detailDeltaCop !== 0) return "adjusted";
+  return "balanced";
 }
 
 function cashExpectedForSettlement(state: AppState, settlement: Settlement, orderIds: string[]) {
@@ -616,6 +737,9 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
   const settledOrderIds = new Set<string>();
   const settlementRows: DriverSettlementCashRow[] = [];
   const receiptRows: DriverCashReceiptRow[] = [];
+  // Indice por id ANTES del bucle. Con `find` esto era 35 cortes x 185 ids sobre ~3.000 pedidos en
+  // CADA emit, y el rescate de pedidos por id añade emits: es el peor momento para ser O(n*m).
+  const ordersById = new Map(state.orders.map((order) => [order.id, order]));
 
   for (const settlement of driverSettlements) {
     const orderIds = settlementOrderIds(settlement, state.wallet);
@@ -633,21 +757,21 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
     const receivedCop = receipts.length > 0 ? receivedFromReceipts : Math.max(0, expectedCashCop - pendingCop);
     const label = settlementLabel(settlement);
 
-    // Detalle por pedido del corte (nivel caja: COD recaudado, pago al domiciliario, efectivo esperado).
-    const orders: DriverUnsettledCashOrderRow[] = orderIds.map((orderId) => {
-      const order = state.orders.find((item) => item.id === orderId);
-      const orderDriverPayCop = driverPayForOrder(state.wallet, driverId, orderId);
-      const codCop = orderCollectedCodCop(order);
-      return {
-        orderId,
-        trackingCode: order?.trackingCode ?? orderId,
-        shopifyOrderId: order?.shopifyOrderId ?? "",
-        status: order?.status,
-        totalCop: codCop,
-        driverPayCop: orderDriverPayCop,
-        expectedCashCop: Math.max(0, codCop - orderDriverPayCop)
-      };
-    });
+    // Detalle por pedido del corte (nivel caja: COD recaudado, pago al domiciliario, efectivo
+    // esperado). Una fila por CADA pedido del corte, tambien las visitas sin recaudo: su pago va a
+    // favor del domiciliario y sin ellas el detalle no podria sumar la cabecera.
+    const allocationByOrderId = allocationsByOrderId(settlement);
+    const orders: DriverSettlementOrderRow[] = orderIds.map((orderId) => settlementOrderRow(
+      orderId,
+      ordersById.get(orderId),
+      driverPayForOrder(state.wallet, driverId, orderId),
+      allocationByOrderId
+    ));
+
+    // Solo las filas con importe: una suma parcial no puede hacerse pasar por el total.
+    const detailCashCop = orders.reduce((sum, order) => sum + (order.amountKnown ? order.expectedCashCop : 0), 0);
+    const unknownAmountCount = orders.filter((order) => !order.amountKnown).length;
+    const detailDeltaCop = detailCashCop - expectedCashCop;
 
     settlementRows.push({
       settlementId: settlement.id,
@@ -659,12 +783,22 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
       pendingCop,
       status: settlement.status,
       createdAt: settlement.createdAt,
-      note: settlement.note
+      note: settlement.note,
+      detailCashCop,
+      detailDeltaCop,
+      detailStatus: resolveDetailStatus(unknownAmountCount, detailDeltaCop),
+      unavailableOrderCount: orders.filter((order) => order.source !== "order").length,
+      unknownAmountCount,
+      noCollectionCount: orders.filter((order) => order.noCollection).length
     });
 
     receiptRows.push(...driverCashReceiptRows(settlement, expectedCashCop, receivedCop));
   }
 
+  // OJO: esta seccion conserva a proposito su `Math.max(0, ...)` y su `trackingCode ?? order.id`.
+  // NO es una incoherencia con el detalle de los cortes de arriba: aqui se parte de `state.orders`,
+  // asi que el pedido siempre existe y nunca hay importes a favor que mostrar. Cambiarlo movería
+  // `unsettledCashCop` y con el el KPI heroe "Pendiente por entregar". Fuera del alcance de la spec 019.
   const unsettledOrders = state.orders
     .filter((order) => order.driverId === driverId && order.status === "delivered" && order.paymentMethod === "cod" && !settledOrderIds.has(order.id))
     .map((order) => {

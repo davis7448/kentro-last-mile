@@ -23,6 +23,7 @@ import { mergeCommunitySellers, type LoadReport } from "../load-status";
 import { emptyState } from "@/lib/seed";
 import type { AppState, AuditEvent, CashSnapshot, City, Community, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
+import { READ_CHUNK_SIZE, readEachById } from "@/lib/read-each-by-id";
 
 const settingsPath = ["settings", "global"] as const;
 const collectionNames = [
@@ -45,6 +46,17 @@ const collectionNames = [
   "payouts",
   "auditEvents"
 ] as const;
+
+/** Parte de un rescate de pedidos por id. `skippedByBudget > 0` significa que el tope de la carga
+ *  de pagina se agoto: lo que falta NO va a llegar, y quien pinta debe decirlo en vez de presentar
+ *  una suma parcial como si fuera el total. */
+export type PinOrdersResult = { requested: number; fetched: number; skippedByBudget: number };
+
+/** Lo que la suscripcion puede hacer bajo demanda, entregado a quien la abre. */
+export type FirestoreStateControls = {
+  /** Trae por id pedidos que quedaron fuera de la ventana de descarga y los deja fijados. */
+  pinOrders: (orderIds: string[]) => Promise<PinOrdersResult>;
+};
 
 export type FirestoreStateContext = {
   role: Role;
@@ -94,7 +106,13 @@ function historyStartBoundary(historyStart?: string) {
 // Tope de valores por consulta `in` en Firestore.
 const IN_QUERY_LIMIT = 30;
 
+// Cuantas lecturas por id se lanzan a la vez cuando se leen de una en una. Ver getDocumentsOneByOne.
+const ONE_BY_ONE_CHUNK = READ_CHUNK_SIZE;
+
 // Tope defensivo de pedidos traidos por id fuera de la ventana. Hoy liquidaciones necesita ~420.
+// Es un tope ACUMULADO por carga de pagina y COMPARTIDO por las dos vias que rescatan pedidos (los
+// movimientos sin liquidar y el detalle de un corte al expandirlo). Antes se aplicaba por llamada,
+// asi que N llamadas podian fijar N x 800 sin que nada avisara.
 const MAX_PINNED_ORDERS = 800;
 
 // Tope duro de Firestore por writeBatch.
@@ -473,7 +491,8 @@ export function subscribeFirestoreState(
   context: FirestoreStateContext | undefined,
   onState: (state: AppState, report: LoadReport) => void,
   onEmpty?: () => void,
-  onError?: (error: unknown) => void
+  onError?: (error: unknown) => void,
+  onControls?: (controls: FirestoreStateControls) => void
 ) {
   const client = getFirebaseClient();
   if (!client) return () => undefined;
@@ -541,7 +560,7 @@ export function subscribeFirestoreState(
           // El lider bajaba 4.127 pedidos (~6,9 MB) — el 95% de la coleccion entera — en un movil
           // y SIN cache persistente, asi que los repetia enteros en cada apertura. Con la misma
           // particion que ya usaban admin y tienda son ~289 (~0,5 MB). Lo que queda fuera de la
-          // ventana y hace falta para el saldo se trae por id: ver pinDriverOrders.
+          // ventana y hace falta para el saldo se trae por id: ver pinOrders.
           ...orderTargets(where("driverId", "==", context.profileId)),
           { key: "orders", target: query(orderRef, where("driverId", "==", null), where("status", "==", "ready_to_assign")) },
           { key: "messengers", target: query(messengerRef, where("leaderDriverId", "==", context.profileId)) },
@@ -661,28 +680,41 @@ export function subscribeFirestoreState(
   };
 
   /** Trae por id los pedidos que faltan y los deja fijados. Idempotente: cada id se pide una
-   *  sola vez por sesion, aunque el pedido no exista. */
-  const pinOrders = async (orderIds: string[]) => {
+   *  sola vez por carga de pagina, aunque el pedido no exista.
+   *
+   *  Devuelve el parte de lo que hizo para que quien llama pueda decir si el detalle quedo
+   *  incompleto A PROPOSITO (tope agotado) en vez de presentar una suma parcial como buena. */
+  const pinOrders = async (orderIds: string[]): Promise<PinOrdersResult> => {
     const known = new Set<string>();
     targets.forEach((entry, index) => {
       if (entry.key !== "orders") return;
       for (const id of caches[index].keys()) known.add(id);
     });
-    const missing = orderIds
-      .filter((id) => id && !known.has(id) && !pinnedRequested.has(id))
-      .slice(0, MAX_PINNED_ORDERS);
-    if (missing.length === 0) return;
+    const candidates = orderIds.filter((id) => id && !known.has(id) && !pinnedRequested.has(id));
+    if (candidates.length === 0) return { requested: 0, fetched: 0, skippedByBudget: 0 };
+    // El tope se consume contra lo ya PEDIDO en esta carga de pagina (exista o no el documento,
+    // que es lo que cuesta una lectura), no contra el lote de esta llamada.
+    const budget = MAX_PINNED_ORDERS - pinnedRequested.size;
+    if (budget <= 0) {
+      perfLog(`tope de rescate agotado (${pinnedRequested.size}); quedan ${candidates.length} pedidos sin traer`);
+      return { requested: 0, fetched: 0, skippedByBudget: candidates.length };
+    }
+    const missing = candidates.slice(0, budget);
+    const skippedByBudget = candidates.length - missing.length;
     for (const id of missing) pinnedRequested.add(id);
     // El admin va por lotes; el lider y el mensajero de uno en uno, para que un id borrado o
     // reasignado no tumbe el lote entero y les baje el saldo sin avisar. Ver getDocumentsOneByOne.
     const fetched = context?.role === "admin"
       ? await getDocumentsByIds<Order>("orders", missing)
       : await getDocumentsOneByOne<Order>("orders", missing);
-    if (stopped || fetched.length === 0) return;
-    for (const order of fetched) pinnedOrders.set(order.id, order as unknown as Record<string, unknown>);
-    perfLog(`pedidos fijados fuera de ventana: ${fetched.length} (acumulado ${pinnedOrders.size})`);
-    dirty.add("orders");
-    scheduleEmit();
+    if (stopped) return { requested: missing.length, fetched: fetched.length, skippedByBudget };
+    if (fetched.length > 0) {
+      for (const order of fetched) pinnedOrders.set(order.id, order as unknown as Record<string, unknown>);
+      perfLog(`pedidos fijados fuera de ventana: ${fetched.length} (acumulado ${pinnedOrders.size}, pedidos ${pinnedRequested.size})`);
+      dirty.add("orders");
+      scheduleEmit();
+    }
+    return { requested: missing.length, fetched: fetched.length, skippedByBudget };
   };
 
   // Una clave solo pasa a servirse desde las caches cuando TODOS sus listeners
@@ -833,6 +865,11 @@ export function subscribeFirestoreState(
       if (stopped) return;
       onError?.(error);
     });
+
+  // Lo que la suscripcion sabe hacer bajo demanda. Se entrega por callback y NO por el valor de
+  // retorno: quien llama devuelve ese valor como cleanup de su efecto, asi que cambiarlo de tipo
+  // romperia la desuscripcion. Mismo patron que `onWidenHistory` en la vista.
+  onControls?.({ pinOrders });
 
   return () => {
     stopped = true;
@@ -1003,21 +1040,20 @@ async function getDocumentsByIds<T extends { id: string }>(name: string, ids: st
  */
 async function getDocumentsOneByOne<T extends { id: string }>(name: string, ids: string[]): Promise<T[]> {
   const client = getFirebaseClient();
-  const unique = Array.from(new Set(ids.filter(Boolean)));
-  if (!client || unique.length === 0) return [];
-
-  const found: T[] = [];
-  await Promise.all(
-    unique.map(async (id) => {
-      try {
-        const snapshot = await getDoc(doc(client.db, name, id));
-        if (snapshot.exists()) found.push({ id: snapshot.id, ...snapshot.data() } as T);
-      } catch (error) {
-        console.warn(`No se pudo leer ${name}/${id}; puede faltar informacion en el saldo.`, error);
-      }
-    })
+  if (!client) return [];
+  // El bucle vive en `read-each-by-id.ts`, sin firebase, para que la suite pueda EJECUTARLO: aqui
+  // dentro no se podia probar que un id ajeno no se lleva a los demas, y esa es toda la funcion.
+  return readEachById<T>(
+    ids,
+    async (id) => {
+      const snapshot = await getDoc(doc(client.db, name, id));
+      return snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as T) : null;
+    },
+    {
+      chunkSize: ONE_BY_ONE_CHUNK,
+      onError: (id, error) => console.warn(`No se pudo leer ${name}/${id}; puede faltar informacion en el saldo.`, error)
+    }
   );
-  return found;
 }
 
 function sellerReferencesFromOrders(orders: Order[]): Seller[] {

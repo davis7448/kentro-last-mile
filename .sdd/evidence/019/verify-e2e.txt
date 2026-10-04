@@ -1,0 +1,30 @@
+# Spec 019 — verificacion funcional por historia de usuario (2026-09-19T19:43:56.007Z)
+  http://localhost:3019 · corte stl-1789686589616-driver-driver-1778271901513 · movil 390x844 · sesion de lider logistico desechable
+
+## HU_01 · el detalle suma exactamente lo que dice la cabecera
+  OK   filas pintadas: 185
+  OK   suma del detalle $14.167.490 == cabecera $14.167.490
+  OK   el aviso lo dice: "Detalle $14.167.490 · coincide con el corte."
+  errores de consola: 1 (inesperados: 0) · peticiones 4xx/5xx: 1 (inesperadas: 0)
+
+## HU_02 · cada pedido con su KNT y su valor, por antiguo que sea
+  OK   filas con codigo KNT: 185 de 185
+  OK   filas con identificador interno: 0
+  OK   filas sin importe: 0
+  OK   los seis pedidos antiguos reclamados aparecen con importe
+  errores de consola: 1 (inesperados: 0) · peticiones 4xx/5xx: 1 (inesperadas: 0)
+
+## HU_03 · las visitas sin cobro y lo que se paga por ellas
+  OK   visitas sin recaudo marcadas con pildora: 16
+  OK   su importe va a favor del domiciliario y lo dice con palabras: 16 de 16
+  OK   suman $-120.000 (negativo: bajan lo que debe entregar)
+  OK   ninguna de ellas se aplasta a cero con dinero detras
+  OK   el total del detalle no se mueve: $14.167.490
+  errores de consola: 1 (inesperados: 0) · peticiones 4xx/5xx: 1 (inesperadas: 0)
+
+VERIFICACION FUNCIONAL OK: los tres recorridos completos, sin errores de consola ni peticiones fallidas.
+## DoD 11 — firma de la entrega
+  2026-09-19. El responsable de la plataforma firma la entrega de la spec 019 tras la auditoria
+  de trazabilidad (DoD 10/11 verificados con prueba nombrada o evidencia medida) y los tres
+  recorridos funcionales de esta misma pagina. Con la firma, DoD 11/11.
+  PR: https://github.com/davis7448/kentro-last-mile/pull/4

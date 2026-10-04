@@ -1,0 +1,12 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/lib/driver-settlement-export.test.ts > spec 019 · T12 · el aviso dice por que el detalle no esta completo (RF_08, RF_11) > sin nada pendiente, el detalle coincide con el corte
+TypeError: (0 , settlementDetailNotice) is not a function
+ FAIL  src/lib/driver-settlement-export.test.ts > spec 019 · T12 · el aviso dice por que el detalle no esta completo (RF_08, RF_11) > RF_08 · mientras llegan pedidos, el aviso es que se esta completando
+TypeError: (0 , settlementDetailNotice) is not a function
+ FAIL  src/lib/driver-settlement-export.test.ts > spec 019 · T12 · el aviso dice por que el detalle no esta completo (RF_08, RF_11) > RF_11 · una fila sin importe gana sobre el tope: incompleto de verdad, no a proposito
+TypeError: (0 , settlementDetailNotice) is not a function
+ FAIL  src/lib/driver-settlement-export.test.ts > spec 019 · T12 · el aviso dice por que el detalle no esta completo (RF_08, RF_11) > RF_11 · con el tope agotado el detalle NO se presenta como coincidente
+TypeError: (0 , settlementDetailNotice) is not a function
+ FAIL  src/lib/driver-settlement-export.test.ts > spec 019 · T12 · el aviso dice por que el detalle no esta completo (RF_08, RF_11) > RF_11 · el tope gana sobre el ajuste posterior: con filas sin bajar, la diferencia no es fiable
+TypeError: (0 , settlementDetailNotice) is not a function
+      Tests  5 failed | 9 passed (14)

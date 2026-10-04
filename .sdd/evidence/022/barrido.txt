@@ -1,0 +1,17 @@
+# Spec 022 — barrido de produccion (2026-09-19T21:00:50.951Z)
+  pedidos: 5103
+  tope: $2.000.000 · umbral de confirmacion: $500.000
+
+  Distribucion de importes
+    minimo $0 · p1 $40.000 · mediana $89.900
+    p99 $179.800 · p99,9 $224.775 · maximo $76.506.523.000
+
+  Pedidos que el tope rechazaria: 2
+    KNT-003174 $76.506.523.000 | delivered | prepaid | importado | 2026-08-06
+    KNT-005321 $11.770.047.900 | cancelled | cod | manual | 2026-09-19
+
+  Pedidos que pedirian confirmacion (entran igual): 1
+    KNT-003033 $1.233.000 | delivered | prepaid | 2026-08-03
+
+RNF_02 OK: los unicos 2 pedidos por encima del tope son los dos importes imposibles conocidos.
+           Ningun pedido legitimo de los 5103 queda fuera.

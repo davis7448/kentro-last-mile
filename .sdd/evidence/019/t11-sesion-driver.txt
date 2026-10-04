@@ -1,0 +1,26 @@
+# Spec 019 — DoD 9: el detalle leido de la PANTALLA, con sesion de lider logistico
+  2026-09-19T19:36:51.817Z · http://localhost:3019 · corte stl-1789686589616-driver-driver-1778271901513
+  cuenta desechable smoke019-driver con reclamos { role: "driver", driverId: "driver-1778271901513" }
+
+  Filas en pantalla:                185   (el corte tiene 185 pedidos)
+  Cabecera (cashExpectedCop):       $14.167.490
+  Suma de las filas de PANTALLA:    $14.167.490
+  Diferencia:                       $0
+  Aviso del detalle:                Detalle $14.167.490 · coincide con el corte.
+  Filas en $0:                      1 (de ellas, sin COD ni pago: 1)
+  Filas sin importe:                0
+  Filas con identificador interno:  0
+
+  Los seis pedidos reclamados el 2026-09-19:
+    KNT-005077  $98.900
+    KNT-005058  $78.900
+    KNT-004892  $78.900
+    KNT-005064  $98.900
+    KNT-005054  $98.900
+    KNT-005060  $78.900
+    suma: $533.400
+
+  Lecturas denegadas por las reglas: 1 (de pedidos del corte: 0)
+    [warning] No se pudo leer orders/stl-1789686589616-driver-driver-1778271901513; puede faltar informacion en el saldo. FirebaseError: Missing or insufficient permissions.
+
+VERIFICACION OK: el detalle de la PANTALLA suma la cabecera con una sesion real de lider logistico.
