@@ -11,7 +11,7 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
-    "T1": { "requirements": ["RF_02", "RF_08", "RF_10", "RF_22", "RF_27", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt"], "testWritten": false, "done": false },
+    "T1": { "requirements": ["RF_01", "RF_02", "RF_08", "RF_10", "RF_22", "RF_27", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt"], "testWritten": false, "done": false },
     "T2": { "requirements": ["RNF_05", "RF_01", "RF_02", "RF_17"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t2-query-check.txt", "firestore.indexes.json"], "testWritten": false, "done": false },
     "T3": { "requirements": ["RNF_01", "RF_25", "RF_26", "RF_20"], "files": ["functions/src/store-api-auth.ts", "src/lib/store-api-auth.test.ts"], "testWritten": false, "done": false },
     "T4": { "requirements": ["RF_04", "RF_05", "RF_06", "RF_13", "RF_14", "RF_15", "RF_19", "RF_21"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts"], "testWritten": false, "done": false },
@@ -36,7 +36,7 @@
     "T22": { "requirements": ["RF_27", "RF_17", "RF_24"], "files": ["src/components/order-audit-trail.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
     "T23": { "requirements": ["RF_25"], "files": ["src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts", "src/lib/spec-013-guards.test.ts"], "testWritten": false, "done": false },
     "T24": { "requirements": ["RF_20", "RF_01"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json"], "testWritten": false, "done": false },
-    "T25": { "requirements": ["RF_11"], "files": ["src/lib/fixtures/029-kovia-order.json", "src/lib/order-seller-actions.test.ts", "scripts/verify-029.js", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
+    "T25": { "requirements": ["RF_11", "RF_16"], "files": ["src/lib/fixtures/029-kovia-order.json", "src/lib/order-seller-actions.test.ts", "scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t25-kovia-replay.txt"], "testWritten": false, "done": false },
     "T26": { "requirements": ["RF_17", "RNF_01", "RNF_02"], "files": ["src/app/api-tiendas/page.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
     "T27": { "requirements": ["RF_20", "RF_27", "RF_16", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt"], "testWritten": false, "done": false }
   },

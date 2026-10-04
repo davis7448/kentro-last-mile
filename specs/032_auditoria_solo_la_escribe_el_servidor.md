@@ -23,6 +23,22 @@ explotado que se sepa, pero:
 **Objetivo:** que solo el servidor pueda escribir `auditEvents`, sin perder ningun evento que hoy escriba el
 cliente legitimamente.
 
+### 1.1 Riesgo relacionado: cambios de estado desde el cliente sin historial (anadido 2026-10-04)
+
+`firestore.rules` (funcion `operationalOrderUpdateByAssignee`, hacia la linea 122, usada en el `update` de
+`orders`) deja que el **lider o el mensajero asignados** cambien desde el cliente el `status` de un pedido entre
+`assigned`, `call_pending`, `scheduled`, `picked_up`, `in_route` y `retry_pending` (y `callOutcome`, `callNote`,
+fechas y franjas de agenda), sin pasar por ninguna callable. Consecuencias:
+
+- esos cambios **no escriben `orderHistory`** (la 029 registra solo lo que pasa por callables del panel y por la
+  API) ni, salvo que el cliente lo haga, `auditEvents`;
+- contradice en la practica la regla de oro 1 del proyecto ("el ciclo de vida de un pedido se cambia solo por
+  callables del servidor") para ese tramo del ciclo;
+- el historial que la 029 ensena a la tienda y a CENTRAL tiene un hueco en esos estados.
+
+La 029 lo declara como limite conocido de su RF_16 y no lo cierra. Esta spec decide si lo cierra (mover esas
+transiciones a callables con historial y quitar la rama de la regla) o lo deja para otra; ver seccion 7.
+
 ## 2. Requisitos funcionales (EARS + RFC 2119)
 
 - **RF_01 (ubicua):** Las reglas de Firestore MUST NOT permitir `create`, `update` ni `delete` en
@@ -38,6 +54,9 @@ cliente legitimamente.
 - **RF_06 (evento):** **Cuando** esta spec este desplegada, la mitigacion temporal de la 029 (2.7: solo
   eventos verificables o de accion permitida para la tienda) MAY retirarse, decidiendolo en esta spec con
   prueba de que ya no hay eventos de cliente posteriores al cierre.
+- **RF_07 (borrador, a decidir, 1.1):** El inventario de RF_02 MUST incluir las escrituras de `status` de
+  `orders` que hace el cliente bajo `operationalOrderUpdateByAssignee` (desde que codigo de `src/` y cuantas en
+  los ultimos 90 dias), para decidir si se mueven a callables que escriban `auditEvents` y `orderHistory`.
 
 ## 3. Requisitos no funcionales
 
@@ -50,6 +69,8 @@ cliente legitimamente.
 - Navegador con el bundle anterior en cache que intenta crear un evento tras el cierre: la escritura falla con
   `permission-denied`; el plan debe comprobar que ese fallo no tumba la accion principal del usuario.
 - Eventos de cliente historicos: se quedan; si alguno resulta fabricado, se documenta, no se borra (RF_05).
+- Si se cierra tambien `operationalOrderUpdateByAssignee` (1.1): un mensajero con el bundle viejo que agenda o
+  marca "en ruta" perderia la accion, no solo el evento; aplica RNF_01 con mas razon.
 
 ## 5. Fuera de alcance
 
@@ -58,7 +79,7 @@ cliente legitimamente.
 
 ## 6. Definition of Done (borrador)
 
-1. Inventario (RF_02) con evidencia de codigo y de produccion.
+1. Inventario (RF_02, RF_07) con evidencia de codigo y de produccion.
 2. Pruebas: guarda de fuente (RF_04) y guarda de reglas (`allow create, update, delete: if false`).
 3. Comprobacion con sesion real de `seller`: crear un `auditEvents` directo devuelve 403.
 4. `npm test`, `npx tsc --noEmit` (raiz y `functions/`), `npm run lint` en verde.
@@ -68,9 +89,13 @@ cliente legitimamente.
 
 - ¿Hay escrituras de cliente legitimas hoy? La busqueda rapida de la 029 solo encontro lecturas en
   `src/lib/firebase/state-store.ts`; el inventario de RF_02 lo confirma o lo desmiente.
+- ¿Se cierra en esta spec `operationalOrderUpdateByAssignee` (1.1), moviendo agenda, llamada y "en ruta" a
+  callables con historial, o va a una spec propia? Depende del inventario de RF_07 y del coste para la app del
+  mensajero.
 
 ## 8. Historial de cambios
 
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-10-04 | Borrador inicial | P3 del plan de la 029, decidida como spec aparte de prioridad alta |
+| 2026-10-04 | Seccion 1.1, RF_07, caso limite y pregunta abierta: `operationalOrderUpdateByAssignee` deja al lider y al mensajero cambiar `status` desde el cliente sin `orderHistory` ni auditoria de servidor | Tercer `/sdd-analyze` de la 029: hueco del historial de RF_16 que la 029 declara y no cierra |
