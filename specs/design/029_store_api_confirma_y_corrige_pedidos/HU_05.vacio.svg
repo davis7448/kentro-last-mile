@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_05 - Historial del pedido vacio: pedido sin cambios registrados (tienda, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.10"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.10"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="140" r="200" fill="url(#ga)"/>
+  <circle cx="340" cy="560" r="220" fill="url(#gb)"/>
+
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">KV</text>
+
+  <rect x="16" y="68" width="343" height="404" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="98" class="n" font-size="15" font-weight="700" fill="#f4f6f8">KNT-003410</text>
+  <rect x="261" y="82" width="82" height="24" rx="12" fill="#c6f24e" fill-opacity="0.14"/>
+  <text x="302" y="98" text-anchor="middle" font-size="12" font-weight="600" fill="#c6f24e">Entregado</text>
+  <text x="32" y="120" class="n" font-size="13" fill="#cbd3dc">Jorge Ivan Salazar · $64.900</text>
+  <text x="32" y="138" font-size="13" fill="#9aa5b3">Cl 5 # 38-20, Cali</text>
+
+  <rect x="28" y="154" width="319" height="306" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity="0.10"/>
+  <circle cx="50" cy="177" r="7" fill="none" stroke="#f4f6f8" stroke-width="1.6"/>
+  <path d="M50 173 v4 l3 2" fill="none" stroke="#f4f6f8" stroke-width="1.6" stroke-linecap="round"/>
+  <text x="64" y="182" font-size="14" font-weight="700" fill="#f4f6f8">Historial del pedido</text>
+  <text x="331" y="182" text-anchor="end" font-size="12" font-weight="600" fill="#9aa5b3">Ocultar</text>
+
+  <rect x="40" y="204" width="295" height="74" rx="12" fill="#7cc4ff" fill-opacity="0.08" stroke="#7cc4ff" stroke-opacity="0.30"/>
+  <text x="52" y="224" font-size="12" font-weight="600" fill="#f4f6f8">Campo por campo desde el 6 oct 2026.</text>
+  <text x="52" y="242" font-size="12" fill="#cbd3dc">No incluye importaciones de Shopify</text>
+  <text x="52" y="260" font-size="12" fill="#cbd3dc">ni webhooks de tienda, ni ChatBy.</text>
+
+  <!-- Vacio -->
+  <circle cx="187.5" cy="324" r="20" fill="#ffffff" fill-opacity="0.06"/>
+  <circle cx="187.5" cy="324" r="9" fill="none" stroke="#9aa5b3" stroke-width="1.8"/>
+  <path d="M187.5 319 v5 l3.5 2.5" fill="none" stroke="#9aa5b3" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="187.5" y="370" text-anchor="middle" font-size="14" font-weight="700" fill="#f4f6f8">Sin cambios registrados</text>
+  <text x="187.5" y="392" text-anchor="middle" font-size="12" fill="#9aa5b3">Este pedido no tiene cambios desde el</text>
+  <text x="187.5" y="410" text-anchor="middle" font-size="12" fill="#9aa5b3">6 oct 2026 ni eventos anteriores.</text>
+
+  <!-- Resto de la lista (filas plegadas) -->
+  <rect x="16" y="484" width="343" height="252" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g>
+    <circle cx="44" cy="520" r="16" fill="#212832"/><text x="44" y="524" text-anchor="middle" font-size="11" font-weight="700" fill="#cbd3dc">AP</text>
+    <text x="70" y="516" font-size="14" font-weight="600" fill="#f4f6f8">Andrea Perea</text>
+    <text x="70" y="534" class="n" font-size="12" fill="#9aa5b3">KNT-005833</text>
+    <text x="343" y="524" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#f4f6f8">$72.000</text>
+    <line x1="32" y1="552.5" x2="343" y2="552.5" stroke="#ffffff" stroke-opacity="0.05"/>
+    <circle cx="44" cy="588" r="16" fill="#212832"/><text x="44" y="592" text-anchor="middle" font-size="11" font-weight="700" fill="#cbd3dc">LC</text>
+    <text x="70" y="584" font-size="14" font-weight="600" fill="#f4f6f8">Luis Carlos Mora</text>
+    <text x="70" y="602" class="n" font-size="12" fill="#9aa5b3">KNT-005840</text>
+    <text x="343" y="592" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#f4f6f8">$119.800</text>
+    <line x1="32" y1="620.5" x2="343" y2="620.5" stroke="#ffffff" stroke-opacity="0.05"/>
+    <circle cx="44" cy="656" r="16" fill="#212832"/><text x="44" y="660" text-anchor="middle" font-size="11" font-weight="700" fill="#cbd3dc">DV</text>
+    <text x="70" y="652" font-size="14" font-weight="600" fill="#f4f6f8">Diana Valencia</text>
+    <text x="70" y="670" class="n" font-size="12" fill="#9aa5b3">KNT-005851</text>
+    <text x="343" y="660" text-anchor="end" class="n" font-size="13" font-weight="600" fill="#f4f6f8">$89.900</text>
+  </g>
+
+  <rect x="0" y="748" width="375" height="64" fill="#191e25"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="11" text-anchor="middle">
+    <rect x="37" y="758" width="20" height="20" rx="6" fill="#c6f24e"/><text x="47" y="796" fill="#f4f6f8" font-weight="700">Operacion</text>
+    <rect x="131" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="141" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="224" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="234" y="796" fill="#9aa5b3">Inventario</text>
+    <rect x="318" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="328" y="796" fill="#9aa5b3">Tiendas</text>
+  </g>
+</svg>

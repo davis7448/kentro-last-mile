@@ -1,0 +1,15 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 1280, "height": 800 },
+  "expect": [
+    { "role": "dialog", "name": "Clave de escritura de Bella Mujer" },
+    { "role": "heading", "name": "Clave de escritura de Bella Mujer" },
+    { "role": "button", "name": "Cerrar" },
+    { "role": "alert", "name": "Copiala ahora" },
+    { "role": "textbox", "name": "Clave de escritura" },
+    { "role": "button", "name": "Copiar clave de escritura" },
+    { "role": "button", "name": "Ya la guarde" }
+  ],
+  "threshold": { "missing": 0 }
+}

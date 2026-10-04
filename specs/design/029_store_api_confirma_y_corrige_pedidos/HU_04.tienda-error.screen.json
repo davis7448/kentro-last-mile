@@ -1,0 +1,12 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Clave de escritura" },
+    { "role": "alert", "name": "No se pudo rotar la clave" },
+    { "role": "button", "name": "Reintentar" },
+    { "role": "status", "name": "Activa" }
+  ],
+  "threshold": { "missing": 0 }
+}

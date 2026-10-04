@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_04 - No se pudo rotar la clave de escritura; la anterior sigue activa (tienda, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.10"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="160" r="200" fill="url(#ga)"/>
+  <circle cx="330" cy="540" r="220" fill="url(#gc)"/>
+
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">KV</text>
+
+  <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Integraciones</text>
+  <text x="16" y="122" font-size="14" fill="#9aa5b3">Shopify, API y sincronizacion</text>
+
+  <rect x="16" y="142" width="343" height="64" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M33 168 l5 5 l-5 5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="170" font-size="14" font-weight="700" fill="#f4f6f8">Conexion con Shopify</text>
+  <text x="52" y="188" font-size="12" fill="#c6f24e">1 tienda conectada</text>
+  <circle cx="331" cy="174" r="11" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+  <text x="331" y="179" text-anchor="middle" font-size="13" font-weight="700" fill="#9aa5b3">?</text>
+
+  <rect x="16" y="218" width="343" height="518" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M31 246 l5 5 l5 -5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="246" font-size="14" font-weight="700" fill="#f4f6f8">Clave de API</text>
+  <text x="52" y="264" font-size="12" fill="#9aa5b3">Lectura y escritura desde tus sistemas</text>
+  <circle cx="331" cy="250" r="11" fill="none" stroke="#9aa5b3" stroke-width="1.5"/>
+  <text x="331" y="255" text-anchor="middle" font-size="13" font-weight="700" fill="#9aa5b3">?</text>
+  <line x1="32" y1="284.5" x2="343" y2="284.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <text x="32" y="312" font-size="15" font-weight="700" fill="#f4f6f8">Clave de lectura</text>
+  <text x="32" y="334" font-size="13" fill="#9aa5b3">Consulta pedidos, KPIs y liquidaciones.</text>
+  <rect x="32" y="350" width="311" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="187.5" y="377" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Ver clave de lectura</text>
+  <line x1="32" y1="414.5" x2="343" y2="414.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <text x="32" y="442" font-size="15" font-weight="700" fill="#f4f6f8">Clave de escritura</text>
+
+  <!-- Error (role=alert) -->
+  <rect x="32" y="458" width="311" height="152" rx="16" fill="#ff8b7c" fill-opacity="0.10" stroke="#ff8b7c" stroke-opacity="0.35"/>
+  <circle cx="58" cy="486" r="12" fill="#ff8b7c" fill-opacity="0.18"/>
+  <text x="58" y="491" text-anchor="middle" font-size="14" font-weight="800" fill="#ff8b7c">!</text>
+  <text x="78" y="491" font-size="15" font-weight="700" fill="#ff8b7c">No se pudo rotar la clave</text>
+  <text x="48" y="518" font-size="13" fill="#cbd3dc">La que termina en c41e sigue activa.</text>
+  <text x="48" y="536" font-size="13" fill="#cbd3dc">No se genero ninguna clave nueva.</text>
+  <rect x="48" y="552" width="279" height="44" rx="22" fill="#c6f24e"/>
+  <text x="187.5" y="579" text-anchor="middle" font-size="14" font-weight="700" fill="#10140c">Reintentar</text>
+
+  <rect x="32" y="626" width="80" height="28" rx="14" fill="none" stroke="#c6f24e" stroke-opacity="0.6"/>
+  <circle cx="48" cy="640" r="4" fill="#c6f24e"/>
+  <text x="60" y="645" font-size="12" font-weight="600" fill="#c6f24e">Activa</text>
+  <text x="32" y="684" font-size="13" fill="#9aa5b3">Termina en</text>
+  <text x="343" y="684" text-anchor="end" class="n" font-size="14" font-weight="700" fill="#f4f6f8">c41e</text>
+  <line x1="32" y1="696.5" x2="343" y2="696.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="720" font-size="13" fill="#9aa5b3">Generada</text>
+  <text x="343" y="720" text-anchor="end" class="n" font-size="14" font-weight="600" fill="#f4f6f8">6 oct 2026, 10:42</text>
+
+  <rect x="0" y="748" width="375" height="64" fill="#191e25"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="11" text-anchor="middle">
+    <rect x="37" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="47" y="796" fill="#9aa5b3">Operacion</text>
+    <rect x="131" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="141" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="224" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="234" y="796" fill="#9aa5b3">Inventario</text>
+    <rect x="318" y="758" width="20" height="20" rx="6" fill="#c6f24e"/><text x="328" y="796" fill="#f4f6f8" font-weight="700">Tiendas</text>
+  </g>
+</svg>

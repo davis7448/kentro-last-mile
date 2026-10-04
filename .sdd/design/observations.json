@@ -574,6 +574,374 @@
         "height": 812
       },
       "evidence": ".sdd/evidence/026_efectivo_que_no_llega_a_un_corte/design/HU_02.error/86537f2b69b0e71de404943c1ec0d4db0cc1f246f67607415f267698031785d3-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.tienda-sin-clave.svg",
+      "sha256": "d57e73ca4639885960cd48040ec1e4f595251ab51fd47fad925c07ce5c1724a6",
+      "observedAt": "2026-10-04T22:39:47.527Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.tienda-sin-clave/d57e73ca4639885960cd48040ec1e4f595251ab51fd47fad925c07ce5c1724a6-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.tienda-recien-generada.svg",
+      "sha256": "ae86a359ac4fd7140693fdc028aa464dc313e1c6bec3f9e05fed0c61b6de6108",
+      "observedAt": "2026-10-04T22:41:36.302Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 960
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 960
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 960
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.tienda-recien-generada/ae86a359ac4fd7140693fdc028aa464dc313e1c6bec3f9e05fed0c61b6de6108-375x960@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.tienda-activa.svg",
+      "sha256": "7a9d8e3680030b85eb755725b9f5ba38451caf700ff8a29d770c5792eaf9b5fb",
+      "observedAt": "2026-10-04T22:41:46.959Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.tienda-activa/7a9d8e3680030b85eb755725b9f5ba38451caf700ff8a29d770c5792eaf9b5fb-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.tienda-rotar.svg",
+      "sha256": "48bcd70180bfd8e97003156adb30df261e35fa6584dabd288867da3d5557b1ff",
+      "observedAt": "2026-10-04T22:41:49.892Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.tienda-rotar/48bcd70180bfd8e97003156adb30df261e35fa6584dabd288867da3d5557b1ff-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.tienda-error.svg",
+      "sha256": "bb6551d86aac018aa6c29f9340719e2da4a950f6d2e64efebe3f9ee0e08841a4",
+      "observedAt": "2026-10-04T22:41:52.968Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.tienda-error/bb6551d86aac018aa6c29f9340719e2da4a950f6d2e64efebe3f9ee0e08841a4-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.admin-lista-movil.svg",
+      "sha256": "4581a79dcfbabdc34896252a8a76d677217e8ab3d4fc987ef45ffb2bf2632fc8",
+      "observedAt": "2026-10-04T22:43:47.071Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.admin-lista-movil/4581a79dcfbabdc34896252a8a76d677217e8ab3d4fc987ef45ffb2bf2632fc8-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.admin-lista.svg",
+      "sha256": "a0aac30da50f9ab90c45bea77b4fdcdd08f199d1912df90b59b4c4cefda84b00",
+      "observedAt": "2026-10-04T22:43:51.885Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 860
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 860
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 860
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.admin-lista/a0aac30da50f9ab90c45bea77b4fdcdd08f199d1912df90b59b4c4cefda84b00-1280x860@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_04.admin-recien-generada.svg",
+      "sha256": "63769e0bf526889a6dd09960e50bb8c28cb44aeaf0b7f5a7abd0688b5af725f1",
+      "observedAt": "2026-10-04T22:43:55.950Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 800
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_04.admin-recien-generada/63769e0bf526889a6dd09960e50bb8c28cb44aeaf0b7f5a7abd0688b5af725f1-1280x800@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.tienda.svg",
+      "sha256": "c1a2381f5026d8e099589ea93d82e4585a024cae0ec45f6a64c197cce55df314",
+      "observedAt": "2026-10-04T22:45:19.770Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.tienda/c1a2381f5026d8e099589ea93d82e4585a024cae0ec45f6a64c197cce55df314-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.tienda.svg",
+      "sha256": "7b4157c5a6d797b7fd5ffccc0b9cadfedb55364f6a3cce89b7ef86b8aff96f95",
+      "observedAt": "2026-10-04T22:46:25.336Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.tienda/7b4157c5a6d797b7fd5ffccc0b9cadfedb55364f6a3cce89b7ef86b8aff96f95-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.admin.svg",
+      "sha256": "492427124005df11b6199528bedf3eb62bedf3cebe729f0a95cc4dcbb979848e",
+      "observedAt": "2026-10-04T22:46:28.474Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.admin/492427124005df11b6199528bedf3eb62bedf3cebe729f0a95cc4dcbb979848e-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.vacio.svg",
+      "sha256": "084878d5b37320d6b8470e65472a74a9efadae4dc3aaa4838dad47aff29bf4c0",
+      "observedAt": "2026-10-04T22:47:37.433Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.vacio/084878d5b37320d6b8470e65472a74a9efadae4dc3aaa4838dad47aff29bf4c0-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.error.svg",
+      "sha256": "e3a6ca7e35a835c7064198240f57947595deeac4da04688b17883a5b6c1eb3ef",
+      "observedAt": "2026-10-04T22:47:40.459Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "scale": 1,
+      "image": {
+        "width": 375,
+        "height": 812
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 375,
+        "height": 812
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.error/e3a6ca7e35a835c7064198240f57947595deeac4da04688b17883a5b6c1eb3ef-375x812@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.tienda-escritorio.svg",
+      "sha256": "ae6a0775dc2507b49bee23c2570d6cdddf2ccd36012d425b8e671f97cf1fb171",
+      "observedAt": "2026-10-04T22:49:03.539Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 800
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.tienda-escritorio/ae6a0775dc2507b49bee23c2570d6cdddf2ccd36012d425b8e671f97cf1fb171-1280x800@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.admin-escritorio.svg",
+      "sha256": "0cb01a3bb836d0cc0d94aadc7466646bb15673eb9a7b446ee58921e3c1a93fe0",
+      "observedAt": "2026-10-04T22:49:07.171Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 800
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.admin-escritorio/0cb01a3bb836d0cc0d94aadc7466646bb15673eb9a7b446ee58921e3c1a93fe0-1280x800@1x.png"
+    },
+    {
+      "file": "specs/design/029_store_api_confirma_y_corrige_pedidos/HU_05.admin-escritorio.svg",
+      "sha256": "c460382619785eb242b5c2bacd4f90c7d494739681598e7b5828f8eb71df55ba",
+      "observedAt": "2026-10-04T22:49:43.963Z",
+      "tool": "mcp__plugin_sdd_playwright_design__browser_take_screenshot",
+      "agent": "sdd:sdd-uxui",
+      "host": "srv995537",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "scale": 1,
+      "image": {
+        "width": 1280,
+        "height": 800
+      },
+      "valid": true,
+      "contractViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "evidence": ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/design/HU_05.admin-escritorio/c460382619785eb242b5c2bacd4f90c7d494739681598e7b5828f8eb71df55ba-1280x800@1x.png"
     }
   ]
 }

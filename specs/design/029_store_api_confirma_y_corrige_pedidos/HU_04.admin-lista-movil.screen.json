@@ -1,0 +1,15 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "button", "name": "Claves de API de tiendas" },
+    { "role": "textbox", "name": "Buscar tienda" },
+    { "role": "list", "name": "Claves de API por tienda" },
+    { "role": "button", "name": "Rotar clave de escritura de Kovia" },
+    { "role": "button", "name": "Generar clave de escritura de Bella Mujer" },
+    { "role": "button", "name": "Siguiente" }
+  ],
+  "threshold": { "missing": 0 }
+}

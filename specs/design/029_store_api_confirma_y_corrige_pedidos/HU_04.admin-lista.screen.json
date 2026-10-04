@@ -1,0 +1,21 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 1280, "height": 860 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "button", "name": "Claves de API de tiendas" },
+    { "role": "textbox", "name": "Buscar tienda" },
+    { "role": "table", "name": "Claves de API por tienda" },
+    { "role": "columnheader", "name": "Tienda" },
+    { "role": "columnheader", "name": "Lectura" },
+    { "role": "columnheader", "name": "Escritura" },
+    { "role": "columnheader", "name": "Generada" },
+    { "role": "columnheader", "name": "Acciones" },
+    { "role": "button", "name": "Rotar clave de escritura de Kovia" },
+    { "role": "button", "name": "Generar clave de escritura de Bella Mujer" },
+    { "role": "button", "name": "Anterior" },
+    { "role": "button", "name": "Siguiente" }
+  ],
+  "threshold": { "missing": 0 }
+}

@@ -1,0 +1,14 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "heading", "name": "Clave de lectura" },
+    { "role": "button", "name": "Ver clave de lectura" },
+    { "role": "heading", "name": "Clave de escritura" },
+    { "role": "status", "name": "Activa" },
+    { "role": "button", "name": "Rotar clave de escritura" }
+  ],
+  "threshold": { "missing": 0 }
+}

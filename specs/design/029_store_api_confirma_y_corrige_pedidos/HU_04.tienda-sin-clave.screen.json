@@ -1,0 +1,16 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "button", "name": "Clave de API" },
+    { "role": "heading", "name": "Clave de lectura" },
+    { "role": "button", "name": "Ver clave de lectura" },
+    { "role": "heading", "name": "Clave de escritura" },
+    { "role": "status", "name": "Sin clave de escritura" },
+    { "role": "button", "name": "Generar clave de escritura" },
+    { "role": "link", "name": "/api-tiendas" }
+  ],
+  "threshold": { "missing": 0 }
+}

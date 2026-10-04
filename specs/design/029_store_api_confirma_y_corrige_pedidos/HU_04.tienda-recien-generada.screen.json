@@ -1,0 +1,15 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 960 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "heading", "name": "Clave de escritura" },
+    { "role": "alert", "name": "Copiala ahora" },
+    { "role": "textbox", "name": "Clave de escritura" },
+    { "role": "button", "name": "Copiar clave de escritura" },
+    { "role": "button", "name": "Ya la guarde" },
+    { "role": "button", "name": "Ver clave de lectura" }
+  ],
+  "threshold": { "missing": 0 }
+}
