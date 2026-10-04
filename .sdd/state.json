@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "phase": "released",
+  "phase": "design",
   "activeSpec": {
-    "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
+    "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
   },
   "ui": {
@@ -10,7 +10,8 @@
     "by": "codex@local@srv995537",
     "at": "2026-10-02T15:12:13Z"
   },
-  "tasks": {
+  "tasks": {},
+  "archivedTasks026": {
     "T1": {
       "requirements": [
         "RNF_01",
@@ -521,6 +522,22 @@
       "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
       "status": "borrador",
       "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
+    },
+    "029": {
+      "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
+      "status": "aprobada",
+      "approved": "2026-10-04 (respuestas propuestas por Claude, aceptadas por el responsable; decisiones 2, 6 y 7 ratificadas)",
+      "origen": "peticion de CENTRAL (Kovia/ONEP) 2026-10-02; renumerada de 028 el 2026-10-04 (028 = abrir la app no escribe nada, otra sesion)"
+    },
+    "030": {
+      "file": "specs/030_webhook_firmado_hacia_la_tienda.md",
+      "status": "borrador",
+      "origen": "OPC_01 de la 029 (2026-10-04)"
+    },
+    "031": {
+      "file": "specs/031_historial_de_importaciones_y_chatby.md",
+      "status": "borrador",
+      "origen": "fuera de alcance de RF_16 de la 029 (decision del responsable 2026-10-04)"
     }
   },
   "archivedTasks": {
@@ -2521,7 +2538,5 @@
       }
     }
   },
-  "plan": "specs/026_plan.md",
-  "tasksFile": "specs/026_tasks.md",
   "migrations": []
 }
