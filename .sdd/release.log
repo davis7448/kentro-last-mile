@@ -1,0 +1,1 @@
+{"at":"2026-10-04T22:19:03Z","scope":"deploy-prod","commitSha":"7f53e14f5929c7c5b9661ed41174a418ccde86d5","approvedBy":"codex@local@srv995537","actor":"claude (sesion principal)","action":"secret OPS_NOTICE_WEBHOOK_URL=none; firebase deploy --only functions; npm run deploy:hosting; compare --deployed PASA"}

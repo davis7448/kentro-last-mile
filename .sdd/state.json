@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "phase": "deploy",
+  "phase": "release",
   "activeSpec": {
     "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
     "status": "approved"
@@ -511,7 +511,11 @@
       "status": "aprobada",
       "approved": "2026-10-02",
       "origen": "producto de LAB sin poder pagarse por efectivo con el domiciliario (2026-09-30)",
-      "enmienda": "2026-10-02: RF_09 cubierto por compensacion (decidido por el responsable)"
+      "enmienda": "2026-10-02: RF_09 cubierto por compensacion (decidido por el responsable)",
+      "secretCreated": "2026-10-04: OPS_NOTICE_WEBHOOK_URL = none (sin canal; el aviso solo en la app)",
+      "functionsDeployed": "2026-10-04 (commit 7f53e14; nuevas: getCashOutstanding, updateCashAlertSettings, notifyOverdueCash 08:00 America/Bogota)",
+      "hostingDeployed": "2026-10-04 (commit 7f53e14; 0 static{ en chunks)",
+      "smokeDeployed": "2026-10-04: compare --deployed PASA (driverReceivable igual, sin explicar 0, 0 stale, 0 missing)"
     },
     "027": {
       "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
