@@ -836,3 +836,79 @@ describe("T14 · getOrderAuditTrail no resuelve identidades para la tienda", () 
     });
   });
 });
+
+describe("T15 · historial en confirmar reintento, ajuste, transicion y cierre (RF_16)", () => {
+  /*
+   * Plan 2.6: las cuatro callables del panel que cambian campos registrados escriben
+   * `buildOrderHistoryRecord(...)` con `origin: "panel"` y el `auditEventId` de SU evento, con
+   * `transaction.set(` dentro de su `runTransaction(` (mismo commit que el pedido y el auditEvent).
+   * Cada cuerpo se extrae por su nombre exportado (`^export const <name> = onCall(` hasta el primer `\n});\n`,
+   * mismo patron que T6b); si una callable deja de tener esa forma, la guarda cae en rojo.
+   */
+  const ORDERS = "functions/src/orders.ts";
+  const CALLABLES = ["confirmRetryOrder", "updateOrderAdjustments", "applyOrderTransition", "closeOrder"] as const;
+
+  function exportedCallableBody(source: string, name: string): string | null {
+    const start = source.search(new RegExp(`^export const ${name}\\s*=\\s*onCall\\(`, "m"));
+    if (start < 0) return null;
+    const end = source.indexOf("\n});\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  function bodyOf(name: string): string {
+    const body = exportedCallableBody(sourceWithoutComments(ORDERS), name);
+    expect(body, `no se encontro export const ${name} = onCall(`).not.toBeNull();
+    return body ?? "";
+  }
+
+  /** Variables que apuntan a `collection("orderHistory")` dentro del cuerpo. */
+  function historyRefVars(body: string): string[] {
+    return [...body.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*[^;]*collection\(\s*["']orderHistory["']\s*\)/g)].map((m) => m[1]);
+  }
+
+  /** Posiciones de `transaction.set(` cuyo primer argumento es una ref de `orderHistory` (literal o variable). */
+  function historyWritesInTransaction(body: string): number[] {
+    const vars = historyRefVars(body);
+    const positions: number[] = [];
+    for (const match of body.matchAll(/\btransaction\.(?:set|create)\(\s*([^,]+),/g)) {
+      const target = match[1].trim();
+      if (/collection\(\s*["']orderHistory["']\s*\)/.test(target) || vars.includes(target)) positions.push(match.index ?? 0);
+    }
+    return positions;
+  }
+
+  for (const name of CALLABLES) {
+    describe(name, () => {
+      it("llama a buildOrderHistoryRecord(", () => {
+        expect(bodyOf(name)).toContain("buildOrderHistoryRecord(");
+      });
+
+      it('escribe en collection("orderHistory") con transaction.set( dentro de su runTransaction(', () => {
+        const body = bodyOf(name);
+        const txStart = body.indexOf("runTransaction(");
+        expect(txStart, `${name} no abre runTransaction(`).toBeGreaterThanOrEqual(0);
+        const writes = historyWritesInTransaction(body);
+        expect(writes.length, `${name} no hace transaction.set( sobre orderHistory`).toBeGreaterThan(0);
+        for (const at of writes) expect(at).toBeGreaterThan(txStart);
+      });
+
+      it('pasa origin: "panel"', () => {
+        expect(bodyOf(name)).toMatch(/origin:\s*["']panel["']/);
+      });
+
+      it("pasa el auditEventId de su propio evento (la ref de newAuditRef)", () => {
+        const body = bodyOf(name);
+        const auditVars = [...body.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*newAuditRef\(/g)].map((m) => m[1]);
+        expect(auditVars.length, `${name} no crea su auditEvent con newAuditRef(`).toBeGreaterThan(0);
+        const linked = auditVars.some((v) => new RegExp(`auditEventId:\\s*${v}\\.id\\b`).test(body));
+        expect(linked, `${name} no pasa auditEventId: <auditRef>.id`).toBe(true);
+      });
+    });
+  }
+
+  it("orders.ts importa buildOrderHistoryRecord del nucleo", () => {
+    expect(sourceWithoutComments(ORDERS)).toMatch(
+      /import\s*\{[^}]*\bbuildOrderHistoryRecord\b[^}]*\}\s*from\s*["']\.\/order-seller-actions["']/
+    );
+  });
+});

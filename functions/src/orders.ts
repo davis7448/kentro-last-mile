@@ -30,7 +30,7 @@ import { createCommunityPricingResolver } from "./community-order-pricing";
 import { CLOSED_STATUSES, MANUAL_EDIT_STAMP } from "./order-import-merge";
 import { checkOrderTotalCop } from "./order-amount";
 import { runCancel, runConfirm, runDeliveryCorrection, type SellerActionRunDeps, type SellerActionRunResult } from "./order-seller-actions-run";
-import type { SellerActor } from "./order-seller-actions";
+import { buildOrderHistoryRecord, type SellerActor } from "./order-seller-actions";
 import { operationalDataBlockMessage } from "./community-access";
 import { buildAuditTrailResponse } from "./store-api-history";
 import {
@@ -248,6 +248,14 @@ type FailedCategory = z.infer<typeof failedCategorySchema>;
  */
 export function newAuditRef(db: FirebaseFirestore.Firestore) {
   return db.collection("auditEvents").doc();
+}
+
+/**
+ * Actor de `orderHistory` para una callable del panel (spec 029, plan 2.6). `SellerActor` tipa el rol de las
+ * acciones de tienda, pero el registro guarda el rol como texto: aqui tambien firman lider, mensajero y admin.
+ */
+function panelHistoryActor(uid: string, role: string): SellerActor {
+  return { kind: "user", uid, role } as SellerActor;
 }
 
 function zodFieldMessage(error: z.ZodError) {
@@ -592,6 +600,20 @@ export const confirmRetryOrder = onCall(async (request) => {
       summary: `Reintento confirmado para ${current.trackingCode ?? current.shopifyOrderId ?? snap.id}`,
       createdAt: now
     });
+    // Spec 029 (RF_16): el diff de campos registrados, en el mismo commit y enlazado a su evento.
+    const historyRecord = buildOrderHistoryRecord(current, { ...current, ...updated }, {
+      orderId: snap.id,
+      sellerId,
+      origin: "panel",
+      action: "order.retry_confirmed",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { id: snap.id, ...updated };
   });
 
@@ -732,6 +754,21 @@ export const updateOrderAdjustments = onCall(async (request) => {
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} ajustado: producto/recaudo/cantidad`,
       createdAt: now
     });
+    // Spec 029 (RF_16). `after` superpone el parche al leido: el set es merge, asi que un campo que
+    // stripUndefined quito del parche conserva su valor en el documento y no cuenta como cambio.
+    const historyRecord = buildOrderHistoryRecord(current, { ...current, ...updated }, {
+      orderId: snap.id,
+      sellerId,
+      origin: "panel",
+      action: "order.adjusted",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { id: snap.id, ...updated };
   });
 
@@ -1159,11 +1196,12 @@ export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
     }
 
+    const closeAction = nextStatus === "delivered" ? "order.delivered" : nextStatus === "failed" ? "order.failed" : "order.retry_scheduled";
     transaction.set(auditRef, {
       id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
-      action: nextStatus === "delivered" ? "order.delivered" : nextStatus === "failed" ? "order.failed" : "order.retry_scheduled",
+      action: closeAction,
       entity: "order",
       entityId: input.orderId,
       fromStatus: String(order.status ?? ""),
@@ -1171,6 +1209,20 @@ export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
       summary: nextStatus === "delivered" ? "Pedido entregado y wallet actualizada" : nextStatus === "failed" ? "Pedido fallido y wallet actualizada" : "Visita reagendada por el cliente",
       createdAt: now
     });
+    // Spec 029 (RF_16). `after` = lo que queda en el documento tras el merge de `nextOrder`.
+    const historyRecord = buildOrderHistoryRecord(order, { ...order, ...nextOrder }, {
+      orderId: input.orderId,
+      sellerId: String(order.sellerId ?? ""),
+      origin: "panel",
+      action: closeAction,
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
 
     return { order: nextOrder, walletEntries };
   });
@@ -2067,6 +2119,20 @@ export const applyOrderTransition = onCall({ memory: "512MiB" }, async (request)
       summary: `Transicion ${order.status} -> ${patch.status ?? order.status}`,
       createdAt: now
     });
+    // Spec 029 (RF_16): el parche es merge, asi que el estado final es el leido con `clean` encima.
+    const historyRecord = buildOrderHistoryRecord(order, { ...order, ...clean }, {
+      orderId,
+      sellerId: String(order.sellerId ?? ""),
+      origin: "panel",
+      action: "order.transition",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { ok: true, order: { ...order, ...clean, id: orderId } };
   });
 });

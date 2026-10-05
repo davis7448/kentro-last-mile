@@ -874,3 +874,92 @@ describe("T5 · corregir datos de entrega, validacion e historial (planificador 
     });
   });
 });
+
+describe("T15 · buildOrderHistoryRecord en las callables del panel (regresion pura)", () => {
+  /*
+   * Casos de las cuatro callables de T15 (confirmRetryOrder, updateOrderAdjustments, applyOrderTransition,
+   * closeOrder). `buildOrderHistoryRecord` ya existe desde T5, asi que estas pruebas pasan hoy: son la
+   * regresion que fija lo que esas callables van a registrar. El rojo de T15 esta en las guardas de
+   * `spec-029-guards.test.ts`.
+   */
+  const panelMeta = (action: string, actor: unknown = ADMIN_ACTOR) => ({
+    orderId: "order-1",
+    sellerId: SELLER,
+    origin: "panel",
+    action,
+    actor,
+    now: NOW,
+    auditEventId: "audit-t15"
+  });
+
+  async function build(before: Record<string, unknown>, after: Record<string, unknown>, meta: Record<string, unknown>) {
+    const { buildOrderHistoryRecord } = await load();
+    return buildOrderHistoryRecord(before, after, meta) as AnyResult | null;
+  }
+
+  function fieldsOf(r: AnyResult | null) {
+    return ((r?.changes ?? []) as Array<{ field: string }>).map((c) => c.field).sort();
+  }
+
+  function base(overrides: Record<string, unknown> = {}) {
+    return order({ productName: "Crema", sku: "CR-1", quantity: 1, totalCop: 89000, deliveryNotes: "Porteria", ...overrides });
+  }
+
+  it("ajuste (updateOrderAdjustments) que cambia totalCop y producto registra esos campos y no status", async () => {
+    const before = base({ status: "ready_to_assign" });
+    const after = base({ status: "ready_to_assign", totalCop: 129000, productName: "Serum", sku: "SR-2", quantity: 2, collectedCop: 129000 });
+    const r = await build(before, after, panelMeta("order.adjusted"));
+    expect(fieldsOf(r)).toEqual(["productName", "quantity", "sku", "totalCop"]);
+    expect((r as AnyResult).changes).toEqual(
+      expect.arrayContaining([
+        { field: "totalCop", from: 89000, to: 129000 },
+        { field: "productName", from: "Crema", to: "Serum" },
+        { field: "sku", from: "CR-1", to: "SR-2" },
+        { field: "quantity", from: 1, to: 2 }
+      ])
+    );
+    expect(r).toMatchObject({ origin: "panel", action: "order.adjusted", auditEventId: "audit-t15" });
+  });
+
+  it("ajuste que solo toca campos no registrados (recaudo, notas internas) → null", async () => {
+    const before = base({ status: "ready_to_assign" });
+    expect(await build(before, { ...before, collectedCop: 50000, adminNote: "x", updatedAt: NOW }, panelMeta("order.adjusted"))).toBeNull();
+  });
+
+  it("cierre (closeOrder) registra solo status aunque cambien evidencia, motivo y fechas", async () => {
+    const before = base({ status: "in_route", driverId: "driver-1", messengerId: "m-1" });
+    const after = {
+      ...before,
+      status: "delivered",
+      deliveredAt: NOW,
+      evidenceStoragePath: "evidence/order-1/foto.jpg",
+      closedBy: "m-uid",
+      failedReason: null,
+      updatedAt: NOW
+    };
+    const r = await build(before, after, panelMeta("order.delivered", { kind: "user", uid: "m-uid", role: "messenger" }));
+    expect((r as AnyResult).changes).toEqual([{ field: "status", from: "in_route", to: "delivered" }]);
+    expect(JSON.stringify(r)).not.toContain("driver-1");
+  });
+
+  it("confirmar reintento (confirmRetryOrder) registra failed → ready_to_assign y no el lider borrado", async () => {
+    const before = base({ status: "failed", driverId: "driver-1", messengerId: "m-1", pickupBatchId: "b-1" });
+    const after = { ...before, status: "ready_to_assign", driverId: null, messengerId: null, pickupBatchId: null, retryDecision: "retry" };
+    const r = await build(before, after, panelMeta("order.retry_confirmed", SELLER_ACTOR));
+    expect((r as AnyResult).changes).toEqual([{ field: "status", from: "failed", to: "ready_to_assign" }]);
+    expect(JSON.stringify(r)).not.toContain("driver-1");
+  });
+
+  it("transicion (applyOrderTransition) que solo cambia lider/mensajero → null", async () => {
+    const before = base({ status: "assigned", driverId: "driver-1" });
+    expect(await build(before, { ...before, driverId: "driver-2", messengerId: "m-2" }, panelMeta("order.transition"))).toBeNull();
+  });
+
+  it("actor de usuario → exactamente { kind: user, uid, role }: sin sellerId ni otros campos del claim", async () => {
+    const actor = { ...SELLER_ACTOR, email: "tienda@ejemplo.com", driverId: "driver-x" };
+    const r = await build(base({ status: "failed" }), base({ status: "ready_to_assign" }), panelMeta("order.retry_confirmed", actor));
+    expect((r as AnyResult).actor).toEqual({ kind: "user", uid: "seller-uid", role: "seller" });
+    expect(JSON.stringify(r)).not.toContain("tienda@ejemplo.com");
+    expect(JSON.stringify(r)).not.toContain("driver-x");
+  });
+});

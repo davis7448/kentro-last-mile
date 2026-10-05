@@ -397,7 +397,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     rama que excluye a los roles de tienda; las plantillas `summary:` de la lista permitida no interpolan
     variables de actor.
 
-- [ ] **T15: Historial en confirmar reintento, ajuste, transicion y cierre**
+- [x] **T15: Historial en confirmar reintento, ajuste, transicion y cierre**
   * Requisitos cubiertos: RF_16
   * Archivos: functions/src/orders.ts, src/lib/spec-029-guards.test.ts, src/lib/order-seller-actions.test.ts
   * Accion: `confirmRetryOrder`, `updateOrderAdjustments`, `applyOrderTransition` y `closeOrder` escriben
