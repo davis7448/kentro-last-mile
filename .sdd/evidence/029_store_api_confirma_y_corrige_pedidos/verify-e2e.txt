@@ -168,3 +168,7 @@
 
 Secretos en la evidencia: ninguno
 VERIFY FALLIDA
+
+## ADDENDA 2026-10-05T12:07Z — RF_25 admin repetido tras T33 (hosting a7cabf6)
+  RF_25/movil-375-admin: PASA · RF_25/escritorio-1280-admin: PASA ("por Prueba 029 admin" una sola vez)
+  Detalle en verify-e2e-RF_25.txt. Veredicto global de la verificacion: 14/14 recorridos OK.

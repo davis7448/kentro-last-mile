@@ -30,7 +30,7 @@ const REGISTRO = path.join(EVIDENCE, "verify-registro.json");
 const T27_REGISTRO = path.join(EVIDENCE, "t27-registro.json");
 const MOBILE = { name: "movil-375", viewport: { width: 375, height: 812 } };
 const DESKTOP = { name: "escritorio-1280", viewport: { width: 1280, height: 800 } };
-const ONLY = (process.argv.find((arg) => arg.startsWith("solo=")) || "").slice(5).split(",").filter(Boolean);
+const ONLY = ((process.argv.find((arg) => arg.startsWith("solo=")) || "").slice(5) || process.env.VERIFY_ONLY || "").split(",").filter(Boolean);
 const FUNCTIONS = "https://us-central1-kentro-last-mile.cloudfunctions.net";
 const SELLER_NAME = "Tienda de pruebas test-029";
 
@@ -417,11 +417,13 @@ const KEY_FLOWS = [
       await shot("recien-generada", maskKey(page));
       await dialog.getByRole("button", { name: "Ya la guarde" }).click();
       await waitWriteState(dialog, ["Activa"]);
+      const dialogText = await dialog.textContent();
+      check(`la fila "Generada por" del dialogo dice el nombre una sola vez, sin "por" duplicado (${(dialogText.match(/Generada por.{0,40}/) || [""])[0].replace(/(\d{2}:\d{2}).*/, "$1")})`, /Generada por\s*(por )?Prueba 029 admin/.test(dialogText) && !/por\s*por/.test(dialogText));
       await dialog.getByRole("button", { name: "Cerrar" }).click();
       await page.waitForTimeout(400);
       const rowText = await list.textContent();
       check(`la fila pasa a "Activa · termina en ${fresh.key.slice(-4)}"`, squash(rowText).includes(squash(`termina en ${fresh.key.slice(-4)}`)));
-      check('"Generada" no duplica la preposicion ("por por ...")', !/por por/.test(rowText));
+      check(`columna "Generada" dice "por Prueba 029 admin" una sola vez (${(rowText.match(/por[^0-9]{0,30}/g) || []).join(" | ")})`, !/por\s*por/.test(rowText) && /por Prueba 029 admin/.test(rowText));
       check(`la fila ofrece ahora "Rotar clave de escritura de ${SELLER_NAME}"`, (await page.getByRole("button", { name: `Rotar clave de escritura de ${SELLER_NAME}` }).count()) === 1);
       await shot("final");
     }
@@ -601,7 +603,7 @@ function writeGlobalAxe(outcomes) {
   for (const item of items.sort((a, b) => a.scope.localeCompare(b.scope) || IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact))) {
     lines.push(`  [${item.scope}] [${item.impact}] ${item.rule} — ${item.target} — ${item.help} (${[...new Set(item.states)].slice(0, 3).join(", ")})`);
   }
-  fs.writeFileSync(path.join(EVIDENCE, "a11y-axe.txt"), lines.join("\n"));
+  fs.writeFileSync(path.join(EVIDENCE, ONLY.length ? `a11y-axe-${ONLY.join("-")}.txt` : "a11y-axe.txt"), lines.join("\n"));
   return { byRule, count };
 }
 
@@ -812,7 +814,8 @@ async function main() {
   const allOk = !setupError && outcomes.length > 0 && outcomes.every((o) => o.ok) && cleanOk && t27Same && leaks.length === 0;
   out.push(allOk ? "VERIFY OK" : "VERIFY FALLIDA");
   const text = redactText(out.join("\n"));
-  fs.writeFileSync(path.join(EVIDENCE, "verify-e2e.txt"), text);
+  // Una corrida parcial no pisa el informe completo: se escribe aparte y se lleva a mano su seccion.
+  fs.writeFileSync(path.join(EVIDENCE, ONLY.length ? `verify-e2e-${ONLY.join("-")}.txt` : "verify-e2e.txt"), text);
   console.log(text);
   console.log(JSON.stringify(axe.byRule));
   process.exitCode = allOk ? 0 : 1;

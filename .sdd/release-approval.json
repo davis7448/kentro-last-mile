@@ -1,7 +1,7 @@
 {
   "scope": "deploy-prod",
-  "commitSha": "9ee6deaa4f36416cdb349c2ed1c92149796c135b",
+  "commitSha": "a7cabf6c4952d8d7a905066354200a5f0cec98f4",
   "approvedBy": "codex@local@srv995537",
-  "approvedAt": "2026-10-05T06:11:07Z",
-  "expiresAt": "2026-10-05T07:11:07Z"
+  "approvedAt": "2026-10-05T07:00:00Z",
+  "expiresAt": "2026-10-05T08:00:00Z"
 }

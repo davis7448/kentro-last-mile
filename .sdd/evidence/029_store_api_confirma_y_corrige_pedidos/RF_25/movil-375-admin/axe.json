@@ -28,7 +28,7 @@
     "help": "All page content should be contained by landmarks",
     "nodes": [
      {
-      "target": ".border-t.border-white\\/10.bg-panel",
+      "target": ".border-t.bg-panel.border-white\\/10",
       "impact": "moderate",
       "scope": "app",
       "html": "<div class=\"border-t border-white/10 bg-panel\">"
