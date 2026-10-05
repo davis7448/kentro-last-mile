@@ -65,7 +65,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Nucleo puro
 
-- [ ] **T3: Credenciales y key de escritura (puro)**
+- [x] **T3: Credenciales y key de escritura (puro)**
   * Requisitos cubiertos: RNF_01, RNF_02, RF_25, RF_26, RF_20
   * Archivos: functions/src/store-api-auth.ts, src/lib/store-api-auth.test.ts
   * Accion: `generateWriteKey()` (`kw_` + 45 base64url, 48 en total), `writeKeyFingerprint` (sha256 hex),

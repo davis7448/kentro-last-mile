@@ -181,7 +181,7 @@ pedido, donde el segundo se evalua con el estado que dejo el primero).
 
 ### 2.3 Key de escritura (RF_25, RF_26, RNF_01)
 
-- **Formato:** `kw_` + 45 caracteres base64url de `crypto.randomBytes(34)` → 48 caracteres (las dos lineas de
+- **Formato:** `kw_` + 45 caracteres base64url de `crypto.randomBytes(34)` (que da 46; se recorta a 45, 270 bits) → 48 caracteres (las dos lineas de
   24 del diseno). El prefijo `kw_` sirve para distinguirla y para rechazarla barato en query; la key de lectura
   (48 hex) no lo tiene. Se guarda, pero no se muestra como dato aparte (RF_25).
 - **Huella:** `sha256(key)` en hex. Sin pepper ni HMAC con secreto: la key tiene ~270 bits de entropia, asi
