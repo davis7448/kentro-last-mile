@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T22",
+  "activeTask": "T23",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
@@ -34,7 +34,7 @@
     "T19": { "requirements": ["RF_25", "RF_27", "RF_17"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts", "src/lib/order-audit-trail-view.ts", "src/lib/order-audit-trail-view.test.ts"], "testWritten": true, "done": true },
     "T20": { "requirements": ["RF_25", "RF_26"], "files": ["src/components/store-api-write-key.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T21": { "requirements": ["RF_25", "RF_26"], "files": ["src/components/store-api-keys-admin.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
-    "T22": { "requirements": ["RF_27", "RF_17", "RF_24"], "files": ["src/components/order-audit-trail.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
+    "T22": { "requirements": ["RF_27", "RF_17", "RF_24"], "files": ["src/components/order-audit-trail.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T23": { "requirements": ["RF_25"], "files": ["src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts", "src/lib/spec-013-guards.test.ts"], "testWritten": false, "done": false },
     "T24": { "requirements": ["RF_20", "RF_01"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json"], "testWritten": false, "done": false },
     "T25": { "requirements": ["RF_11", "RF_16"], "files": ["src/lib/fixtures/029-kovia-order.json", "src/lib/order-seller-actions.test.ts", "scripts/verify-029.js", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },

@@ -517,7 +517,11 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
   * Verificacion: bloque `describe("T21 · ...")`: montado solo para admin; la columna Lectura no muestra la key;
     E2E en `/sdd-verify` contra `HU_04.admin-*.screen.json`.
 
-- [ ] **T22: "Historial del pedido" con origen y cambios**
+- [x] **T22: "Historial del pedido" con origen y cambios**
+  * **Al cerrar (2026-10-05), limites conocidos:** el modelo de vista se elige por `activeRole`, pero el servidor
+    responde por el rol del token: un admin con el sombrero de tienda ve todas las pildoras "Kentro" (sin fuga:
+    es admin). Lider y mensajero lo ven como admin, como hoy (con identidades). "Campo" es la unica cabecera
+    escrita en el componente (no esta en el modelo).
   * Requisitos cubiertos: RF_27, RF_17, RF_24
   * Archivos: src/components/order-audit-trail.tsx, src/components/operations-app.tsx, src/lib/spec-029-guards.test.ts
   * **Compuerta:** no empieza hasta que `sdd-uxui` ratifique en el README del diseno las etiquetas

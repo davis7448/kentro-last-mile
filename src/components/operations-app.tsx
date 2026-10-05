@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } fr
 import { renderCode128Svg } from "@/lib/barcode";
 import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
 import { CashOutstandingLeaderPanel } from "./cash-outstanding-leader";
+import { OrderAuditTrail } from "./order-audit-trail";
 import { StoreApiKeysAdminPanel } from "./store-api-keys-admin";
 import { StoreWriteKeySection } from "./store-api-write-key";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
@@ -30,7 +31,6 @@ import {
   closeFirebaseOrder,
   confirmFirebaseImportedOrder,
   confirmFirebaseRetryOrder,
-  fetchFirebaseOrderAuditTrail,
   rejectFirebaseSellerPayout,
   requestFirebaseSellerPayout,
   getFirebaseBootstrapStatus,
@@ -86,7 +86,7 @@ import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
+import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -2044,116 +2044,12 @@ return (
       )}
       {/* Fuera del gate `!compact`: las tarjetas compactas son las de pedidos entregados, que
           son precisamente las que se auditan despues del hecho. */}
-      <OrderAuditTrail orderId={order.id} />
+      <OrderAuditTrail
+        orderId={order.id}
+        viewer={state.activeRole === "seller" || state.activeRole === "seller_logistics" ? "store" : "admin"}
+        cities={state.cities}
+      />
     </Card>
-  );
-}
-
-// Etiquetas de las acciones de auditoria. El backend construye algunas dinamicamente
-// (order.delivered / order.failed / order.retry_scheduled), asi que cualquier accion que no
-// este aqui cae al nombre crudo en vez de quedar en blanco.
-const AUDIT_ACTION_LABELS: Record<string, string> = {
-  "order.webhook_imported": "Importado por webhook",
-  "order.manual_created": "Creado a mano",
-  "order.imported_updated": "Editado antes de confirmar",
-  "order.seller_confirmed": "Confirmado",
-  "order.confirmed_uchat": "Confirmado por el bot",
-  "order.transition": "Cambio de estado",
-  "order.adjusted": "Ajustado",
-  "order.cancelled": "Anulado",
-  "order.delivered": "Entregado",
-  "order.failed": "Fallido",
-  "order.retry_scheduled": "Visita reagendada",
-  "order.retry_confirmed": "Reintento confirmado",
-  "order.failed_classified": "Fallido clasificado",
-  "order.messenger_reassigned": "Mensajero reasignado",
-  "order.messenger_unassigned": "Mensajero retirado",
-  "order.correct_failed_to_delivered": "Corregido a entregado",
-  "order.correct_delivered_to_failed": "Corregido a fallido",
-  "order.correct_cancelled_to_operational": "Reactivado tras anulacion",
-  "order.reopened_for_retry": "Reabierto para nueva visita",
-  // Escritas por los scripts one-off que la correccion desde la UI reemplaza. Sin estas
-  // etiquetas el historial de KNT-003316 / KNT-003259 / KNT-003595 sale con el nombre crudo.
-  "order.correct_cancelled_to_delivered": "Corregido a entregado (script)",
-  "order.correct_delivered_to_chargeable_failed": "Corregido a fallido con cobro (script)",
-  "order.clawback_delivered_financials": "Reversa de entrega (script)",
-  "order.correct_retry_to_failed": "Reintento cerrado como fallido (script)"
-};
-
-function auditActionLabel(action: string) {
-  return AUDIT_ACTION_LABELS[action] ?? action;
-}
-
-/**
- * Historial de auditoria de un pedido: quien hizo cada accion y cuando.
- *
- * Se carga bajo demanda al abrir el bloque, nunca en el render: las vistas pintan cientos de
- * tarjetas y una llamada por tarjeta hundiria la pagina.
- */
-function OrderAuditTrail({ orderId }: { orderId: string }) {
-  const [open, setOpen] = useState(false);
-  const [events, setEvents] = useState<OrderAuditEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (!next || events !== null || loading) return;
-    setLoading(true);
-    setError("");
-    try {
-      setEvents((await fetchFirebaseOrderAuditTrail(orderId)).events);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el historial.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="grid gap-2 rounded-2xl border border-white/10 bg-panel p-3">
-      <button
-        className="focus-ring flex items-center justify-between gap-2 text-left text-sm font-semibold"
-        type="button"
-        onClick={() => void toggle()}
-      >
-        <span className="inline-flex items-center gap-2"><History size={16} /> Historial del pedido</span>
-        <span className="text-xs font-semibold text-ink-60">{open ? "Ocultar" : "Ver quien hizo cada accion"}</span>
-      </button>
-
-      {open && (
-        <div className="grid gap-2">
-          {loading && <p className="text-xs text-ink-60">Cargando historial...</p>}
-          {error && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{error}</p>}
-          {!loading && !error && events?.length === 0 && (
-            <p className="text-xs text-ink-60">Este pedido no tiene eventos de auditoria registrados.</p>
-          )}
-          {!loading && !error && events && events.length > 0 && (
-            <ol className="grid gap-2">
-              {events.map((event) => (
-                <li key={event.id} className="grid gap-0.5 border-l-2 border-white/10 pl-3">
-                  <p className="text-xs font-semibold text-ink-60">{formatDateTime(event.createdAt)}</p>
-                  <p className="text-sm font-semibold">
-                    {auditActionLabel(event.action)}
-                    {event.fromStatus && event.toStatus && (
-                      <span className="font-normal text-ink-60"> · {statusLabel(event.fromStatus)} → {statusLabel(event.toStatus)}</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-ink-70">
-                    {event.actorLabel ?? event.actorTag ?? ""}
-                    {event.actorEmail && event.actorEmail !== event.actorLabel && ` (${event.actorEmail})`}
-                    {event.actorRole && ` · ${event.actorRole}`}
-                  </p>
-                  {/* Los eventos historicos no tienen fromStatus/toStatus: el summary es lo unico que los describe. */}
-                  {!event.fromStatus && event.summary && <p className="text-xs text-ink-60">{event.summary}</p>}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 

@@ -1433,11 +1433,15 @@ describe("T18 · tipos y envoltorios de cliente (RF_25, RF_27)", () => {
     expect(t18Callables.calls.map((call) => call.name)).toEqual(["listStoreApiKeys"]);
   });
 
-  it("operations-app.tsx: todo uso de fetchFirebaseOrderAuditTrail( lee .events", () => {
-    const app = sourceWithoutComments(APP);
-    const uses = [...app.matchAll(/fetchFirebaseOrderAuditTrail\(/g)];
-    expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) {
+  // T22 saca el historial a su propio componente: la llamada puede vivir en cualquiera de los dos archivos,
+  // pero entre los dos tiene que haber al menos una y todas deben leer `.events`.
+  it("operations-app.tsx y order-audit-trail.tsx: todo uso de fetchFirebaseOrderAuditTrail( lee .events", () => {
+    const sources = [APP, "src/components/order-audit-trail.tsx"]
+      .filter((file) => existsSync(absolute(file)))
+      .map((file) => sourceWithoutComments(file));
+    const total = sources.reduce((count, source) => count + [...source.matchAll(/fetchFirebaseOrderAuditTrail\(/g)].length, 0);
+    expect(total).toBeGreaterThan(0);
+    for (const app of sources) for (const use of app.matchAll(/fetchFirebaseOrderAuditTrail\(/g)) {
       const at = use.index ?? 0;
       const lineStart = app.lastIndexOf("\n", at) + 1;
       const statement = app.slice(lineStart, app.indexOf(";", at) + 1);
@@ -1791,6 +1795,118 @@ describe("T21 · panel \"Claves de API de tiendas\" del admin (RF_25, RF_26)", (
     const app = sourceWithoutComments(APP);
     for (const name of ["listFirebaseStoreApiKeys", "buildAdminKeysListView", "ADMIN_KEYS_PAGE_SIZE"]) {
       expect(app.includes(name), `operations-app.tsx no debe usar ${name}`).toBe(false);
+    }
+  });
+});
+
+describe("T22 · RF_27 \"Historial del pedido\" con origen y cambios", () => {
+  /*
+   * `OrderAuditTrail` sale de operations-app.tsx a `src/components/order-audit-trail.tsx` y pinta SOLO lo que da
+   * `buildOrderAuditTrailView` (T19): para la tienda el modelo ya no trae identidades, asi que el componente no
+   * puede leerlas del evento crudo. Textos ratificados en el README del diseno, decisiones 8-16.
+   */
+  const COMPONENT = "src/components/order-audit-trail.tsx";
+  const APP = "src/components/operations-app.tsx";
+  const VIEW_MODEL = "./order-audit-trail-view";
+  const README = "specs/design/029_store_api_confirma_y_corrige_pedidos/README.md";
+
+  const componentSource = (): string => {
+    expect(existsSync(absolute(COMPONENT)), `${COMPONENT} debe existir`).toBe(true);
+    return sourceWithoutComments(COMPONENT);
+  };
+
+  /** Etiquetas `| \`order.x\` | **Texto** |` de las tablas del README. */
+  const readmeActionLabels = (): Record<string, string> => {
+    const labels: Record<string, string> = {};
+    for (const match of readFileSync(absolute(README), "utf8").matchAll(/^\s*\|\s*`(order\.[a-z_]+)`\s*\|\s*\*\*([^*]+)\*\*/gm)) {
+      labels[match[1]] = match[2].trim();
+    }
+    return labels;
+  };
+
+  it("el archivo existe y exporta OrderAuditTrail", () => {
+    expect(componentSource()).toMatch(/export\s+(?:default\s+)?function\s+OrderAuditTrail\s*\(|export\s+const\s+OrderAuditTrail\s*[:=]/);
+  });
+
+  it("carga con fetchFirebaseOrderAuditTrail y pinta con buildOrderAuditTrailView", () => {
+    const source = componentSource();
+    expect(source).toMatch(/import\s*\{[^}]*\bfetchFirebaseOrderAuditTrail\b[^}]*\}\s*from\s*["']@\/lib\/firebase\/auth["']/);
+    expect(source).toMatch(/import\s*\{[^}]*\bbuildOrderAuditTrailView\b[^}]*\}\s*from\s*["']@\/lib\/order-audit-trail-view["']/);
+    expect(source).toMatch(/\bbuildOrderAuditTrailView\s*\(/);
+    expect(source).toMatch(/\bfetchFirebaseOrderAuditTrail\s*\(/);
+  });
+
+  it("boton de cabecera con nombre fijo \"Historial del pedido\", aria-expanded y texto derecho aria-hidden", () => {
+    const source = componentSource();
+    expect(source).toContain("Historial del pedido");
+    expect(source).toMatch(/aria-expanded=\{/);
+    expect(source, "el texto \"Ocultar\"/\"Ver cambios\" va aria-hidden (decision 8)").toMatch(/aria-hidden/);
+    expect(source, "ya no promete \"quien hizo cada accion\" (para la tienda no es cierto)").not.toContain("Ver quien hizo cada accion");
+  });
+
+  it("no pinta identidades del evento crudo: actorEmail, actorLabel, actorRole, actorId ni actorTag", () => {
+    const source = componentSource();
+    for (const field of ["actorEmail", "actorLabel", "actorRole", "actorId", "actorTag", "apiKeyLast4"]) {
+      expect(source.includes(field), `${COMPONENT} no debe leer ${field}: sale del modelo de vista`).toBe(false);
+    }
+  });
+
+  it("acciones, transiciones y fechas salen del modelo de vista (sin etiquetar ni formatear en el componente)", () => {
+    const source = componentSource();
+    for (const banned of ["auditActionLabel(", "statusLabel(", "formatDateTime(", "toLocaleString(", "toLocaleDateString(", "AUDIT_ACTION_LABELS"]) {
+      expect(source.includes(banned), `${COMPONENT} no debe usar ${banned}`).toBe(false);
+    }
+    for (const viewField of ["actionLabel", "dateText", "transition", "origin", "changes"]) {
+      expect(source, `pinta ${viewField} del modelo`).toMatch(new RegExp(`\\.${viewField}\\b`));
+    }
+  });
+
+  it("sin fecha literal: la de historySince sale del modelo (decision 9)", () => {
+    const source = componentSource();
+    expect(source).not.toMatch(/\b20\d{2}-\d{2}-\d{2}/);
+    expect(source).not.toMatch(/2026/);
+    expect(source).not.toMatch(/\b\d{1,2}\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b/i);
+  });
+
+  it("estados del bloque desde el modelo: nota, vacio, error con \"Reintentar\" del modelo y role=alert", () => {
+    const source = componentSource();
+    expect(source.includes("Reintentar"), "\"Reintentar\" no se escribe a mano: es alert.retryLabel").toBe(false);
+    expect(source).toMatch(/\bretryLabel\b/);
+    expect(source).toMatch(/role=["']alert["']/);
+    expect(source).toMatch(/role=["']note["']/);
+    expect(source).toMatch(/\.note\b/);
+    expect(source).toMatch(/\.empty\b/);
+    for (const literal of ["No se pudo cargar el historial", "Sin cambios registrados", "Cargando historial", "Campo por campo desde"]) {
+      expect(source.includes(literal), `"${literal}" sale del modelo, no del componente`).toBe(false);
+    }
+  });
+
+  it("\"Antes\"/\"Ahora\" escritos con las etiquetas del modelo (CHANGE_LABELS)", () => {
+    const source = componentSource();
+    expect(source).toMatch(/\bCHANGE_LABELS\b/);
+  });
+
+  it("operations-app.tsx ya no define OrderAuditTrail, AUDIT_ACTION_LABELS ni auditActionLabel; importa el componente y lo monta", () => {
+    const app = sourceWithoutComments(APP);
+    expect(app).not.toMatch(/^(?:export\s+)?function\s+OrderAuditTrail\s*\(/m);
+    expect(app).not.toMatch(/^(?:export\s+)?const\s+AUDIT_ACTION_LABELS\b/m);
+    expect(app).not.toMatch(/^(?:export\s+)?function\s+auditActionLabel\s*\(/m);
+    expect(app).toMatch(/import\s*\{[^}]*\bOrderAuditTrail\b[^}]*\}\s*from\s*["'](?:@\/components|\.)\/order-audit-trail["']/);
+    expect(app).toMatch(/<OrderAuditTrail[\s/>]/);
+  });
+
+  it("AUDIT_ACTION_LABELS (exportado del modelo de vista) coincide con el README en las acciones nuevas y de mensajero", async () => {
+    const mod = (await import(VIEW_MODEL)) as { AUDIT_ACTION_LABELS: Record<string, string> };
+    const readme = readmeActionLabels();
+    for (const action of [
+      "order.delivery_corrected",
+      "order.address_reviewed",
+      "order.picked_up",
+      "order.messenger_assigned",
+      "order.messenger_unassigned"
+    ]) {
+      expect(readme[action], `el README ratifica ${action}`).toBeTruthy();
+      expect(mod.AUDIT_ACTION_LABELS[action], action).toBe(readme[action]);
     }
   });
 });
