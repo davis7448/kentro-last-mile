@@ -537,7 +537,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `AUDIT_ACTION_LABELS` para las tres acciones nuevas coinciden con el README; E2E en `/sdd-verify` contra los
     seis `HU_05.*.screen.json`.
 
-- [ ] **T23: El "?" de `CollapsiblePanel` mide 44 px**
+- [x] **T23: El "?" de `CollapsiblePanel` mide 44 px**
   * Requisitos cubiertos: RF_25 — aceptada por el orquestador el 2026-10-04 como parte del diseno de HU_04: el
     "?" vive en el panel de la clave de API y su area tactil es requisito WCAG 2.2 AA de la spec (pendiente 3
     del README)

@@ -1910,3 +1910,42 @@ describe("T22 · RF_27 \"Historial del pedido\" con origen y cambios", () => {
     }
   });
 });
+
+describe("T23 · el \"?\" de CollapsiblePanel mide 44 px (RF_25, WCAG 2.2 AA)", () => {
+  /** Etiqueta `<button ...>` de ayuda de `CollapsiblePanel`: la que lleva `aria-expanded={helpOpen}`. */
+  const helpButtonTag = (): string => {
+    const source = readFileSync(absolute("src/components/operations-app.tsx"), "utf8");
+    const start = source.indexOf("function CollapsiblePanel(");
+    expect(start, "no se encuentra `function CollapsiblePanel(`").toBeGreaterThan(-1);
+    const end = source.indexOf("\nfunction ", start + 1);
+    const body = source.slice(start, end > start ? end : undefined);
+    const tags = [...body.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
+    const help = tags.filter((tag) => tag.includes("aria-expanded={helpOpen}"));
+    expect(help.length, "una sola etiqueta `<button` de ayuda (con `aria-expanded={helpOpen}`) en `CollapsiblePanel`").toBe(1);
+    return help[0];
+  };
+
+  const classes = (tag: string): string[] => (tag.match(/className="([^"]*)"/)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+  it("el boton de ayuda no lleva `h-8` ni `w-8`", () => {
+    const list = classes(helpButtonTag());
+    expect(list.includes("h-8") || list.includes("w-8"), `clases: ${list.join(" ")}`).toBe(false);
+  });
+
+  it("el boton de ayuda lleva `h-11` y `w-11` (44 px)", () => {
+    const list = classes(helpButtonTag());
+    expect(list.includes("h-11") && list.includes("w-11"), `clases: ${list.join(" ")}`).toBe(true);
+  });
+
+  it("conserva la forma circular (`rounded-full`)", () => {
+    expect(classes(helpButtonTag())).toContain("rounded-full");
+  });
+
+  it("el contenido del \"?\" no cambia de tamano (texto 16 px: `text-sm` fuera, sin icono escalado)", () => {
+    const source = readFileSync(absolute("src/components/operations-app.tsx"), "utf8");
+    const start = source.indexOf("function CollapsiblePanel(");
+    const tagAt = source.indexOf(helpButtonTag(), start);
+    const inner = source.slice(tagAt, source.indexOf("</button>", tagAt));
+    expect(/size=\{16\}|text-sm/.test(inner), "el \"?\" conserva su tamano de 16 px").toBe(true);
+  });
+});
