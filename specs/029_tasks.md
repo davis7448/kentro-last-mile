@@ -358,7 +358,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     atajo diciendo `fresh` y un registro ya presente al leer dentro de la transaccion (otra peticion gano), el
     ejecutor responde `replay` con la respuesta guardada y no aplica el cambio.
 
-- [ ] **T13: Historial por API e indice**
+- [x] **T13: Historial por API e indice**
   * Requisitos cubiertos: RF_17, RF_18, RF_20, RF_24
   * Archivos: functions/src/store-api-history.ts, functions/src/store-api-write.ts, functions/src/store-api.ts, src/lib/store-api-history.test.ts, src/lib/store-api-write.test.ts
   * Accion: `toStoreHistoryResponse(records, historySince)` con lista explicita de claves, orden ascendente,

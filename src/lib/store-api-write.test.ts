@@ -1405,3 +1405,310 @@ describe("T12 · idempotencia y limite de tasa en el handler (RNF_03, RNF_04)", 
     });
   });
 });
+
+// =====================================================================================================
+// T13 · historial por API e indice
+// =====================================================================================================
+/*
+ * Contrato que fijan estas pruebas (T13):
+ *
+ *   GET /orders/{id}/history (lectura o escritura; pasos 0-4 de la precedencia + 503):
+ *     - pedido ajeno o inexistente → 404 order_not_found con el cuerpo del GET /orders/{id}, y SIN leer
+ *       `orderHistory` (la propiedad del pedido se comprueba antes);
+ *     - sin `settings/storeApi` → 503 { ok:false, code:"history_not_ready", ... } (buildErrorBody);
+ *     - con el documento → 200 { orderId, ...toStoreHistoryResponse(registros, historySince) };
+ *     - lee `orderHistory` con `where("orderId","==",id)` (+ limit), ordena en memoria y descarta un registro
+ *       cuyo `sellerId` no sea el de la key (comprobacion doble, plan 2.5).
+ *   Indice de la raiz (`/`): cada clave de hoy con su valor identico (instantanea abajo, leida del codigo del
+ *   2026-10-05) y la documentacion nueva solo en claves NUEVAS de primer nivel; el indice sigue en 200 sin
+ *   `settings/storeApi`.
+ */
+
+const HISTORY_SINCE_DOC = "2026-10-05T12:00:00.000Z";
+
+function historyDb(options: { withSettings?: boolean } = {}): FakeDb {
+  const db = seededDb();
+  if (options.withSettings !== false) db.seed("settings", "storeApi", { historySince: HISTORY_SINCE_DOC });
+  // Dos registros del pedido propio o-3, guardados desordenados.
+  db.seed("orderHistory", "h-2", {
+    id: "h-2", orderId: "o-3", sellerId: SELLER, createdAt: "2026-10-05T14:30:00.000Z", origin: "panel",
+    action: "order.imported_updated", changes: [{ field: "addressRaw", from: "Cra 1 # 2-3", to: "Cra 1 # 2-30" }],
+    auditEventId: "audit-h2", actor: { kind: "user", uid: "uid-admin-secreto", role: "admin" }
+  });
+  db.seed("orderHistory", "h-1", {
+    id: "h-1", orderId: "o-3", sellerId: SELLER, createdAt: "2026-10-05T13:00:00.000Z", origin: "api",
+    action: "order.seller_confirmed", changes: [{ field: "status", from: "imported", to: "ready_to_assign" }],
+    auditEventId: "audit-h1", actor: { kind: "api", keyLast4: "zz99" }
+  });
+  // Mismo orderId pero de otra tienda: la comprobacion doble lo descarta.
+  db.seed("orderHistory", "h-intruso", {
+    id: "h-intruso", orderId: "o-3", sellerId: OTHER_SELLER, createdAt: "2026-10-05T13:30:00.000Z", origin: "api",
+    action: "order.cancelled", changes: [{ field: "status", from: "ready_to_assign", to: "cancelled" }],
+    auditEventId: "audit-intruso", actor: { kind: "api", keyLast4: "xx11" }
+  });
+  // Historial del pedido ajeno.
+  db.seed("orderHistory", "h-ajeno", {
+    id: "h-ajeno", orderId: "o-x", sellerId: OTHER_SELLER, createdAt: "2026-10-05T13:00:00.000Z", origin: "panel",
+    action: "order.transition", changes: [{ field: "status", from: "in_route", to: "delivered" }],
+    auditEventId: "audit-ajeno", actor: { kind: "user", uid: "uid-lider", role: "driver" }
+  });
+  return db;
+}
+
+const historyReads = (db: FakeDb) => db.reads.filter((read) => read.collection === "orderHistory");
+
+type HistoryBody = {
+  ok: boolean;
+  orderId: string;
+  historySince: string;
+  excludes: string[];
+  aviso: string;
+  registros: Array<Record<string, unknown>>;
+};
+
+/**
+ * Instantanea del indice de hoy (`GET /` con la tienda del db falso), copiada del codigo del 2026-10-05
+ * (`store-api.ts`, rama `resource === "docs"`, y `STORE_BALANCE_NOTICE` de `store-summary.ts`). Es un literal a
+ * proposito: si alguien cambia una clave actual, esta prueba lo dice aunque el cambio venga de una constante.
+ */
+const INDEX_SNAPSHOT_2026_10_05 = {
+  ok: true,
+  tienda: "Tienda de pruebas 029",
+  endpoints: {
+    "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
+    "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
+    "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa, estado de pago y desglose financiero real por pedido (cod, flete, costo producto, neto).",
+    "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
+  },
+  autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>.",
+  avisos: [
+    {
+      fecha: "2026-09-17",
+      cambio:
+        "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+      campos: ["disponibleCop", "retenidoCop", "retenidoPedidos", "bloqueadoCodCop", "totalCop"]
+    }
+  ]
+} as const;
+
+const CURRENT_INDEX_KEYS = Object.keys(INDEX_SNAPSHOT_2026_10_05);
+
+function newTopLevel(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).filter(([key]) => !CURRENT_INDEX_KEYS.includes(key)));
+}
+
+/** Todos los valores anidados (objetos y arrays incluidos) de un arbol JSON. */
+function allValues(value: unknown): unknown[] {
+  const out: unknown[] = [value];
+  if (Array.isArray(value)) for (const item of value) out.push(...allValues(item));
+  else if (value && typeof value === "object") for (const item of Object.values(value)) out.push(...allValues(item));
+  return out;
+}
+
+async function loadIndexInputs() {
+  const request = (await import(REQUEST_MODULE)) as {
+    STORE_API_ERROR_HTTP: Record<string, number>;
+    STORE_API_PRECEDENCE: ReadonlyArray<{ step: string; codes: readonly string[] }>;
+  };
+  const actions = (await import("../../functions/src/order-seller-actions")) as { API_EDITABLE_STATUSES: readonly string[] };
+  const history = (await import("../../functions/src/store-api-history")) as {
+    HISTORY_EXCLUDES: readonly string[];
+    toStoreHistoryResponse: (records: unknown[], historySince: string) => { aviso: string };
+  };
+  return { ...request, ...actions, ...history };
+}
+
+describe("T13 · historial por API e indice (RF_17, RF_18, RF_20, RF_24)", () => {
+  describe("GET /orders/{id}/history", () => {
+    it("pedido propio → 200 con orderId, historySince del documento, excludes, aviso y registros del mas viejo al mas nuevo", async () => {
+      const response = await call(historyDb(), { path: "/orders/o-3/history", query: { sellerId: SELLER, key: READ_KEY } });
+      expect(response.statusCode).toBe(200);
+      const body = response.body as HistoryBody;
+      expect(body).toMatchObject({ ok: true, orderId: "o-3", historySince: HISTORY_SINCE_DOC, excludes: ["imports", "chatby"] });
+      expect(typeof body.aviso).toBe("string");
+      expect(body.registros).toEqual([
+        { at: "2026-10-05T13:00:00.000Z", origin: "api", action: "order.seller_confirmed", changes: [{ field: "status", from: "imported", to: "ready_to_assign" }] },
+        { at: "2026-10-05T14:30:00.000Z", origin: "panel", action: "order.imported_updated", changes: [{ field: "addressRaw", from: "Cra 1 # 2-3", to: "Cra 1 # 2-30" }] }
+      ]);
+    });
+
+    it("no expone identidades ni datos de otra tienda (RF_18): sin actor/uid/auditEventId y sin el registro intruso", async () => {
+      const response = await call(historyDb(), { path: "/orders/o-3/history", query: { sellerId: SELLER, key: READ_KEY } });
+      expect(response.statusCode).toBe(200);
+      expect((response.body as HistoryBody).registros).toHaveLength(2);
+      const text = JSON.stringify(response.body);
+      for (const leaked of ["uid-admin-secreto", "audit-h1", "audit-h2", "zz99", "audit-intruso", "xx11", OTHER_SELLER, "actor", "auditEventId"]) {
+        expect(text, `el historial filtra ${leaked}`).not.toContain(leaked);
+      }
+    });
+
+    it("lee orderHistory acotado por orderId (sin bajar la coleccion)", async () => {
+      const db = historyDb();
+      await call(db, { path: "/orders/o-3/history", query: { sellerId: SELLER, key: READ_KEY } });
+      const reads = historyReads(db);
+      expect(reads.length).toBeGreaterThan(0);
+      for (const read of reads) {
+        expect(read.kind).toBe("query");
+        if (read.kind === "query") {
+          expect(read.filters).toContainEqual(["orderId", "==", "o-3"]);
+          expect(read.limit ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(200);
+        }
+      }
+    });
+
+    it("pedido sin registros (anterior a la spec) → 200 registros: [] con historySince (RF_24)", async () => {
+      const response = await call(historyDb(), { path: "/orders/o-1/history", query: { sellerId: SELLER, key: READ_KEY } });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toMatchObject({ ok: true, orderId: "o-1", historySince: HISTORY_SINCE_DOC, registros: [] });
+    });
+
+    it("pedido de otra tienda y pedido inexistente → 404 order_not_found identico, sin leer orderHistory", async () => {
+      const foreignDb = historyDb();
+      const missingDb = historyDb();
+      const foreign = await call(foreignDb, { path: "/orders/o-x/history", query: { sellerId: SELLER, key: READ_KEY } });
+      const missing = await call(missingDb, { path: "/orders/no-existe/history", query: { sellerId: SELLER, key: READ_KEY } });
+      expect(foreign.statusCode).toBe(404);
+      expect(missing.statusCode).toBe(404);
+      expect(foreign.body).toMatchObject({ ok: false, code: "order_not_found" });
+      expect(foreign.body).toEqual(missing.body);
+      expect(foreign.headers).toEqual(missing.headers);
+      expect(historyReads(foreignDb)).toEqual([]);
+      expect(historyReads(missingDb)).toEqual([]);
+    });
+
+    it("el 404 del historial es el mismo cuerpo que el de GET /orders/{id} de un pedido ajeno", async () => {
+      const history = await call(historyDb(), { path: "/orders/o-x/history", query: { sellerId: SELLER, key: READ_KEY } });
+      const single = await call(historyDb(), { path: "/orders/o-x", query: { sellerId: SELLER, key: READ_KEY } });
+      expect(history.body).toEqual(single.body);
+      const text = JSON.stringify(history.body);
+      for (const leaked of ["o-x", "KNT-000099", "delivered", "order.transition", OTHER_SELLER]) expect(text).not.toContain(leaked);
+    });
+
+    it("sin settings/storeApi → 503 history_not_ready con la forma nueva", async () => {
+      const { buildErrorBody } = await loadRequestModule();
+      const response = await call(historyDb({ withSettings: false }), {
+        path: "/orders/o-3/history",
+        query: { sellerId: SELLER, key: READ_KEY }
+      });
+      expect(response.statusCode).toBe(503);
+      expect(response.body).toEqual(buildErrorBody("history_not_ready"));
+    });
+
+    it("parametro desconocido → 400 unknown_parameter, sin leer orderHistory", async () => {
+      const db = historyDb();
+      const response = await call(db, { path: "/orders/o-3/history", query: { sellerId: SELLER, key: READ_KEY, foo: "1" } });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toMatchObject({ ok: false, code: "unknown_parameter" });
+      expect(historyReads(db)).toEqual([]);
+    });
+
+    it("key de escritura por Bearer → 200 con el mismo cuerpo que la key de lectura por query", async () => {
+      const byRead = await call(historyDb(), { path: "/orders/o-3/history", query: { sellerId: SELLER, key: READ_KEY } });
+      const byWrite = await call(historyDb(), { path: "/orders/o-3/history", query: { sellerId: SELLER }, bearer: WRITE_KEY });
+      expect(byWrite.statusCode).toBe(200);
+      expect(byWrite.body).toEqual(byRead.body);
+    });
+
+    it("key de lectura por Bearer → 200", async () => {
+      const response = await call(historyDb(), { path: "/orders/o-3/history", query: { sellerId: SELLER }, bearer: READ_KEY });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it("key de escritura por query → 401 key_in_query, sin leer orderHistory", async () => {
+      const db = historyDb();
+      const response = await call(db, { path: "/orders/o-3/history", query: { sellerId: SELLER, key: WRITE_KEY } });
+      expect(response.statusCode).toBe(401);
+      expect(response.body).toMatchObject({ ok: false, code: "key_in_query" });
+      expect(historyReads(db)).toEqual([]);
+    });
+
+    it("POST a /history → 405 method_not_allowed (la ruta es solo GET)", async () => {
+      const response = await call(historyDb(), { method: "POST", path: "/orders/o-3/history", query: { sellerId: SELLER }, bearer: WRITE_KEY });
+      expect(response.statusCode).toBe(405);
+    });
+  });
+
+  describe("indice de la raiz (RF_17, RF_20)", () => {
+    async function index(options: { withSettings?: boolean } = {}) {
+      return call(historyDb(options), { path: "/", query: { sellerId: SELLER, key: READ_KEY } });
+    }
+
+    it("cada clave actual conserva su valor identico (comparacion profunda con la instantanea de hoy)", async () => {
+      const response = await index();
+      expect(response.statusCode).toBe(200);
+      const body = response.body as Record<string, unknown>;
+      for (const key of CURRENT_INDEX_KEYS) {
+        expect(body[key], `la clave actual ${key} cambio`).toEqual(INDEX_SNAPSHOT_2026_10_05[key as keyof typeof INDEX_SNAPSHOT_2026_10_05]);
+      }
+    });
+
+    it("sin settings/storeApi el indice sigue en 200 con las claves actuales intactas", async () => {
+      const response = await index({ withSettings: false });
+      expect(response.statusCode).toBe(200);
+      const body = response.body as Record<string, unknown>;
+      for (const key of CURRENT_INDEX_KEYS) expect(body[key]).toEqual(INDEX_SNAPSHOT_2026_10_05[key as keyof typeof INDEX_SNAPSHOT_2026_10_05]);
+    });
+
+    it("la documentacion nueva va en claves nuevas de primer nivel", async () => {
+      const body = (await index()).body as Record<string, unknown>;
+      expect(Object.keys(newTopLevel(body)).length).toBeGreaterThan(0);
+    });
+
+    it("las claves nuevas documentan las cinco rutas nuevas", async () => {
+      const text = JSON.stringify(newTopLevel((await index()).body as Record<string, unknown>));
+      for (const route of ["GET /orders/{id}", "GET /orders/{id}/history", "POST /orders/{id}/confirm", "PATCH /orders/{id}", "POST /orders/{id}/cancel"]) {
+        expect(text, `falta la ruta ${route}`).toContain(route);
+      }
+    });
+
+    it("las claves nuevas traen HISTORY_EXCLUDES y su aviso", async () => {
+      const { HISTORY_EXCLUDES, toStoreHistoryResponse } = await loadIndexInputs();
+      const added = newTopLevel((await index()).body as Record<string, unknown>);
+      expect(allValues(added)).toContainEqual([...HISTORY_EXCLUDES]);
+      expect(allValues(added)).toContain(toStoreHistoryResponse([], HISTORY_SINCE_DOC).aviso);
+    });
+
+    it("las claves nuevas traen historySince leido de settings/storeApi", async () => {
+      const added = newTopLevel((await index()).body as Record<string, unknown>);
+      expect(allValues(added)).toContain(HISTORY_SINCE_DOC);
+    });
+
+    it("las claves nuevas traen todos los codigos de error", async () => {
+      const { STORE_API_ERROR_HTTP } = await loadIndexInputs();
+      const text = JSON.stringify(newTopLevel((await index()).body as Record<string, unknown>));
+      for (const code of Object.keys(STORE_API_ERROR_HTTP)) expect(text, `falta el codigo ${code}`).toContain(`"${code}"`);
+    });
+
+    it("las claves nuevas traen la precedencia: una lista con un elemento por paso, en orden, con sus codigos", async () => {
+      const { STORE_API_PRECEDENCE } = await loadIndexInputs();
+      const added = newTopLevel((await index()).body as Record<string, unknown>);
+      const candidates = allValues(added).filter(
+        (value): value is unknown[] =>
+          Array.isArray(value) &&
+          value.length === STORE_API_PRECEDENCE.length &&
+          STORE_API_PRECEDENCE.every((row, i) => row.codes.every((code) => JSON.stringify(value[i]).includes(`"${code}"`)))
+      );
+      expect(candidates.length, "no hay una lista de precedencia paso a paso").toBeGreaterThan(0);
+    });
+
+    it("las claves nuevas traen los estados editables por API", async () => {
+      const { API_EDITABLE_STATUSES } = await loadIndexInputs();
+      const added = newTopLevel((await index()).body as Record<string, unknown>);
+      const expected = [...API_EDITABLE_STATUSES].sort();
+      const found = allValues(added).some(
+        (value) => Array.isArray(value) && JSON.stringify([...value].sort()) === JSON.stringify(expected)
+      );
+      expect(found, "faltan los estados editables").toBe(true);
+    });
+
+    it("las claves nuevas dicen que la key de escritura va solo por cabecera Authorization: Bearer", async () => {
+      const text = JSON.stringify(newTopLevel((await index()).body as Record<string, unknown>));
+      expect(text).toContain("Authorization: Bearer");
+    });
+
+    it("las claves nuevas documentan el numeral codificado en shopifyOrderId (%23)", async () => {
+      const text = JSON.stringify(newTopLevel((await index()).body as Record<string, unknown>));
+      expect(text).toContain("shopifyOrderId=%23");
+    });
+  });
+});

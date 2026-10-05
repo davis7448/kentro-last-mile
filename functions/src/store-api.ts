@@ -12,19 +12,20 @@ import {
   type WalletEntryDoc
 } from "./seller-ledger";
 import { resolveStoreCredentials } from "./store-api-auth";
+import { buildStoreApiIndexAdditions } from "./store-api-history";
 import { computeKpis, inRange } from "./store-api-orders";
 import {
-  buildErrorBody,
   isValidShopifyOrderId,
   routeStoreApiRequest,
   type StoreApiNewRoute,
-  STORE_API_ERROR_HTTP,
   validateQueryParameters
 } from "./store-api-request";
 import {
   handleStoreApiWrite,
   listStoreOrdersByShopifyOrderId,
+  readHistorySince,
   readStoreOrder,
+  readStoreOrderHistory,
   storeOrderItem,
   type StoreApiWriteRouteName
 } from "./store-api-write";
@@ -149,12 +150,6 @@ export async function handleStoreApiRequest(
     response.status(match.httpStatus).json(match.body);
     return;
   }
-  // El historial llega en T13: hasta entonces la ruta no existe.
-  if (match.kind === "new" && match.route === "order_history") {
-    response.status(STORE_API_ERROR_HTTP.route_not_found).json(buildErrorBody("route_not_found"));
-    return;
-  }
-
   const db = deps.db;
   // Pasos 1-2. Como hoy, la key de query manda sobre la Bearer (`query ?? bearer`).
   const rawSellerId = String(request.query.sellerId ?? "");
@@ -204,6 +199,13 @@ export async function handleStoreApiRequest(
     return;
   }
 
+  if (match.kind === "new" && match.route === "order_history") {
+    // T13: propiedad del pedido antes que el historial (mismo 404 que GET /orders/{id}).
+    const reply = await readStoreOrderHistory(db, { sellerId, orderId: match.orderId });
+    response.status(reply.httpStatus).json(reply.body);
+    return;
+  }
+
   if (match.kind === "new") {
     const reply = await readStoreOrder(db, { sellerId, orderId: match.orderId });
     response.status(reply.httpStatus).json(reply.body);
@@ -229,7 +231,9 @@ export async function handleStoreApiRequest(
         "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
       },
       autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>.",
-      avisos: [STORE_BALANCE_NOTICE]
+      avisos: [STORE_BALANCE_NOTICE],
+      // RF_20: las claves de arriba conservan su valor de siempre; lo de la spec 029 va solo en claves nuevas.
+      ...buildStoreApiIndexAdditions(await readHistorySince(db))
     });
     return;
   }

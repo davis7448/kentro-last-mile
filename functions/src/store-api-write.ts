@@ -12,6 +12,7 @@ import {
   type StoredReply
 } from "./order-seller-actions-run";
 import type { OrderDoc, SettlementDoc, WalletEntryDoc } from "./seller-ledger";
+import { toStoreHistoryResponse } from "./store-api-history";
 import { buildPaymentInfo, classifyOrder, loadTargetedPaymentInputs, orderPayload } from "./store-api-orders";
 import {
   bodyHash,
@@ -119,6 +120,39 @@ export async function readStoreOrder(db: Firestore, input: { sellerId: string; o
   if (!data || data.sellerId !== input.sellerId) return orderNotFound();
   const order = { id: snap.id, ...data } as OrderDoc;
   return { httpStatus: 200, body: { ok: true, pedido: await loadOrderItem(db, input.sellerId, order) } };
+}
+
+/** Tope de registros por pedido (plan 2.5): lectura acotada aunque un pedido acumule muchos cambios. */
+const HISTORY_READ_LIMIT = 200;
+
+/** `settings/storeApi.historySince`, o `null` si el documento (o el dato) aun no existe (plan 2.4). */
+export async function readHistorySince(db: Firestore): Promise<string | null> {
+  const snap = await db.collection("settings").doc("storeApi").get();
+  const value = snap.exists ? snap.data()?.historySince : undefined;
+  return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * `GET /orders/{id}/history` (RF_17, RF_18, RF_24). Primero la propiedad del pedido (paso 4): un pedido ajeno o
+ * inexistente da el MISMO 404 que `GET /orders/{id}` y no se llega a leer `orderHistory`. Sin
+ * `settings/storeApi` → 503 `history_not_ready`. Los registros se leen por `orderId` con tope y se descartan los
+ * que no sean de la tienda de la key (comprobacion doble, plan 2.5).
+ */
+export async function readStoreOrderHistory(db: Firestore, input: { sellerId: string; orderId: string }): Promise<StoreApiReply> {
+  if (!isUsableDocumentId(input.orderId)) return orderNotFound();
+  const orderSnap = await db.collection("orders").doc(input.orderId).get();
+  if (!orderSnap.exists || orderSnap.data()?.sellerId !== input.sellerId) return orderNotFound();
+
+  const historySince = await readHistorySince(db);
+  if (historySince === null) {
+    return { httpStatus: STORE_API_ERROR_HTTP.history_not_ready, body: buildErrorBody("history_not_ready") };
+  }
+
+  const historySnap = await db.collection("orderHistory").where("orderId", "==", input.orderId).limit(HISTORY_READ_LIMIT).get();
+  const records = historySnap.docs
+    .map((doc) => doc.data() as Record<string, unknown>)
+    .filter((record) => record.sellerId === input.sellerId);
+  return { httpStatus: 200, body: { orderId: input.orderId, ...toStoreHistoryResponse(records, historySince) } };
 }
 
 /**
