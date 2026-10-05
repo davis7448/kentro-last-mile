@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T8",
+  "activeTask": "T9",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
@@ -20,7 +20,7 @@
     "T6": { "requirements": ["RF_19", "RF_04", "RF_11", "RF_13"], "files": ["functions/src/order-seller-actions-run.ts", "functions/src/order-import-merge.ts", "src/lib/spec-017-guards.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": true, "done": true },
     "T6b": { "requirements": ["RF_19", "RF_11", "RF_16"], "files": ["functions/src/orders.ts", "src/lib/spec-017-guards.test.ts", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/mutacion-rf19.txt", "functions/src/order-seller-actions-run.ts", "src/lib/order-seller-actions-run.test.ts", "src/lib/spec-013-guards.test.ts"], "testWritten": true, "done": true },
     "T7": { "requirements": ["RF_16", "RF_17", "RF_24"], "files": ["firestore.rules", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
-    "T8": { "requirements": ["RF_03", "RF_09", "RF_12", "RF_13", "RNF_02", "RNF_04"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
+    "T8": { "requirements": ["RF_03", "RF_09", "RF_12", "RF_13", "RNF_02", "RNF_04"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T9": { "requirements": ["RF_01", "RF_20"], "files": ["functions/src/store-api-orders.ts", "functions/src/store-api.ts", "src/lib/store-api-orders.test.ts"], "testWritten": false, "done": false },
     "T10": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_20", "RNF_01", "RNF_05"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": false, "done": false },
     "T11": { "requirements": ["RF_04", "RF_07", "RF_10", "RF_13", "RF_19", "RNF_01", "RNF_02"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": false, "done": false },

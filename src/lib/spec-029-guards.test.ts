@@ -427,3 +427,101 @@ describe("T7 · reglas: historial e idempotencia cerrados, settings/storeApi fue
     expect(offenders).toEqual([]);
   });
 });
+
+describe("T8 · limite unico, contenido de entrega en el nucleo y parseWriteBody sin 422", () => {
+  /*
+   * Contrato (plan 2.9, 4.4; tarea T8): el limite de tasa vive solo en `STORE_API_WRITES_PER_MINUTE`
+   * (`functions/src/store-api-request.ts`); ese modulo no repite las reglas de contenido de los datos de entrega
+   * (las toma de `validateDeliveryInput`, T5) ni el maximo del motivo (`CANCEL_REASON_MAX_LENGTH`), y
+   * `parseWriteBody` calcula errores de campo pero nunca responde un 422: lo responde el nucleo en el paso 6.
+   */
+  const REQUEST = "functions/src/store-api-request.ts";
+  const request = () => sourceWithoutComments(REQUEST);
+
+  function functionsSources(dir = "functions/src"): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(absolute(dir))) {
+      const rel = `${dir}/${entry}`;
+      if (statSync(absolute(rel)).isDirectory()) out.push(...functionsSources(rel));
+      else if (/\.ts$/.test(entry) && !/\.test\.ts$/.test(entry)) out.push(rel);
+    }
+    return out;
+  }
+
+  /** Cuerpo de `[export] function name(` hasta su `}` de columna 0. */
+  function exportedFunctionBody(source: string, name: string): string | null {
+    const start = source.search(new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*[<(]`, "m"));
+    if (start < 0) return null;
+    const end = source.indexOf("\n}\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 2);
+  }
+
+  it("store-api-request.ts existe", () => {
+    expect(existsSync(absolute(REQUEST))).toBe(true);
+  });
+
+  it("declara `export const STORE_API_WRITES_PER_MINUTE = 120` y la cifra no aparece otra vez en el modulo", () => {
+    const source = request();
+    expect(source).toMatch(/export\s+const\s+STORE_API_WRITES_PER_MINUTE\s*=\s*120\s*;/);
+    expect(source.match(/\b120\b/g) ?? []).toHaveLength(1);
+  });
+
+  it("ningun otro archivo de functions/src declara el limite", () => {
+    const offenders = functionsSources()
+      .filter((file) => file !== REQUEST)
+      .filter((file) => /STORE_API_WRITES_PER_MINUTE\s*=/.test(sourceWithoutComments(file)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("quien toca la tasa (storeApiRateLimits / rate_limited) no escribe la cifra: importa la constante", () => {
+    const offenders: string[] = [];
+    for (const file of functionsSources()) {
+      if (file === REQUEST) continue;
+      const source = sourceWithoutComments(file);
+      if (!/storeApiRateLimits|rate_limited|rateWindow/.test(source)) continue;
+      if (/\b120\b/.test(source)) offenders.push(`${file}: literal 120`);
+      if (!/\bSTORE_API_WRITES_PER_MINUTE\b/.test(source)) offenders.push(`${file}: sin STORE_API_WRITES_PER_MINUTE`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("importa validateDeliveryInput y CANCEL_REASON_MAX_LENGTH de ./order-seller-actions", () => {
+    const imports = [...request().matchAll(/import\s*\{([^}]*)\}\s*from\s*["']\.\/order-seller-actions["']/g)]
+      .map((match) => match[1])
+      .join(",");
+    expect(imports).toMatch(/\bvalidateDeliveryInput\b/);
+    expect(imports).toMatch(/\bCANCEL_REASON_MAX_LENGTH\b/);
+    expect(request()).toMatch(/\bvalidateDeliveryInput\s*\(/);
+  });
+
+  it.each([
+    ["patron de telefono de 10 digitos", /\\d\{10\}/],
+    ["prefijo +57 en una expresion regular", /\\\+57/],
+    ["patron E.164", /\[1-9\]\\d\{7,14\}/],
+    ["patron de cityId", /\[a-z0-9-\]\{1,64\}/],
+    ["separadores de telefono", /\[\\s\\-\.\(\)\]/]
+  ])("no repite reglas de contenido: %s", (_label, pattern) => {
+    expect(request()).not.toMatch(pattern);
+  });
+
+  it.each([
+    ["maximo de direccion (300)", /\b300\b/],
+    ["maximo del motivo escrito a mano (500 junto a reason/length)", /(?:reason|length)[^\n;]{0,60}\b500\b|\b500\b[^\n;]{0,60}(?:reason|length)/]
+  ])("no repite limites de contenido fuera de los textos: %s", (_label, pattern) => {
+    // Fuera de los textos: un mensaje en espanol puede nombrar el limite sin ser una regla.
+    const codeOnly = request().replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g, '""');
+    expect(codeOnly).not.toMatch(pattern);
+  });
+
+  it("parseWriteBody existe y nunca devuelve un 422 ni construye el error de campo", () => {
+    const body = exportedFunctionBody(request(), "parseWriteBody");
+    expect(body).not.toBeNull();
+    expect(body).not.toMatch(/\b422\b/);
+    expect(body).not.toContain("buildFieldError(");
+    expect(body).not.toMatch(/["'`](?:validation_failed|field_not_allowed|no_fields)["'`]/);
+  });
+
+  it("store-api-request.ts es puro: sin firebase-admin ni firebase-functions", () => {
+    expect(request()).not.toMatch(/from\s+["']firebase-(?:admin|functions)/);
+  });
+});

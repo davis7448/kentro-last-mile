@@ -212,7 +212,12 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## API
 
-- [ ] **T8: Peticion, errores y limite (puro)**
+- [x] **T8: Peticion, errores y limite (puro)**
+  * **Deuda anotada al cerrar (2026-10-05):** el orden required → empty → too_long del motivo de cancelar vive en
+    `parseWriteBody` y en `cancelReasonProblems` (privada de `order-seller-actions.ts`), y la lista de campos de
+    `PATCH` se repite como `PATCH_FIELDS` porque `DELIVERY_FIELDS` no esta exportada. Hoy no divergen (el
+    planificador usa los `fieldProblems` recibidos). Unificar exportando ambas en la primera tarea que tenga
+    `order-seller-actions.ts` en su alcance.
   * Requisitos cubiertos: RF_03, RF_09, RF_12, RF_13, RNF_02, RNF_04
   * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/lib/spec-029-guards.test.ts
   * Accion: `routeStoreApiRequest` (paso 0: rutas nuevas y viejas, `Allow` por ruta), parametros permitidos por
