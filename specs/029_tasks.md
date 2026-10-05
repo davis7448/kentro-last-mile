@@ -1,14 +1,15 @@
 # Tareas — Spec 029: una tienda confirma, corrige y cancela sus pedidos por API
 
-Plan: `specs/029_plan.md` (preguntas P1-P5 resueltas el 2026-10-04; precisado tras seis pasadas de
-`/sdd-analyze`, 2026-10-04 y 2026-10-05, seccion 13). Diseno:
+Plan: `specs/029_plan.md` (preguntas P1-P5 resueltas el 2026-10-04; precisado tras siete pasadas de
+`/sdd-analyze`, 2026-10-04 y 2026-10-05, la ultima como **pasada final**, seccion 13). Diseno:
 `specs/design/029_store_api_confirma_y_corrige_pedidos/` (README + 14 pantallas). Evidencia:
 `.sdd/evidence/029_store_api_confirma_y_corrige_pedidos/` (abajo `EV/`).
 
 Cada tarea empieza por una prueba que falla (RED) y dura 20-30 minutos. Vitest solo recoge
 `src/**/*.test.ts`; `functions/src` se importa como `../../functions/src/<modulo>`. Cada tarea lleva al menos un
 archivo de prueba en su alcance. Ante dos formas de verificar algo, la mas simple y robusta; ningun mecanismo
-nuevo que no pida la spec.
+nuevo que no pida la spec. Los hallazgos menores de la pasada final van como **"Nota para la prueba"** dentro de
+la tarea afectada: se resuelven al escribir su RED, sin otra ronda de analisis.
 
 **Archivos compartidos (plan 5.2):** un bloque `describe("T<n> · ...")` por tarea, sin editar los de otra, en
 `src/lib/spec-029-guards.test.ts` (casi todas), `src/lib/order-seller-actions.test.ts` (T4, T5, T15, T25),
@@ -20,18 +21,18 @@ en su callable. `functions/src/order-seller-actions-run.ts`: T6 (ejecutor), T12 
 de su transaccion). `functions/src/store-api.ts`: T9, T10 (autenticacion de rutas viejas, filtro
 `shopifyOrderId` y rutas de lectura nuevas), T11, T13, cada una en su ruta. `operations-app.tsx`: T18 (solo la
 adaptacion de `fetchFirebaseOrderAuditTrail`), T20, T21, T22, T23, cada una en su punto de montaje.
-`scripts/verify-029.js`: T1, T2, T24, T25, T27, cada una en su modo; las salvaguardas de envio y de limpieza
-(plan 5.3 (a)-(d)) son un modulo comun del guion que crea T25 y reutiliza T27.
+`scripts/verify-029.js`: T1, T2, T24 (modos de solo lectura), T25 (modulo de salvaguardas y modo `kovia-replay`,
+sin ejecutarlo en produccion) y T27 (`run-all`, `set-history-since`, `cleanup --from-registro`).
 
 **Reglas transversales:** escrituras nuevas con `stripUndefined`; la regla de confirmar/corregir/cancelar solo
 en `order-seller-actions.ts` (plan 2.2), y el sello `MANUAL_EDIT_STAMP` solo lo pone el nucleo; **precedencia de
-codigos unica** (decision 12 de la spec, tabla del plan 2.1): 401 key en query → 401/403 credenciales → 400
-parametros y forma del cuerpo → [429, idempotencia] → 404 → 409 por estado → 422 validacion y cobertura → sin
-cambios → 409 `status_changed` → aplicar; `orderHistory` nunca guarda `driverId`/`messengerId`; la key de
-escritura nunca en logs, en Firestore en claro ni en `localStorage`; el secreto de Shopify nunca en disco ni en
-logs; `STORE_API_WRITES_PER_MINUTE` es el unico sitio del limite; `historySince` nunca como literal; con tiendas
-reales, solo key de lectura y ninguna sesion de tienda; el guion solo escribe ids de prueba y todo borrado pasa
-por `safeDelete`.
+codigos unica** (decision 12 de la spec, tabla del plan 2.1): ruta y metodo → 401 key en query → 401/403
+credenciales → 400 parametros y forma del cuerpo → [429, idempotencia] → 404 → 409 por estado → 422 validacion y
+cobertura → sin cambios → 409 `status_changed` → aplicar; `orderHistory` nunca guarda `driverId`/`messengerId`;
+la key de escritura nunca en logs, en Firestore en claro, en `localStorage` ni en el registro de `run-all`; el
+secreto de Shopify nunca en disco ni en logs; `STORE_API_WRITES_PER_MINUTE` es el unico sitio del limite;
+`historySince` nunca como literal; con tiendas reales, solo key de lectura y ninguna sesion de tienda; el guion
+solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Medicion previa (compuertas)
 
@@ -92,6 +93,7 @@ por `safeDelete`.
   * Accion: tipos del plan 4.1, `isApiEditable`, `planConfirm`, `planCancel` con la tabla de politica
     (`panel` / `api`), los **pasos 4-9 de la precedencia** (404 → 409 por estado → 422 → sin cambios →
     `status_changed` → aplicar) y el parche de cancelar con `driverId: current.driverId ?? null` como hoy.
+    `planConfirm` no recibe errores de campo: el cuerpo invalido de confirmar ya se respondio con 400 en el paso 3.
   * Verificacion: bloque `describe("T4 · ...")`: `imported` sin lider → `ready_to_assign`, `accepted`,
     `confirmedVia` `api`/`manual`; `imported` con lider → 409 `order_not_editable` con `hasLeader: true` en API
     (y aplica en panel, como hoy); `ready_to_assign`, `in_route`, `delivered` → `unchanged` en API y rechazo en
@@ -194,8 +196,9 @@ por `safeDelete`.
   * Verificacion: bloque `describe("T7 · ...")`: los tres bloques con su regla; el bloque
     `match /settings/{settingId}` tiene un `allow write` que exige `isAdmin()` **y** `settingId != "storeApi"`, y
     no hay otro `allow write` ni `allow create/update` en `settings` sin esa condicion; ninguna fuente de `src/`
-    ni `functions/src/` contiene un literal de fecha asociado a `historySince`; ninguna fuente salvo los modos
-    `cleanup` de `scripts/verify-029.js` hace `delete`/`update` sobre `orderHistory` (excepcion de RF_16).
+    ni `functions/src/` contiene un literal de fecha asociado a `historySince`; ninguna fuente salvo el `cleanup`
+    de `scripts/verify-029.js` (en `run-all` y `--from-registro`) hace `delete`/`update` sobre `orderHistory`
+    (excepcion de RF_16).
 
 ## API
 
@@ -204,31 +207,43 @@ por `safeDelete`.
   * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/lib/spec-029-guards.test.ts
   * Accion: `routeStoreApiRequest` (paso 0: rutas nuevas y viejas, `Allow` por ruta), parametros permitidos por
     ruta y forma del cuerpo (paso 3), **validador puro de `shopifyOrderId`** (`^[0-9A-Za-z#._-]{1,64}$`, plan
-    2.10; T10 solo lo llama y responde con la forma vieja); `parseWriteBody` segun el plan 4.4: 400
-    `invalid_json` si el cuerpo no es JSON o no es un objeto (se responde en el paso 3); si no, separa
-    `expectedStatus` **antes** de validar, anota cada clave no permitida (`not_allowed`), valida forma y tipos de
-    las permitidas con Zod (solo forma y tipos basicos; `invalid_type`), valida el contenido con
-    `validateDeliveryInput` (T5) en `PATCH` y el motivo en cancelar (obligatorio, recortado 1-500), y devuelve
-    `{ input, expectedStatus, fieldProblems }` **sin responder el 422**: lo responde el nucleo en el paso 6, tras
-    404 y 409; `buildFieldError(fieldProblems)` construye ese 422 con **todos** los campos y `code` de primer
-    nivel `field_not_allowed` si hay alguno `not_allowed`, si no `validation_failed`; la tabla de precedencia
-    (plan 2.1) como constante documentada; catalogo `code` → HTTP (con `key_in_query` en 401), `buildErrorBody`,
-    `bodyHash` canonico, `STORE_API_WRITES_PER_MINUTE = 120`, `rateWindow(now)` → `{ bucketId, retryAfterSeconds }`.
+    2.10; T10 solo lo llama y responde con la forma vieja); **cuerpo de confirmar** (plan 4.4, decision 13):
+    vacio o `{ expectedStatus }` con texto; cualquier otra clave o un tipo invalido → **400 `invalid_body`** en el
+    paso 3; `parseWriteBody` para `PATCH` y cancelar segun el plan 4.4: 400 `invalid_json` si el cuerpo no es
+    JSON y 400 `invalid_body` si no es un objeto (se responden en el paso 3); si no, separa `expectedStatus`
+    **antes** de validar, anota cada clave no permitida (`not_allowed`), valida forma y tipos de las permitidas
+    con Zod (solo forma y tipos basicos; `invalid_type`), valida el contenido con `validateDeliveryInput` (T5) en
+    `PATCH` y el motivo en cancelar (obligatorio, recortado 1-500), y devuelve `{ input, expectedStatus,
+    fieldProblems }` **sin responder el 422**: lo responde el nucleo en el paso 6, tras 404 y 409;
+    `buildFieldError(fieldProblems)` construye ese 422 con **todos** los campos y `code` de primer nivel
+    `field_not_allowed` si hay alguno `not_allowed`, si no `validation_failed`; la tabla de precedencia (plan 2.1)
+    como constante documentada; catalogo `code` → HTTP (con `key_in_query` en 401 e `invalid_body` en 400),
+    `buildErrorBody`, `bodyHash` canonico, `STORE_API_WRITES_PER_MINUTE = 120`, `rateWindow(now)` →
+    `{ bucketId, retryAfterSeconds }`.
   * Verificacion: bloque `describe("T8 · ...")`: parametro desconocido → 400 nombrando cada uno en cada ruta
     nueva; **en una ruta de escritura con `key` en query y un parametro desconocido, el paso 3 no llega a
     ejecutarse: la respuesta es 401 `key_in_query`** (prueba sobre la secuencia `routeStoreApiRequest` →
     `resolveStoreCredentials` → parametros); rutas viejas sin validacion de parametros; `shopifyOrderId` valido
-    (`1001`, `#1001`, `KOV-1001`) e invalido (vacio, 65 caracteres, espacios, `/`); cuerpo que no es JSON o que es
-    un array → 400 `invalid_json`; `expectedStatus` no cuenta como campo (cuerpo `{ expectedStatus }` en `PATCH`
-    → sin `fieldProblems`, y el nucleo dara `no_fields`); cuerpo con `totalCop` y `sku` → `fieldProblems` con los
-    dos `not_allowed` y `buildFieldError` → `field_not_allowed`; cuerpo con `totalCop` y `customerName: ""` →
-    `field_not_allowed` de primer nivel y `fields` con los dos (`totalCop` `not_allowed`, `customerName` `empty`);
-    cuerpo con `customerName: ""` y telefono invalido → `validation_failed` con los dos campos; tipo incorrecto
-    (`customerName: 5`) → `validation_failed` con `invalid_type`; cancelar sin motivo → `reason` `required`,
-    motivo solo espacios → `empty`, motivo de 1 y de 500 caracteres pasa, de 501 → `too_long`; catalogo congelado
-    (nombres y HTTP); `Retry-After` >= 1; hash igual con claves en otro orden. Guarda: el limite solo aparece en
-    `STORE_API_WRITES_PER_MINUTE`; `store-api-request.ts` no repite reglas de contenido de entrega (importa
-    `validateDeliveryInput`); `parseWriteBody` no devuelve nunca un 422.
+    (`1001`, `#1001`, `KOV-1001`) e invalido (vacio, 65 caracteres, espacios, `/`); cuerpo que no es JSON → 400
+    `invalid_json`, cuerpo que es un array → 400 `invalid_body`; **confirmar con `{ expectedStatus: "imported",
+    foo: 1 }` → 400 `invalid_body`; confirmar con `{ expectedStatus: 5 }` → 400 `invalid_body`; confirmar con
+    `{}` o sin cuerpo → pasa el paso 3**; `expectedStatus` no cuenta como campo en `PATCH` (cuerpo
+    `{ expectedStatus }` → sin `fieldProblems`, y el nucleo dara `no_fields`); cuerpo con `totalCop` y `sku` →
+    `fieldProblems` con los dos `not_allowed` y `buildFieldError` → `field_not_allowed`; cuerpo con `totalCop` y
+    `customerName: ""` → `field_not_allowed` de primer nivel y `fields` con los dos (`totalCop` `not_allowed`,
+    `customerName` `empty`); cuerpo con `customerName: ""` y telefono invalido → `validation_failed` con los dos
+    campos; tipo incorrecto (`customerName: 5`) → `validation_failed` con `invalid_type`; cancelar sin motivo →
+    `reason` `required`, motivo solo espacios → `empty`, motivo de 1 y de 500 caracteres pasa, de 501 →
+    `too_long`; catalogo congelado (nombres y HTTP); `Retry-After` >= 1; hash igual con claves en otro orden.
+    Guarda: el limite solo aparece en `STORE_API_WRITES_PER_MINUTE`; `store-api-request.ts` no repite reglas de
+    contenido de entrega (importa `validateDeliveryInput`); `parseWriteBody` no devuelve nunca un 422.
+  * **Nota para la prueba (pasada final, 9):** el paso 0 de la precedencia necesita su codigo de ruta: al
+    escribir el RED, fijar `route_not_found` (404) para ruta desconocida y `method_not_allowed` (405) para metodo
+    no admitido en las rutas nuevas, anadir `route_not_found` al catalogo y probar que el paso 0 gana sobre una key
+    en query.
+  * **Nota para la prueba (pasada final, 12):** en el esquema de forma, los cinco campos de entrega aceptan
+    `null` como tipo valido (no `invalid_type`): `deliveryNotes: null` borra y los otros cuatro con `null` dan
+    `empty` en la validacion de contenido de T5. Probar los cinco con `null`.
 
 - [ ] **T9: Forma de pedido extraida sin cambiar la salida**
   * Requisitos cubiertos: RF_01, RF_20
@@ -274,35 +289,47 @@ por `safeDelete`.
   * Requisitos cubiertos: RF_04, RF_07, RF_10, RF_13, RF_19, RNF_01, RNF_02
   * Archivos: functions/src/store-api-write.ts, functions/src/store-api.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-write.test.ts
   * Accion: `POST /confirm`, `PATCH`, `POST /cancel` en el orden de la precedencia (plan 2.1): credenciales →
-    `parseWriteBody` (T8; solo el 400 se responde aqui) → tasa → idempotencia → ejecutor con `policy: "api"`,
-    actor `{ kind: "api", keyLast4 }` y los `fieldProblems`; mapeo de rechazos a `StoreApiError`; 422
-    `out_of_coverage` con `activeCities` (P4); respuesta `{ ok, changed, pedido }` con la forma de T9.
+    cuerpo (T8; solo los 400 se responden aqui) → tasa → idempotencia → ejecutor con `policy: "api"`, actor
+    `{ kind: "api", keyLast4 }` y los `fieldProblems`; mapeo de rechazos a `StoreApiError`; 422 `out_of_coverage`
+    con `activeCities` (P4); respuesta `{ ok, changed, pedido }` con la forma de T9.
   * Verificacion: `store-api-write.test.ts`: `mapRejectionToResponse` para cada rechazo (codigo, HTTP,
     `status`, `hasLeader`, `fields`, `activeCities` ordenadas por nombre y ausentes si fallo su lectura); con un
     `db` falso, **un `PATCH` con un campo invalido sobre un pedido de otra tienda → 404, y sobre uno `in_route` →
     409** (no 422); guarda: los handlers llaman a `runConfirm`/`runDeliveryCorrection`/`runCancel` y no escriben
     en `orders`.
+  * **Nota para la prueba (pasada final, 8):** completar con el `db` falso los pares de precedencia que faltan:
+    parametro desconocido + limite superado → 400 (no 429); limite superado + `Idempotency-Key` ya usada → 429;
+    `Idempotency-Key` reutilizada con otro cuerpo + pedido inexistente → 422 `idempotency_key_reused` (no 404);
+    y **404 frente a 409 con un pedido de otra tienda que esta `in_route`** → 404 (nunca revela su estado).
+  * **Nota para la prueba (pasada final, 10):** la guarda anti-copia de RF_19 tambien cubre
+    `functions/src/store-api-write.ts`: sus handlers no contienen `status: "ready_to_assign"`,
+    `status: "cancelled"`, `addressRisk: "accepted"` ni `[MANUAL_EDIT_STAMP]`; escribirla en el bloque de T11.
+  * **Nota para la prueba (pasada final, 11):** T11 deja el enganche de idempotencia (el handler pasa
+    `Idempotency-Key` y `bodyHash` al ejecutor, que en T11 los ignora); **T12** conecta `decideIdempotency` y el
+    registro. La prueba de T11 no depende de la idempotencia.
 
 - [ ] **T12: Idempotencia y limite de tasa**
   * Requisitos cubiertos: RNF_03, RNF_04
   * Archivos: functions/src/store-api-request.ts, functions/src/store-api-write.ts, functions/src/order-seller-actions-run.ts, src/lib/store-api-request.test.ts, src/lib/order-seller-actions-run.test.ts
   * Accion: `decideIdempotency(stored, { bodyHash, now })` → `replay | conflict | fresh`; ids
     `{sellerId}__{...}` en `storeApiIdempotency` y `storeApiRateLimits` (plan 2.8, 2.9); **la decision que vale se
-    toma dentro de la transaccion del ejecutor** (`order-seller-actions-run.ts` recibe la key, vuelve a leer el
-    registro en la transaccion, decide y lo escribe junto al pedido, **tambien cuando el plan rechaza con 409**,
-    en cuyo caso es la unica escritura); el handler puede leer antes fuera de la transaccion **solo como atajo**
-    para responder pronto `replay`/`conflict` (pasos 3a-3b del plan 2.1); ventana de tasa en transaccion corta
-    previa; 429 con `Retry-After`.
+    toma dentro de la transaccion del ejecutor** (`order-seller-actions-run.ts` recibe la key del enganche que dejo
+    T11, vuelve a leer el registro en la transaccion, decide y lo escribe junto al pedido, **tambien cuando el plan
+    rechaza con un 409 (pasos 5 y 8) o un 422 del paso 6**, en cuyo caso es la unica escritura); el handler puede
+    leer antes fuera de la transaccion **solo como atajo** para responder pronto `replay`/`conflict` (pasos 3a-3b
+    del plan 2.1); ventana de tasa en transaccion corta previa; 429 con `Retry-After`.
   * Verificacion: bloque `describe("T12 · ...")` en `store-api-request.test.ts`: misma key y cuerpo →
     `replay`; otro cuerpo → `idempotency_key_reused`; expirado → `fresh`; key vacia o > 255 →
-    `invalid_idempotency_key`; contador 121 → 429 y nunca 403; se guardan 200 y 409 y no 404 ni 422; los ids de
-    idempotencia y de tasa empiezan por `{sellerId}__`. Bloque `describe("T12 · ...")` en
-    `order-seller-actions-run.test.ts` con una transaccion falsa: una correccion rechazada con 409
-    (`order_not_editable`) **escribe el registro idempotente** con `status: 409` y su cuerpo, y ninguna escritura
-    en `orders`, `auditEvents` ni `orderHistory`; una aplicada escribe el registro con 200 en la misma transaccion
-    que el pedido; un 422 no escribe registro; **el atajo no decide:** con el atajo diciendo `fresh` y un registro
-    ya presente al leer dentro de la transaccion (otra peticion gano), el ejecutor responde `replay` con la
-    respuesta guardada y no aplica el cambio.
+    `invalid_idempotency_key`; contador 121 → 429 y nunca 403; **se guardan 200, 409 y 422 del paso 6**, y no
+    400, 401, 403, 404, 429 ni `idempotency_key_reused`; los ids de idempotencia y de tasa empiezan por
+    `{sellerId}__`. Bloque `describe("T12 · ...")` en `order-seller-actions-run.test.ts` con una transaccion
+    falsa: una correccion rechazada con 409 (`order_not_editable`) **escribe el registro idempotente** con
+    `status: 409` y su cuerpo, y ninguna escritura en `orders`, `auditEvents` ni `orderHistory`; **una correccion
+    rechazada con 422 (`out_of_coverage` o `validation_failed`) escribe el registro con `status: 422` y su cuerpo,
+    y la segunda peticion con la misma key y cuerpo devuelve ese mismo 422 sin reevaluar el pedido**; una
+    aplicada escribe el registro con 200 en la misma transaccion que el pedido; **el atajo no decide:** con el
+    atajo diciendo `fresh` y un registro ya presente al leer dentro de la transaccion (otra peticion gano), el
+    ejecutor responde `replay` con la respuesta guardada y no aplica el cambio.
 
 - [ ] **T13: Historial por API e indice**
   * Requisitos cubiertos: RF_17, RF_18, RF_20, RF_24
@@ -370,12 +397,13 @@ por `safeDelete`.
     `REGISTRAN_HISTORIAL` contiene un escritor de historial (`buildOrderHistoryRecord(`, o `runConfirm(` /
     `runDeliveryCorrection(` / `runCancel(` para las tres que delegan); (3) **prueba positiva:**
     `createOrUpdatePickupBatch`, `assignMessengerToOrders` y `unassignMessengerFromOrders` estan en
-    `REGISTRAN_HISTORIAL` y su cuerpo contiene `buildOrderHistoryRecord(`; (4) **ningun archivo de
-    `functions/src` que escriba en `orderHistory` (contiene `collection("orderHistory")`) lee
-    `collection("auditEvents")`** (RF_24). Una callable nueva en esos archivos sin clasificar pone la guarda en
-    rojo. La guarda lleva un comentario de cabecera: las importaciones y ChatBy viven en otros archivos y quedan
-    fuera por la spec (031), y las escrituras directas de cliente (`operationalOrderUpdateByAssignee`) son de la
-    032.
+    `REGISTRAN_HISTORIAL` y su cuerpo contiene `buildOrderHistoryRecord(`; (4) **RF_24:**
+    **`getOrderAuditTrail` es la unica funcion de `functions/src` que hace `.where(` o `.get(` sobre
+    `collection("auditEvents")`, y su cuerpo no escribe `orderHistory`; y no existe modo de relleno de
+    `orderHistory` desde `auditEvents`** (ningun modo de `scripts/verify-029.js` escribe en `orderHistory`; el
+    `cleanup` solo borra). Una callable nueva en esos archivos sin clasificar pone la guarda en rojo. La guarda
+    lleva un comentario de cabecera: las importaciones y ChatBy viven en otros archivos y quedan fuera por la spec
+    (031), y las escrituras directas de cliente (`operationalOrderUpdateByAssignee`) son de la 032.
 
 - [ ] **T17: Callables de la key de escritura**
   * Requisitos cubiertos: RF_25, RF_26
@@ -477,50 +505,38 @@ por `safeDelete`.
   * Accion: `capture-reads` de tres tiendas reales **solo con su key de lectura** (keys leidas del servidor,
     nunca escritas en la evidencia), guardando `captureAt`: `/kpis`, `/orders` y `/settlements` con **rangos
     cerrados del pasado** (`from` y `to` anteriores al dia de la captura, fijados en la evidencia para reusarlos);
-    `/resumen` (solo su forma); el indice. `compare-reads` para despues del despliegue (plan 5.3): mismos rangos;
-    de `/orders` y `/settlements` compara **por valor** solo los pedidos y cortes con `updatedAt < captureAt` que
-    conserven ese `updatedAt` (los movidos entre medias se excluyen de los dos lados y se cuentan); `/kpis` por
-    valor; `/resumen` **solo por forma** (claves y tipos), con la razon escrita en el guion (resume el estado de
-    hoy y ningun rango lo congela); del indice, valor identico de cada clave actual y solo claves nuevas de primer
-    nivel admitidas. **Tolerancia declarada en el guion:** cero diferencias en lo comparado por valor; solo se
-    ignoran las marcas de tiempo de la propia respuesta listadas en el guion. La comparacion con key de escritura
-    no se hace sobre tiendas reales: solo sobre la tienda de pruebas, en T27.
+    `/resumen` (solo su forma); el indice. Deja preparada la funcion de comparacion que usara `compare-reads`
+    dentro de `run-all` (T27): mismos rangos; de `/orders` y `/settlements` compara **por valor** solo los
+    pedidos y cortes con `updatedAt < captureAt` que conserven ese `updatedAt` (los movidos entre medias se
+    excluyen de los dos lados y se cuentan); `/kpis` por valor; `/resumen` **solo por forma** (claves y tipos),
+    con la razon escrita en el guion (resume el estado de hoy y ningun rango lo congela); del indice, valor
+    identico de cada clave actual y solo claves nuevas de primer nivel admitidas. **Tolerancia declarada en el
+    guion:** cero diferencias en lo comparado por valor; solo se ignoran las marcas de tiempo de la propia
+    respuesta listadas en el guion. La comparacion con key de escritura no se hace sobre tiendas reales: solo
+    sobre la tienda de pruebas, en T27.
   * Verificacion: bloque `describe("T24 · ...")`: el modo solo hace `GET`; contra tiendas que no sean
     `seller-test-029` solo usa la key de lectura (el guion no lee `writeKey*` de configs reales); los `from`/`to`
-    de `capture-reads` son anteriores a `captureAt`; `compare-reads` filtra por `updatedAt < captureAt`, compara
-    `/resumen` solo por claves y tipos y declara la lista explicita de campos ignorados; la evidencia no contiene
-    ninguna key (busqueda de 48 hex y de `kw_`); captura sin error.
+    de `capture-reads` son anteriores a `captureAt`; la funcion de comparacion filtra por `updatedAt <
+    captureAt`, compara `/resumen` solo por claves y tipos y declara la lista explicita de campos ignorados; la
+    evidencia no contiene ninguna key (busqueda de 48 hex y de `kw_`); captura sin error.
 
-- [ ] **T25: Forma de Kovia: fixture sintetico y replay firmado sobre la tienda de pruebas**
+- [ ] **T25: Forma de Kovia: fixture sintetico, salvaguardas del guion y sus guardas (sin ejecutar en produccion)**
   * Requisitos cubiertos: RF_11, RF_16 (excepcion del `cleanup`)
-  * Archivos: src/lib/fixtures/029-kovia-order.json, src/lib/order-seller-actions.test.ts, scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t25-kovia-replay.txt
+  * Archivos: src/lib/fixtures/029-kovia-order.json, src/lib/order-seller-actions.test.ts, scripts/verify-029.js, src/lib/spec-029-guards.test.ts
   * Accion: (a) copiar en solo lectura un pedido real de Kovia y su payload de Shopify como fixture,
     sustituyendo nombre, telefono, direccion **e id de Shopify** por valores sinteticos de la misma forma (id en
-    el rango reservado del guion). (b) **Modulo de salvaguardas del guion** (plan 5.3), reutilizado por T27:
+    el rango reservado del guion). (b) **Modulo de salvaguardas del guion** (plan 5.3), que ejecutara T27:
     `assertNotExists(ruta)` justo antes de cada envio (aborta si el documento que la via crearia ya existe);
     constantes de ids sinteticos (rango reservado de id de Shopify, p. ej. `9029000000000`-`9029000000999`,
     prefijo `TEST-029-` del numero de pedido, prefijo `test-029-` del id externo del webhook de tienda, dominio
-    `kentro-test-029.myshopify.com`, lider `driver-test-029`); registro en memoria de los ids que el guion crea
-    (pedidos, corridas de `importRuns`, `uid` de usuarios de Auth); `safeDelete(coleccion, id)` que **lee el
-    documento y comprueba su pertenencia segun la tabla por coleccion del plan 5.3 (c)**: `orders`/`orderHistory`
-    por `sellerId == "seller-test-029"`; `walletEntries` por `orderId` en los ids de pedidos de prueba;
-    `auditEvents` por `entityId` en los ids de pedidos de prueba o `== "seller-test-029"`;
-    `inventory`/`productCatalog` por `sellerId == "seller-test-029"`; `sellers`/`storeApiConfigs` por id
-    `seller-test-029`; `storeApiIdempotency`/`storeApiRateLimits` por prefijo `seller-test-029__`;
-    `shopifyStores` por dominio sintetico; `importRuns` por los ids que registro el guion;
-    `storeWebhookSamples`/`shopifySyncIssues` por referencia a un pedido de prueba o a `seller-test-029`; usuarios
-    de Auth por `uid` registrado por el guion; config de webhook de prueba por su clave. Si no pertenece, **se
-    niega a borrar** (aborta con error); una coleccion sin regla en la tabla no se puede borrar. (c) Modo
-    `kovia-replay`: crea el `shopifyStores` de prueba apuntando a `seller-test-029`;
-    `assertNotExists("orders/shopify-<id sintetico>")`; **replay 1** al `shopifyWebhook` con el payload de forma
-    Kovia, firmado con HMAC calculado leyendo el secreto de Shopify existente **solo en memoria** (nunca a disco,
-    evidencia ni logs); `PATCH` por API con la key de escritura de la tienda de pruebas; antes del **replay 2**,
-    comprueba que el pedido existente es el del replay 1 (`sellerId == "seller-test-029"`) o aborta; replay 2
-    (mismo payload); comprobacion de RF_11 (cliente y direccion corregidos conservados, estado sin cambio, fase
-    `edited`). (d) `kovia-replay --cleanup` (tambien llamado por el `cleanup` de T27), solo con `safeDelete`:
-    `shopifyStores` de prueba, `importRuns` de esas corridas, `shopifySyncIssues` y `storeWebhookSamples` que
-    referencien el pedido, su `orderHistory`, sus `walletEntries`, sus `auditEvents` y el pedido; falla si queda
-    algo.
+    `kentro-test-029.myshopify.com`, lider `driver-test-029`); **registro sin secretos** (`recordCreated(kind,
+    id)`, que anade a `EV/t27-registro.json` solo ids, `uid`, ids de corrida y el dominio de prueba, antes de cada
+    creacion); `safeDelete(coleccion, id)` que **lee el documento y comprueba su pertenencia segun la tabla por
+    coleccion del plan 5.3 (c)** y **se niega a borrar** (aborta con error) si no pertenece; una coleccion sin
+    regla en la tabla no se puede borrar. (c) Codigo del modo `kovia-replay` (crea el `shopifyStores` de prueba;
+    `assertNotExists("orders/shopify-<id sintetico>")`; replay 1 → `PATCH` → replay 2 con la comprobacion de que
+    el pedido existente es el del replay 1; firma HMAC con el secreto de Shopify leido **solo en memoria**;
+    comprobacion de RF_11), **sin ejecutarlo en produccion**: lo ejecuta `run-all` en T27.
   * Verificacion: bloque `describe("T25 · ...")` en `order-seller-actions.test.ts`: corregir el fixture y
     reimportarlo con `mergeImportedOrder` conserva cliente y direccion, y el `status` no cambia aunque el payload
     venga cancelado. Guardas en `spec-029-guards.test.ts` (salvaguardas (d) del plan 5.3): **(a)** toda llamada
@@ -533,58 +549,72 @@ por `safeDelete`.
     `orderHistory`, `walletEntries`, `auditEvents`, `inventory`, `productCatalog`, `sellers`, `storeApiConfigs`,
     `storeApiIdempotency`, `storeApiRateLimits`, `shopifyStores`, `importRuns`, `storeWebhookSamples`,
     `shopifySyncIssues`, usuarios de Auth, config de webhook de prueba) y lanza para cualquier otra;
-    `kovia-replay` solo escribe con `sellerId` `seller-test-029`; el secreto de Shopify no aparece en ningun
-    `fs.write*`, `console.*` ni en la evidencia. Evidencia `EV/t25-kovia-replay.txt` con las tres fases, la
-    comprobacion de RF_11 y el `cleanup` en cero.
+    `kovia-replay` solo escribe con `sellerId` `seller-test-029`; **(d)** `recordCreated` solo acepta ids
+    (rechaza valores con forma de key `kw_`, 48 hex, contrasena o secreto) y el secreto de Shopify no aparece en
+    ningun `fs.write*`, `console.*` ni en el registro.
 
 - [ ] **T26: Manual de la API**
   * Requisitos cubiertos: RF_17, RNF_01, RNF_02 (DoD 5)
   * Archivos: src/app/api-tiendas/page.tsx, src/lib/spec-029-guards.test.ts
   * Accion: rutas nuevas, codigos y su **precedencia** (decision 12), estados editables, `historySince`, que el
     historial no incluye importaciones ni ChatBy, key de escritura solo por cabecera (cualquier key por query en
-    una escritura da 401), `Idempotency-Key` (y que un reintento de una accion ya aplicada responde sin cambios
-    aunque traiga el `expectedStatus` anterior), limite y ciudades activas.
+    una escritura da 401), cuerpo de confirmar (solo `expectedStatus`), `Idempotency-Key` (y que un reintento de
+    una accion ya aplicada responde sin cambios aunque traiga el `expectedStatus` anterior, y que un 409 o 422 se
+    repite igual con la misma key), limite y ciudades activas.
   * Verificacion: bloque `describe("T26 · ...")`: la pagina menciona cada `code` del catalogo de T8, las tres
     rutas de escritura, `Authorization: Bearer` y `historySince`.
 
-- [ ] **T27: Despliegue, recorrido real y limpieza**
-  * Requisitos cubiertos: RF_20, RF_27, RF_16 (excepcion del `cleanup`), RNF_05, DoD 3
-  * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt
-  * Accion: modos `set-history-since` (`create`), `smoke --setup` (plan 5.3): tienda `seller-test-029` con
-    `inventory` y `productCatalog` de prueba, usuarios `seller` y `seller_logistics` con claim
-    `sellerId: "seller-test-029"`, **admin desechable** (aceptado explicitamente en la spec, como en
-    `verify-022`/`verify-026`; su `uid` se registra para borrarlo), config de webhook de tienda de prueba y
-    pedidos de prueba: el `imported` **entra por el `storeOrderWebhook` de `seller-test-029`**, con id externo
-    `test-029-…`, firmado con su secreto de prueba y precedido de `assertNotExists` (salvaguardas de T25); el
-    `address_risk` y el de inventario reservado, por `createManualOrder`; el **"con lider"**, creado por la tienda
-    y preparado con el **Admin SDK** (`status: "assigned"`, `driverId: "driver-test-029"`), **declarado en la
-    evidencia como paso fuera del canal del cliente**; **sin** usuarios de lider o mensajero, `drivers` ni
-    `pickupBatches` de prueba. CA_01-CA_12. **RF_27 con sesiones reales de la tienda de pruebas y del admin
-    desechable**: el guion **siembra con el Admin SDK**, sobre un pedido de `seller-test-029`, dos `auditEvents`
-    con forma historica (sin `origin`, sin `orderHistory`, con `actorId`/`actorRole` de Kentro): uno de accion
-    permitida (`order.transition`) y otro fuera de la lista (`order.messenger_reassigned`), y lo comprueba con la
-    sesion `seller` y con la del admin desechable. p95 de escrituras y de `GET /orders/{id}`; `compare-reads`
-    sobre datos congelados (T24; tiendas reales con key de lectura; key de escritura solo contra
-    `seller-test-029`); `cleanup` solo con `safeDelete`. Ninguna sesion de tienda sobre una tienda real. Cada
-    pedido creado por webhook consume un numero del contador de `trackingCode` (aceptado, plan 5.3). Orden de
-    despliegue del plan 10 (humano).
-  * Verificacion: bloque `describe("T27 · ...")`: `set-history-since` usa `create`; el `imported` de prueba se
-    crea con una peticion al `storeOrderWebhook` precedida de `assertNotExists(` y no con `createManualOrder`;
-    **el guion solo escribe ids de prueba**: toda escritura con el Admin SDK y toda llamada a callables de
-    escritura con la sesion del admin desechable llevan `sellerId: "seller-test-029"`, un id de pedido de prueba
-    registrado o un id de las constantes sinteticas; el guion no crea usuarios con un claim `sellerId` distinto de
-    `seller-test-029`, crea como mucho un admin y lo registra, y no crea usuarios de lider o mensajero ni escribe
-    en `drivers` o `pickupBatches`; el unico `driverId` que escribe es `driver-test-029`; la siembra de eventos
-    historicos escribe solo `auditEvents` con `entityId` de un pedido de `seller-test-029`; el `cleanup` recorre,
-    y solo borra mediante `safeDelete` con la prueba de pertenencia de su coleccion: `orders`, `auditEvents`
-    (incluidos los sembrados y los de la key de escritura, `entityId = "seller-test-029"`), `orderHistory` (unica
-    excepcion de RF_16), `walletEntries` (por `orderId` de prueba), `storeWebhookSamples`, `shopifySyncIssues`,
-    `storeApiIdempotency` y `storeApiRateLimits` (prefijo `seller-test-029__`), `importRuns` de prueba, la config
-    de webhook de prueba, el `shopifyStores` de prueba, `inventory` y `productCatalog` de la tienda,
-    `storeApiConfigs/seller-test-029`, los usuarios de Auth por `uid` registrado (tienda y admin desechable) y
-    `sellers/seller-test-029`; imprime recuento por coleccion y falla si queda algo; `compare-reads` solo usa key
-    de escritura con `seller-test-029`. Evidencia con p95 < 2 s, el paso del `driverId` declarado como fuera del
-    canal del cliente, el resultado de RF_27 (evento permitido sin identidades y con su etiqueta para la tienda;
-    el de fuera de la lista ausente para la tienda; los dos visibles para el admin), `compare-reads` sin
-    diferencias en lo comparado por valor (y el recuento de excluidos por `updatedAt`) y `cleanup` en cero en
-    todas las colecciones.
+- [ ] **T27: Despliegue, recorrido real en un solo proceso y limpieza**
+  * Requisitos cubiertos: RF_01, RF_11, RF_20, RF_27, RF_16 (excepcion del `cleanup`), RNF_05, DoD 3
+  * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-registro.json
+  * **Compuerta:** no empieza hasta que el **anexo A de la spec** tenga los CA_01-CA_12 transcritos del documento
+    de CENTRAL (2-oct-2026), sin ninguna fila "pendiente de transcribir" (lo cierra la sesion principal con el
+    responsable).
+  * Accion: modos `set-history-since` (`create`), **`run-all`** y **`cleanup --from-registro`** (plan 5.3).
+    `run-all` hace todo en **un solo proceso**, con el `cleanup` en un `finally`: setup de la tienda
+    `seller-test-029` (con `inventory` y `productCatalog` de prueba, usuarios `seller` y `seller_logistics` con
+    claim `sellerId: "seller-test-029"`, **admin desechable** aceptado explicitamente en la spec, config de
+    webhook de tienda de prueba y su key de lectura con `createStoreApiKey`); **key de escritura generada (y
+    rotada si la prueba lo pide) con la callable dentro del proceso, sin salir nunca de memoria**; pedidos de
+    prueba (el `imported` por el `storeOrderWebhook` con id externo `test-029-…` y `assertNotExists`; el
+    `address_risk` y el de inventario reservado por `createManualOrder`; el "con lider" preparado con el Admin
+    SDK, `status: "assigned"`, `driverId: "driver-test-029"`, **declarado en la evidencia como paso fuera del
+    canal del cliente**; sin usuarios de lider o mensajero, `drivers` ni `pickupBatches`); recorrido de los
+    CA_01-CA_12 del anexo A; **`kovia-replay`** (el codigo de T25: replay 1 → `PATCH` → replay 2 y comprobacion
+    de RF_11); **RF_27** con los dos `auditEvents` de forma historica sembrados con el Admin SDK sobre un pedido de
+    `seller-test-029` (uno de accion permitida, `order.transition`; otro fuera de la lista,
+    `order.messenger_reassigned`), comprobados con la sesion `seller` y con la del admin desechable;
+    **`compare-reads`** (tiendas reales con key de lectura contra la captura de T24; key de escritura solo contra
+    `seller-test-029`); **`GET /orders/{id}` contra su elemento de `GET /orders` sobre 20 pedidos reales** de
+    Kovia, ONEP y DANDA, solo lectura y key de lectura; p95 de escrituras y de `GET /orders/{id}`. Cada creacion se
+    anota antes en `EV/t27-registro.json` (sin secretos); si el proceso se cae, `cleanup --from-registro` limpia
+    con ese registro. Ninguna sesion de tienda sobre una tienda real. Cada pedido creado por webhook consume un
+    numero del contador de `trackingCode` (aceptado, plan 5.3). Orden de despliegue del plan 10 (humano).
+  * Verificacion: bloque `describe("T27 · ...")`: `set-history-since` usa `create`; `run-all` es una sola funcion
+    que crea, prueba y llama a `cleanup` dentro de un `finally`; **la key de escritura solo existe en variables
+    del proceso**: no aparece en ningun `fs.write*`, `console.*`, en el registro ni en la evidencia; el `imported`
+    de prueba se crea con una peticion al `storeOrderWebhook` precedida de `assertNotExists(` y no con
+    `createManualOrder`; **el guion solo escribe ids de prueba**: toda escritura con el Admin SDK y toda llamada a
+    callables de escritura con la sesion del admin desechable llevan `sellerId: "seller-test-029"`, un id de
+    pedido de prueba registrado o un id de las constantes sinteticas; el guion no crea usuarios con un claim
+    `sellerId` distinto de `seller-test-029`, crea como mucho un admin y lo registra, y no crea usuarios de lider o
+    mensajero ni escribe en `drivers` o `pickupBatches`; el unico `driverId` que escribe es `driver-test-029`; la
+    siembra de eventos historicos escribe solo `auditEvents` con `entityId` de un pedido de `seller-test-029`;
+    `cleanup` (en `finally` y con `--from-registro`) recorre, y solo borra mediante `safeDelete` con la prueba de
+    pertenencia de su coleccion: `orders`, `auditEvents` (incluidos los sembrados y los de la key de escritura,
+    `entityId = "seller-test-029"`), `orderHistory` (unica excepcion de RF_16), `walletEntries` (por `orderId` de
+    prueba), `storeWebhookSamples`, `shopifySyncIssues`, `storeApiIdempotency` y `storeApiRateLimits` (prefijo
+    `seller-test-029__`), `importRuns` del registro, la config de webhook de prueba, el `shopifyStores` de prueba,
+    `inventory` y `productCatalog` de la tienda, `storeApiConfigs/seller-test-029`, los usuarios de Auth del
+    registro (tienda y admin desechable) y `sellers/seller-test-029`; imprime recuento por coleccion y falla si
+    queda algo; la comparacion de `GET /orders/{id}` solo hace `GET` con key de lectura. Evidencia en
+    `EV/t27-smoke.txt` con: los CA del anexo A uno a uno; el paso del `driverId` declarado como fuera del canal del
+    cliente; las tres fases de `kovia-replay` y la comprobacion de RF_11; el resultado de RF_27 (evento permitido
+    sin identidades y con su etiqueta para la tienda; el de fuera de la lista ausente para la tienda; los dos
+    visibles para el admin); `compare-reads` sin diferencias en lo comparado por valor (y el recuento de excluidos
+    por `updatedAt`); los 20 pedidos de `GET /orders/{id}` iguales a su elemento de `GET /orders`; p95 < 2 s; y
+    `cleanup` en cero en todas las colecciones. `EV/t27-registro.json` queda en la evidencia, sin secretos.
+  * **Nota para la prueba (pasada final, 13):** en la tienda de pruebas, `compare-reads` compara la respuesta con
+    key de lectura y con key de escritura **en el mismo momento** (llamadas consecutivas, sin escrituras entre
+    medias) sobre `/resumen`, `/kpis`, `/orders` y `/settlements`, por valor; la key de lectura de la tienda de
+    pruebas se crea con `createStoreApiKey` en el setup (y no se escribe en el registro).

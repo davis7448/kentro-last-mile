@@ -3,12 +3,12 @@
 - **Estado:** aprobada (2026-10-04, con las respuestas propuestas por Claude y aceptadas por el responsable; el
   mismo dia el responsable ratifico la precision de la decision 2, acoto el historial a API y panel (decision 6) y
   metio en esta spec que la tienda no vea identidades de Kentro en el historial (decision 7); precisada tras
-  `/sdd-analyze` el 2026-10-04 y el 2026-10-05, seccion 10)
+  `/sdd-analyze` el 2026-10-04 y el 2026-10-05, con una pasada final decidida por el responsable, seccion 10)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-10-02 (aprobada y contrastada contra el codigo el 2026-10-04)
 - **Origen:** peticion de CENTRAL (plataforma de operacion de Kovia y ONEP), "Spec · Confirmar y corregir pedidos
   por API en Kentro", del 2-oct-2026. CENTRAL va a confirmar con el cliente por WhatsApp, con un agente propio,
-  antes de que el pedido salga a ruta.
+  antes de que el pedido salga a ruta. Sus criterios de aceptacion se transcriben en el anexo A.
 - **Prioridad:** alta. Es una integracion de un cliente activo y abre la primera via de escritura externa sobre
   pedidos.
 - **Accesibilidad:** WCAG 2.2 AA
@@ -140,7 +140,9 @@ de la decision 12.
   `ready_to_assign` con la **misma regla y la misma auditoria** que `confirmImportedOrder` (incluido
   `addressRisk: "accepted"`), con `confirmedVia: "api"` y origen `api` en el historial. **Si** el pedido
   `imported` ya tiene lider (caso anomalo), confirmar por API MUST responder 409 con
-  `code: "order_not_editable"`, su estado y `hasLeader: true`, sin cambiar nada.
+  `code: "order_not_editable"`, su estado y `hasLeader: true`, sin cambiar nada. El cuerpo de confirmar solo
+  admite `expectedStatus`: cualquier otra clave, o un tipo invalido, es un error de forma del cuerpo y MUST
+  responder 400 (decision 13).
 - **RF_05 (estado):** **Mientras** el pedido ya este en `ready_to_assign` o en un estado posterior, sin estar
   cancelado, confirmar MUST responder exito con el pedido tal como esta, sin cambiar nada ni anadir historial,
   **aunque traiga un `expectedStatus` que no coincida** con el estado real: la idempotencia gana (RF_19). (Un
@@ -283,8 +285,10 @@ de la decision 12.
   `{ ok: false, code, message, fields? }`. Los `code` son estables: se agregan, no se renombran. Las rutas
   existentes conservan su forma (RF_20). Cuando aplican varios, se responde el primero segun la decision 12.
 - **RNF_03 (idempotencia):** Las escrituras MUST aceptar `Idempotency-Key`. La misma key con el mismo cuerpo
-  durante 24 horas MUST devolver la misma respuesta sin aplicar el cambio dos veces. La misma key con otro
-  cuerpo MUST responder 422 con `code: "idempotency_key_reused"`.
+  durante 24 horas MUST devolver la misma respuesta sin aplicar el cambio dos veces, **tambien cuando la primera
+  respuesta fue un error que depende del pedido** (409 por estado o `status_changed`, y 422 de validacion o
+  cobertura): se repite el mismo error (decision 13). La misma key con otro cuerpo MUST responder 422 con
+  `code: "idempotency_key_reused"`.
 - **RNF_04 (limites):** Al superar el limite de tasa, el sistema MUST responder 429 con `Retry-After`, nunca 403.
   El minimo es 60 escrituras por minuto por tienda. Hoy `/storeApi` no tiene limite de tasa: es nuevo.
 - **RNF_05 (latencia):** El p95 de las escrituras y de `GET /orders/{id}` SHOULD ser menor a 2 segundos. Para eso
@@ -362,7 +366,8 @@ de la decision 12.
 1. **Pruebas, una por grupo de comportamiento:**
    - RF_04 y RF_05: confirmar `imported` lo deja en `ready_to_assign` con `confirmedVia: "api"`, y confirmar dos
      veces deja un solo registro de historial; confirmar un `imported` con lider da 409 `order_not_editable`;
-     confirmar un `ready_to_assign` con `expectedStatus: "imported"` responde sin cambios, no 409.
+     confirmar un `ready_to_assign` con `expectedStatus: "imported"` responde sin cambios, no 409; un cuerpo de
+     confirmar con una clave distinta de `expectedStatus` da 400.
    - RF_21 y RF_22: confirmar un `address_risk` da 409 `address_review_pending`, con y sin lider y tambien con un
      `expectedStatus` distinto; corregirlo (sin lider) lo deja en `imported` con `review`; confirmarlo despues lo
      deja en `ready_to_assign`; ninguna escritura por API deja un pedido en `address_risk`.
@@ -393,7 +398,7 @@ de la decision 12.
      valida y aunque venga un parametro desconocido); una key `kw_` por query en una ruta de lectura da 401.
    - Decision 12: cada par de condiciones vecinas de la precedencia tiene una prueba que comprueba que gana la
      de mayor precedencia.
-   - RNF_03: la misma `Idempotency-Key` no aplica dos veces.
+   - RNF_03: la misma `Idempotency-Key` no aplica dos veces, y repite el mismo 409 o 422 durante 24 horas.
    - RF_20: las respuestas de `/kpis`, `/orders` y `/settlements` sobre datos congelados al capturar, y los
      valores de las claves actuales del indice, no cambian (comparacion por valor antes/despues); `/resumen`
      conserva su forma; en tiendas reales solo con su key de lectura; con key de escritura, solo en la tienda de
@@ -402,14 +407,17 @@ de la decision 12.
    (RF_19), y la guarda de la spec 017 (`spec-017-guards.test.ts`) sigue en verde: si el codigo nuevo escribe en
    `orders` fuera de `orders.ts`, se declara en `IMPORT_WRITE_EXEMPTIONS` con su razon.
 3. **Recorrido real contra produccion** con una tienda de pruebas: los criterios de aceptacion CA_01 a CA_12 de
-   CENTRAL, con CA_03 corregido para confirmar un pedido `imported`. Con evidencia. Incluye abrir "Historial del
-   pedido" con una sesion real de tienda y comprobar que no aparece ningun nombre ni correo de Kentro (RF_27).
-   **Sesiones:** las de tienda (`seller` y `seller_logistics`) son de la tienda de pruebas; ninguna sesion de
-   tienda se crea sobre una tienda real. Se acepta **explicitamente un admin desechable**, creado y borrado por
-   el guion de verificacion (como en las verificaciones de las specs 022 y 026), usado solo sobre la tienda de
-   pruebas. **No se crea lider ni mensajero desechable:** el pedido de prueba "con lider" se prepara poniendo su
-   `driverId` con el Admin SDK, y eso se declara en la evidencia como paso que no va por el canal del cliente. El
-   `cleanup` final borra solo lo creado por la verificacion (RF_16, excepcion).
+   CENTRAL **tal como quedan transcritos en el anexo A**, con CA_03 corregido para confirmar un pedido
+   `imported`. **El recorrido no empieza mientras el anexo A tenga criterios pendientes de transcribir.** Con
+   evidencia. Incluye abrir "Historial del pedido" con una sesion real de tienda y comprobar que no aparece
+   ningun nombre ni correo de Kentro (RF_27). **Sesiones:** las de tienda (`seller` y `seller_logistics`) son de
+   la tienda de pruebas; ninguna sesion de tienda se crea sobre una tienda real. Se acepta **explicitamente un
+   admin desechable**, creado y borrado por el guion de verificacion (como en las verificaciones de las specs 022
+   y 026), usado solo sobre la tienda de pruebas. **No se crea lider ni mensajero desechable:** el pedido de
+   prueba "con lider" se prepara poniendo su `driverId` con el Admin SDK, y eso se declara en la evidencia como
+   paso que no va por el canal del cliente. Todo el recorrido con escrituras corre **en un solo proceso** con
+   limpieza al final pase lo que pase y con un registro sin secretos de lo creado, para poder limpiar si el
+   proceso se cae (plan 5.3). El `cleanup` final borra solo lo creado por la verificacion (RF_16, excepcion).
 4. **Calidad:** `npm test`, `npx tsc --noEmit` (raiz y `functions/`) y `npm run lint` en verde.
 5. **Documentacion:** la de `/storeApi` (el indice de la raiz, en claves nuevas, y `/api-tiendas`) describe las
    rutas nuevas, los codigos de error y su precedencia, los estados editables, `historySince` y lo que el
@@ -472,11 +480,12 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 12. **Precedencia de codigos y precisiones del sexto `/sdd-analyze` (2026-10-05, orquestador):**
     (a) **Precedencia de codigos de las rutas nuevas.** Cuando una peticion reune varias condiciones, se
     responde la primera de esta lista, en este orden:
+    0. ruta y metodo (ruta desconocida o metodo no admitido; la tabla del plan 2.1 fija sus codigos);
     1. 401 por key enviada en query a una ruta de escritura (`key_in_query`), antes incluso que los parametros;
     2. 401/403 de credenciales (`missing_credentials`, `invalid_key`, `key_in_query` por `kw_` en lectura,
        `read_only_key`);
     3. 400 de parametros (`unknown_parameter`) y de forma del cuerpo (`invalid_json`, cuerpo que no es un
-       objeto);
+       objeto, y en confirmar cualquier clave distinta de `expectedStatus` o un tipo invalido, decision 13);
     4. 404 pedido ajeno o inexistente (`order_not_found`);
     5. 409 por estado (`order_cancelled`, `address_review_pending`, `order_not_editable`);
     6. 422 de validacion y cobertura (`field_not_allowed`, `validation_failed`, `no_fields`,
@@ -492,6 +501,16 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
     (c) **Sesiones de la verificacion (DoD 3):** sesiones de tienda solo de la tienda de pruebas; un admin
     desechable aceptado explicitamente, creado y borrado por el guion; ningun lider ni mensajero desechable (el
     `driverId` del pedido de prueba se pone con el Admin SDK, declarado como paso fuera del canal del cliente).
+13. **Pasada final (septimo `/sdd-analyze`, 2026-10-05, decidida por el responsable):** se corrigen seis puntos de
+    fondo y los menores quedan como "Nota para la prueba" en las tareas. De fondo: (a) en `POST /confirm`, cuyo
+    cuerpo solo admite `expectedStatus`, una clave no permitida o un tipo invalido es forma del cuerpo: 400 en el
+    paso 3 (RF_04, decision 12); (b) la idempotencia guarda tambien los errores que dependen del pedido (409 y
+    los 422 del paso 6), y la misma key y cuerpo repite el mismo error durante 24 horas (RNF_03); (c) la
+    verificacion con escrituras corre en un solo proceso, con limpieza al final y un registro sin secretos de lo
+    creado (DoD 3); (d) los criterios CA_01-CA_12 de CENTRAL se transcriben en el anexo A y el recorrido real no
+    empieza mientras esten pendientes (DoD 3); (e) la guarda de RF_24 y la comparacion de `GET /orders/{id}` con
+    su elemento de `GET /orders` sobre pedidos reales quedan fijadas en el plan y las tareas. → RF_04, RNF_03,
+    DoD 3, anexo A.
 
 ## 10. Historial de cambios
 
@@ -507,3 +526,27 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 | 2026-10-04 | Precisiones del cuarto `/sdd-analyze` (decision 10), sin cambiar la intencion: glosario (accion sin cambios); RF_05, RF_15 y RF_19 (la idempotencia gana sobre `expectedStatus`; `status_changed` solo si la accion cambiaria algo); caso limite ChatBy + API con `expectedStatus`; RF_20 (documentacion nueva del indice solo en claves nuevas de primer nivel, valores actuales identicos, comparacion por valor); DoD 1, 3 y 5 ajustados (RF_27 sobre la tienda de pruebas, sin sesiones sobre tiendas reales) | Cuarto `/sdd-analyze`: `expectedStatus` contradecia la idempotencia de RF_05/RF_15 y el indice admitia cambios dentro de claves actuales |
 | 2026-10-05 | Precisiones del quinto `/sdd-analyze` (decision 11), sin cambiar la intencion: RF_10 se valida antes del no-op (glosario y caso limite nuevo); RF_25 enumera los metadatos visibles despues de generar; RF_20 y DoD: comparacion sobre datos congelados al capturar, `/resumen` por forma | Quinto `/sdd-analyze`: criterios de verificacion que el texto dejaba abiertos |
 | 2026-10-05 | Sexto `/sdd-analyze` (decision 12): precedencia de codigos de las rutas nuevas (401 key en query → credenciales → 400 parametros y forma → 404 → 409 por estado → 422 validacion y cobertura → sin cambios → 409 `status_changed` → aplicar), referida desde la seccion 4, RF_19, RF_21, RNF_01, RNF_02, glosario, casos limite y DoD; RF_25 ajustado a lo que muestra el diseno (existe, termina en, generada, generada por; sin prefijo ni fecha de rotacion); DoD 3: admin desechable aceptado explicitamente, sin lider ni mensajero desechables (`driverId` puesto con el Admin SDK, fuera del canal del cliente) | Sexto `/sdd-analyze`: orden de errores sin definir, RF_25 mas amplio que el diseno y sesiones de verificacion sin declarar |
+| 2026-10-05 | Pasada final, septimo `/sdd-analyze` (decision 13): RF_04 y decision 12 (paso 3: en confirmar, clave no permitida o tipo invalido → 400; paso 0 de ruta y metodo explicito); RNF_03 (la idempotencia repite tambien los 409 y 422 que dependen del pedido); DoD 1 y 3 (recorrido en un solo proceso con limpieza final y registro sin secretos; compuerta del anexo A); anexo A nuevo con CA_01-CA_12 pendientes de transcribir | Decision del responsable: una pasada final, con los menores como notas en las tareas |
+
+## Anexo A. Criterios de aceptacion de CENTRAL
+
+Los criterios CA_01 a CA_12 vienen del documento de CENTRAL "Spec · Confirmar y corregir pedidos por API en
+Kentro" (2-oct-2026), que **no esta en el repositorio**. Se transcriben aqui, uno por fila, con el texto de
+CENTRAL y, si hace falta, la correccion de esta spec (por ejemplo, CA_03 se corrige para confirmar un pedido
+`imported`, no uno en `call_pending`). **Compuerta:** el recorrido real contra produccion (DoD 3, tarea T27) no
+empieza mientras quede alguna fila "pendiente de transcribir".
+
+| Id | Criterio de CENTRAL (texto) | Correccion de la spec 029 | Requisitos | Estado |
+|---|---|---|---|---|
+| CA_01 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_02 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_03 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | confirmar un pedido `imported` (no `call_pending`) | RF_04 | pendiente |
+| CA_04 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_05 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_06 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_07 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_08 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_09 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_10 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_11 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_12 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
