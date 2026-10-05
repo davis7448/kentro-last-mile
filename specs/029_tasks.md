@@ -434,7 +434,10 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     lleva un comentario de cabecera: las importaciones y ChatBy viven en otros archivos y quedan fuera por la spec
     (031), y las escrituras directas de cliente (`operationalOrderUpdateByAssignee`) son de la 032.
 
-- [ ] **T17: Callables de la key de escritura**
+- [x] **T17: Callables de la key de escritura**
+  * **Al cerrar (2026-10-05):** una sola callable `rotateStoreWriteKey({ sellerId, rotate })` genera
+    (`rotate: false`) o rota; `listStoreApiKeys` devuelve `{ stores: StoreApiKeyStatus[] }` (T18 lee `.stores`);
+    `generatedByLabel` del admin ya trae "por " delante.
   * Requisitos cubiertos: RF_25, RF_26
   * Archivos: functions/src/store-api-keys.ts, functions/src/index.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-auth.test.ts
   * Accion: `rotateStoreWriteKey` (transaccion huella + auditoria con `entityId = sellerId`; key devuelta tras

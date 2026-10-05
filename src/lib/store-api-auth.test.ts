@@ -399,3 +399,153 @@ describe("T3 · planWriteKeyChange", () => {
     expect(result.previousLast4).toBeNull();
   });
 });
+
+describe("T17 · toStoreApiKeyStatus: lo que se muestra de las keys (RF_25)", () => {
+  /*
+   * Contrato (T17). Vive en `functions/src/store-api-keys.ts` (el modulo de las tres callables), porque
+   * `store-api-auth.ts` no esta en el alcance de T17. Es pura y el modulo NO puede llamar a `getFirestore()`,
+   * `getAuth()` ni `initializeApp()` al cargarse (solo dentro de las callables): la prueba lo importa.
+   *
+   *   toStoreApiKeyStatus({
+   *     sellerId: string,
+   *     sellerName?: string,                       // si falta: config.sellerName, y si no, sellerId
+   *     config: StoreApiConfigLike | null | undefined,
+   *     viewerRole: "admin" | "seller" | "seller_logistics",
+   *     adminNames?: Record<string, string>,       // uid → nombre; solo se consulta si viewerRole = "admin"
+   *   }) → StoreApiKeyStatus (plan 4.2):
+   *     { sellerId, sellerName,
+   *       read:  { exists: boolean, status: "active" | "inactive" | "none" },
+   *       write: { exists: false } | { exists: true, last4, generatedAt, generatedByLabel },
+   *       canManageWrite: boolean }
+   *
+   * - read.exists = hay `apiKey` (texto no vacio). Sin `apiKey` → status "none"; con ella, "active" si
+   *   config.status === "active" y si no "inactive".
+   * - write.exists = hay `writeKeyHash` (texto no vacio). generatedAt = writeKeyRotatedAt ?? writeKeyCreatedAt.
+   * - generatedByLabel segun `writeKeyGeneratedBy.role` y quien pregunta:
+   *     tienda (seller / seller_logistics): role "seller" → "Tu tienda"; role "admin" → "Kentro" (nunca el nombre).
+   *     admin: role "seller" → "por la tienda"; role "admin" → "por <nombre>" (adminNames[uid]); si el
+   *     nombre no se resolvio, "por <uid>" (mismo respaldo que el historial).
+   * - canManageWrite: true para admin y seller, false para seller_logistics.
+   */
+  const MODULE_KEYS = "../../functions/src/store-api-keys";
+  const CREATED = "2026-10-01T10:00:00.000Z";
+  const ROTATED = "2026-10-04T08:30:00.000Z";
+
+  async function status(input: Record<string, unknown>) {
+    const { toStoreApiKeyStatus } = await import(MODULE_KEYS);
+    return toStoreApiKeyStatus({ sellerId: SELLER, viewerRole: "seller", ...input });
+  }
+
+  it("write trae exactamente exists, last4, generatedAt y generatedByLabel (sin prefix, rotatedAt, createdAt)", async () => {
+    const result = await status({ config: activeConfig({ writeKeyRotatedAt: ROTATED }) });
+    expect(Object.keys(result.write).sort()).toEqual(["exists", "generatedAt", "generatedByLabel", "last4"]);
+    expect(result.write).toEqual({
+      exists: true,
+      last4: WRITE_KEY.slice(-4),
+      generatedAt: ROTATED,
+      generatedByLabel: "Tu tienda"
+    });
+  });
+
+  it("forma de primer nivel: sellerId, sellerName, read, write, canManageWrite y nada mas", async () => {
+    const result = await status({ config: activeConfig() });
+    expect(Object.keys(result).sort()).toEqual(["canManageWrite", "read", "sellerId", "sellerName", "write"]);
+    expect(result.sellerId).toBe(SELLER);
+    expect(result.sellerName).toBe("Tienda de prueba");
+  });
+
+  it("sellerName explicito gana a config.sellerName; sin ninguno, el sellerId", async () => {
+    expect((await status({ config: activeConfig(), sellerName: "Kovia" })).sellerName).toBe("Kovia");
+    expect((await status({ config: null })).sellerName).toBe(SELLER);
+  });
+
+  it("generatedAt = fecha de rotacion si la hubo", async () => {
+    const result = await status({ config: activeConfig({ writeKeyCreatedAt: CREATED, writeKeyRotatedAt: ROTATED }) });
+    expect(result.write.generatedAt).toBe(ROTATED);
+  });
+
+  it("generatedAt = fecha de generacion si nunca se roto", async () => {
+    const result = await status({ config: activeConfig({ writeKeyCreatedAt: CREATED }) });
+    expect(result.write.generatedAt).toBe(CREATED);
+  });
+
+  it("sin writeKeyHash → write = { exists: false } y nada mas", async () => {
+    const config = activeConfig({ writeKeyHash: undefined, writeKeyLast4: undefined, writeKeyPrefix: undefined, writeKeyCreatedAt: undefined, writeKeyGeneratedBy: undefined });
+    expect((await status({ config })).write).toEqual({ exists: false });
+  });
+
+  it("config inexistente → read none, write { exists: false }", async () => {
+    const result = await status({ config: null });
+    expect(result.read).toEqual({ exists: false, status: "none" });
+    expect(result.write).toEqual({ exists: false });
+  });
+
+  it("read: activa, inactiva y sin key de lectura (config creada al generar la de escritura)", async () => {
+    expect((await status({ config: activeConfig() })).read).toEqual({ exists: true, status: "active" });
+    expect((await status({ config: activeConfig({ status: "disabled" }) })).read).toEqual({ exists: true, status: "inactive" });
+    expect((await status({ config: activeConfig({ apiKey: undefined }) })).read).toEqual({ exists: false, status: "none" });
+  });
+
+  describe("generatedByLabel para la tienda (nunca el nombre de un admin)", () => {
+    for (const viewerRole of ["seller", "seller_logistics"] as const) {
+      it(`${viewerRole}: generada por la tienda → "Tu tienda"`, async () => {
+        const result = await status({ viewerRole, config: activeConfig({ writeKeyGeneratedBy: { uid: "u-seller", role: "seller" } }) });
+        expect(result.write.generatedByLabel).toBe("Tu tienda");
+      });
+
+      it(`${viewerRole}: generada por un admin → "Kentro", aunque se pase su nombre`, async () => {
+        const result = await status({
+          viewerRole,
+          config: activeConfig({ writeKeyGeneratedBy: { uid: "u-admin", role: "admin" } }),
+          adminNames: { "u-admin": "Laura Gomez" }
+        });
+        expect(result.write.generatedByLabel).toBe("Kentro");
+        expect(JSON.stringify(result)).not.toContain("Laura");
+        expect(JSON.stringify(result)).not.toContain("u-admin");
+      });
+    }
+  });
+
+  describe("generatedByLabel para el admin", () => {
+    it('generada por la tienda → "por la tienda"', async () => {
+      const result = await status({ viewerRole: "admin", config: activeConfig({ writeKeyGeneratedBy: { uid: "u-seller", role: "seller" } }) });
+      expect(result.write.generatedByLabel).toBe("por la tienda");
+    });
+
+    it('generada por un admin → "por <nombre del admin>"', async () => {
+      const result = await status({
+        viewerRole: "admin",
+        config: activeConfig({ writeKeyGeneratedBy: { uid: "u-admin", role: "admin" } }),
+        adminNames: { "u-admin": "Laura Gomez" }
+      });
+      expect(result.write.generatedByLabel).toBe("por Laura Gomez");
+    });
+
+    it('admin sin nombre resuelto → "por <uid>"', async () => {
+      const result = await status({ viewerRole: "admin", config: activeConfig({ writeKeyGeneratedBy: { uid: "u-admin", role: "admin" } }) });
+      expect(result.write.generatedByLabel).toBe("por u-admin");
+    });
+  });
+
+  it("canManageWrite: admin y seller si, seller_logistics no", async () => {
+    expect((await status({ viewerRole: "admin", config: activeConfig() })).canManageWrite).toBe(true);
+    expect((await status({ viewerRole: "seller", config: activeConfig() })).canManageWrite).toBe(true);
+    expect((await status({ viewerRole: "seller_logistics", config: activeConfig() })).canManageWrite).toBe(false);
+  });
+
+  it("nunca la key de lectura, la de escritura, la huella ni el prefijo, para ningun rol", async () => {
+    for (const viewerRole of ["admin", "seller", "seller_logistics"] as const) {
+      const json = JSON.stringify(await status({ viewerRole, config: activeConfig({ writeKeyRotatedAt: ROTATED }), adminNames: {} }));
+      expect(json).not.toContain(READ_KEY);
+      expect(json).not.toContain(WRITE_KEY);
+      expect(json).not.toContain(sha256(WRITE_KEY));
+      expect(json).not.toContain("kw_");
+      expect(json).not.toMatch(/apiKey|writeKeyHash|writeKeyPrefix|prefix|rotatedAt|createdAt/);
+    }
+  });
+
+  it("sin undefined en la salida (va por una callable)", async () => {
+    const result = await status({ config: activeConfig({ apiKey: undefined, writeKeyHash: undefined }) });
+    expect(JSON.stringify(result)).toBe(JSON.stringify(result, (_k, v) => (v === undefined ? "UNDEF" : v)));
+  });
+});

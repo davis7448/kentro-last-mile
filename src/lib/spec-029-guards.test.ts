@@ -1109,3 +1109,199 @@ describe("T16 · historial por nombre: mensajero, recogida y correcciones (RF_16
     });
   });
 });
+
+describe("T17 · callables de la key de escritura (RF_25, RF_26)", () => {
+  /*
+   * Plan 2.3: `functions/src/store-api-keys.ts` (nuevo) exporta `rotateStoreWriteKey`, `getStoreApiKeyStatus`
+   * y `listStoreApiKeys` como `export const X = onCall(`, cerradas por `\n});\n`, y la pura
+   * `toStoreApiKeyStatus` (probada en `store-api-auth.test.ts`). Una sola callable para generar y rotar:
+   * `rotateStoreWriteKey({ sellerId, rotate })`; `rotate: false` genera (failed-precondition si ya hay key),
+   * `rotate: true` rota (failed-precondition si no la hay). Las precondiciones las decide
+   * `planWriteKeyChange` DENTRO de la transaccion; la key se genera ANTES (`generateWriteKey(`) y se
+   * devuelve DESPUES del commit.
+   */
+  const FILE = "functions/src/store-api-keys.ts";
+  const CALLABLES = ["rotateStoreWriteKey", "getStoreApiKeyStatus", "listStoreApiKeys"] as const;
+
+  const source = (): string => {
+    expect(existsSync(absolute(FILE)), `${FILE} no existe`).toBe(true);
+    return sourceWithoutComments(FILE);
+  };
+
+  function exportedBody(text: string, name: string): string {
+    const start = text.search(new RegExp(`^export const ${name}\\s*=\\s*onCall\\(`, "m"));
+    expect(start, `no se encontro export const ${name} = onCall(`).toBeGreaterThanOrEqual(0);
+    const end = text.indexOf("\n});\n", start);
+    return text.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  /** Texto desde `open` hasta su parentesis de cierre (balanceado; ignora parentesis dentro de cadenas simples). */
+  function balancedFrom(text: string, open: number): string {
+    let depth = 0;
+    let quote: string | null = null;
+    for (let i = open; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0) return text.slice(open, i + 1);
+      }
+    }
+    return text.slice(open);
+  }
+
+  /** Argumentos de cada llamada de escritura `.set(`/`.update(`/`.create(`/`.add(` del texto, con su posicion. */
+  function writeCalls(text: string): { at: number; args: string }[] {
+    return [...text.matchAll(/\.(?:set|update|create|add)\(/g)].map((m) => ({
+      at: m.index ?? 0,
+      args: balancedFrom(text, (m.index ?? 0) + m[0].length - 1)
+    }));
+  }
+
+  function transactionSpan(body: string): { start: number; end: number; text: string } {
+    const call = body.indexOf("runTransaction(");
+    expect(call, "rotateStoreWriteKey no usa runTransaction(").toBeGreaterThanOrEqual(0);
+    const text = balancedFrom(body, call + "runTransaction".length);
+    return { start: call, end: call + "runTransaction".length + text.length, text };
+  }
+
+  it("el modulo existe y exporta las tres callables como onCall", () => {
+    const text = source();
+    for (const name of CALLABLES) expect(text).toMatch(new RegExp(`^export const ${name}\\s*=\\s*onCall\\(`, "m"));
+  });
+
+  it("exporta la pura toStoreApiKeyStatus", () => {
+    expect(source()).toMatch(/^export function toStoreApiKeyStatus\s*\(/m);
+  });
+
+  it("no inicializa Firestore ni Auth al cargarse (solo dentro de las callables)", () => {
+    // Solo sentencias de primer nivel (columna 0); un helper `function x() { getAuth()... }` es legitimo.
+    expect(source()).not.toMatch(/^(?:export\s+)?(?:(?:const|let|var)\s+\w+\s*=\s*)?(?:getFirestore|getAuth|initializeApp)\s*\(/m);
+  });
+
+  it("index.ts reexporta las tres desde ./store-api-keys", () => {
+    const index = sourceWithoutComments("functions/src/index.ts");
+    const match = index.match(/export\s*\{([^}]*)\}\s*from\s*["']\.\/store-api-keys["']/);
+    expect(match, "index.ts no tiene export { ... } from \"./store-api-keys\"").not.toBeNull();
+    for (const name of CALLABLES) expect(match?.[1]).toMatch(new RegExp(`\\b${name}\\b`));
+  });
+
+  describe("rotateStoreWriteKey", () => {
+    const body = () => exportedBody(source(), "rotateStoreWriteKey");
+
+    it("rechaza a quien no sea admin ni seller (seller_logistics → permission-denied)", () => {
+      const text = body();
+      const guard = text.slice(0, Math.max(0, text.indexOf("runTransaction(")));
+      expect(guard).toMatch(/HttpsError\(\s*["']permission-denied["']/);
+      expect(guard).toMatch(/role\s*!==\s*["']admin["']/);
+      expect(guard).toMatch(/role\s*!==\s*["']seller["']/);
+      expect(text, "seller_logistics no puede aparecer en la lista de roles que rotan").not.toContain("seller_logistics");
+    });
+
+    it("la tienda solo rota la suya: compara el sellerId pedido con el del token", () => {
+      expect(body()).toMatch(/token\.sellerId/);
+    });
+
+    it("genera la key con generateWriteKey( ANTES de la transaccion", () => {
+      const text = body();
+      const generated = text.indexOf("generateWriteKey(");
+      expect(generated, "no llama a generateWriteKey(").toBeGreaterThanOrEqual(0);
+      expect(generated).toBeLessThan(transactionSpan(text).start);
+    });
+
+    it("planWriteKeyChange( se decide DENTRO de la transaccion (precondiciones sobre lo leido en ella)", () => {
+      expect(transactionSpan(body()).text).toContain("planWriteKeyChange(");
+    });
+
+    it("runTransaction( envuelve la escritura de storeApiConfigs y la de auditEvents", () => {
+      const text = body();
+      const span = transactionSpan(text);
+      expect(text).toMatch(/collection\(\s*["']storeApiConfigs["']\s*\)/);
+      expect(text).toMatch(/collection\(\s*["']auditEvents["']\s*\)/);
+      const inside = writeCalls(span.text);
+      expect(inside.length, "la transaccion deberia escribir config y evento").toBeGreaterThanOrEqual(2);
+      expect(inside.some((call) => /\.fields\b/.test(call.args)), "ninguna escritura usa los fields del plan").toBe(true);
+      expect(inside.some((call) => /\.auditEvent\b/.test(call.args)), "ninguna escritura usa el auditEvent del plan").toBe(true);
+    });
+
+    it("no escribe nada fuera de la transaccion", () => {
+      const text = body();
+      const span = transactionSpan(text);
+      const outside = writeCalls(text).filter((call) => call.at < span.start || call.at >= span.end);
+      expect(outside.map((call) => call.args.slice(0, 60))).toEqual([]);
+    });
+
+    it("el evento lleva entityId = sellerId (el del plan; si se reescribe, solo con el sellerId)", () => {
+      for (const m of body().matchAll(/\bentityId\s*:\s*([^,}\n]+)/g)) {
+        expect(m[1].trim()).toMatch(/^(?:input\.|parsed\.data\.|data\.)?sellerId$/);
+      }
+    });
+
+    it("el return con writeKey esta despues de la transaccion, y ninguno dentro", () => {
+      const text = body();
+      const span = transactionSpan(text);
+      const returns = [...text.matchAll(/return\s*\{[^;]*?\bwriteKey\b/g)].map((m) => m.index ?? 0);
+      expect(returns.length, "no hay return { ... writeKey ... }").toBeGreaterThan(0);
+      for (const at of returns) expect(at).toBeGreaterThanOrEqual(span.end);
+      expect([...span.text.matchAll(/return\s*\{[^;]*?\bwriteKey\b/g)]).toEqual([]);
+    });
+  });
+
+  it("ningun set/update/create/add del modulo lleva writeKey (solo su huella via fields)", () => {
+    const offenders = writeCalls(source()).filter((call) => /\bwriteKey\b/.test(call.args));
+    expect(offenders.map((call) => call.args.slice(0, 80))).toEqual([]);
+  });
+
+  it("la key nunca va a logs", () => {
+    const logs = [...source().matchAll(/\b(?:console|logger)\.\w+\(/g)].map((m) => balancedFrom(source(), (m.index ?? 0) + m[0].length - 1));
+    expect(logs.filter((args) => /\bwriteKey\b/.test(args))).toEqual([]);
+  });
+
+  describe("las de estado no devuelven secretos", () => {
+    for (const name of ["getStoreApiKeyStatus", "listStoreApiKeys"] as const) {
+      it(`${name} pasa por toStoreApiKeyStatus( y no menciona apiKey ni writeKeyHash`, () => {
+        const text = exportedBody(source(), name);
+        expect(text).toContain("toStoreApiKeyStatus(");
+        expect(text).not.toMatch(/\b(apiKey|writeKeyHash)\b/);
+      });
+
+      it(`${name} no escribe`, () => {
+        expect(writeCalls(exportedBody(source(), name))).toEqual([]);
+      });
+    }
+
+    it("rotateStoreWriteKey tampoco devuelve apiKey ni writeKeyHash", () => {
+      const text = exportedBody(source(), "rotateStoreWriteKey");
+      for (const m of text.matchAll(/return\s*\{/g)) {
+        const ret = text.slice(m.index ?? 0, text.indexOf(";", m.index ?? 0));
+        expect(ret).not.toMatch(/\b(apiKey|writeKeyHash)\b/);
+      }
+    });
+
+    it("listStoreApiKeys es solo de admin", () => {
+      const text = exportedBody(source(), "listStoreApiKeys");
+      expect(text).toMatch(/role\s*!==\s*["']admin["']/);
+      expect(text).toMatch(/HttpsError\(\s*["']permission-denied["']/);
+    });
+
+    it("getStoreApiKeyStatus admite seller_logistics de su tienda (compara token.sellerId)", () => {
+      const text = exportedBody(source(), "getStoreApiKeyStatus");
+      expect(text).toContain("seller_logistics");
+      expect(text).toMatch(/token\.sellerId/);
+    });
+  });
+
+  it("RF_26: createStoreApiKey (key de lectura) no escribe ningun campo writeKey*", () => {
+    const store = sourceWithoutComments("functions/src/store-api.ts");
+    const start = store.search(/^export const createStoreApiKey\s*=\s*onCall\(/m);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = store.indexOf("\n});\n", start);
+    expect(store.slice(start, end < 0 ? undefined : end)).not.toMatch(/writeKey/);
+  });
+});

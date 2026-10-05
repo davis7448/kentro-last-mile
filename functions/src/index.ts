@@ -33,6 +33,7 @@ export { mercadotiendaContactFormWebhook } from "./contact-form";
 export { onstockOrderWebhook } from "./onstock-webhook";
 export { createStoreWebhookConfig, storeOrderWebhook } from "./store-webhook";
 export { createStoreApiKey, storeApi } from "./store-api";
+export { rotateStoreWriteKey, getStoreApiKeyStatus, listStoreApiKeys } from "./store-api-keys";
 export { uchatConfirmWebhook } from "./uchat-webhook";
 export { pullUchatConfirmations, setStoreUchatConfig } from "./uchat-pull";
 export { cleanupShopifySyncIssues } from "./sync-issues-cleanup";

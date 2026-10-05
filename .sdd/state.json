@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T17",
+  "activeTask": "T18",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
@@ -29,7 +29,7 @@
     "T14": { "requirements": ["RF_27", "RF_18"], "files": ["functions/src/store-api-history.ts", "functions/src/orders.ts", "src/lib/store-api-history.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T15": { "requirements": ["RF_16"], "files": ["functions/src/orders.ts", "src/lib/spec-029-guards.test.ts", "src/lib/order-seller-actions.test.ts"], "testWritten": true, "done": true },
     "T16": { "requirements": ["RF_16", "RF_24"], "files": ["functions/src/orders.ts", "functions/src/order-corrections.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
-    "T17": { "requirements": ["RF_25", "RF_26"], "files": ["functions/src/store-api-keys.ts", "functions/src/index.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-auth.test.ts"], "testWritten": false, "done": false },
+    "T17": { "requirements": ["RF_25", "RF_26"], "files": ["functions/src/store-api-keys.ts", "functions/src/index.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-auth.test.ts"], "testWritten": true, "done": true },
     "T18": { "requirements": ["RF_25", "RF_27"], "files": ["src/lib/types.ts", "src/lib/firebase/auth.ts", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },
     "T19": { "requirements": ["RF_25", "RF_27", "RF_17"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts", "src/lib/order-audit-trail-view.ts", "src/lib/order-audit-trail-view.test.ts"], "testWritten": false, "done": false },
     "T20": { "requirements": ["RF_25", "RF_26"], "files": ["src/components/store-api-write-key.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },

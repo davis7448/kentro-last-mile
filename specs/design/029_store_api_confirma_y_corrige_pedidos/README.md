@@ -28,8 +28,8 @@ estan marcadas "sin interfaz" y no tienen pantalla.
 | `HU_05.error` | HU_05 | tienda | 375x812 | no se pudo cargar |
 
 Las 14 se observaron con el navegador de diseno el 2026-10-04, cada una a su `viewport` y despues de su
-ultima edicion (ver "Correcciones de la observacion"). La decision 15 (2026-10-05) solo fija textos que estos
-dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observados.
+ultima edicion (ver "Correcciones de la observacion"). Las decisiones 15 y 16 (2026-10-05) solo fijan textos
+que estos dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observados.
 
 ## Decisiones — HU_04, clave de escritura
 
@@ -184,6 +184,28 @@ dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observa
       es de toda la app y no de esta spec.
     - Un campo de `OrderHistoryField` sin fila en esta tabla es un fallo de la guarda de T19, no un texto que
       el codigo pueda inventar.
+16. **Acciones de mensajero en el historial (ratificado el 2026-10-05).** Amplia la decision 15 con las dos
+    acciones que aparecieron al cerrar T16 (tareas, nota de T19). Las escriben `assignMessengerToOrders` y
+    `unassignMessengerFromOrders`; solo dejan registro cuando cambia `status`, asi que siempre llevan
+    transicion.
+
+    | Accion | Texto visible | Transicion que la acompana | Por que |
+    |---|---|---|---|
+    | `order.messenger_assigned` | **Mensajero asignado** | "Recogido → Llamada pendiente" | Misma forma que las dos que ya existen ("Mensajero reasignado", "Mensajero retirado"): sustantivo + participio, sin tildes. Las tres se leen como una familia y se distinguen por el verbo |
+    | `order.messenger_unassigned` | **Mensajero retirado** | "Llamada pendiente → Recogido" (o desde el estado activo en que estuviera) | **No es un texto nuevo**: ya esta en `AUDIT_ACTION_LABELS` y lo llevan 180 eventos historicos (linea base de T1). Se ratifica tal cual; cambiarlo partiria el historial de un mismo pedido en dos nombres para la misma accion |
+
+    - `order.messenger_reassigned` conserva **"Mensajero reasignado"**.
+    - La transicion usa `statusLabel`, como el resto (decision 15, fila `status`): `call_pending` se pinta
+      **"Llamada pendiente"**, no "por llamar" ni el valor crudo.
+    - **Sin identidades (RF_27).** Ninguno de los tres textos nombra al mensajero ni al lider, y no se les
+      anade nombre. "Mensajero" es el rol generico, la misma palabra que la tienda ya ve en su propio
+      formulario ("Indicaciones para el mensajero (opcional)"); nunca un nombre ni un id. La pildora de actor
+      para la tienda es **"Kentro"** (lo hace el lider, decision 11). El `summary` del evento de auditoria
+      ("... reasignado de mensajero msg-uid-1 a msg-uid-2 ...") lleva ids y **no se pinta a la tienda**: si el
+      servidor le entrega uno de estos eventos, la linea es la etiqueta y la transicion, con `summary` vacio,
+      como ya exige la guarda de `order.messenger_reassigned`. El admin ve lo de siempre (decision 12).
+    - Si la tienda llega a ver estos eventos o no es del plan (filtro de `getOrderAuditTrail`); el diseno solo
+      fija como se nombran cuando se muestran.
 
 ## Accesibilidad (WCAG 2.2 AA)
 
@@ -216,6 +238,9 @@ dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observa
   `order.address_reviewed` ("Direccion revisada"), `order.picked_up` ("Recogido") y `order.delivery_corrected`
   ("Datos de entrega corregidos"), y nombres visibles de `status`, los cinco de entrega y `totalCop`,
   `productName`, `sku` y `quantity`. Ver decision 15. T19 y T22 pueden empezar.
+- **Resuelto el 2026-10-05 — acciones de mensajero** (tareas, nota de T19 al cerrar T16):
+  `order.messenger_assigned` ("Mensajero asignado") y `order.messenger_unassigned` ("Mensajero retirado", el
+  que ya existia). Ver decision 16.
 
 ## Para revisar fuera del diseno
 
@@ -225,3 +250,6 @@ dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observa
   cosa del plan.
 - Un `summary` historico que nombre a una persona de Kentro (caso limite de la spec) se resuelve en el plan;
   el diseno no reescribe registros.
+- `order.messenger_assigned` sale sin `auditEventId`, y la regla actual muestra a la tienda una accion fuera
+  de la lista permitida solo si es verificable (`isStoreVisibleEvent`). Si con eso la tienda no ve la
+  asignacion pero si el retiro, es asimetrico; decidirlo es del plan (decision 16).
