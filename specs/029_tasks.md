@@ -715,3 +715,15 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
   * Verificacion: guarda en `getOrderAuditTrail` (`id: doc.id` despues del spread de `doc.data()`); prueba pura de
     `buildAuditTrailResponse` con una fila cuyo `id` real no esta en `orderHistory` aunque su cuerpo copie uno
     verificado → descartada para la tienda.
+
+## Correcciones de la revision adversarial (ronda 2, 2026-10-05)
+
+- [ ] **T32: El filtro `shopifyOrderId` no tiene tope propio: el unico es el de Firestore (R2-RF_02-1)**
+  * Requisitos cubiertos: RF_02, RF_03
+  * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/lib/store-api-write.test.ts, src/app/api-tiendas/page.tsx
+  * Accion: ninguna via de escritura limita el numero (manual con `optionalText` sin maximo, webhooks con `name`
+    libre) y un input de texto conserva tabuladores. Valido = texto no vacio tras recortar y de como mucho 1500
+    bytes UTF-8 (limite de Firestore para un valor indexado: por encima no se puede buscar por igualdad);
+    se aceptan tabuladores y cualquier caracter salvo NUL. Manual alineado.
+  * Verificacion: 230 caracteres y un valor con tabulador son validos; vacio, solo espacios, mas de 1500 bytes
+    (tambien con multibyte), NUL, array y numero no.
