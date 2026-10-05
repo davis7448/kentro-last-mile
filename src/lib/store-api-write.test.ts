@@ -443,8 +443,9 @@ describe("T10 · autenticacion de todas las rutas, GET /orders/{id} y filtro sho
       expectTargetedReads(db);
     });
 
-    // T28 (R1-RF_02-1): espacios, signos y tildes ya son validos; estos son invalidos reales de la regla nueva.
-    it.each(["   ", "a".repeat(201), "#10\n01", "#10\u000001"])(
+    // T28 (R1-RF_02-1): espacios, signos y tildes ya son validos. T32 (R2-RF_02-1): 201 caracteres y "\n"
+    // tambien; el unico tope es el de Firestore (1500 bytes UTF-8). Estos son invalidos reales de la regla vigente.
+    it.each(["   ", "#10\u000001", "a".repeat(1501)])(
       "shopifyOrderId invalido (%j) → 400 con la forma vieja, sin code ni message, y sin consultar pedidos",
       async (value) => {
         const db = seededDb();
@@ -462,7 +463,7 @@ describe("T10 · autenticacion de todas las rutas, GET /orders/{id} y filtro sho
     });
 
     it("credenciales malas con shopifyOrderId invalido → 401 (credenciales antes que parametros)", async () => {
-      const response = await call(seededDb(), { path: "/orders", query: { sellerId: SELLER, key: "mala", shopifyOrderId: "a".repeat(201) } });
+      const response = await call(seededDb(), { path: "/orders", query: { sellerId: SELLER, key: "mala", shopifyOrderId: "a".repeat(1501) } });
       expect(response.statusCode).toBe(401);
       expect(response.body).toEqual({ ok: false, error: "invalid_key" });
     });

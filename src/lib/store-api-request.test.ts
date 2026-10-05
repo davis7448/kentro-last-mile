@@ -241,8 +241,39 @@ describe("T28 · shopifyOrderId acepta todo numero que el sistema guarda (R1-RF_
   it.each([
     ["vacio", ""],
     ["solo espacios", "   "],
-    ["201 caracteres", "x".repeat(201)],
+    // T32 (R2-RF_02-1): "201 caracteres" y "con salto de linea" ya no son invalidos; ver el bloque T32.
+    ["con NUL", "#10\u000001"],
+    ["array", ["1001"]],
+    ["numero", 1001],
+    ["undefined", undefined]
+  ])("%s es invalido", async (_label, value) => {
+    const { isValidShopifyOrderId } = await load();
+    expect(isValidShopifyOrderId(value)).toBe(false);
+  });
+});
+
+/*
+ * T32 · R2-RF_02-1. Ni el tope de 200 caracteres ni el veto a los caracteres de control salen de una via de
+ * escritura: el manual guarda texto libre sin maximo y un input conserva tabuladores. El unico tope real es el
+ * de Firestore para un valor indexado (1500 bytes UTF-8): por encima no se puede buscar por igualdad.
+ * Valido = texto no vacio tras recortar, de como mucho 1500 bytes UTF-8, sin NUL.
+ */
+describe("T32 · shopifyOrderId sin tope propio: el unico es el de Firestore (R2-RF_02-1)", () => {
+  it.each([
+    ["230 caracteres", "x".repeat(230)],
+    ["con tabulador", "#10\t01"],
     ["con salto de linea", "#10\n01"],
+    ["1500 bytes exactos", "x".repeat(1500)]
+  ])("%s es valido", async (_label, value) => {
+    const { isValidShopifyOrderId } = await load();
+    expect(isValidShopifyOrderId(value)).toBe(true);
+  });
+
+  it.each([
+    ["vacio", ""],
+    ["solo espacios", "   "],
+    ["1501 bytes ASCII", "x".repeat(1501)],
+    ["501 emojis de 4 bytes (2004 bytes, 501 caracteres)", "\u{1F600}".repeat(501)],
     ["con NUL", "#10\u000001"],
     ["array", ["1001"]],
     ["numero", 1001],

@@ -158,7 +158,7 @@ Authorization: Bearer TU_CLAVE_DE_ESCRITURA`}</Code>
               ["from / to", "Rango de fechas (opcional, inclusivo, por fecha de creacion)."],
               ["status", "Filtra por estado exacto: imported, ready_to_assign, assigned, call_pending, scheduled, picked_up, in_route, retry_pending, delivered, failed, cancelled, liquidated (opcional)."],
               ["limit", "Maximo de pedidos (default 500, tope 1000). Ordenados del mas reciente al mas antiguo."],
-              ["shopifyOrderId", "Busca el pedido por su numero de Shopify en tu tienda (opcional). Admite cualquier numero tal como lo devuelve GET /orders, codificado en la URL (# → %23, espacio → %20). Ver el ejemplo de abajo."]
+              ["shopifyOrderId", "Busca el pedido por su numero de Shopify en tu tienda (opcional): texto no vacio de hasta 1500 bytes. Admite cualquier numero tal como lo devuelve GET /orders, codificado en la URL (# → %23, espacio → %20). Ver el ejemplo de abajo."]
             ]}
           />
           <p className="text-sm leading-6 text-black/70">
@@ -322,7 +322,7 @@ curl -X POST "${BASE_URL}/orders/ID_DEL_PEDIDO/cancel?sellerId=TU_SELLER_ID" \\
             rows={[
               ["route_not_found", "404", "La ruta no existe."],
               ["unknown_parameter", "400", "Parametros de consulta que la ruta no admite (las escrituras solo admiten sellerId)."],
-              ["invalid_shopify_order_id", "400", "shopifyOrderId vacio o invalido: de 1 a 200 caracteres, sin saltos de linea ni caracteres de control (el # codificado como %23, el espacio como %20)."],
+              ["invalid_shopify_order_id", "400", "shopifyOrderId vacio o invalido: texto no vacio de hasta 1500 bytes (el # codificado como %23, el espacio como %20)."],
               ["invalid_idempotency_key", "400", "Idempotency-Key fuera de 1 a 255 caracteres imprimibles."],
               ["invalid_json", "400", "El cuerpo no es JSON valido."],
               ["invalid_body", "400", "El cuerpo no tiene la forma esperada (no es un objeto, expectedStatus no es texto, o confirmar trae algo mas que expectedStatus)."],

@@ -718,7 +718,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Correcciones de la revision adversarial (ronda 2, 2026-10-05)
 
-- [ ] **T32: El filtro `shopifyOrderId` no tiene tope propio: el unico es el de Firestore (R2-RF_02-1)**
+- [x] **T32: El filtro `shopifyOrderId` no tiene tope propio: el unico es el de Firestore (R2-RF_02-1)**
   * Requisitos cubiertos: RF_02, RF_03
   * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/lib/store-api-write.test.ts, src/app/api-tiendas/page.tsx
   * Accion: ninguna via de escritura limita el numero (manual con `optionalText` sin maximo, webhooks con `name`

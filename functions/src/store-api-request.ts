@@ -246,17 +246,19 @@ export function validateQueryParameters(
 // ---------------------------------------------------------------------------------------------------------
 
 // R1-RF_02-1: antes se exigia ^[0-9A-Za-z#._-]{1,64}$, pero los pedidos manuales guardan texto libre con "#"
-// delante (espacios, tildes) y GET /orders los devolvia con un numero que el filtro rechazaba. Ahora vale todo
-// texto de 1 a 200 caracteres (tras recortar) sin caracteres de control. El recorte es solo para medir: la
-// consulta usa el valor tal cual llega, que es como se guardo.
-const SHOPIFY_ORDER_ID_MAX_LENGTH = 200;
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
+// delante (espacios, tildes) y GET /orders los devolvia con un numero que el filtro rechazaba.
+// R2-RF_02-1: tampoco vale un tope propio (200 caracteres, sin caracteres de control): ninguna via de escritura
+// limita el numero, asi que cualquier tope nuestro deja fuera numeros que GET /orders si devuelve. El unico tope
+// es el de Firestore para un valor indexado: 1500 bytes UTF-8 y sin \u0000. El recorte es solo para ver que no
+// esta vacio: la consulta usa el valor tal cual llega, que es como se guardo.
+const SHOPIFY_ORDER_ID_MAX_BYTES = 1500;
 
 export function isValidShopifyOrderId(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  const length = value.trim().length;
-  return length >= 1 && length <= SHOPIFY_ORDER_ID_MAX_LENGTH && !CONTROL_CHARACTERS.test(value);
+  if (value.trim().length === 0) return false;
+  if (value.includes("\u0000")) return false;
+  // Bytes UTF-8 con TextEncoder, sin depender de Buffer.
+  return new TextEncoder().encode(value).length <= SHOPIFY_ORDER_ID_MAX_BYTES;
 }
 
 // ---------------------------------------------------------------------------------------------------------
