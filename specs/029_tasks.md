@@ -686,7 +686,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
   * Verificacion: `#Marcela López` y `#Cra 98c #54-86 apto 501` son validos; vacio, 201 caracteres, `\n` y array
     no; las pruebas de T8/T10 siguen verdes.
 
-- [ ] **T29: La huella de idempotencia cubre el cuerpo entero (R1-RF_12-1)**
+- [x] **T29: La huella de idempotencia cubre el cuerpo entero (R1-RF_12-1)**
   * Requisitos cubiertos: RF_12, RNF_03
   * Archivos: functions/src/store-api-write.ts, src/lib/store-api-write.test.ts
   * Accion: `prepareWrite` calcula `bodyHash` sobre el cuerpo JSON recibido completo (canonico), no solo sobre

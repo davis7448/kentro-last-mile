@@ -320,12 +320,24 @@ type ConfirmRunInput = Parameters<typeof runConfirm>[1]["input"];
 /** Cuerpo parseado (paso 3) listo para el ejecutor, con lo que entra en el hash de idempotencia. */
 type PreparedWrite = {
   ok: true;
-  /** Cuerpo normalizado que se hashea: el mismo cuerpo logico da el mismo hash. */
+  /** Cuerpo recibido completo que se hashea (canonico en `bodyHash`): el mismo cuerpo da el mismo hash. */
   hashedBody: unknown;
   run: (runDeps: SellerActionRunDeps, base: RunBase, idempotency: RunIdempotency | undefined) => Promise<IdempotentRunResult>;
 };
 
 type RunBase = Omit<RunRequest<unknown>, "input" | "idempotency">;
+
+/**
+ * Cuerpo recibido tal cual para la huella de idempotencia (sin cuerpo = `{}`). Se hashea el cuerpo ENTERO, no el
+ * input filtrado: si no, dos cuerpos que difieren en un campo no permitido o de tipo invalido darian la misma
+ * huella y la key reutilizada se responderia como replay en vez de conflicto (R1-RF_12-1). Solo se llama cuando
+ * el parseo ya dio ok, asi que el texto es vacio o un objeto JSON valido.
+ */
+function receivedBodyForHash(raw: StoreApiWriteInput["rawBody"]): unknown {
+  if (raw === undefined || raw === null) return {};
+  const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
+  return text.trim() === "" ? {} : (JSON.parse(text) as unknown);
+}
 
 /** Paso 3, forma del cuerpo por ruta: solo los 400 se responden aqui; los errores de campo van al nucleo. */
 function prepareWrite(input: StoreApiWriteInput): PreparedWrite | StoreApiFailure {
@@ -335,7 +347,7 @@ function prepareWrite(input: StoreApiWriteInput): PreparedWrite | StoreApiFailur
     const confirmInput: ConfirmRunInput = parsed.expectedStatus === undefined ? {} : { expectedStatus: parsed.expectedStatus };
     return {
       ok: true,
-      hashedBody: confirmInput,
+      hashedBody: receivedBodyForHash(input.rawBody),
       run: (runDeps, base, idempotency) => runConfirm(runDeps, { ...base, input: confirmInput, idempotency })
     };
   }
@@ -347,7 +359,7 @@ function prepareWrite(input: StoreApiWriteInput): PreparedWrite | StoreApiFailur
     const patchInput: DeliveryRunInput = { ...delivery, expectedStatus: parsed.expectedStatus, fieldProblems: parsed.fieldProblems };
     return {
       ok: true,
-      hashedBody: { ...parsed.input, expectedStatus: parsed.expectedStatus },
+      hashedBody: receivedBodyForHash(input.rawBody),
       run: (runDeps, base, idempotency) => runDeliveryCorrection(runDeps, { ...base, input: patchInput, idempotency })
     };
   }
@@ -356,7 +368,7 @@ function prepareWrite(input: StoreApiWriteInput): PreparedWrite | StoreApiFailur
   const cancelInput: CancelRunInput = { reason: parsed.input.reason, expectedStatus: parsed.expectedStatus, fieldProblems: parsed.fieldProblems };
   return {
     ok: true,
-    hashedBody: { ...parsed.input, expectedStatus: parsed.expectedStatus },
+    hashedBody: receivedBodyForHash(input.rawBody),
     run: (runDeps, base, idempotency) => runCancel(runDeps, { ...base, input: cancelInput, idempotency })
   };
 }

@@ -1713,3 +1713,119 @@ describe("T13 · historial por API e indice (RF_17, RF_18, RF_20, RF_24)", () =>
     });
   });
 });
+
+// =====================================================================================================
+// T29 · la huella de idempotencia cubre el cuerpo entero (R1-RF_12-1)
+// =====================================================================================================
+/*
+ * Contrato (T29, RNF_03 + RF_12): el `bodyHash` se calcula sobre el cuerpo JSON recibido completo (canonico),
+ * no solo sobre el `input` permitido. Dos cuerpos que difieren en un campo no permitido o de tipo invalido dan
+ * huellas distintas: la misma Idempotency-Key con el otro cuerpo es un conflicto (422 idempotency_key_reused,
+ * sin escribir), nunca el replay de la respuesta guardada. El reintento identico sigue siendo replay.
+ */
+describe("T29 · la huella de idempotencia cubre el cuerpo entero (R1-RF_12-1)", () => {
+  async function writeWithKey(db: TxFakeDb, options: WriteOptions & { idempotencyKey: string }): Promise<FakeResponse> {
+    const handler = (await loadHandler()) as unknown as (
+      request: FakeRequest,
+      response: FakeResponse,
+      deps: { db: TxFakeDb; now?: () => Date; deleteField?: () => unknown }
+    ) => Promise<void>;
+    const request = makeWriteRequest(options);
+    request.headers["idempotency-key"] = options.idempotencyKey;
+    const response = makeResponse();
+    await handler(request, response, { db, now: () => new Date(NOW), deleteField: () => DELETE_SENTINEL });
+    return response;
+  }
+
+  const patch = (body: unknown, idempotencyKey: string) =>
+    ({ method: "PATCH", path: "/orders/w-imported", query: OWN, bearer: WRITE_KEY, body, idempotencyKey });
+  const cancel = (body: unknown, idempotencyKey: string) =>
+    ({ method: "POST", path: "/orders/w-ready/cancel", query: OWN, bearer: WRITE_KEY, body, idempotencyKey });
+  const orderWrites = (db: TxFakeDb) => guardedWrites(db).filter((w) => w.collection === "orders");
+
+  it("PATCH {customerName} 200 y luego misma key con totalCop y paymentMethod → 422 idempotency_key_reused, sin escribir", async () => {
+    const db = writeDb();
+    const first = await writeWithKey(db, patch({ customerName: "Ana" }, "k-t29-1"));
+    expect(first.statusCode).toBe(200);
+    const writesAfterFirst = orderWrites(db).length;
+    const orderAfterFirst = db.read("orders", "w-imported");
+
+    const second = await writeWithKey(db, patch({ customerName: "Ana", totalCop: 5000, paymentMethod: "transfer" }, "k-t29-1"));
+    expect(second.statusCode).toBe(422);
+    expect(second.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    expect(orderWrites(db)).toHaveLength(writesAfterFirst);
+    expect(db.read("orders", "w-imported")).toEqual(orderAfterFirst);
+  });
+
+  it("al reves: primero 422 field_not_allowed (guardado) y luego el cuerpo corregido con la misma key → 422 idempotency_key_reused", async () => {
+    const db = writeDb();
+    const first = await writeWithKey(db, patch({ customerName: "Ana", totalCop: 5000, paymentMethod: "transfer" }, "k-t29-2"));
+    expect(first.statusCode).toBe(422);
+    expect(first.body).toMatchObject({ ok: false, code: "field_not_allowed" });
+
+    const second = await writeWithKey(db, patch({ customerName: "Ana" }, "k-t29-2"));
+    expect(second.statusCode).toBe(422);
+    expect(second.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    expect(orderWrites(db)).toEqual([]);
+    expect(db.read("orders", "w-imported")).toMatchObject({ customerName: "Carla Prueba" });
+  });
+
+  it("tipo invalido (deliveryNotes: 5) y valido con la misma key → conflicto, en los dos ordenes", async () => {
+    const dbA = writeDb();
+    const validFirst = await writeWithKey(dbA, patch({ customerName: "Ana" }, "k-t29-3"));
+    expect(validFirst.statusCode).toBe(200);
+    const invalidAfter = await writeWithKey(dbA, patch({ customerName: "Ana", deliveryNotes: 5 }, "k-t29-3"));
+    expect(invalidAfter.statusCode).toBe(422);
+    expect(invalidAfter.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+
+    const dbB = writeDb();
+    const invalidFirst = await writeWithKey(dbB, patch({ customerName: "Ana", deliveryNotes: 5 }, "k-t29-3"));
+    expect(invalidFirst.statusCode).toBe(422);
+    expect(invalidFirst.body).not.toMatchObject({ code: "idempotency_key_reused" });
+    const validAfter = await writeWithKey(dbB, patch({ customerName: "Ana" }, "k-t29-3"));
+    expect(validAfter.statusCode).toBe(422);
+    expect(validAfter.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    expect(orderWrites(dbB)).toEqual([]);
+  });
+
+  it("el reintento identico sigue siendo replay: mismo status y mismo cuerpo, sin escritura nueva", async () => {
+    const db = writeDb();
+    const ok1 = await writeWithKey(db, patch({ customerName: "Ana" }, "k-t29-4a"));
+    const ok2 = await writeWithKey(db, patch({ customerName: "Ana" }, "k-t29-4a"));
+    expect(ok1.statusCode).toBe(200);
+    expect(ok2.statusCode).toBe(ok1.statusCode);
+    expect(ok2.body).toEqual(ok1.body);
+    expect(orderWrites(db)).toHaveLength(1);
+
+    const bad = { customerName: "Ana", totalCop: 5000, paymentMethod: "transfer" };
+    const rej1 = await writeWithKey(db, patch(bad, "k-t29-4b"));
+    const rej2 = await writeWithKey(db, patch(bad, "k-t29-4b"));
+    expect(rej1.statusCode).toBe(422);
+    expect(rej2.statusCode).toBe(rej1.statusCode);
+    expect(rej2.body).toEqual(rej1.body);
+  });
+
+  it("cancelar: {reason} y luego {reason, extra} con la misma key → 422 idempotency_key_reused, en los dos ordenes", async () => {
+    const dbA = writeDb();
+    const okFirst = await writeWithKey(dbA, cancel({ reason: "Cliente desistio" }, "k-t29-5"));
+    expect(okFirst.statusCode).toBe(200);
+    const writesAfterFirst = orderWrites(dbA).length;
+    const extraAfter = await writeWithKey(dbA, cancel({ reason: "Cliente desistio", extra: "x" }, "k-t29-5"));
+    expect(extraAfter.statusCode).toBe(422);
+    expect(extraAfter.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    expect(orderWrites(dbA)).toHaveLength(writesAfterFirst);
+
+    const dbB = writeDb();
+    const extraFirst = await writeWithKey(dbB, cancel({ reason: "Cliente desistio", extra: "x" }, "k-t29-5"));
+    expect(extraFirst.statusCode).toBe(422);
+    const okAfter = await writeWithKey(dbB, cancel({ reason: "Cliente desistio" }, "k-t29-5"));
+    expect(okAfter.statusCode).toBe(422);
+    expect(okAfter.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    expect(orderWrites(dbB)).toEqual([]);
+    expect(db_status(dbB)).toBe("ready_to_assign");
+  });
+
+  function db_status(db: TxFakeDb) {
+    return db.read("orders", "w-ready")?.status;
+  }
+});
