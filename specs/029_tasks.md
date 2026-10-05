@@ -619,7 +619,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
   * Verificacion: bloque `describe("T26 · ...")`: la pagina menciona cada `code` del catalogo de T8, las tres
     rutas de escritura, `Authorization: Bearer` y `historySince`.
 
-- [ ] **T27: Despliegue, recorrido real en un solo proceso y limpieza**
+- [x] **T27: Despliegue, recorrido real en un solo proceso y limpieza**
   * Requisitos cubiertos: RF_01, RF_11, RF_20, RF_27, RF_16 (excepcion del `cleanup`), RNF_05, DoD 3
   * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-registro.json
   * **Compuerta:** no empieza hasta que el **anexo A de la spec** tenga los CA_01-CA_12 transcritos del documento

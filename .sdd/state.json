@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "phase": "audit",
+  "phase": "verify",
   "activeTask": "T27",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
@@ -39,7 +39,7 @@
     "T24": { "requirements": ["RF_20", "RF_01"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json"], "testWritten": true, "done": true },
     "T25": { "requirements": ["RF_11", "RF_16"], "files": ["src/lib/fixtures/029-kovia-order.json", "src/lib/order-seller-actions.test.ts", "scripts/verify-029.js", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T26": { "requirements": ["RF_17", "RNF_01", "RNF_02"], "files": ["src/app/api-tiendas/page.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
-    "T27": { "requirements": ["RF_01", "RF_11", "RF_20", "RF_27", "RF_16", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-registro.json"], "testWritten": true, "done": false },
+    "T27": { "requirements": ["RF_01", "RF_11", "RF_20", "RF_27", "RF_16", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-registro.json"], "testWritten": true, "done": true },
     "T28": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/app/api-tiendas/page.tsx", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
     "T29": { "requirements": ["RF_12", "RNF_03"], "files": ["functions/src/store-api-write.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
     "T30": { "requirements": ["RF_13"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": true, "done": true },

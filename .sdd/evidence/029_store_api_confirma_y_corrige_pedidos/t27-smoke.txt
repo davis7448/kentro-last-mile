@@ -1,0 +1,45 @@
+# Spec 029 — T27 recorrido real (run-all) sobre la tienda de pruebas
+Inicio: 2026-10-05T06:20:25.823Z
+
+setup: tienda de pruebas con inventario y catalogo, usuarios seller / seller_logistics / admin desechables, webhook de tienda de prueba, key de lectura (createStoreApiKey) y key de escritura (rotateStoreWriteKey, solo en memoria)
+pedido con lider ord-knt-006213: status assigned y driverId sintetico puestos con el Admin SDK (paso fuera del canal del cliente)
+pedidos de prueba: imported shopify-test-029-a-865c03 (webhook de tienda), address_risk ord-knt-006212, con lider ord-knt-006213, con inventario ord-knt-006214
+CA_01 OK · GET /orders?shopifyOrderId= -> 200 (1 pedido) · numero inexistente -> 200 con 0 pedidos · GET /orders/{id} -> 200
+CA_05 OK · PATCH en imported -> 200 · guardado=si · /history 200 con 1 registros
+CA_06 OK · PATCH con totalCop y productName -> 422 field_not_allowed (totalCop, productName) · sin cambios=si
+CA_09 OK · ciudad inexistente -> 422 out_of_coverage · ciudades activas en la respuesta: 1
+CA_10 OK · misma Idempotency-Key y cuerpo -> 200 y 200 identicos, historial +1 · otro cuerpo -> 422 idempotency_key_reused
+CA_02 OK · confirmar imported -> 200 estado ready_to_assign · repetir -> 200 sin cambios=si
+CA_05 OK · PATCH en ready_to_assign sin lider -> 200
+CA_03 OK · confirmar address_risk -> 409 address_review_pending · sin cambios=si
+CA_04 OK · PATCH direccion en address_risk -> 200 estado imported · confirmar -> 200 estado ready_to_assign
+CA_07 OK · con lider: PATCH -> 409 order_not_editable · cancelar -> 409 order_not_editable · confirmar -> 200 sin cambios=si · pedido intacto=si · reconfirmar ready_to_assign sin cambios=si
+CA_08 OK · sin motivo -> 422 validation_failed · 501 caracteres -> 422 validation_failed · con motivo -> 200 cancelled · inventario reservado 1 -> 0 · repetir -> 200 · confirmar cancelado -> 409 order_cancelled
+CA_11 OK · sin clave -> 401 missing_credentials · de lectura -> 403 read_only_key · en la URL -> 401 key_in_query · la anterior tras rotar (admin) -> 401 invalid_key · pedido de otra tienda (id inexistente) -> 404 order_not_found
+CA_12 OK · /history 200: 4 registros con fecha y origen · rafaga de 130 confirmaciones -> 429 rate_limited Retry-After=31
+kovia-replay shopify-9029000000001: replay 1 (crea) -> PATCH por API (corrige cliente y direccion) -> replay 2 (reimporta) · RF_11 OK · customerName=si · customerPhone=si · addressRaw=si · status=si · edited=si
+RF_27 OK · tienda (seller si, seller_logistics si): order.transition sin actorId/actorLabel/actorEmail/actorRole y con etiqueta "Kentro", order.messenger_reassigned ausente · admin ve los dos: si
+compare-reads tienda de pruebas (key de lectura y de escritura, consecutivas): OK · /resumen 200 dif=0 · /kpis 200 dif=0 · /orders 200 dif=0 · /settlements 200 dif=0
+compare-reads Kovia: diferencias=0 · excluidos por updatedAt: pedidos=0, cortes=0
+compare-reads DANDA: diferencias=0 · excluidos por updatedAt: pedidos=0, cortes=0
+GET /orders/{id} contra GET /orders: 20 pedidos reales (Kovia, DANDA) · distintos=0 · movidos entre medias=0 · OK
+p95 escrituras=442 ms (25) · p95 GET /orders/{id}=160 ms · umbral 2000 ms · OK
+cleanup orderHistory: borrados=8 · quedan=0
+cleanup walletEntries: borrados=0 · quedan=0
+cleanup auditEvents: borrados=17 · quedan=0
+cleanup storeWebhookSamples: borrados=1 · quedan=0
+cleanup shopifySyncIssues: borrados=0 · quedan=0
+cleanup storeApiIdempotency: borrados=2 · quedan=0
+cleanup storeApiRateLimits: borrados=3 · quedan=0
+cleanup importRuns: borrados=0 · quedan=0
+cleanup orders: borrados=5 · quedan=0
+cleanup storeWebhookConfigs: borrados=1 · quedan=0
+cleanup shopifyStores: borrados=1 · quedan=0
+cleanup inventory: borrados=1 · quedan=0
+cleanup productCatalog: borrados=1 · quedan=0
+cleanup storeApiConfigs: borrados=1 · quedan=0
+cleanup authUsers: borrados=3 · quedan=0
+cleanup sellers: borrados=1 · quedan=0
+cleanup: cero en todas las colecciones
+
+RESULTADO: OK
