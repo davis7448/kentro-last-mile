@@ -379,7 +379,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `orderHistory`; sin `settings/storeApi` → 503 `history_not_ready`; con el documento → 200 con
     `historySince` de ese documento.
 
-- [ ] **T14: `getOrderAuditTrail` sin identidades para la tienda**
+- [x] **T14: `getOrderAuditTrail` sin identidades para la tienda**
   * Requisitos cubiertos: RF_27, RF_18
   * Archivos: functions/src/store-api-history.ts, functions/src/orders.ts, src/lib/store-api-history.test.ts, src/lib/spec-029-guards.test.ts
   * Accion: `storeActorTag`, `storeSafeSummary` (lista permitida), `isStoreVisibleEvent` (verificable por
@@ -460,6 +460,10 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `rotateFirebaseStoreWriteKey`, `getFirebaseStoreApiKeyStatus`, `listFirebaseStoreApiKeys`. En
     `operations-app.tsx`, **solo** la adaptacion de los usos actuales de `fetchFirebaseOrderAuditTrail` a la forma
     `{ events, historySince }` (sin cambiar lo que se pinta: eso es T22).
+  * **Nota (2026-10-05, al lanzar T14):** desde T14 la callable devuelve `{ events, historySince }` en vez de un
+    array. Entre el despliegue de functions y el de hosting el cliente viejo recibiria un objeto: desplegar
+    functions y hosting seguidos, y que el envoltorio nuevo acepte tambien un array (forma vieja) durante la
+    transicion.
   * Verificacion: bloque `describe("T18 · ...")`: los cuatro envoltorios llaman a la callable de su nombre;
     en `operations-app.tsx` todo uso de `fetchFirebaseOrderAuditTrail(` lee `.events`; `npx tsc --noEmit`
     limpio con los usos actuales adaptados.

@@ -96,3 +96,166 @@ export function buildStoreApiIndexAdditions(historySince: string | null): Record
     }
   };
 }
+
+/*
+ * "Historial del pedido" en la app (callable `getOrderAuditTrail`, spec 029 RF_27, plan 2.7). PURO: la callable
+ * lee `auditEvents`, `orderHistory` y `settings/storeApi`, y resuelve actores SOLO para roles que no son tienda;
+ * aqui se decide que sale para cada rol.
+ */
+
+/**
+ * Acciones cuyas plantillas de `summary` se comprobaron sin identidades de Kentro (plan 2.7). Lista PERMITIDA:
+ * una accion que no este aqui llega a la tienda con `summary: ""` (y solo si es verificable).
+ */
+export const STORE_SUMMARY_ACTIONS: readonly string[] = Object.freeze([
+  "order.seller_confirmed",
+  "order.imported_updated",
+  "order.cancelled",
+  "order.retry_confirmed",
+  "order.transition",
+  "order.delivered",
+  "order.failed",
+  "order.retry_scheduled",
+  "order.webhook_imported",
+  "order.manual_created",
+  "order.confirmed_uchat",
+  "order.failed_classified",
+  "order.delivery_corrected",
+  "order.address_reviewed",
+  "order.picked_up"
+]);
+
+const STORE_SUMMARY_ACTION_SET: ReadonlySet<string> = new Set(STORE_SUMMARY_ACTIONS);
+
+const STORE_ROLES: ReadonlySet<string> = new Set(["seller", "seller_logistics"]);
+
+export type StoreActorTag = "Kentro" | "Tu tienda" | "API";
+
+/** Lo unico que la tienda sabe de quien actuo. Solo lee `actorRole`: nunca un id, un nombre ni un correo. */
+export function storeActorTag(actorRole: unknown): StoreActorTag {
+  if (actorRole === "store_api") return "API";
+  if (typeof actorRole === "string" && STORE_ROLES.has(actorRole)) return "Tu tienda";
+  return "Kentro";
+}
+
+/** El `summary` para la tienda: tal cual si la accion esta en la lista permitida, `""` en cualquier otro caso. */
+export function storeSafeSummary(action: string, summary: unknown): string {
+  if (!STORE_SUMMARY_ACTION_SET.has(action) || typeof summary !== "string") return "";
+  return summary;
+}
+
+/**
+ * Mitigacion hasta la spec 032: hoy un cliente puede crear un `auditEvents` con el `entityId` de un pedido ajeno.
+ * La tienda solo ve un evento si es verificable (tiene registro en `orderHistory`, que solo escribe el servidor)
+ * o si su accion esta en la lista permitida.
+ */
+export function isStoreVisibleEvent(event: { id: string; action: string }, verifiedAuditEventIds: ReadonlySet<string>): boolean {
+  if (event.id && verifiedAuditEventIds.has(event.id)) return true;
+  return STORE_SUMMARY_ACTION_SET.has(event.action);
+}
+
+export type AuditTrailEvent = {
+  id: string;
+  createdAt: string;
+  action: string;
+  summary: string;
+  fromStatus?: string;
+  toStatus?: string;
+  origin?: string;
+  changes?: StoreHistoryChange[];
+  /** Solo tienda. */
+  actorTag?: StoreActorTag;
+  /** Solo roles que no son tienda. */
+  actorId?: string;
+  actorLabel?: string;
+  actorEmail?: string;
+  actorRole?: string;
+  /** Solo admin, solo eventos de la API. */
+  apiKeyLast4?: string;
+};
+
+export type AuditTrailInput = {
+  role: string;
+  events: ReadonlyArray<Record<string, unknown>>;
+  history: ReadonlyArray<Record<string, unknown>>;
+  historySince: string | null;
+  sellerName: string;
+  /** SOLO para roles que no son tienda; para la tienda se ignora aunque venga. */
+  actors?: ReadonlyMap<string, { label: string; email?: string }>;
+};
+
+export type AuditTrailResponse = { events: AuditTrailEvent[]; historySince: string | null };
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function isApiEvent(row: Record<string, unknown>, historyRow: Record<string, unknown> | undefined): boolean {
+  return row.actorRole === "store_api" || row.origin === "api" || historyRow?.origin === "api";
+}
+
+function historyKeyLast4(historyRow: Record<string, unknown> | undefined): string | undefined {
+  const actor = historyRow?.actor;
+  if (!actor || typeof actor !== "object") return undefined;
+  return optionalText((actor as Record<string, unknown>).keyLast4);
+}
+
+/**
+ * Respuesta de `getOrderAuditTrail`: `{ events, historySince }`, del mas viejo al mas nuevo. Cada evento se
+ * construye con una lista EXPLICITA de claves (RF_18): lo que traiga el documento y no se copie aqui no sale.
+ * El filtro financiero del `seller_logistics` lo aplica la callable antes de llamar aqui.
+ */
+export function buildAuditTrailResponse(input: AuditTrailInput): AuditTrailResponse {
+  const isStore = STORE_ROLES.has(input.role);
+  const historyByEvent = new Map<string, Record<string, unknown>>();
+  for (const historyRow of input.history) {
+    const auditEventId = optionalText(historyRow.auditEventId);
+    if (auditEventId && !historyByEvent.has(auditEventId)) historyByEvent.set(auditEventId, historyRow);
+  }
+  const verified = new Set(historyByEvent.keys());
+
+  const events = input.events
+    .map((row) => ({ row, id: String(row.id ?? ""), action: String(row.action ?? ""), createdAt: String(row.createdAt ?? "") }))
+    .filter((entry) => !isStore || isStoreVisibleEvent({ id: entry.id, action: entry.action }, verified))
+    // Comparacion de cadenas ISO, no `localeCompare` (docs/rendimiento.md). `sort` es estable.
+    .sort((left, right) => (left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0))
+    .map(({ row, id, action, createdAt }): AuditTrailEvent => {
+      const historyRow = id ? historyByEvent.get(id) : undefined;
+      const event: AuditTrailEvent = {
+        id,
+        createdAt,
+        action,
+        summary: isStore ? storeSafeSummary(action, row.summary) : typeof row.summary === "string" ? row.summary : ""
+      };
+      const fromStatus = optionalText(row.fromStatus);
+      const toStatus = optionalText(row.toStatus);
+      const origin = optionalText(historyRow?.origin) ?? optionalText(row.origin);
+      if (fromStatus) event.fromStatus = fromStatus;
+      if (toStatus) event.toStatus = toStatus;
+      if (origin) event.origin = origin;
+      if (historyRow) event.changes = Array.isArray(historyRow.changes) ? historyRow.changes.map(toStoreChange) : [];
+
+      if (isStore) {
+        event.actorTag = storeActorTag(row.actorRole);
+        return event;
+      }
+
+      const actorId = String(row.actorId ?? "unknown");
+      const actor = input.actors?.get(actorId);
+      event.actorId = actorId;
+      event.actorLabel = actor?.label ?? actorId;
+      const actorEmail = optionalText(actor?.email);
+      if (actorEmail) event.actorEmail = actorEmail;
+      const actorRole = optionalText(row.actorRole);
+      if (actorRole) event.actorRole = actorRole;
+
+      if (input.role === "admin" && isApiEvent(row, historyRow)) {
+        const keyLast4 = optionalText(row.apiKeyLast4) ?? historyKeyLast4(historyRow);
+        if (keyLast4) event.apiKeyLast4 = keyLast4;
+        event.actorLabel = `Clave de escritura de ${input.sellerName}`;
+      }
+      return event;
+    });
+
+  return { events, historySince: input.historySince };
+}

@@ -28,7 +28,8 @@ estan marcadas "sin interfaz" y no tienen pantalla.
 | `HU_05.error` | HU_05 | tienda | 375x812 | no se pudo cargar |
 
 Las 14 se observaron con el navegador de diseno el 2026-10-04, cada una a su `viewport` y despues de su
-ultima edicion (ver "Correcciones de la observacion").
+ultima edicion (ver "Correcciones de la observacion"). La decision 15 (2026-10-05) solo fija textos que estos
+dibujos no muestran; ningun SVG ni `.screen.json` cambio, asi que siguen observados.
 
 ## Decisiones — HU_04, clave de escritura
 
@@ -120,7 +121,8 @@ ultima edicion (ver "Correcciones de la observacion").
     muestran el `summary` (como hoy).
     - Accion nueva para la correccion de datos de entrega: **"Datos de entrega corregidos"** (se anade a
       `AUDIT_ACTION_LABELS`). Confirmar por API reutiliza "Confirmado"; cancelar, "Anulado".
-    - Nombres de campo visibles: Nombre, Telefono, Direccion, Indicaciones, Ciudad (estado: Estado).
+    - Nombres de campo visibles: **los ratificados en la decision 15** (sustituye la lista que habia aqui el
+      2026-10-04; el unico cambio es `customerName`, de "Nombre" a "Cliente").
 11. **Que ve la tienda (RF_27).** Nunca uid, nombre, correo ni rol. Solo la pildora de actor:
     - **"Kentro"**: admin, lider, mensajero o proceso de la plataforma (ChatBy, webhooks, sistema);
     - **"Tu tienda"**: un usuario de esa tienda, incluido su logistico;
@@ -144,6 +146,44 @@ ultima edicion (ver "Correcciones de la observacion").
     - Error (`HU_05.error`): `role=alert` "No se pudo cargar el historial", "Revisa la conexion y vuelve a
       intentarlo. El pedido no ha cambiado por esto." y **"Reintentar"** (nuevo: hoy, tras un error, el bloque
       no vuelve a pedir nada). Sin nota ni eventos a medias.
+15. **Textos visibles de acciones y campos del historial (ratificado el 2026-10-05).** Cierra la compuerta de
+    diseno de T19 y T22 (plan, secciones 9 y 12). Son los textos exactos que usan `AUDIT_ACTION_LABELS` y el
+    modelo de vista `order-audit-trail-view.ts`; las guardas de T19 y T22 los comparan con esta tabla.
+
+    **Acciones nuevas en `AUDIT_ACTION_LABELS`:**
+
+    | Accion | Texto visible | Por que |
+    |---|---|---|
+    | `order.delivery_corrected` | **Datos de entrega corregidos** | Ratifica la decision 10. Distinto de "Editado antes de confirmar" (`order.imported_updated`, edicion del panel) para que la tienda vea que la correccion vino por otra via |
+    | `order.address_reviewed` | **Direccion revisada** | Cierra el estado que la app ya llama "Direccion por revisar" (`address_risk`); misma raiz, en participio como "Confirmado" o "Anulado". No dice "corregida" porque en este caso no cambio ningun campo (plan, P1) |
+    | `order.picked_up` | **Recogido** | Es el texto que la app ya da al estado `picked_up` (`statusLabel` y la exportacion a Excel). Coincidir con la etiqueta del estado sigue el patron de "Entregado", "Fallido" y "Anulado"; la transicion de la misma linea ("... → Recogido") no lo hace redundante, porque la accion es la que nombra el evento y la transicion puede faltar en eventos historicos |
+
+    Las acciones existentes no cambian (confirmar por API reutiliza "Confirmado"; cancelar, "Anulado").
+
+    **Nombres de campo en "Antes/Ahora":**
+
+    | Campo | Texto visible | Valor que se pinta en Antes/Ahora | Coherencia con la app |
+    |---|---|---|---|
+    | `status` | **Estado** | la etiqueta de `statusLabel` ("Pendiente confirmacion", "Direccion por revisar", "Listo para asignar"...), nunca el valor crudo | igual que la pildora de estado de la tarjeta |
+    | `customerName` | **Cliente** | el nombre tal cual | es el rotulo del formulario de la tienda ("Cliente", `ImportedOrderReviewForm`) y de su mensaje "Completa cliente, telefono, direccion y valor". Sustituye a "Nombre", que con "Producto" en la misma lista ya no dice de quien es el nombre. No estaba dibujado en ningun SVG |
+    | `customerPhone` | **Telefono** | el telefono tal cual | rotulo del formulario; ya dibujado |
+    | `addressRaw` | **Direccion** | la direccion tal cual | rotulo del formulario; ya dibujado |
+    | `deliveryNotes` | **Indicaciones** | el texto tal cual | forma corta de "Indicaciones para el mensajero (opcional)"; el resto no cabe en la columna de 375 px |
+    | `cityId` | **Ciudad** | el nombre de la ciudad, nunca el id | la app habla de "la ciudad activa"; el id no le dice nada a la tienda |
+    | `totalCop` | **Valor** | importe con `formatCop` ("$89.900") y cifras tabulares | rotulo del formulario de la tienda ("Valor"; "Completa ... y valor"). No "Recaudo": es el rotulo del ajuste del admin ("Recaudo COP") pero en un pedido pagado no hay recaudo, y la tienda y el admin ven el mismo modelo de vista |
+    | `productName` | **Producto** | el nombre tal cual | rotulo de los dos formularios (tienda y ajuste del admin) |
+    | `sku` | **SKU** | el SKU tal cual | rotulo de los dos formularios y de la tarjeta ("SKU ...") |
+    | `quantity` | **Cantidad** | el numero, sin unidad | rotulo de los dos formularios |
+
+    - Valor vacio o ausente a un lado (por ejemplo, indicaciones borradas por la API, o un SKU que no habia):
+      se escribe **"Sin dato"**, en muted pero con contraste 6,1:1, nunca una celda en blanco ni un guion
+      (un lector de pantalla no lee nada util en ninguno de los dos).
+    - Sin tildes, como el resto de los textos visibles de la app (`statusLabel`, `AUDIT_ACTION_LABELS` y los
+      formularios van todos sin tildes: "Direccion", "Telefono", "Anulado"). Mezclar "Teléfono" en el historial
+      con "Telefono" en el formulario de al lado seria la incoherencia visible; el cambio a tildes, si se hace,
+      es de toda la app y no de esta spec.
+    - Un campo de `OrderHistoryField` sin fila en esta tabla es un fallo de la guarda de T19, no un texto que
+      el codigo pueda inventar.
 
 ## Accesibilidad (WCAG 2.2 AA)
 
@@ -169,6 +209,13 @@ ultima edicion (ver "Correcciones de la observacion").
 - `HU_05.error`: se quito una linea "Codigo: unavailable" antes de la primera captura (era ruido tecnico
   para la tienda).
 - Sin defectos en la primera captura: las ocho de HU_04, `HU_05.tienda-escritorio` y `HU_05.vacio`.
+
+## Pendientes
+
+- **Resuelto el 2026-10-05 — compuerta de diseno de T19 y T22** (plan, seccion 12): etiquetas de
+  `order.address_reviewed` ("Direccion revisada"), `order.picked_up` ("Recogido") y `order.delivery_corrected`
+  ("Datos de entrega corregidos"), y nombres visibles de `status`, los cinco de entrega y `totalCop`,
+  `productName`, `sku` y `quantity`. Ver decision 15. T19 y T22 pueden empezar.
 
 ## Para revisar fuera del diseno
 

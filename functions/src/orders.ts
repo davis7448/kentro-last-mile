@@ -32,6 +32,7 @@ import { checkOrderTotalCop } from "./order-amount";
 import { runCancel, runConfirm, runDeliveryCorrection, type SellerActionRunDeps, type SellerActionRunResult } from "./order-seller-actions-run";
 import type { SellerActor } from "./order-seller-actions";
 import { operationalDataBlockMessage } from "./community-access";
+import { buildAuditTrailResponse } from "./store-api-history";
 import {
   buildWalletEntries,
   isLiquidationWalletType,
@@ -2181,33 +2182,34 @@ export const getOrderAuditTrail = onCall(async (request) => {
   }
 
   // Igualdad simple sobre un campo: usa el indice automatico, sin indice compuesto. El orden
-  // se resuelve en memoria porque son pocas decenas de eventos por pedido.
-  const snap = await db.collection("auditEvents").where("entityId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get();
+  // se resuelve en memoria (en buildAuditTrailResponse) porque son pocas decenas de eventos por pedido.
+  const [snap, historySnap, storeApiSnap] = await Promise.all([
+    db.collection("auditEvents").where("entityId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get(),
+    // Spec 029 (plan 2.7): une por `auditEventId` los cambios campo a campo y verifica los eventos.
+    db.collection("orderHistory").where("orderId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get(),
+    db.collection("settings").doc("storeApi").get()
+  ]);
   const rows = snap.docs
     .map((doc) => doc.data())
-    .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))))
-    .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+    .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))));
+  const history = historySnap.docs.map((doc) => doc.data());
+  const rawHistorySince = storeApiSnap.exists ? storeApiSnap.data()?.historySince : undefined;
+  const historySince = typeof rawHistorySince === "string" && rawHistorySince ? rawHistorySince : null;
 
-  const actors = await resolveAuditActors([...new Set(rows.map((row) => String(row.actorId ?? "unknown")))]);
+  // RF_27: para la tienda la identidad no se oculta despues de resolverla: no se resuelve.
+  const esTienda = role === "seller" || role === "seller_logistics";
+  let actors: Map<string, ResolvedActor> | undefined;
+  let sellerName = "";
+  if (!esTienda) {
+    actors = await resolveAuditActors([...new Set(rows.map((row) => String(row.actorId ?? "unknown")))]);
+    if (role === "admin") {
+      const sellerId = typeof order.sellerId === "string" ? order.sellerId : "";
+      const sellerSnap = sellerId ? await db.collection("sellers").doc(sellerId).get() : null;
+      sellerName = String(sellerSnap?.data()?.name ?? (sellerId || "la tienda"));
+    }
+  }
 
-  const events = rows.map((row) => {
-    const actorId = String(row.actorId ?? "unknown");
-    const actor = actors.get(actorId);
-    return stripUndefined({
-      id: String(row.id ?? ""),
-      createdAt: String(row.createdAt ?? ""),
-      action: String(row.action ?? ""),
-      actorId,
-      actorLabel: actor?.label ?? actorId,
-      actorEmail: actor?.email,
-      actorRole: typeof row.actorRole === "string" ? row.actorRole : undefined,
-      fromStatus: typeof row.fromStatus === "string" ? row.fromStatus : undefined,
-      toStatus: typeof row.toStatus === "string" ? row.toStatus : undefined,
-      summary: typeof row.summary === "string" ? row.summary : ""
-    });
-  });
-
-  return { events };
+  return buildAuditTrailResponse({ role, events: rows, history, historySince, sellerName, actors });
 });
 
 const requestSellerPayoutSchema = z.object({

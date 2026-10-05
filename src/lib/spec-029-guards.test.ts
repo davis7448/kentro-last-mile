@@ -647,3 +647,192 @@ describe("T11 · rutas de escritura: delegan en el ejecutor y no escriben pedido
     expect(source).toMatch(/\bdeleteField\b/);
   });
 });
+
+describe("T14 · getOrderAuditTrail no resuelve identidades para la tienda", () => {
+  /*
+   * RF_27 (plan 2.7): para `seller` / `seller_logistics` la identidad no se oculta despues de resolverla:
+   * no se resuelve. La llamada a `resolveAuditActors(` de la callable vive en una rama que excluye a los roles
+   * de tienda (un `if (!esTienda)`, un `else` de un `if (esTienda)` o un ternario `esTienda ? ... : resolver`).
+   * La callable devuelve `{ events, historySince }` (directo o via `buildAuditTrailResponse(`) y lee
+   * `orderHistory` para unir por `auditEventId`. Las plantillas `summary:` de las acciones de la lista permitida
+   * no interpolan variables de actor.
+   */
+  const ORDERS = "functions/src/orders.ts";
+
+  function callableBody(source: string, name: string): string {
+    const start = source.search(new RegExp(`^export\\s+const\\s+${name}\\s*=\\s*onCall\\(`, "m"));
+    if (start < 0) throw new Error(`no se encontro export const ${name} = onCall(`);
+    const end = source.indexOf("\n});\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  /** Cabecera del bloque `{` sin cerrar que contiene la posicion `at` (texto entre el `;`/`{`/`}` previo y la llave). */
+  function enclosingHeaders(body: string, at: number): string[] {
+    const headers: string[] = [];
+    let depth = 0;
+    for (let index = at - 1; index >= 0; index -= 1) {
+      const char = body[index];
+      if (char === "}") depth += 1;
+      else if (char === "{") {
+        if (depth === 0) {
+          const before = body.slice(0, index);
+          const cut = Math.max(before.lastIndexOf(";"), before.lastIndexOf("{"), before.lastIndexOf("}"));
+          headers.push(before.slice(cut + 1).trim());
+          // Para un `else`, la cabecera del `if` hermano.
+          if (/^else$/.test(headers[headers.length - 1])) {
+            const ifStart = before.slice(0, cut + 1);
+            let ifDepth = 0;
+            for (let back = ifStart.length - 1; back >= 0; back -= 1) {
+              if (ifStart[back] === "}") ifDepth += 1;
+              else if (ifStart[back] === "{") {
+                ifDepth -= 1;
+                if (ifDepth === 0) {
+                  const head = ifStart.slice(0, back);
+                  const headCut = Math.max(head.lastIndexOf(";"), head.lastIndexOf("{"), head.lastIndexOf("}"));
+                  headers.push(`else-of: ${head.slice(headCut + 1).trim()}`);
+                  break;
+                }
+              }
+            }
+          }
+        } else depth -= 1;
+      }
+    }
+    return headers;
+  }
+
+  const STORE_REF = /seller|store|tienda/i;
+
+  function isExcludingStoreBranch(body: string, at: number): boolean {
+    const statementStart = Math.max(body.lastIndexOf(";", at), body.lastIndexOf("{", at), body.lastIndexOf("}", at));
+    const statement = body.slice(statementStart + 1, at);
+    // Ternario: `esTienda ? <sin resolver> : resolveAuditActors(`
+    const ternary = statement.match(/(?:[^=!<>]=(?!=)|\breturn\b)\s*([^?]*)\?[^:]*:\s*(?:await\s*)?$/);
+    if (ternary && STORE_REF.test(ternary[1]) && !/^\s*\(?\s*!/.test(ternary[1])) return true;
+    for (const header of enclosingHeaders(body, at)) {
+      if (header.startsWith("else-of: ")) {
+        const condition = header.slice("else-of: ".length);
+        if (/^if\s*\(/.test(condition) && STORE_REF.test(condition) && !/^if\s*\(\s*!/.test(condition)) return true;
+        continue;
+      }
+      if (/^if\s*\(/.test(header) && STORE_REF.test(header)) {
+        const condition = header.replace(/^if\s*\(/, "").replace(/\)\s*$/, "");
+        if (/^\s*!/.test(condition) || /!==\s*["'`]seller/.test(condition)) return true;
+      }
+    }
+    return false;
+  }
+
+  it.each([
+    ["if (!esTienda)", "x = 1;\n  if (!isStoreRole(role)) {\n    actors = await resolveAuditActors(ids);\n  }\n", true],
+    ["else de if (esTienda)", "x = 1;\n  if (isStoreRole(role)) {\n    a = 1;\n  } else {\n    actors = await resolveAuditActors(ids);\n  }\n", true],
+    ["ternario esTienda ? : resolver", "x = 1;\n  const actors = isStoreRole(role) ? undefined : await resolveAuditActors(ids);\n", true],
+    ["if (role !== seller && ...)", "x = 1;\n  if (role !== \"seller\" && role !== \"seller_logistics\") {\n    actors = await resolveAuditActors(ids);\n  }\n", true],
+    ["sin rama", "x = 1;\n  const actors = await resolveAuditActors(ids);\n", false],
+    ["if (esTienda) positivo", "x = 1;\n  if (isStoreRole(role)) {\n    actors = await resolveAuditActors(ids);\n  }\n", false],
+    ["ternario negado", "x = 1;\n  const actors = !isStoreRole(role) ? undefined : await resolveAuditActors(ids);\n", false]
+  ] as const)("el detector de rama clasifica el caso: %s", (_label, snippet, expected) => {
+    expect(isExcludingStoreBranch(snippet, snippet.indexOf("resolveAuditActors("))).toBe(expected);
+  });
+
+  it("la callable llama a resolveAuditActors una sola vez", () => {
+    const body = callableBody(sourceWithoutComments(ORDERS), "getOrderAuditTrail");
+    expect(body.match(/resolveAuditActors\(/g) ?? []).toHaveLength(1);
+  });
+
+  it("la llamada a resolveAuditActors esta en la rama que excluye a seller y seller_logistics", () => {
+    const body = callableBody(sourceWithoutComments(ORDERS), "getOrderAuditTrail");
+    const at = body.indexOf("resolveAuditActors(");
+    expect(at).toBeGreaterThan(-1);
+    expect(isExcludingStoreBranch(body, at)).toBe(true);
+  });
+
+  it("la callable no llama a getUsers( por su cuenta", () => {
+    const body = callableBody(sourceWithoutComments(ORDERS), "getOrderAuditTrail");
+    expect(body).not.toMatch(/getUsers\(/);
+  });
+
+  it("la callable lee orderHistory para unir por auditEventId", () => {
+    const body = callableBody(sourceWithoutComments(ORDERS), "getOrderAuditTrail");
+    expect(body).toMatch(/collection\(\s*["'`]orderHistory["'`]\s*\)/);
+  });
+
+  it("la callable devuelve { events, historySince }", () => {
+    const body = callableBody(sourceWithoutComments(ORDERS), "getOrderAuditTrail");
+    const direct = /return\s*\{\s*events\s*,\s*historySince\s*\}/.test(body);
+    const viaBuilder = /return\s+buildAuditTrailResponse\(/.test(body);
+    expect(direct || viaBuilder).toBe(true);
+    expect(body).not.toMatch(/return\s*\{\s*events\s*\}\s*;/);
+  });
+
+  describe("plantillas summary: de la lista permitida sin variables de actor", () => {
+    const ALLOWED = [
+      "order.seller_confirmed", "order.imported_updated", "order.cancelled", "order.retry_confirmed", "order.transition",
+      "order.delivered", "order.failed", "order.retry_scheduled", "order.webhook_imported", "order.manual_created",
+      "order.confirmed_uchat", "order.failed_classified", "order.delivery_corrected", "order.address_reviewed", "order.picked_up"
+    ];
+    const ACTOR_VARS = /\b(actorId|uid|messengerId|driverId|email|displayName|messengerName|driverName|userName|fullName|leaderName)\b/;
+
+    function functionsSources(): Array<[string, string]> {
+      const dir = absolute("functions/src");
+      return readdirSync(dir)
+        .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+        .map((file) => [`functions/src/${file}`, sourceWithoutComments(`functions/src/${file}`)] as [string, string]);
+    }
+
+    /** Objeto literal `{ ... }` que contiene la posicion `at`. */
+    function enclosingObject(source: string, at: number): string {
+      let depth = 0;
+      let open = -1;
+      for (let index = at; index >= 0; index -= 1) {
+        if (source[index] === "}") depth += 1;
+        else if (source[index] === "{") {
+          if (depth === 0) { open = index; break; }
+          depth -= 1;
+        }
+      }
+      if (open < 0) return "";
+      depth = 0;
+      for (let index = open; index < source.length; index += 1) {
+        if (source[index] === "{") depth += 1;
+        else if (source[index] === "}") {
+          depth -= 1;
+          if (depth === 0) return source.slice(open, index + 1);
+        }
+      }
+      return source.slice(open);
+    }
+
+    /** Expresion del `summary:` hasta la siguiente propiedad o el cierre del objeto. */
+    function summaryExpression(objectText: string): string | null {
+      const start = objectText.search(/\bsummary\s*:/);
+      if (start < 0) return null;
+      const rest = objectText.slice(start);
+      const end = rest.slice(1).search(/,\s*\n\s*[A-Za-z_$][\w$]*\??\s*:|\n\s*\}/);
+      return end < 0 ? rest : rest.slice(0, end + 1);
+    }
+
+    function templates(): Array<{ file: string; action: string; summary: string }> {
+      const found: Array<{ file: string; action: string; summary: string }> = [];
+      for (const [file, source] of functionsSources()) {
+        const actionProp = /\baction\s*:[^\n]*/g;
+        for (const match of source.matchAll(actionProp)) {
+          const actions = ALLOWED.filter((action) => match[0].includes(`"${action}"`));
+          if (actions.length === 0) continue;
+          const summary = summaryExpression(enclosingObject(source, match.index ?? 0));
+          if (summary) for (const action of actions) found.push({ file, action, summary });
+        }
+      }
+      return found;
+    }
+
+    it("encuentra plantillas de la lista permitida (la guarda no es vacia)", () => {
+      expect(templates().length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("ninguna plantilla summary: de la lista permitida interpola variables de actor", () => {
+      const offenders = templates().filter((template) => ACTOR_VARS.test(template.summary));
+      expect(offenders).toEqual([]);
+    });
+  });
+});
