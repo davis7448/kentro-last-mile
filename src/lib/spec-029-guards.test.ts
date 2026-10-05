@@ -3393,3 +3393,37 @@ describe("T27 · despliegue, recorrido real en un solo proceso y limpieza (RF_01
     });
   });
 });
+
+describe("T31 · getOrderAuditTrail arma las filas con el id real del documento (R1-RF_27-1)", () => {
+  const ORDERS = "functions/src/orders.ts";
+
+  function callableBody(): string {
+    const source = sourceWithoutComments(ORDERS);
+    const start = source.search(/^export const getOrderAuditTrail\s*=\s*onCall\(/m);
+    if (start < 0) expect.fail(`no se encontro export const getOrderAuditTrail = onCall( en ${ORDERS}`);
+    const end = source.indexOf("\n});\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  /** El `.map(...)` que se aplica al resultado de la consulta a auditEvents (`snap.docs`). */
+  function auditRowsMap(body: string): string {
+    const match = body.match(/\bsnap\.docs\s*\.map\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*([\s\S]*?)\)\s*(?:\.filter|;)/);
+    if (!match) expect.fail("no se encontro snap.docs.map(...) sobre auditEvents en getOrderAuditTrail");
+    return match![0];
+  }
+
+  it("las filas de auditEvents no se arman con doc.data() a secas (el campo `id` del cuerpo lo escribe cualquier sesion)", () => {
+    const body = callableBody();
+    expect(body).not.toMatch(/\bsnap\.docs\s*\.map\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\.data\(\)\s*\)/);
+  });
+
+  it("el id real del documento va DESPUES del spread de data(), para que el cuerpo no lo pise", () => {
+    const mapped = auditRowsMap(callableBody());
+    const param = mapped.match(/\.map\(\s*\(?\s*(\w+)/)![1];
+    const spread = new RegExp(`\\.\\.\\.\\s*${param}\\.data\\(\\)`);
+    const realId = new RegExp(`\\bid\\s*:\\s*${param}\\.id\\b`);
+    expect(mapped, "falta el spread de data()").toMatch(spread);
+    expect(mapped, "falta id: <doc>.id").toMatch(realId);
+    expect(mapped.search(realId)).toBeGreaterThan(mapped.search(spread));
+  });
+});

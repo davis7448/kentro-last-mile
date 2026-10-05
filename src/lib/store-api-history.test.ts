@@ -449,3 +449,16 @@ describe("T14 · getOrderAuditTrail sin identidades para la tienda", () => {
     });
   });
 });
+
+describe("T31 · la tienda verifica eventos por el id real del documento (R1-RF_27-1)", () => {
+  // Regresion: buildAuditTrailResponse ya compara `row.id`; el agujero estaba en la callable, que le pasaba el
+  // `id` del CUERPO. Con el id real (`doc.id`), una copia del cuerpo de un evento verificado no se verifica.
+  it.each(STORE_ROLES)("%s: fila con id real ajeno a orderHistory y accion fuera de la lista → descartada aunque copie un cuerpo verificado", async (role) => {
+    const { buildAuditTrailResponse } = await loadTrailModule();
+    const verified = auditRow({ id: "ev-real", action: "order.seller_confirmed", summary: "Pedido KNT-1 confirmado por vendedor" });
+    const history = record({ id: "h-real", auditEventId: "ev-real", origin: "panel", action: "order.seller_confirmed", changes: [{ field: "status", from: "imported", to: "ready_to_assign" }] });
+    const forged = { ...verified, id: "doc-falso-xyz", action: "order.correct_delivered_to_failed", actorRole: "seller" };
+    const out = buildAuditTrailResponse(trailInput({ role, actors: undefined, events: [verified, forged], history: [history] }));
+    expect(out.events.map((event) => event.id)).toEqual(["ev-real"]);
+  });
+});

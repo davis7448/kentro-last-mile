@@ -2315,8 +2315,10 @@ export const getOrderAuditTrail = onCall(async (request) => {
     db.collection("orderHistory").where("orderId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get(),
     db.collection("settings").doc("storeApi").get()
   ]);
+  // R1-RF_27-1: el id sale del documento, no del cuerpo. auditEvents admite create a cualquier sesion,
+  // asi que un `id` en el cuerpo podria suplantar el de un evento verificado por orderHistory.
   const rows = snap.docs
-    .map((doc) => doc.data())
+    .map((doc) => ({ ...doc.data(), id: doc.id }) as Record<string, unknown>)
     .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))));
   const history = historySnap.docs.map((doc) => doc.data());
   const rawHistorySince = storeApiSnap.exists ? storeApiSnap.data()?.historySince : undefined;

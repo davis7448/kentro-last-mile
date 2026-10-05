@@ -707,7 +707,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     (con su razon); `imported` sin marca → `none`; recorrido puro address_risk manual → correccion → cancelar →
     `release`.
 
-- [ ] **T31: El historial de la tienda verifica eventos por el id real del documento (R1-RF_27-1)**
+- [x] **T31: El historial de la tienda verifica eventos por el id real del documento (R1-RF_27-1)**
   * Requisitos cubiertos: RF_27, RF_18
   * Archivos: functions/src/orders.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-history.test.ts
   * Accion: `getOrderAuditTrail` arma las filas con `{ ...doc.data(), id: doc.id }` (el `id` del cuerpo lo puede
