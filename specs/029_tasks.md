@@ -471,7 +471,10 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     en `operations-app.tsx` todo uso de `fetchFirebaseOrderAuditTrail(` lee `.events`; `npx tsc --noEmit`
     limpio con los usos actuales adaptados.
 
-- [ ] **T19: Modelos de vista**
+- [x] **T19: Modelos de vista**
+  * **Al cerrar (2026-10-05):** `AUDIT_ACTION_LABELS` vive ahora exportado en `order-audit-trail-view.ts` con
+    las acciones nuevas; **T22 debe importarlo y borrar la copia privada de `operations-app.tsx`**. Una ciudad sin
+    nombre conocido se pinta "Sin dato" (nunca el id). Fixture de la key corregido a `kw_` + 45.
   * Requisitos cubiertos: RF_25, RF_27, RF_17
   * Archivos: src/lib/store-api-keys-view.ts, src/lib/store-api-keys-view.test.ts, src/lib/order-audit-trail-view.ts, src/lib/order-audit-trail-view.test.ts
   * **Compuerta:** no empieza hasta que `sdd-uxui` ratifique en el README del diseno las etiquetas
