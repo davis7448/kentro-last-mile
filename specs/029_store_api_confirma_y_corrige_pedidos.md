@@ -3,7 +3,7 @@
 - **Estado:** aprobada (2026-10-04, con las respuestas propuestas por Claude y aceptadas por el responsable; el
   mismo dia el responsable ratifico la precision de la decision 2, acoto el historial a API y panel (decision 6) y
   metio en esta spec que la tienda no vea identidades de Kentro en el historial (decision 7); precisada tras
-  `/sdd-analyze` el mismo dia, seccion 10)
+  `/sdd-analyze` el 2026-10-04 y el 2026-10-05, seccion 10)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-10-02 (aprobada y contrastada contra el codigo el 2026-10-04)
 - **Origen:** peticion de CENTRAL (plataforma de operacion de Kovia y ONEP), "Spec · Confirmar y corregir pedidos
@@ -99,7 +99,7 @@ tienda deje de ver identidades de quien opera en Kentro.
 | Key de lectura | La key actual de la tienda (`storeApiConfigs.apiKey`), que sigue funcionando como hoy |
 | Key de escritura | Una key nueva, distinta, que ademas puede escribir. Kentro solo guarda su huella, asi que se muestra completa una sola vez |
 | `historySince` | Fecha desde la que hay historial campo por campo: la del despliegue de esta spec. Solo cubre cambios por API y por el panel |
-| Accion sin cambios (no-op) | Una escritura que, aplicada al estado real, no cambiaria nada: confirmar un pedido ya en `ready_to_assign` o posterior no cancelado (RF_05), cancelar uno ya `cancelled` (RF_15), o corregir con los valores que ya tiene un pedido editable que no esta en `address_risk` |
+| Accion sin cambios (no-op) | Una escritura que, aplicada al estado real, no cambiaria nada: confirmar un pedido ya en `ready_to_assign` o posterior no cancelado (RF_05), cancelar uno ya `cancelled` (RF_15), o corregir con los valores que ya tiene un pedido editable que no esta en `address_risk`, siempre que la ciudad enviada, si viene, este cubierta (RF_10 se evalua antes) |
 
 ## 3. Historias de usuario
 
@@ -166,8 +166,10 @@ tienda deje de ver identidades de quien opera en Kentro.
   indicaciones del pedido (es la forma de quitarlas). Cualquier otro campo de entrega enviado vacio o `null`
   MUST contarse como invalido.
 - **RF_10 (error):** **Si** la ciudad enviada no es una ciudad cubierta, el sistema MUST responder 422 con
-  `code: "out_of_coverage"`, sin aplicar ningun campo. La API valida campos (RF_09) y ciudad, y **no juzga la
-  direccion**: no geocodifica ni la puntua. Una direccion que pasa RF_09 en una ciudad cubierta se acepta.
+  `code: "out_of_coverage"`, sin aplicar ningun campo, **aunque sea la misma ciudad que ya tiene el pedido**: la
+  ciudad enviada se valida antes de decidir si la correccion cambia algo (no-op). La API valida campos (RF_09) y
+  ciudad, y **no juzga la direccion**: no geocodifica ni la puntua. Una direccion que pasa RF_09 en una ciudad
+  cubierta se acepta.
 - **RF_22 (evento):** **Cuando** se corrija por API un pedido en `address_risk` sin lider con datos que pasan
   RF_09 y RF_10, el sistema MUST devolverlo a `imported` con `addressRisk: "review"` (pendiente de confirmar,
   como cualquier pedido recien importado), y MUST registrar ese cambio de estado en el historial con origen
@@ -232,8 +234,10 @@ tienda deje de ver identidades de quien opera en Kentro.
 
 - **RF_25 (evento):** **Cuando** la tienda (rol `seller`, solo la suya) o un admin generen o roten la key de
   escritura, el sistema MUST mostrarla completa **una sola vez**, guardar solo su huella, invalidar la anterior en
-  el acto, y auditar quien la genero. Despues MUST mostrar solo que existe, cuando se genero y sus ultimos 4
-  caracteres.
+  el acto, y auditar quien la genero. Despues MUST mostrar solo sus metadatos, nunca la key: que existe, su
+  prefijo (`kw_`) y sus ultimos 4 caracteres, cuando se genero, cuando se roto por ultima vez (si se roto) y
+  quien la genero (a la tienda, "Tu tienda" o "Kentro"; al admin, "por la tienda" o el nombre del admin), como
+  muestra el diseno de HU_04.
 - **RF_26 (ubicua):** Generar o rotar la key de escritura MUST NOT cambiar la key de lectura, y viceversa.
 
 ### Consistencia con lo que hay
@@ -252,9 +256,11 @@ tienda deje de ver identidades de quien opera en Kentro.
   identicos** todas sus claves actuales (rutas, autenticacion y el resto) y la documentacion nueva (rutas nuevas,
   lo que el historial no incluye, codigos de error, estados editables y `historySince`, como exigen RF_17 y el
   DoD 5) MUST ir **solo en claves nuevas de primer nivel**, sin anadir nada dentro de las actuales. La
-  comparacion antes/despues del indice se hace **por valor** sobre sus claves actuales. La unica respuesta nueva
-  en una ruta existente sin el filtro nuevo es el 401 a una key de escritura enviada por query (RNF_01), que
-  ninguna integracion actual puede estar usando porque esa key no existe hoy.
+  comparacion antes/despues se hace **por valor** sobre datos que no cambian entre la captura y la comparacion
+  (rangos cerrados del pasado y pedidos y cortes no modificados desde la captura); `/resumen`, que depende del
+  dia, se compara por forma (plan 5.3). La unica respuesta nueva en una ruta existente sin el filtro nuevo es el
+  401 a una key de escritura enviada por query (RNF_01), que ninguna integracion actual puede estar usando
+  porque esa key no existe hoy.
 
 ## 5. Requisitos no funcionales
 
@@ -286,6 +292,8 @@ tienda deje de ver identidades de quien opera en Kentro.
   `expectedStatus` (RF_19). Las dos van por transaccion.
 - **Correccion que llega justo cuando un lider toma el pedido:** la condicion se evalua en la transaccion
   (RF_19) y responde 409. No se corrige un pedido que ya tiene lider.
+- **Correccion que reenvia la misma ciudad, ya desactivada:** responde 422 `out_of_coverage` (RF_10), no "sin
+  cambios": la ciudad se valida antes del no-op.
 - **`imported` con lider** (anomalo): confirmar, corregir y cancelar por API responden 409 `order_not_editable`
   (RF_04, RF_08, RF_14).
 - **`address_risk` con lider** (un lider tomo un pedido marcado "revisar"): no es editable ni cancelable por API
@@ -352,8 +360,9 @@ tienda deje de ver identidades de quien opera en Kentro.
    - RF_08: corregir un pedido en `in_route`, en `call_pending` o en `address_risk` con lider responde 409 y no
      cambia nada.
    - RF_09 y RF_10: un telefono valido con una ciudad no cubierta responde 422 nombrando la ciudad, y el telefono
-     no cambia; `deliveryNotes: ""` y `deliveryNotes: null` borran las indicaciones; otro campo vacio da 422; un
-     cuerpo con un campo no permitido y otro invalido lista los dos, con `code: "field_not_allowed"`.
+     no cambia; reenviar la ciudad que ya tiene el pedido, desactivada, da 422 y no "sin cambios";
+     `deliveryNotes: ""` y `deliveryNotes: null` borran las indicaciones; otro campo vacio da 422; un cuerpo con
+     un campo no permitido y otro invalido lista los dos, con `code: "field_not_allowed"`.
    - RF_23: corregir la direccion borra `normalizedAddress`, `lat`, `lng` y `geoProvider`.
    - RF_11: una reimportacion de Shopify despues de un PATCH conserva la direccion corregida.
    - RF_13 a RF_15: cancelar un editable lo anula y libera inventario reservado; cancelar un `assigned` da 409;
@@ -368,16 +377,17 @@ tienda deje de ver identidades de quien opera en Kentro.
      nombre ni correo en ningun evento (tambien en uno con forma anterior a la spec) y trae la etiqueta correcta;
      un evento no verificable fuera de la lista permitida no llega a la tienda y si al admin; con sesion `admin`
      sigue trayendo nombre y correo. Guarda de fuente: `OrderAuditTrail` no pinta `actorEmail` para la tienda.
-   - RF_25 y RF_26: la key de escritura se muestra una vez, se guarda solo su huella y rotarla no toca la de
+   - RF_25 y RF_26: la key de escritura se muestra una vez, se guarda solo su huella, despues solo se ven sus
+     metadatos (prefijo, ultimos 4, fechas de generacion y rotacion, quien la genero) y rotarla no toca la de
      lectura.
    - RNF_01 y RNF_02: la key de lectura en la cabecera de una escritura recibe 403 `read_only_key`; un pedido de
      otra tienda da 404; cualquier key por query en una escritura da 401 (tambien la de lectura y aunque sea
      valida); una key `kw_` por query en una ruta de lectura da 401.
    - RNF_03: la misma `Idempotency-Key` no aplica dos veces.
-   - RF_20: las respuestas de `/resumen`, `/kpis`, `/orders` y `/settlements`, y los valores de las claves
-     actuales del indice, no cambian (comparacion por valor antes/despues): en tiendas reales solo con su key de
-     lectura; con key de escritura, solo en la tienda de pruebas. Un `shopifyOrderId` mal formado en
-     `GET /orders` responde con la forma vieja.
+   - RF_20: las respuestas de `/kpis`, `/orders` y `/settlements` sobre datos congelados al capturar, y los
+     valores de las claves actuales del indice, no cambian (comparacion por valor antes/despues); `/resumen`
+     conserva su forma; en tiendas reales solo con su key de lectura; con key de escritura, solo en la tienda de
+     pruebas. Un `shopifyOrderId` mal formado en `GET /orders` responde con la forma vieja.
 2. **Guardas de fuente:** las escrituras por API reutilizan el nucleo de confirmar, editar y cancelar sin copiarlo
    (RF_19), y la guarda de la spec 017 (`spec-017-guards.test.ts`) sigue en verde: si el codigo nuevo escribe en
    `orders` fuera de `orders.ts`, se declara en `IMPORT_WRITE_EXEMPTIONS` con su razon.
@@ -441,6 +451,11 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
     de primer nivel, con los valores de las actuales identicos, y se compara por valor (RF_20, DoD 5); (c) la
     verificacion de RF_27 sobre eventos con forma historica se hace sobre la tienda de pruebas, sin sesiones con
     permisos sobre tiendas reales (DoD 3).
+11. **Precisiones del quinto `/sdd-analyze` (2026-10-05, orquestador; sin cambiar la intencion):** (a) RF_10 se
+    evalua antes del no-op: una ciudad no cubierta da 422 aunque sea la que ya tiene el pedido (RF_10, glosario,
+    caso limite); (b) RF_25 enumera los metadatos que se muestran despues (prefijo, ultimos 4, generacion,
+    rotacion, quien la genero), los mismos del diseno de HU_04; (c) la comparacion de RF_20 se hace sobre datos
+    congelados al capturar y `/resumen` por forma (RF_20, DoD 1).
 
 ## 10. Historial de cambios
 
@@ -454,3 +469,4 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 | 2026-10-04 | Precisiones de `/sdd-analyze` (decision 8): RF_21 gana sobre `order_not_editable` al confirmar un `address_risk` con lider; RNF_01 separa el 401 (cualquier key por query en escritura; `kw_` por query en cualquier ruta, tambien las viejas) del 403 (solo key de lectura en la cabecera); RF_09 declara la excepcion de `deliveryNotes` vacio o `null`; RF_16 enumera las callables igual que la tabla 2.6 del plan y declara la excepcion del `cleanup` de verificacion; RF_20 reescrito para no contradecir RF_17 y DoD 5 (el indice gana claves nuevas y conserva las actuales); RF_27 y casos limite declaran que la tienda deja de ver eventos no verificables fuera de la lista permitida (mitigacion P3 hasta la 032); DoD ajustado | Hallazgos de `/sdd-analyze`: requisitos que se contradecian entre si o con el plan |
 | 2026-10-04 | Precisiones del tercer `/sdd-analyze` (decision 9), sin cambiar la intencion: RF_09 (el 422 lista todos los campos de los dos tipos; prioridad del `code`); RF_02, RF_03 y RF_20 (`GET /orders` viejo: 400 con forma vieja, `status`/`limit` con el filtro); RF_04/RF_05 (`imported` con lider → 409 `order_not_editable`); RF_16 (la edicion del panel registra producto y valor; limite conocido de `operationalOrderUpdateByAssignee`, a la 032); contexto (`normalizeAddress` es un stub sin uso; escrituras directas de `status` del lider y del mensajero); casos limite, fuera de alcance y DoD ajustados (comparacion de RF_20 con key de escritura solo en la tienda de pruebas) | Tercer `/sdd-analyze`: el texto no decia lo que el plan ya hacia o el codigo ya tenia |
 | 2026-10-04 | Precisiones del cuarto `/sdd-analyze` (decision 10), sin cambiar la intencion: glosario (accion sin cambios); RF_05, RF_15 y RF_19 (la idempotencia gana sobre `expectedStatus`; `status_changed` solo si la accion cambiaria algo); caso limite ChatBy + API con `expectedStatus`; RF_20 (documentacion nueva del indice solo en claves nuevas de primer nivel, valores actuales identicos, comparacion por valor); DoD 1, 3 y 5 ajustados (RF_27 sobre la tienda de pruebas, sin sesiones sobre tiendas reales) | Cuarto `/sdd-analyze`: `expectedStatus` contradecia la idempotencia de RF_05/RF_15 y el indice admitia cambios dentro de claves actuales |
+| 2026-10-05 | Precisiones del quinto `/sdd-analyze` (decision 11), sin cambiar la intencion: RF_10 se valida antes del no-op (glosario y caso limite nuevo); RF_25 enumera los metadatos visibles despues de generar (prefijo, ultimos 4, fechas de generacion y rotacion, quien la genero); RF_20 y DoD: comparacion sobre datos congelados al capturar, `/resumen` por forma | Quinto `/sdd-analyze`: criterios de verificacion que el texto dejaba abiertos |
