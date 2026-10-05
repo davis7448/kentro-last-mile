@@ -1478,3 +1478,178 @@ describe("T18 · tipos y envoltorios de cliente (RF_25, RF_27)", () => {
     }
   });
 });
+
+describe("T20 · seccion \"Clave de escritura\" de la tienda (RF_25, RF_26)", () => {
+  /*
+   * Contrato (README del diseno, decisiones 1, 3-7; pantallas HU_04.tienda-*):
+   * - `src/components/store-api-write-key.tsx` exporta un componente de funcion (PascalCase) que pinta el
+   *   modelo de vista de T19 (`buildWriteKeySectionView`). Los textos de estado viven en el modelo de vista,
+   *   no se reescriben en el componente.
+   * - La key fresca vive solo en el estado local del componente: nada de `localStorage`, `sessionStorage`,
+   *   IndexedDB, URL ni estado global de la app (`AppState`/`setState`).
+   * - Rotar pide confirmacion con un dialogo propio (`role="dialog"` + `aria-modal`, o `<dialog>`), nunca
+   *   `window.confirm`. Nombre "Rotar la clave de escritura"; botones "Cerrar", "Rotar ahora" y "Cancelar".
+   *   El foco entra en "Cancelar" y Escape cancela.
+   * - `StoreApiKeyCard` (operations-app.tsx) se parte en dos `h3`, "Clave de lectura" (boton "Ver clave de
+   *   lectura") y "Clave de escritura", y solo MONTA el componente nuevo: ninguna llamada a las callables de la
+   *   key de escritura ni al modelo de vista vive en operations-app.tsx.
+   */
+  const COMPONENT = "src/components/store-api-write-key.tsx";
+  const APP = "src/components/operations-app.tsx";
+
+  const componentSource = (): string => {
+    expect(existsSync(absolute(COMPONENT)), `${COMPONENT} debe existir`).toBe(true);
+    return sourceWithoutComments(COMPONENT);
+  };
+
+  const exportedComponentNames = (source: string): string[] => {
+    const names = new Set<string>();
+    for (const match of source.matchAll(/export\s+(?:default\s+)?function\s+([A-Z][A-Za-z0-9]*)\s*\(/g)) names.add(match[1]);
+    for (const match of source.matchAll(/export\s+const\s+([A-Z][A-Za-z0-9]*)\s*[:=]/g)) names.add(match[1]);
+    return [...names];
+  };
+
+  /** Etiqueta de apertura del elemento cuyo texto contiene `text` (busca el `<tag` anterior mas cercano). */
+  const openingTagBefore = (source: string, text: string, tag: string): string | null => {
+    const at = source.search(new RegExp(`>\\s*${text}\\s*<`));
+    if (at < 0) return null;
+    const start = source.lastIndexOf(`<${tag}`, at);
+    if (start < 0) return null;
+    return source.slice(start, at + 1);
+  };
+
+  it("el archivo existe y exporta un componente", () => {
+    const source = componentSource();
+    expect(exportedComponentNames(source).length, "debe exportar un componente PascalCase").toBeGreaterThan(0);
+  });
+
+  it("pinta el modelo de vista de T19 (importa y llama buildWriteKeySectionView)", () => {
+    const source = componentSource();
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bbuildWriteKeySectionView\b[^}]*\}\s*from\s*["'](?:@\/lib|\.\.\/lib)\/store-api-keys-view["']/
+    );
+    expect(source).toMatch(/\bbuildWriteKeySectionView\s*\(/);
+  });
+
+  it("usa los envoltorios de cliente (rotateFirebaseStoreWriteKey, getFirebaseStoreApiKeyStatus)", () => {
+    const source = componentSource();
+    expect(source).toMatch(/\brotateFirebaseStoreWriteKey\s*\(/);
+    expect(source).toMatch(/\bgetFirebaseStoreApiKeyStatus\s*\(/);
+    expect(source).toMatch(/from\s*["'](?:@\/lib|\.\.\/lib)\/firebase\/auth["']/);
+  });
+
+  it("no reimplementa los textos de estado del modelo de vista", () => {
+    const source = componentSource();
+    const VIEW_MODEL_TEXTS = [
+      "Sin clave de escritura",
+      "Copiala ahora",
+      "No se pudo rotar la clave",
+      "No se pudo generar la clave",
+      "Termina en",
+      "Generada por",
+      "Copiar clave de escritura",
+      "Ya la guarde",
+      "Generar clave de escritura",
+      "Rotar clave de escritura",
+      "Reintentar",
+      "Va solo en la cabecera",
+      "Solo se muestra completa esta vez",
+      "sigue activa",
+      "Si sales sin copiarla",
+      "Solo la cuenta principal",
+      "Consultando..."
+    ];
+    const reimplemented = VIEW_MODEL_TEXTS.filter((text) => source.includes(text));
+    expect(reimplemented, "estos textos salen de buildWriteKeySectionView, no del componente").toEqual([]);
+    expect(source, "el pill \"Activa\" sale del modelo de vista").not.toMatch(/["'`>]\s*Activa\s*["'`<]/);
+    expect(source, "la key se parte con splitWriteKey / keyLines, no a mano").not.toMatch(/\.slice\(\s*0\s*,\s*24\s*\)/);
+  });
+
+  it("pinta la pildora como status y el aviso como alert", () => {
+    const source = componentSource();
+    expect(source).toMatch(/role=["{]["']?status/);
+    expect(source).toMatch(/role=["{]["']?alert/);
+  });
+
+  it("la key fresca no se persiste: sin localStorage, sessionStorage, IndexedDB ni URL", () => {
+    const source = componentSource();
+    for (const banned of ["localStorage", "sessionStorage", "indexedDB", "pushState", "replaceState", "searchParams", "location.hash"]) {
+      expect(source.includes(banned), `${COMPONENT} no debe usar ${banned}`).toBe(false);
+    }
+  });
+
+  it("la key fresca no va al estado global de la app (ni AppState, ni setState de props, ni Firestore)", () => {
+    const source = componentSource();
+    expect(source).not.toMatch(/\bAppState\b/);
+    expect(source).not.toMatch(/\bsetState\s*\(/);
+    expect(source).not.toMatch(/from\s*["'](?:@\/lib|\.\.\/lib)\/firebase\/state-store["']/);
+    expect(source).not.toMatch(/from\s*["']firebase\/firestore["']/);
+    expect(source, "la key fresca vive en useState del componente").toMatch(/\buseState\b/);
+  });
+
+  it("el dialogo de rotar no usa window.confirm", () => {
+    const source = componentSource();
+    expect(source).not.toMatch(/\bwindow\.confirm\b/);
+    expect(source).not.toMatch(/(^|[^.\w])confirm\s*\(/m);
+  });
+
+  it("el dialogo es modal y accesible (role=dialog + aria-modal, o <dialog>) con su nombre", () => {
+    const source = componentSource();
+    const roleDialog = /role=["{]["']?dialog/.test(source) && /aria-modal/.test(source);
+    const nativeDialog = /<dialog[\s>]/.test(source);
+    expect(roleDialog || nativeDialog, "role=\"dialog\" con aria-modal, o <dialog>").toBe(true);
+    expect(source).toContain("Rotar la clave de escritura");
+    expect(source).toMatch(/aria-labelledby|aria-label=["{]["'`]?Rotar la clave de escritura/);
+    expect(source).toMatch(/>\s*Rotar ahora\s*</);
+    expect(source).toMatch(/aria-label=["{]["'`]?Cerrar/);
+  });
+
+  it("el foco inicial del dialogo entra en \"Cancelar\", no en \"Rotar ahora\"", () => {
+    const source = componentSource();
+    const cancelTag = openingTagBefore(source, "Cancelar", "button");
+    expect(cancelTag, "boton \"Cancelar\"").not.toBeNull();
+    const refName = cancelTag?.match(/\bref=\{\s*([A-Za-z_$][\w$]*)\s*\}/)?.[1];
+    const focusByRef = refName ? new RegExp(`\\b${refName}\\.current\\??\\.focus\\(`).test(source) : false;
+    expect(Boolean(cancelTag && /\bautoFocus\b/.test(cancelTag)) || focusByRef, "Cancelar con autoFocus o ref enfocado").toBe(true);
+
+    const rotateTag = openingTagBefore(source, "Rotar ahora", "button");
+    expect(rotateTag, "boton \"Rotar ahora\"").not.toBeNull();
+    expect(rotateTag ?? "").not.toMatch(/\bautoFocus\b/);
+  });
+
+  it("Escape cierra el dialogo", () => {
+    const source = componentSource();
+    const handlesEscape = /["']Escape["']/.test(source);
+    const nativeCancel = /<dialog[\s>]/.test(source) && /\bonCancel\s*=/.test(source);
+    expect(handlesEscape || nativeCancel, "manejar la tecla Escape (o onCancel de <dialog>)").toBe(true);
+  });
+
+  it("StoreApiKeyCard tiene dos secciones h3: \"Clave de lectura\" y \"Clave de escritura\"", () => {
+    const card = topLevelFunctionBody(sourceWithoutComments(APP), "StoreApiKeyCard");
+    expect(card, "StoreApiKeyCard sigue en operations-app.tsx").not.toBeNull();
+    expect(card).toMatch(/<h3[^>]*>\s*Clave de lectura\s*<\/h3>/);
+    expect(card).toMatch(/<h3[^>]*>\s*Clave de escritura\s*<\/h3>/);
+    expect(card).toMatch(/Ver clave de lectura/);
+    expect(card).not.toMatch(/Ver mi API key/);
+  });
+
+  it("StoreApiKeyCard monta el componente nuevo importado de store-api-write-key", () => {
+    const app = sourceWithoutComments(APP);
+    const names = exportedComponentNames(componentSource());
+    const imported = names.filter((name) =>
+      new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["'](?:@\\/components|\\.)\\/store-api-write-key["']`).test(app)
+    );
+    expect(imported.length, "operations-app.tsx importa el componente de store-api-write-key").toBeGreaterThan(0);
+    const card = topLevelFunctionBody(app, "StoreApiKeyCard") ?? "";
+    expect(imported.some((name) => new RegExp(`<${name}[\\s/>]`).test(card)), "StoreApiKeyCard lo monta").toBe(true);
+  });
+
+  it("operations-app.tsx no tiene logica de la key de escritura (solo monta)", () => {
+    const app = sourceWithoutComments(APP);
+    for (const name of ["rotateFirebaseStoreWriteKey", "getFirebaseStoreApiKeyStatus", "buildWriteKeySectionView", "splitWriteKey"]) {
+      expect(app.includes(name), `operations-app.tsx no debe usar ${name}`).toBe(false);
+    }
+    const card = topLevelFunctionBody(app, "StoreApiKeyCard") ?? "";
+    expect(card, "la key fresca no pasa por StoreApiKeyCard").not.toMatch(/\bwriteKey\b/);
+  });
+});

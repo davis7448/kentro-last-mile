@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } fr
 import { renderCode128Svg } from "@/lib/barcode";
 import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
 import { CashOutstandingLeaderPanel } from "./cash-outstanding-leader";
+import { StoreWriteKeySection } from "./store-api-write-key";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
 import type { OrderPeriodStats } from "@/lib/firebase/auth";
 import {
@@ -11159,7 +11160,7 @@ function ShopifySyncIssuesPanel({ issues, sellers }: { issues: ShopifySyncIssue[
   );
 }
 
-function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
+function StoreApiKeyCard({ sellerId, viewer }: { sellerId: string; viewer: "seller" | "seller_logistics" }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -11182,18 +11183,19 @@ function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
 
   return (
     <Card>
+      <section className="grid gap-0">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="font-bold">API de tienda</h2>
-          <p className="text-xs text-ink-60">Consulta por API (solo lectura) tus pedidos, KPIs operativos y liquidaciones. La key solo ve los datos de tu tienda, sin importar como esta conectada (Shopify, webhook o manual).</p>
+          <h3 className="font-bold">Clave de lectura</h3>
+          <p className="text-xs text-ink-60">Consulta pedidos, KPIs y liquidaciones. La clave solo ve los datos de tu tienda, sin importar como esta conectada (Shopify, webhook o manual).</p>
         </div>
         <button
-          className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
+          className="focus-ring rounded-full bg-field px-3 py-2 text-xs font-semibold text-fg hover:bg-white/10 disabled:text-ink-60 disabled:cursor-not-allowed"
           type="button"
           disabled={busy}
           onClick={() => void fetchKey(false)}
         >
-          {busy ? "Consultando..." : apiKey ? "Actualizar" : "Ver mi API key"}
+          {busy ? "Consultando..." : apiKey ? "Actualizar" : "Ver clave de lectura"}
         </button>
       </div>
       {apiKey && (
@@ -11229,6 +11231,12 @@ function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
         </div>
       )}
       {message && <p className="mt-3 rounded-2xl bg-field px-3 py-2 text-xs font-semibold text-ink-70">{message}</p>}
+      </section>
+      {/* Spec 029 (RF_25): la de escritura vive en su propio componente; aqui solo se monta. */}
+      <section className="mt-4 grid gap-3 border-t border-white/10 pt-4">
+        <h3 className="font-bold">Clave de escritura</h3>
+        <StoreWriteKeySection sellerId={sellerId} viewer={viewer} />
+      </section>
     </Card>
   );
 }
@@ -11812,10 +11820,10 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
             </CollapsiblePanel>
             <CollapsiblePanel
               title="Clave de API"
-              summary="Consulta de pedidos desde tus sistemas"
-              help="Una clave de solo lectura para consultar tus pedidos y saldos desde fuera de Kentro."
+              summary="Lectura y escritura desde tus sistemas"
+              help="Dos claves para trabajar desde fuera de Kentro: la de lectura consulta tus pedidos y saldos; la de escritura confirma, corrige y cancela pedidos que aun no tienen lider."
             >
-              <StoreApiKeyCard sellerId={seller.id} />
+              <StoreApiKeyCard sellerId={seller.id} viewer={session.role === "seller_logistics" ? "seller_logistics" : "seller"} />
             </CollapsiblePanel>
           </div>
           <div className="grid content-start gap-3">

@@ -495,7 +495,11 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     "generada por", y **no** contiene el prefijo `kw_` como dato ni una fecha de rotacion, ni nunca la key; cada
     `OrderHistoryField` tiene nombre visible y coincide con el del README.
 
-- [ ] **T20: Seccion "Clave de escritura" de la tienda**
+- [x] **T20: Seccion "Clave de escritura" de la tienda**
+  * **Al cerrar (2026-10-05):** `StoreWriteKeySection({ sellerId, viewer, actorName?, initialStatus?,
+    onStatusChange? })` es reutilizable por T21. La clave de lectura conserva su `window.confirm` (decision 1:
+    comportamiento de hoy). **T26:** `src/app/api-tiendas/page.tsx` aun dice "Ver mi API key" → "Ver clave de
+    lectura".
   * Requisitos cubiertos: RF_25, RF_26
   * Archivos: src/components/store-api-write-key.tsx, src/components/operations-app.tsx, src/lib/spec-029-guards.test.ts
   * Accion: `StoreApiKeyCard` en dos secciones `h3` ("Clave de lectura" con su comportamiento de hoy y el boton
