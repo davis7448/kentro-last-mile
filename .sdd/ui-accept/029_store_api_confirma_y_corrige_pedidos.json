@@ -1,0 +1,18 @@
+{
+  "accepted": [
+    { "kind": "a11y-unverified", "screen": "HU_04.admin-lista-movil", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.admin-lista", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.admin-recien-generada", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.tienda-activa", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.tienda-error", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.tienda-recien-generada", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.tienda-rotar", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_04.tienda-sin-clave", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.admin-escritorio", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.admin", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.error", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.tienda-escritorio", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.tienda", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" },
+    { "kind": "a11y-unverified", "screen": "HU_05.vacio", "unverifiedReason": "no-route", "by": "codex@local@srv995537", "reason": "acepto las imágenes", "at": "2026-10-05T12:20:26Z" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "story": "HU_05",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "button", "name": "Historial del pedido" },
+    { "role": "alert", "name": "No se pudo cargar el historial" },
+    { "role": "button", "name": "Reintentar" }
+  ],
+  "threshold": { "missing": 0 }
+}

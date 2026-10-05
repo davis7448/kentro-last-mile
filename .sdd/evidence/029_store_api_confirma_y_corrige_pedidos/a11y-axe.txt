@@ -1,0 +1,16 @@
+# Spec 029 — accesibilidad con axe-core (2026-10-05T06:53:38.112Z) contra https://kentro-last-mile.web.app
+  32 estados en 14 recorridos. Reglas wcag2a/aa, 21a/aa, 22aa y best-practice.
+  "029" = nodo dentro de la seccion Clave de escritura, el panel Claves de API de tiendas, un dialogo, el
+  bloque Historial del pedido o un boton "?" de ayuda. Nodos unicos por regla + selector.
+
+                critical   serious  moderate     minor
+    029                0         0         0         0
+    resto app          0         0         3         0
+
+## Por regla
+  app region [moderate]: 3 nodos
+
+## Detalle
+  [app] [moderate] region — .border-t — All page content should be contained by landmarks (RF_25/movil-375-admin/lista, RF_25/movil-375-admin/final, RF_25/escritorio-1280-admin/lista)
+  [app] [moderate] region — .border-t.border-white\/10.bg-panel — All page content should be contained by landmarks (RF_25/movil-375-admin/recien-generada)
+  [app] [moderate] region — .border-t.bg-panel.border-white\/10 — All page content should be contained by landmarks (RF_25/escritorio-1280-admin/recien-generada, RF_27/escritorio-1280-admin/final)

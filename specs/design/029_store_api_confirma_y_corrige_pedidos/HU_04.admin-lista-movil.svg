@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_04 - Claves de API de tiendas, tarjetas por tienda (admin, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.10"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="160" r="200" fill="url(#ga)"/>
+  <circle cx="340" cy="560" r="220" fill="url(#gb)"/>
+
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">LG</text>
+
+  <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Integraciones</text>
+  <text x="16" y="122" font-size="14" fill="#9aa5b3">Shopify, webhooks, UChat y claves de API</text>
+
+  <rect x="16" y="142" width="343" height="56" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M33 165 l5 5 l-5 5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="167" font-size="14" font-weight="700" fill="#f4f6f8">Tiendas Shopify</text>
+  <text x="52" y="184" font-size="12" fill="#9aa5b3">12 conectadas</text>
+
+  <rect x="16" y="210" width="343" height="530" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M31 237 l5 5 l5 -5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="238" font-size="14" font-weight="700" fill="#f4f6f8">Claves de API de tiendas</text>
+  <text x="52" y="256" font-size="12" fill="#9aa5b3">3 de 14 tiendas con clave de escritura</text>
+
+  <rect x="32" y="276" width="311" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
+  <circle cx="56" cy="297" r="6" fill="none" stroke="#9aa5b3" stroke-width="1.8"/>
+  <line x1="60.5" y1="301.5" x2="65" y2="306" stroke="#9aa5b3" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="76" y="303" font-size="14" fill="#9aa5b3">Buscar tienda</text>
+
+  <!-- Tarjeta Kovia -->
+  <text x="32" y="356" font-size="15" font-weight="700" fill="#f4f6f8">Kovia</text>
+  <text x="32" y="376" class="n" font-size="13" fill="#c6f24e">Escritura activa <tspan fill="#cbd3dc">· termina en c41e</tspan></text>
+  <text x="32" y="394" class="n" font-size="12" fill="#9aa5b3">6 oct, 10:42 · por la tienda</text>
+  <rect x="255" y="352" width="88" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <text x="299" y="379" text-anchor="middle" font-size="14" font-weight="700" fill="#ff8b7c">Rotar</text>
+  <line x1="32" y1="412.5" x2="343" y2="412.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Tarjeta ONEP -->
+  <text x="32" y="440" font-size="15" font-weight="700" fill="#f4f6f8">ONEP</text>
+  <text x="32" y="460" class="n" font-size="13" fill="#c6f24e">Escritura activa <tspan fill="#cbd3dc">· termina en 0b93</tspan></text>
+  <text x="32" y="478" class="n" font-size="12" fill="#9aa5b3">7 oct, 09:15 · por Laura Gomez</text>
+  <rect x="255" y="436" width="88" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <text x="299" y="463" text-anchor="middle" font-size="14" font-weight="700" fill="#ff8b7c">Rotar</text>
+  <line x1="32" y1="496.5" x2="343" y2="496.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Tarjeta Bella Mujer -->
+  <text x="32" y="524" font-size="15" font-weight="700" fill="#f4f6f8">Bella Mujer</text>
+  <text x="32" y="544" font-size="13" fill="#cbd3dc">Sin clave de escritura</text>
+  <text x="32" y="562" font-size="12" fill="#9aa5b3">Lectura activa</text>
+  <rect x="255" y="520" width="88" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="299" y="547" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Generar</text>
+  <line x1="32" y1="580.5" x2="343" y2="580.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Tarjeta E-master -->
+  <text x="32" y="608" font-size="15" font-weight="700" fill="#f4f6f8">E-master</text>
+  <text x="32" y="628" font-size="13" fill="#cbd3dc">Sin clave de escritura</text>
+  <text x="32" y="646" font-size="12" fill="#9aa5b3">Sin clave de lectura</text>
+  <rect x="255" y="604" width="88" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="299" y="631" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Generar</text>
+  <line x1="32" y1="664.5" x2="343" y2="664.5" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <text x="32" y="704" class="n" font-size="13" fill="#9aa5b3">1 a 4 de 14</text>
+  <rect x="231" y="680" width="112" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="287" y="707" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Siguiente</text>
+
+  <!-- Navegacion inferior (admin) -->
+  <rect x="0" y="748" width="375" height="64" fill="#191e25"/>
+  <line x1="0" y1="748.5" x2="375" y2="748.5" stroke="#ffffff" stroke-opacity="0.06"/>
+  <g font-size="10" text-anchor="middle">
+    <rect x="21" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="31" y="796" fill="#9aa5b3">Operacion</text>
+    <rect x="84" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="94" y="796" fill="#9aa5b3">Wallet</text>
+    <rect x="146" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="156" y="796" fill="#9aa5b3">Inventario</text>
+    <rect x="209" y="758" width="20" height="20" rx="6" fill="#c6f24e"/><text x="219" y="796" fill="#f4f6f8" font-weight="700">Tiendas</text>
+    <rect x="271" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="281" y="796" fill="#9aa5b3">Cortes</text>
+    <rect x="334" y="758" width="20" height="20" rx="6" fill="#9aa5b3" fill-opacity="0.5"/><text x="344" y="796" fill="#9aa5b3">Ajustes</text>
+  </g>
+</svg>

@@ -1,5 +1,5 @@
 {
-  "spec": "specs/026_efectivo_que_no_llega_a_un_corte.md",
-  "round": 4,
+  "spec": "specs/029_store_api_confirma_y_corrige_pedidos.md",
+  "round": 3,
   "findings": []
 }

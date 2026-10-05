@@ -5,6 +5,9 @@ import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } fr
 import { renderCode128Svg } from "@/lib/barcode";
 import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
 import { CashOutstandingLeaderPanel } from "./cash-outstanding-leader";
+import { OrderAuditTrail } from "./order-audit-trail";
+import { StoreApiKeysAdminPanel } from "./store-api-keys-admin";
+import { StoreWriteKeySection } from "./store-api-write-key";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
 import type { OrderPeriodStats } from "@/lib/firebase/auth";
 import {
@@ -28,7 +31,6 @@ import {
   closeFirebaseOrder,
   confirmFirebaseImportedOrder,
   confirmFirebaseRetryOrder,
-  fetchFirebaseOrderAuditTrail,
   rejectFirebaseSellerPayout,
   requestFirebaseSellerPayout,
   getFirebaseBootstrapStatus,
@@ -84,7 +86,7 @@ import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { emptyState } from "@/lib/seed";
-import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
+import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
 const sessionKey = "kentro-session";
@@ -1150,7 +1152,7 @@ function CollapsiblePanel({
         </button>
         {help && (
           <button
-            className="focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-60 hover:bg-white/10 hover:text-fg"
+            className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-60 hover:bg-white/10 hover:text-fg"
             type="button"
             aria-label={`Que es ${title}`}
             aria-expanded={helpOpen}
@@ -2042,116 +2044,12 @@ return (
       )}
       {/* Fuera del gate `!compact`: las tarjetas compactas son las de pedidos entregados, que
           son precisamente las que se auditan despues del hecho. */}
-      <OrderAuditTrail orderId={order.id} />
+      <OrderAuditTrail
+        orderId={order.id}
+        viewer={state.activeRole === "seller" || state.activeRole === "seller_logistics" ? "store" : "admin"}
+        cities={state.cities}
+      />
     </Card>
-  );
-}
-
-// Etiquetas de las acciones de auditoria. El backend construye algunas dinamicamente
-// (order.delivered / order.failed / order.retry_scheduled), asi que cualquier accion que no
-// este aqui cae al nombre crudo en vez de quedar en blanco.
-const AUDIT_ACTION_LABELS: Record<string, string> = {
-  "order.webhook_imported": "Importado por webhook",
-  "order.manual_created": "Creado a mano",
-  "order.imported_updated": "Editado antes de confirmar",
-  "order.seller_confirmed": "Confirmado",
-  "order.confirmed_uchat": "Confirmado por el bot",
-  "order.transition": "Cambio de estado",
-  "order.adjusted": "Ajustado",
-  "order.cancelled": "Anulado",
-  "order.delivered": "Entregado",
-  "order.failed": "Fallido",
-  "order.retry_scheduled": "Visita reagendada",
-  "order.retry_confirmed": "Reintento confirmado",
-  "order.failed_classified": "Fallido clasificado",
-  "order.messenger_reassigned": "Mensajero reasignado",
-  "order.messenger_unassigned": "Mensajero retirado",
-  "order.correct_failed_to_delivered": "Corregido a entregado",
-  "order.correct_delivered_to_failed": "Corregido a fallido",
-  "order.correct_cancelled_to_operational": "Reactivado tras anulacion",
-  "order.reopened_for_retry": "Reabierto para nueva visita",
-  // Escritas por los scripts one-off que la correccion desde la UI reemplaza. Sin estas
-  // etiquetas el historial de KNT-003316 / KNT-003259 / KNT-003595 sale con el nombre crudo.
-  "order.correct_cancelled_to_delivered": "Corregido a entregado (script)",
-  "order.correct_delivered_to_chargeable_failed": "Corregido a fallido con cobro (script)",
-  "order.clawback_delivered_financials": "Reversa de entrega (script)",
-  "order.correct_retry_to_failed": "Reintento cerrado como fallido (script)"
-};
-
-function auditActionLabel(action: string) {
-  return AUDIT_ACTION_LABELS[action] ?? action;
-}
-
-/**
- * Historial de auditoria de un pedido: quien hizo cada accion y cuando.
- *
- * Se carga bajo demanda al abrir el bloque, nunca en el render: las vistas pintan cientos de
- * tarjetas y una llamada por tarjeta hundiria la pagina.
- */
-function OrderAuditTrail({ orderId }: { orderId: string }) {
-  const [open, setOpen] = useState(false);
-  const [events, setEvents] = useState<OrderAuditEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (!next || events !== null || loading) return;
-    setLoading(true);
-    setError("");
-    try {
-      setEvents(await fetchFirebaseOrderAuditTrail(orderId));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el historial.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="grid gap-2 rounded-2xl border border-white/10 bg-panel p-3">
-      <button
-        className="focus-ring flex items-center justify-between gap-2 text-left text-sm font-semibold"
-        type="button"
-        onClick={() => void toggle()}
-      >
-        <span className="inline-flex items-center gap-2"><History size={16} /> Historial del pedido</span>
-        <span className="text-xs font-semibold text-ink-60">{open ? "Ocultar" : "Ver quien hizo cada accion"}</span>
-      </button>
-
-      {open && (
-        <div className="grid gap-2">
-          {loading && <p className="text-xs text-ink-60">Cargando historial...</p>}
-          {error && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{error}</p>}
-          {!loading && !error && events?.length === 0 && (
-            <p className="text-xs text-ink-60">Este pedido no tiene eventos de auditoria registrados.</p>
-          )}
-          {!loading && !error && events && events.length > 0 && (
-            <ol className="grid gap-2">
-              {events.map((event) => (
-                <li key={event.id} className="grid gap-0.5 border-l-2 border-white/10 pl-3">
-                  <p className="text-xs font-semibold text-ink-60">{formatDateTime(event.createdAt)}</p>
-                  <p className="text-sm font-semibold">
-                    {auditActionLabel(event.action)}
-                    {event.fromStatus && event.toStatus && (
-                      <span className="font-normal text-ink-60"> · {statusLabel(event.fromStatus)} → {statusLabel(event.toStatus)}</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-ink-70">
-                    {event.actorLabel}
-                    {event.actorEmail && event.actorEmail !== event.actorLabel && ` (${event.actorEmail})`}
-                    {event.actorRole && ` · ${event.actorRole}`}
-                  </p>
-                  {/* Los eventos historicos no tienen fromStatus/toStatus: el summary es lo unico que los describe. */}
-                  {!event.fromStatus && event.summary && <p className="text-xs text-ink-60">{event.summary}</p>}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -5506,6 +5404,9 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Incidencias de sincronizacion" count={(state.shopifySyncIssues ?? []).length} summary={`${(state.shopifySyncIssues ?? []).length} sin resolver`} tone={(state.shopifySyncIssues ?? []).length > 0 ? "rust" : "default"} defaultOpen={(state.shopifySyncIssues ?? []).length > 0}>
             <ShopifySyncIssuesPanel issues={state.shopifySyncIssues ?? []} sellers={state.sellers} />
+          </CollapsiblePanel>
+          <CollapsiblePanel flush title="Claves de API de tiendas" summary="Lectura y escritura por tienda">
+            <StoreApiKeysAdminPanel actorName={session.name} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Solicitudes de instalacion" count={state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0} summary={`${state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0} pendientes`} tone={(state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0) > 0 ? "acid" : "default"} defaultOpen={(state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0) > 0}>
             <ShopifyInstallRequestsPanel state={state} setState={setState} />
@@ -11159,7 +11060,7 @@ function ShopifySyncIssuesPanel({ issues, sellers }: { issues: ShopifySyncIssue[
   );
 }
 
-function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
+function StoreApiKeyCard({ sellerId, viewer }: { sellerId: string; viewer: "seller" | "seller_logistics" }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -11182,18 +11083,19 @@ function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
 
   return (
     <Card>
+      <section className="grid gap-0">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="font-bold">API de tienda</h2>
-          <p className="text-xs text-ink-60">Consulta por API (solo lectura) tus pedidos, KPIs operativos y liquidaciones. La key solo ve los datos de tu tienda, sin importar como esta conectada (Shopify, webhook o manual).</p>
+          <h3 className="font-bold">Clave de lectura</h3>
+          <p className="text-xs text-ink-60">Consulta pedidos, KPIs y liquidaciones. La clave solo ve los datos de tu tienda, sin importar como esta conectada (Shopify, webhook o manual).</p>
         </div>
         <button
-          className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
+          className="focus-ring rounded-full bg-field px-3 py-2 text-xs font-semibold text-fg hover:bg-white/10 disabled:text-ink-60 disabled:cursor-not-allowed"
           type="button"
           disabled={busy}
           onClick={() => void fetchKey(false)}
         >
-          {busy ? "Consultando..." : apiKey ? "Actualizar" : "Ver mi API key"}
+          {busy ? "Consultando..." : apiKey ? "Actualizar" : "Ver clave de lectura"}
         </button>
       </div>
       {apiKey && (
@@ -11229,6 +11131,12 @@ function StoreApiKeyCard({ sellerId }: { sellerId: string }) {
         </div>
       )}
       {message && <p className="mt-3 rounded-2xl bg-field px-3 py-2 text-xs font-semibold text-ink-70">{message}</p>}
+      </section>
+      {/* Spec 029 (RF_25): la de escritura vive en su propio componente; aqui solo se monta. */}
+      <section className="mt-4 grid gap-3 border-t border-white/10 pt-4">
+        <h3 className="font-bold">Clave de escritura</h3>
+        <StoreWriteKeySection sellerId={sellerId} viewer={viewer} />
+      </section>
     </Card>
   );
 }
@@ -11812,10 +11720,10 @@ function SellerView({ state, setState, session, orderSearch, onOrderSearchChange
             </CollapsiblePanel>
             <CollapsiblePanel
               title="Clave de API"
-              summary="Consulta de pedidos desde tus sistemas"
-              help="Una clave de solo lectura para consultar tus pedidos y saldos desde fuera de Kentro."
+              summary="Lectura y escritura desde tus sistemas"
+              help="Dos claves para trabajar desde fuera de Kentro: la de lectura consulta tus pedidos y saldos; la de escritura confirma, corrige y cancela pedidos que aun no tienen lider."
             >
-              <StoreApiKeyCard sellerId={seller.id} />
+              <StoreApiKeyCard sellerId={seller.id} viewer={session.role === "seller_logistics" ? "seller_logistics" : "seller"} />
             </CollapsiblePanel>
           </div>
           <div className="grid content-start gap-3">

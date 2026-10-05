@@ -1,0 +1,13 @@
+{
+  "story": "HU_04",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "dialog", "name": "Rotar la clave de escritura" },
+    { "role": "heading", "name": "Rotar la clave de escritura" },
+    { "role": "button", "name": "Cerrar" },
+    { "role": "button", "name": "Rotar ahora" },
+    { "role": "button", "name": "Cancelar" }
+  ],
+  "threshold": { "missing": 0 }
+}

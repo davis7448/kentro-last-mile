@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_04 - Confirmar la rotacion de la clave de escritura, hoja inferior (tienda, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="160" r="200" fill="url(#ga)"/>
+
+  <!-- Pagina de fondo (HU_04.tienda-activa), atenuada -->
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <text x="16" y="98" font-size="28" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Integraciones</text>
+  <rect x="16" y="142" width="343" height="64" rx="24" fill="#191e25"/>
+  <rect x="16" y="218" width="343" height="518" rx="24" fill="#191e25"/>
+  <text x="52" y="246" font-size="14" font-weight="700" fill="#f4f6f8">Clave de API</text>
+  <text x="32" y="442" font-size="15" font-weight="700" fill="#f4f6f8">Clave de escritura</text>
+  <rect x="0" y="0" width="375" height="812" fill="#0e1116" fill-opacity="0.72"/>
+
+  <!-- Hoja inferior (role=dialog, aria-modal) -->
+  <path d="M0 494 a24 24 0 0 1 24 -24 h327 a24 24 0 0 1 24 24 v318 h-375 z" fill="#191e25" stroke="#ffffff" stroke-opacity="0.08"/>
+  <rect x="167" y="482" width="40" height="4" rx="2" fill="#9aa5b3" fill-opacity="0.6"/>
+  <text x="24" y="530" font-size="20" font-weight="800" fill="#f4f6f8" letter-spacing="-0.4">Rotar la clave de escritura</text>
+  <circle cx="335" cy="524" r="22" fill="#ffffff" fill-opacity="0.06"/>
+  <path d="M329 518 l12 12 M341 518 l-12 12" stroke="#cbd3dc" stroke-width="2" stroke-linecap="round"/>
+
+  <text x="24" y="566" font-size="14" fill="#cbd3dc">La clave que termina en c41e deja de</text>
+  <text x="24" y="586" font-size="14" fill="#cbd3dc">funcionar en el acto: tus integraciones</text>
+  <text x="24" y="606" font-size="14" fill="#cbd3dc">reciben 401 hasta que pongas la nueva.</text>
+  <text x="24" y="634" font-size="14" fill="#9aa5b3">La clave de lectura no cambia.</text>
+
+  <rect x="24" y="660" width="327" height="44" rx="22" fill="#ff8b7c"/>
+  <text x="187.5" y="687" text-anchor="middle" font-size="14" font-weight="700" fill="#10140c">Rotar ahora</text>
+  <rect x="24" y="716" width="327" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="187.5" y="743" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Cancelar</text>
+</svg>

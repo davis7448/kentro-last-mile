@@ -1,0 +1,3 @@
+# 4xx/5xx y fallidas: 2 (no contempladas: 0; FORZADA = provocada con page.route)
+403 POST https://us-central1-kentro-last-mile.cloudfunctions.net/getSellerBalance
+FORZADA 500 POST https://us-central1-kentro-last-mile.cloudfunctions.net/getOrderAuditTrail

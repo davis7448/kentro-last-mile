@@ -29,7 +29,10 @@ import {
 import { createCommunityPricingResolver } from "./community-order-pricing";
 import { CLOSED_STATUSES, MANUAL_EDIT_STAMP } from "./order-import-merge";
 import { checkOrderTotalCop } from "./order-amount";
+import { runCancel, runConfirm, runDeliveryCorrection, type SellerActionRunDeps, type SellerActionRunResult } from "./order-seller-actions-run";
+import { buildOrderHistoryRecord, type SellerActor } from "./order-seller-actions";
 import { operationalDataBlockMessage } from "./community-access";
+import { buildAuditTrailResponse } from "./store-api-history";
 import {
   buildWalletEntries,
   isLiquidationWalletType,
@@ -247,6 +250,14 @@ export function newAuditRef(db: FirebaseFirestore.Firestore) {
   return db.collection("auditEvents").doc();
 }
 
+/**
+ * Actor de `orderHistory` para una callable del panel (spec 029, plan 2.6). `SellerActor` tipa el rol de las
+ * acciones de tienda, pero el registro guarda el rol como texto: aqui tambien firman lider, mensajero y admin.
+ */
+export function panelHistoryActor(uid: string, role: string): SellerActor {
+  return { kind: "user", uid, role } as SellerActor;
+}
+
 function zodFieldMessage(error: z.ZodError) {
   const flat = error.flatten();
   const messages = Object.entries(flat.fieldErrors)
@@ -387,6 +398,39 @@ export const createManualOrder = onCall(async (request) => {
   return { order };
 });
 
+/** Dependencias del ejecutor de acciones de tienda (spec 029): la base real y el borrado de Firestore. */
+function sellerActionDeps(): SellerActionRunDeps {
+  return { db: getFirestore(), deleteField: () => FieldValue.delete() };
+}
+
+/** El usuario del panel como actor del nucleo. El rol ya viene validado por la callable. */
+function panelActor(uid: string, role: "admin" | "seller" | "seller_logistics", sellerClaim: string | undefined): SellerActor {
+  return { kind: "user", uid, role, sellerId: sellerClaim };
+}
+
+/**
+ * Traduce el resultado del ejecutor (politica `panel`) a lo que las callables respondian antes de la
+ * spec 029: el pedido tal como queda, o el `HttpsError` con el mismo codigo y mensaje de siempre.
+ * `invalidMessage` es el texto del `invalid-argument` propio de cada callable.
+ */
+function panelOrderOrThrow(result: SellerActionRunResult, invalidMessage: string): Record<string, unknown> {
+  if (result.kind !== "rejected") return result.order;
+  const rejection = result.rejection;
+  switch (rejection.code) {
+    case "panel_precondition":
+      throw new HttpsError(rejection.httpsCode, rejection.message);
+    case "order_not_found":
+      throw new HttpsError("not-found", "Order not found.");
+    case "validation_failed":
+    case "field_not_allowed":
+      throw new HttpsError("invalid-argument", invalidMessage, { fields: rejection.fields });
+    default:
+      // Con politica `panel` y sin `expectedStatus` el nucleo no produce ningun otro rechazo: si
+      // aparece, es un cambio del nucleo que esta traduccion no conoce, y no se disfraza de otro error.
+      throw new HttpsError("internal", `Unexpected seller action rejection: ${rejection.code}.`);
+  }
+}
+
 // 512 MiB no es por memoria sino por CPU: en Cloud Functions la CPU va atada a la memoria, y
 // el arranque en frio medido contra produccion era de 2,33 s incluso en una funcion trivial.
 // Esta esta en la ruta caliente del domiciliario, que lo paga al cerrar el primer pedido del
@@ -403,48 +447,19 @@ export const confirmImportedOrder = onCall({ memory: "512MiB" }, async (request)
     throw new HttpsError("invalid-argument", "Invalid confirm order data.", parsed.error.flatten());
   }
 
-  const db = getFirestore();
-  const orderRef = db.collection("orders").doc(parsed.data.orderId);
-  const now = new Date().toISOString();
-  const order = await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(orderRef);
-    if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
-    const current = snap.data() ?? {};
-    const sellerId = String(current.sellerId ?? "");
-    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
-      throw new HttpsError("permission-denied", "Sellers can only confirm their own orders.");
-    }
-    if (current.status !== "imported") {
-      throw new HttpsError("failed-precondition", "Only imported orders can be confirmed.");
-    }
-    const updated = {
-      ...current,
-      addressRisk: "accepted",
-      status: "ready_to_assign",
-      // Deja explicito en el propio pedido que lo confirmo una persona, para contrastarlo
-      // contra las confirmaciones automaticas del bot ("uchat" / "uchat_pull").
-      confirmedVia: "manual",
-      updatedAt: now
-    };
-    transaction.set(orderRef, updated, { merge: true });
-    const auditRef = newAuditRef(db);
-    transaction.set(auditRef, {
-      id: auditRef.id,
-      actorId: request.auth?.uid,
-      actorRole: role,
-      action: "order.seller_confirmed",
-      entity: "order",
-      entityId: snap.id,
-      fromStatus: "imported",
-      toStatus: "ready_to_assign",
-      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} confirmado por ${role === "admin" ? "admin" : "vendedor"}`,
-      createdAt: now
-    });
-    return { id: snap.id, ...updated };
+  // Spec 029 (RF_19): la regla (precondiciones, parche, evento, historial) vive en el nucleo
+  // compartido con la Store API; aqui solo se traduce la sesion a actor y el rechazo a HttpsError.
+  const result = await runConfirm(sellerActionDeps(), {
+    orderId: parsed.data.orderId,
+    policy: "panel",
+    actor: panelActor(request.auth.uid, role, sellerClaim),
+    input: {},
+    now: new Date().toISOString()
   });
 
-  return { order };
+  return { order: panelOrderOrThrow(result, "Invalid confirm order data.") };
 });
+
 
 /**
  * Resuelve las lineas de un pedido que se esta editando desde un formulario que solo
@@ -490,63 +505,45 @@ export const updateImportedOrder = onCall(async (request) => {
   }
 
   const input = parsed.data;
-  const db = getFirestore();
-  const orderRef = db.collection("orders").doc(input.orderId);
-  const now = new Date().toISOString();
-  const order = await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(orderRef);
-    if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
-    const current = snap.data() ?? {};
-    const sellerId = String(current.sellerId ?? "");
-    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
-      throw new HttpsError("permission-denied", "Sellers can only edit their own orders.");
-    }
-    if (current.status !== "imported") {
-      throw new HttpsError("failed-precondition", "Only imported orders pending confirmation can be edited.");
-    }
-    // Edicion manual de producto. Un pedido `imported` nunca reservo inventario, asi que
-    // aqui no hay delta de stock que aplicar.
-    const { summary: editedSummary, preserved } = resolveEditedOrderLines(input, current);
-    const updated = stripUndefined({
-      ...current,
-      customerName: input.customerName.trim(),
-      customerPhone: input.customerPhone.trim(),
-      addressRaw: input.addressRaw.trim(),
-      // Si el cliente no la envia, stripUndefined quita la clave y el merge conserva la corregida del mensajero (spec 013, RF_11).
-      normalizedAddress: input.normalizedAddress?.trim(),
+  // Spec 029 (RF_19): precondiciones, sello de edicion manual, evento e historial los decide el nucleo
+  // (`planDeliveryCorrection`, politica `panel`). Aqui solo se traduce el formulario: datos de entrega
+  // por un lado y, por otro, lo demas que el panel edita (`panelExtras`).
+  const result = await runDeliveryCorrection(sellerActionDeps(), {
+    orderId: input.orderId,
+    policy: "panel",
+    actor: panelActor(request.auth.uid, role, sellerClaim),
+    input: {
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      addressRaw: input.addressRaw,
+      // En blanco = conservar las indicaciones de hoy (el nucleo tambien lo trata asi con politica panel).
       deliveryNotes: input.deliveryNotes?.trim() || undefined,
-      zoneId: input.zoneId?.trim(),
-      paymentMethod: input.paymentMethod,
-      fulfillmentMode: input.fulfillmentMode,
-      totalCop: input.totalCop,
-      productId: input.productId?.trim(),
-      // Con lineas preservadas los campos planos salen de las lineas reales.
-      productName: preserved ? editedSummary?.productName : input.productName?.trim(),
-      sku: preserved ? editedSummary?.sku : input.sku?.trim(),
-      quantity: preserved ? editedSummary?.quantity : input.quantity,
-      lineItems: editedSummary?.lineItems,
-      // Spec 017 (RF_17): la marca de que este pedido ya se toco a mano. Sin ella, "sigue
-      // importado" se leeria como "nadie lo ha tocado" y una reimportacion se llevaria esta
-      // correccion sin error y sin aviso.
-      [MANUAL_EDIT_STAMP]: now,
-      updatedAt: now
-    });
-    transaction.set(orderRef, updated, { merge: true });
-    const auditRef = newAuditRef(db);
-    transaction.set(auditRef, {
-      id: auditRef.id,
-      actorId: request.auth?.uid,
-      actorRole: role,
-      action: "order.imported_updated",
-      entity: "order",
-      entityId: snap.id,
-      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} editado antes de confirmar`,
-      createdAt: now
-    });
-    return { id: snap.id, ...updated };
+      // Funcion del pedido leido DENTRO de la transaccion: las lineas se resuelven contra el documento que
+      // se va a pisar, y un reintento por concurrencia la vuelve a evaluar con el nuevo.
+      panelExtras: (current) => {
+        // Edicion manual de producto. Un pedido `imported` nunca reservo inventario, asi que
+        // aqui no hay delta de stock que aplicar.
+        const { summary: editedSummary, preserved } = resolveEditedOrderLines(input, current);
+        return stripUndefined({
+          // Si el cliente no la envia, stripUndefined quita la clave y el merge conserva la corregida del mensajero (spec 013, RF_11).
+          normalizedAddress: input.normalizedAddress?.trim(),
+          zoneId: input.zoneId?.trim(),
+          paymentMethod: input.paymentMethod,
+          fulfillmentMode: input.fulfillmentMode,
+          totalCop: input.totalCop,
+          productId: input.productId?.trim(),
+          // Con lineas preservadas los campos planos salen de las lineas reales.
+          productName: preserved ? editedSummary?.productName : input.productName?.trim(),
+          sku: preserved ? editedSummary?.sku : input.sku?.trim(),
+          quantity: preserved ? editedSummary?.quantity : input.quantity,
+          lineItems: editedSummary?.lineItems
+        });
+      }
+    },
+    now: new Date().toISOString()
   });
 
-  return { order };
+  return { order: panelOrderOrThrow(result, "Invalid imported order data.") };
 });
 
 export const confirmRetryOrder = onCall(async (request) => {
@@ -603,6 +600,20 @@ export const confirmRetryOrder = onCall(async (request) => {
       summary: `Reintento confirmado para ${current.trackingCode ?? current.shopifyOrderId ?? snap.id}`,
       createdAt: now
     });
+    // Spec 029 (RF_16): el diff de campos registrados, en el mismo commit y enlazado a su evento.
+    const historyRecord = buildOrderHistoryRecord(current, { ...current, ...updated }, {
+      orderId: snap.id,
+      sellerId,
+      origin: "panel",
+      action: "order.retry_confirmed",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { id: snap.id, ...updated };
   });
 
@@ -743,6 +754,21 @@ export const updateOrderAdjustments = onCall(async (request) => {
       summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} ajustado: producto/recaudo/cantidad`,
       createdAt: now
     });
+    // Spec 029 (RF_16). `after` superpone el parche al leido: el set es merge, asi que un campo que
+    // stripUndefined quito del parche conserva su valor en el documento y no cuenta como cambio.
+    const historyRecord = buildOrderHistoryRecord(current, { ...current, ...updated }, {
+      orderId: snap.id,
+      sellerId,
+      origin: "panel",
+      action: "order.adjusted",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { id: snap.id, ...updated };
   });
 
@@ -867,14 +893,43 @@ export const createOrUpdatePickupBatch = onCall(async (request) => {
     };
     transaction.set(batchRef, batch);
     for (const { snap, data } of orders) {
-      transaction.set(snap.ref, {
+      const pickedUp = {
         ...data,
         driverId: driverClaim,
         pickupBatchId: batch.id,
         pickedUpAt: now,
         status: "picked_up",
         updatedAt: now
-      }, { merge: true });
+      };
+      transaction.set(snap.ref, pickedUp, { merge: true });
+      // Spec 029 (RF_16): la recogida queda como evento propio (sin identidades: la tienda lo lee) y su diff
+      // en orderHistory, en el mismo commit que el pedido.
+      const auditRef = newAuditRef(db);
+      transaction.set(auditRef, {
+        id: auditRef.id,
+        actorId: request.auth?.uid,
+        actorRole: role,
+        action: "order.picked_up",
+        entity: "order",
+        entityId: snap.id,
+        fromStatus: String(data.status ?? ""),
+        toStatus: "picked_up",
+        summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} recogido`,
+        createdAt: now
+      });
+      const historyRecord = buildOrderHistoryRecord(data, pickedUp, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: "order.picked_up",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: auditRef.id
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+      }
     }
     return { pickupBatch: batch };
   });
@@ -917,8 +972,10 @@ export const assignMessengerToOrders = onCall(async (request) => {
         updatedAt: now
       };
       transaction.set(snap.ref, updated, { merge: true });
+      let reassignAuditId: string | undefined;
       if (previousMessengerId && previousMessengerId !== parsed.data.messengerId) {
         const auditRef = newAuditRef(db);
+        reassignAuditId = auditRef.id;
         transaction.set(auditRef, {
           id: auditRef.id,
           actorId: request.auth?.uid,
@@ -929,6 +986,21 @@ export const assignMessengerToOrders = onCall(async (request) => {
           summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} reasignado de mensajero ${previousMessengerId} a ${parsed.data.messengerId} por el lider logistico`,
           createdAt: now
         });
+      }
+      // Spec 029 (RF_16): solo `status` es campo registrado (messengerId no), asi que hay registro solo cuando
+      // el pedido pasa de picked_up a call_pending. Ese caso no escribe auditEvent salvo reasignacion.
+      const historyRecord = buildOrderHistoryRecord(data, updated, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: reassignAuditId ? "order.messenger_reassigned" : "order.messenger_assigned",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: reassignAuditId
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
       }
       return updated;
     });
@@ -983,6 +1055,20 @@ export const unassignMessengerFromOrders = onCall(async (request) => {
         summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} devuelto a pendiente de mensajero (antes: ${previousMessengerId}) por el lider logistico`,
         createdAt: now
       });
+      // Spec 029 (RF_16): registro solo si cambia `status` (un pedido ya en picked_up no deja diff).
+      const historyRecord = buildOrderHistoryRecord(data, updated, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: "order.messenger_unassigned",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: auditRef.id
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+      }
       return updated;
     });
     return { orders: updatedOrders };
@@ -1001,64 +1087,19 @@ export const cancelOrder = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Invalid cancel order data.", parsed.error.flatten());
   }
 
-  const db = getFirestore();
-  const orderRef = db.collection("orders").doc(parsed.data.orderId);
-  const now = new Date().toISOString();
-  const collectedStatuses = new Set(["call_pending", "scheduled", "pickup_pending", "picked_up", "in_route", "retry_pending"]);
-  const closedStatuses = new Set(["delivered", "failed", "cancelled", "liquidated"]);
-
-  const order = await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(orderRef);
-    if (!snap.exists) throw new HttpsError("not-found", "Order not found.");
-    const current = snap.data() ?? {};
-    const sellerId = String(current.sellerId ?? "");
-    const status = String(current.status ?? "");
-    if ((role === "seller" || role === "seller_logistics") && sellerId !== sellerClaim) {
-      throw new HttpsError("permission-denied", "Sellers can only cancel their own orders.");
-    }
-    if (closedStatuses.has(status)) {
-      throw new HttpsError("failed-precondition", "Closed orders cannot be cancelled.");
-    }
-    if ((role === "seller" || role === "seller_logistics") && collectedStatuses.has(status)) {
-      throw new HttpsError("failed-precondition", "This order was already collected. Only an admin can cancel it.");
-    }
-
-    // Solo libera quien reservo. Un pedido `imported` nunca reservo (cinturon y tirantes).
-    const movements = orderOwnsInventoryReservation(current) && status !== "imported"
-      ? inventoryMovementsForOrder(current)
-      : [];
-    const inventoryIndex = movements.length > 0 && sellerId
-      ? await readSellerInventoryIndex(transaction, db.collection("inventory"), sellerId)
-      : null;
-    if (inventoryIndex) applyInventoryMovements(transaction, inventoryIndex, movements, "release", now);
-
-    const updated = stripUndefined({
-      ...current,
-      status: "cancelled",
-      closedAt: now,
-      driverId: current.driverId ?? null,
-      callNote: parsed.data.reason?.trim() || current.callNote,
-      updatedAt: now
-    });
-    transaction.set(orderRef, updated, { merge: true });
-    const auditRef = newAuditRef(db);
-    transaction.set(auditRef, {
-      id: auditRef.id,
-      actorId: request.auth?.uid,
-      actorRole: role,
-      action: "order.cancelled",
-      entity: "order",
-      entityId: snap.id,
-      fromStatus: String(current.status ?? ""),
-      toStatus: "cancelled",
-      summary: `Pedido ${current.trackingCode ?? current.shopifyOrderId ?? snap.id} anulado por ${role === "admin" ? "admin" : role === "seller_logistics" ? "logistico tienda" : "vendedor"}`,
-      createdAt: now
-    });
-    return { id: snap.id, ...updated };
+  // Spec 029 (RF_19): estados cerrados, pedidos ya recogidos, liberacion de inventario, parche
+  // (incluido conservar el lider), evento e historial los decide el nucleo con politica `panel`.
+  const result = await runCancel(sellerActionDeps(), {
+    orderId: parsed.data.orderId,
+    policy: "panel",
+    actor: panelActor(request.auth.uid, role, sellerClaim),
+    input: { reason: parsed.data.reason },
+    now: new Date().toISOString()
   });
 
-  return { order };
+  return { order: panelOrderOrThrow(result, "Invalid cancel order data.") };
 });
+
 
 export const reconcileInventoryReservations = onCall(async (request) => {
   const role = request.auth?.token.role;
@@ -1215,11 +1256,12 @@ export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
       transaction.set(db.collection("walletEntries").doc(entry.id), entry, { merge: true });
     }
 
+    const closeAction = nextStatus === "delivered" ? "order.delivered" : nextStatus === "failed" ? "order.failed" : "order.retry_scheduled";
     transaction.set(auditRef, {
       id: auditRef.id,
       actorId: request.auth?.uid,
       actorRole: role,
-      action: nextStatus === "delivered" ? "order.delivered" : nextStatus === "failed" ? "order.failed" : "order.retry_scheduled",
+      action: closeAction,
       entity: "order",
       entityId: input.orderId,
       fromStatus: String(order.status ?? ""),
@@ -1227,6 +1269,20 @@ export const closeOrder = onCall({ memory: "512MiB" }, async (request) => {
       summary: nextStatus === "delivered" ? "Pedido entregado y wallet actualizada" : nextStatus === "failed" ? "Pedido fallido y wallet actualizada" : "Visita reagendada por el cliente",
       createdAt: now
     });
+    // Spec 029 (RF_16). `after` = lo que queda en el documento tras el merge de `nextOrder`.
+    const historyRecord = buildOrderHistoryRecord(order, { ...order, ...nextOrder }, {
+      orderId: input.orderId,
+      sellerId: String(order.sellerId ?? ""),
+      origin: "panel",
+      action: closeAction,
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
 
     return { order: nextOrder, walletEntries };
   });
@@ -2123,6 +2179,20 @@ export const applyOrderTransition = onCall({ memory: "512MiB" }, async (request)
       summary: `Transicion ${order.status} -> ${patch.status ?? order.status}`,
       createdAt: now
     });
+    // Spec 029 (RF_16): el parche es merge, asi que el estado final es el leido con `clean` encima.
+    const historyRecord = buildOrderHistoryRecord(order, { ...order, ...clean }, {
+      orderId,
+      sellerId: String(order.sellerId ?? ""),
+      origin: "panel",
+      action: "order.transition",
+      actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+      now,
+      auditEventId: auditRef.id
+    });
+    if (historyRecord) {
+      const historyRef = db.collection("orderHistory").doc();
+      transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+    }
     return { ok: true, order: { ...order, ...clean, id: orderId } };
   });
 });
@@ -2238,33 +2308,36 @@ export const getOrderAuditTrail = onCall(async (request) => {
   }
 
   // Igualdad simple sobre un campo: usa el indice automatico, sin indice compuesto. El orden
-  // se resuelve en memoria porque son pocas decenas de eventos por pedido.
-  const snap = await db.collection("auditEvents").where("entityId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get();
+  // se resuelve en memoria (en buildAuditTrailResponse) porque son pocas decenas de eventos por pedido.
+  const [snap, historySnap, storeApiSnap] = await Promise.all([
+    db.collection("auditEvents").where("entityId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get(),
+    // Spec 029 (plan 2.7): une por `auditEventId` los cambios campo a campo y verifica los eventos.
+    db.collection("orderHistory").where("orderId", "==", orderId).limit(AUDIT_TRAIL_LIMIT).get(),
+    db.collection("settings").doc("storeApi").get()
+  ]);
+  // R1-RF_27-1: el id sale del documento, no del cuerpo. auditEvents admite create a cualquier sesion,
+  // asi que un `id` en el cuerpo podria suplantar el de un evento verificado por orderHistory.
   const rows = snap.docs
-    .map((doc) => doc.data())
-    .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))))
-    .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+    .map((doc) => ({ ...doc.data(), id: doc.id }) as Record<string, unknown>)
+    .filter((row) => !(role === "seller_logistics" && FINANCIAL_AUDIT_ACTIONS.has(String(row.action ?? ""))));
+  const history = historySnap.docs.map((doc) => doc.data());
+  const rawHistorySince = storeApiSnap.exists ? storeApiSnap.data()?.historySince : undefined;
+  const historySince = typeof rawHistorySince === "string" && rawHistorySince ? rawHistorySince : null;
 
-  const actors = await resolveAuditActors([...new Set(rows.map((row) => String(row.actorId ?? "unknown")))]);
+  // RF_27: para la tienda la identidad no se oculta despues de resolverla: no se resuelve.
+  const esTienda = role === "seller" || role === "seller_logistics";
+  let actors: Map<string, ResolvedActor> | undefined;
+  let sellerName = "";
+  if (!esTienda) {
+    actors = await resolveAuditActors([...new Set(rows.map((row) => String(row.actorId ?? "unknown")))]);
+    if (role === "admin") {
+      const sellerId = typeof order.sellerId === "string" ? order.sellerId : "";
+      const sellerSnap = sellerId ? await db.collection("sellers").doc(sellerId).get() : null;
+      sellerName = String(sellerSnap?.data()?.name ?? (sellerId || "la tienda"));
+    }
+  }
 
-  const events = rows.map((row) => {
-    const actorId = String(row.actorId ?? "unknown");
-    const actor = actors.get(actorId);
-    return stripUndefined({
-      id: String(row.id ?? ""),
-      createdAt: String(row.createdAt ?? ""),
-      action: String(row.action ?? ""),
-      actorId,
-      actorLabel: actor?.label ?? actorId,
-      actorEmail: actor?.email,
-      actorRole: typeof row.actorRole === "string" ? row.actorRole : undefined,
-      fromStatus: typeof row.fromStatus === "string" ? row.fromStatus : undefined,
-      toStatus: typeof row.toStatus === "string" ? row.toStatus : undefined,
-      summary: typeof row.summary === "string" ? row.summary : ""
-    });
-  });
-
-  return { events };
+  return buildAuditTrailResponse({ role, events: rows, history, historySince, sellerName, actors });
 });
 
 const requestSellerPayoutSchema = z.object({

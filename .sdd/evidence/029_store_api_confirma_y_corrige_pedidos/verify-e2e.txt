@@ -1,0 +1,174 @@
+# Spec 029 — verify E2E contra la app desplegada (2026-10-05T06:51:06.162Z)
+  https://kentro-last-mile.web.app · solo datos de seller-test-029
+
+  Pedido de prueba KNT-006217 (ord-knt-006217) · PATCH por Store API changed=true · clave termina en 8zC2
+
+## RF_26/movil-375-tienda — PASA
+  HU_04 tienda: sin clave -> Generar -> recien generada -> Ya la guarde -> activa -> Rotar (dialogo) -> error forzado -> Reintentar
+  OK    T23: 3 botones "?" en Integraciones, todos >= 44x44 (Conexion con Shopify 44x44; Clave de API 44x44; Importar pedido 44x44)
+  OK    sin clave: pildora "Sin clave de escritura" y boton "Generar clave de escritura"
+  OK    sin clave: texto de la decision 3
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso "Solo se muestra completa esta vez" y "Si sales sin copiarla..."
+  OK    el foco queda en "Copiar clave de escritura"
+  OK    "Copiar" anuncia "Copiada"
+  OK    activa: "Termina en vvtS" y "Generada por Tu tienda"
+  OK    tras 'Ya la guarde' la clave no esta en el DOM ni en localStorage/sessionStorage
+  OK    dialogo "Rotar la clave de escritura": el foco entra en "Cancelar"
+  OK    el dialogo nombra la clave que termina en vvtS
+  OK    Escape cierra el dialogo y el foco vuelve a Rotar
+  OK    error: "La que termina en vvtS sigue activa. No se genero ninguna clave nueva." y "Reintentar"
+  OK    con el fallo la clave guardada sigue siendo la misma (writeKeyLast4=vvtS)
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    tras rotar: "La clave que terminaba en vvtS ya no funciona."
+  OK    la clave rotada es distinta
+  consola: 2 errores (no contemplados 0) · red 4xx/5xx/fallidas: 2 (no contempladas 0) · secretos tapados en trace: 18
+
+## RF_26/escritorio-1280-tienda — PASA
+  HU_04 tienda: sin clave -> Generar -> recien generada -> Ya la guarde -> activa -> Rotar (dialogo) -> error forzado -> Reintentar
+  OK    T23: 3 botones "?" en Integraciones, todos >= 44x44 (Conexion con Shopify 44x44; Clave de API 44x44; Importar pedido 44x44)
+  OK    sin clave: pildora "Sin clave de escritura" y boton "Generar clave de escritura"
+  OK    sin clave: texto de la decision 3
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso "Solo se muestra completa esta vez" y "Si sales sin copiarla..."
+  OK    el foco queda en "Copiar clave de escritura"
+  OK    "Copiar" anuncia "Copiada"
+  OK    activa: "Termina en BoWw" y "Generada por Tu tienda"
+  OK    tras 'Ya la guarde' la clave no esta en el DOM ni en localStorage/sessionStorage
+  OK    dialogo "Rotar la clave de escritura": el foco entra en "Cancelar"
+  OK    el dialogo nombra la clave que termina en BoWw
+  OK    Escape cierra el dialogo y el foco vuelve a Rotar
+  OK    error: "La que termina en BoWw sigue activa. No se genero ninguna clave nueva." y "Reintentar"
+  OK    con el fallo la clave guardada sigue siendo la misma (writeKeyLast4=BoWw)
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    tras rotar: "La clave que terminaba en BoWw ya no funciona."
+  OK    la clave rotada es distinta
+  consola: 2 errores (no contemplados 0) · red 4xx/5xx/fallidas: 2 (no contempladas 0) · secretos tapados en trace: 18
+
+## RF_26/movil-375-logistico — PASA
+  HU_04 seller_logistics: ve el estado de la clave de escritura sin botones
+  OK    T23: 3 botones "?" en Integraciones, todos >= 44x44 (Conexion con Shopify 44x44; Clave de API 44x44; Importar pedido 44x44)
+  OK    la seccion de escritura no tiene botones (encontrados: ninguno)
+  OK    dice "Solo la cuenta principal de la tienda o Kentro pueden generarla."
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 11
+
+## RF_26/escritorio-1280-logistico — PASA
+  HU_04 seller_logistics: ve el estado de la clave de escritura sin botones
+  OK    T23: 3 botones "?" en Integraciones, todos >= 44x44 (Conexion con Shopify 44x44; Clave de API 44x44; Importar pedido 44x44)
+  OK    la seccion de escritura no tiene botones (encontrados: ninguno)
+  OK    dice "Solo la cuenta principal de la tienda o Kentro pueden generarla."
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 11
+
+## RF_25/movil-375-admin — FALLA
+  HU_04 admin: panel "Claves de API de tiendas", buscar, generar desde la fila -> recien generada
+  OK    T23: Integraciones del admin no tiene botones "?" (sus paneles no llevan ayuda)
+  OK    resumen "N de M tiendas con clave de escritura"
+  OK    movil: tarjetas "Claves de API por tienda"
+  OK    buscar "test-029" deja la fila de la tienda de pruebas con "Generar"
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso de admin: "Entregala a la tienda por un canal seguro" y "Queda registrado que la generaste tu"
+  OK    aviso mudo "Si cierras sin copiarla, tendras que rotarla."
+  OK    la fila pasa a "Activa · termina en E4j4"
+  FALLA "Generada" no duplica la preposicion ("por por ...")
+  OK    la fila ofrece ahora "Rotar clave de escritura de Tienda de pruebas test-029"
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 16
+
+## RF_25/escritorio-1280-admin — FALLA
+  HU_04 admin: panel "Claves de API de tiendas", buscar, generar desde la fila -> recien generada
+  OK    T23: Integraciones del admin no tiene botones "?" (sus paneles no llevan ayuda)
+  OK    resumen "N de M tiendas con clave de escritura"
+  OK    escritorio: tabla "Claves de API por tienda"
+  OK    buscar "test-029" deja la fila de la tienda de pruebas con "Generar"
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso de admin: "Entregala a la tienda por un canal seguro" y "Queda registrado que la generaste tu"
+  OK    aviso mudo "Si cierras sin copiarla, tendras que rotarla."
+  OK    la fila pasa a "Activa · termina en _2px"
+  FALLA "Generada" no duplica la preposicion ("por por ...")
+  OK    la fila ofrece ahora "Rotar clave de escritura de Tienda de pruebas test-029"
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 16
+
+## RF_27/movil-375-tienda — PASA
+  HU_05 tienda: pildoras Tu tienda/API, Antes/Ahora, nota de alcance, sin identidades
+  OK    nota de alcance "Que incluye el historial" con "Campo por campo desde el ..."
+  OK    evento "Datos de entrega corregidos" con pildora "API"
+  OK    evento "Creado a mano" con pildora "Tu tienda"
+  OK    "Antes" y "Ahora" escritos, con "Cliente" corregido
+  OK    sin identidades: ni uid, ni correo, ni rol, ni nombre de usuario
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 12
+
+## RF_27/escritorio-1280-tienda — PASA
+  HU_05 tienda: pildoras Tu tienda/API, Antes/Ahora, nota de alcance, sin identidades
+  OK    nota de alcance "Que incluye el historial" con "Campo por campo desde el ..."
+  OK    evento "Datos de entrega corregidos" con pildora "API"
+  OK    evento "Creado a mano" con pildora "Tu tienda"
+  OK    "Antes" y "Ahora" escritos, con "Cliente" corregido
+  OK    sin identidades: ni uid, ni correo, ni rol, ni nombre de usuario
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 12
+
+## RF_27/movil-375-admin — PASA
+  HU_05 admin: linea de quien, Panel/API, 'Clave de escritura de <tienda>'
+  OK    pildoras "API" y "Panel"
+  OK    linea de quien de la API: "Clave de escritura de Tienda de pruebas test-029"
+  OK    "termina en 8zC2" (que clave era)
+  OK    linea de quien del panel con correo y rol (seller)
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 14
+
+## RF_27/escritorio-1280-admin — PASA
+  HU_05 admin: linea de quien, Panel/API, 'Clave de escritura de <tienda>'
+  OK    pildoras "API" y "Panel"
+  OK    linea de quien de la API: "Clave de escritura de Tienda de pruebas test-029"
+  OK    "termina en 8zC2" (que clave era)
+  OK    linea de quien del panel con correo y rol (seller)
+  OK    escritorio: mini tabla Campo/Antes/Ahora
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 14
+
+## RF_17/movil-375-vacio — PASA
+  HU_05 vacio (forzado con page.route): nota de alcance y 'Sin cambios registrados'
+  OK    vacio: nota "Que incluye el historial" y status "Sin cambios registrados ... desde el ..."
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 12
+
+## RF_17/escritorio-1280-vacio — PASA
+  HU_05 vacio (forzado con page.route): nota de alcance y 'Sin cambios registrados'
+  OK    vacio: nota "Que incluye el historial" y status "Sin cambios registrados ... desde el ..."
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 12
+
+## RF_17/movil-375-error — PASA
+  HU_05 error (forzado con page.route): alerta y Reintentar, sin nota
+  OK    error: "No se pudo cargar el historial", "El pedido no ha cambiado por esto." y "Reintentar"
+  OK    error: sin nota de alcance ni eventos
+  OK    Reintentar vuelve a pedir y pinta los eventos
+  consola: 3 errores (no contemplados 0) · red 4xx/5xx/fallidas: 2 (no contempladas 0) · secretos tapados en trace: 13
+
+## RF_17/escritorio-1280-error — PASA
+  HU_05 error (forzado con page.route): alerta y Reintentar, sin nota
+  OK    error: "No se pudo cargar el historial", "El pedido no ha cambiado por esto." y "Reintentar"
+  OK    error: sin nota de alcance ni eventos
+  OK    Reintentar vuelve a pedir y pinta los eventos
+  consola: 3 errores (no contemplados 0) · red 4xx/5xx/fallidas: 2 (no contempladas 0) · secretos tapados en trace: 13
+
+## Limpieza
+  cleanup orderHistory: borrados=1 · quedan=0
+  cleanup walletEntries: borrados=0 · quedan=0
+  cleanup auditEvents: borrados=10 · quedan=0
+  cleanup storeWebhookSamples: borrados=0 · quedan=0
+  cleanup shopifySyncIssues: borrados=0 · quedan=0
+  cleanup storeApiIdempotency: borrados=1 · quedan=0
+  cleanup storeApiRateLimits: borrados=1 · quedan=0
+  cleanup importRuns: borrados=0 · quedan=0
+  cleanup orders: borrados=1 · quedan=0
+  cleanup storeWebhookConfigs: borrados=0 · quedan=0
+  cleanup shopifyStores: borrados=0 · quedan=0
+  cleanup inventory: borrados=0 · quedan=0
+  cleanup productCatalog: borrados=0 · quedan=0
+  cleanup storeApiConfigs: borrados=1 · quedan=0
+  cleanup authUsers: borrados=3 · quedan=0
+  cleanup sellers: borrados=1 · quedan=0
+  cleanup: sin error del modo cleanup -> cero en todas las colecciones
+  t27-registro.json restaurado e igual a HEAD: si
+
+Secretos en la evidencia: ninguno
+VERIFY FALLIDA
+
+## ADDENDA 2026-10-05T12:07Z — RF_25 admin repetido tras T33 (hosting a7cabf6)
+  RF_25/movil-375-admin: PASA · RF_25/escritorio-1280-admin: PASA ("por Prueba 029 admin" una sola vez)
+  Detalle en verify-e2e-RF_25.txt. Veredicto global de la verificacion: 14/14 recorridos OK.

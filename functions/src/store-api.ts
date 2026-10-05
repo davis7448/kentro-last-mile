@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
@@ -11,7 +11,25 @@ import {
   type SettlementDoc,
   type WalletEntryDoc
 } from "./seller-ledger";
-import { buildStoreSummary, chargeMagnitude, STORE_BALANCE_NOTICE, sumType } from "./store-summary";
+import { resolveStoreCredentials } from "./store-api-auth";
+import { buildStoreApiIndexAdditions } from "./store-api-history";
+import { computeKpis, inRange } from "./store-api-orders";
+import {
+  isValidShopifyOrderId,
+  routeStoreApiRequest,
+  type StoreApiNewRoute,
+  validateQueryParameters
+} from "./store-api-request";
+import {
+  handleStoreApiWrite,
+  listStoreOrdersByShopifyOrderId,
+  readHistorySince,
+  readStoreOrder,
+  readStoreOrderHistory,
+  storeOrderItem,
+  type StoreApiWriteRouteName
+} from "./store-api-write";
+import { buildStoreSummary, STORE_BALANCE_NOTICE } from "./store-summary";
 
 /**
  * API de solo lectura para tiendas (sellers).
@@ -30,12 +48,6 @@ const createStoreApiKeySchema = z.object({
   sellerId: z.string().min(1),
   rotate: z.boolean().optional()
 });
-
-function safeEqual(left: string, right: string) {
-  const leftBuffer = Buffer.from(left, "utf8");
-  const rightBuffer = Buffer.from(right, "utf8");
-  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
 
 export const createStoreApiKey = onCall(async (request) => {
   const role = request.auth?.token.role;
@@ -94,200 +106,114 @@ export const createStoreApiKey = onCall(async (request) => {
 });
 
 
+type StoreApiHttpRequest = {
+  method: string;
+  path: string;
+  query: Record<string, unknown>;
+  get(name: string): string | undefined;
+  /** Cuerpo crudo, como lo deja Cloud Functions: las escrituras lo parsean ellas mismas. */
+  rawBody?: Buffer;
+};
 
-// Misma semántica que orderDateValue() de la UI.
-function orderDateValue(order: OrderDoc) {
-  return String(order.createdAt || order.updatedAt || "").slice(0, 10);
+type StoreApiHttpResponse = {
+  status(code: number): StoreApiHttpResponse;
+  json(body: unknown): unknown;
+  set(name: string, value: string): unknown;
+};
+
+export type StoreApiDeps = {
+  db: Firestore;
+  now?: () => Date;
+  /** Borrado de campos que recibe el ejecutor de escrituras; por defecto el de produccion. */
+  deleteField?: () => unknown;
+};
+
+const productionDeleteField = (): unknown => FieldValue.delete();
+
+function isWriteRoute(route: StoreApiNewRoute): route is StoreApiWriteRouteName {
+  return route === "order_confirm" || route === "order_patch" || route === "order_cancel";
 }
 
-function inRange(order: OrderDoc, from: string, to: string) {
-  const date = orderDateValue(order);
-  if (from && date && date < from) return false;
-  if (to && date && date > to) return false;
-  return true;
-}
+/**
+ * Handler de `storeApi` con el `db` inyectable (spec 029 T10). Orden de la precedencia (plan 2.1): ruta y
+ * metodo → credenciales (`resolveStoreCredentials`, unica regla de keys) → parametros → recurso.
+ */
+export async function handleStoreApiRequest(
+  request: StoreApiHttpRequest,
+  response: StoreApiHttpResponse,
+  deps: StoreApiDeps
+): Promise<void> {
+  // Paso 0: ruta y metodo. Las rutas de hoy conservan su 405 con la forma vieja.
+  const match = routeStoreApiRequest({ method: request.method, path: request.path || "/" });
+  if (!match.ok) {
+    if (match.allow) response.set("Allow", match.allow);
+    response.status(match.httpStatus).json(match.body);
+    return;
+  }
+  const db = deps.db;
+  // Pasos 1-2. Como hoy, la key de query manda sobre la Bearer (`query ?? bearer`).
+  const rawSellerId = String(request.query.sellerId ?? "");
+  const sellerIdForLookup = rawSellerId.trim();
+  const configSnap = sellerIdForLookup ? await db.collection("storeApiConfigs").doc(sellerIdForLookup).get() : null;
+  const config = (configSnap?.exists ? configSnap.data() : null) ?? null;
+  const credentials = resolveStoreCredentials({
+    route: match.access,
+    querySellerId: rawSellerId,
+    queryKey: request.query.key == null ? undefined : String(request.query.key),
+    bearer: request.get("authorization")?.replace(/^Bearer\s+/i, ""),
+    config
+  });
+  if (!credentials.ok) {
+    response.status(credentials.httpStatus).json(credentials.body);
+    return;
+  }
+  const sellerId = credentials.sellerId;
+  const sellerName = config?.sellerName ?? sellerId;
 
-// Misma semántica que isChargeableFailedOrder() de src/lib/finance.ts.
-function isChargeableFailed(order: OrderDoc) {
-  return order.status === "failed" && String(order.failedCategory ?? "failed_visit") === "failed_visit";
-}
-
-const PICKED_BY_DRIVER_STATUSES = new Set(["call_pending", "scheduled", "picked_up", "in_route", "retry_pending", "delivered", "failed", "liquidated"]);
-
-// Clasificación operativa por pedido, alineada con LogisticsKpis.
-function classifyOrder(order: OrderDoc) {
-  const takenByDriver = Boolean(order.driverId) && PICKED_BY_DRIVER_STATUSES.has(String(order.status));
-  const noCoverageFailed = order.status === "failed" && order.failedCategory === "no_coverage";
-  const badOrderFailed = order.status === "failed" && order.failedCategory === "bad_order_or_no_contact";
-  const badPhoneFailed = order.status === "failed" && order.failedCategory === "bad_phone";
-  const dispatchable = takenByDriver && !noCoverageFailed && !badOrderFailed && !badPhoneFailed;
-  return {
-    takenByDriver,
-    dispatchable,
-    delivered: order.status === "delivered",
-    failed: order.status === "failed",
-    chargeableFailed: isChargeableFailed(order),
-    noCoverageFailed,
-    badOrderFailed,
-    badPhoneFailed,
-    closed: ["delivered", "failed", "cancelled", "liquidated"].includes(String(order.status))
-  };
-}
-
-// Réplica exacta de LogisticsKpis (operations-app.tsx).
-function computeKpis(orders: OrderDoc[]) {
-  const total = orders.length;
-  const pendingConfirm = orders.filter((o) => o.status === "imported" || o.status === "address_risk").length;
-  const readyWithoutLeader = orders.filter((o) => o.status === "ready_to_assign" && !o.driverId).length;
-  const assignedPendingPickup = orders.filter((o) => o.status === "assigned").length;
-  const pickedWithoutMessenger = orders.filter((o) => o.status === "picked_up" && !o.messengerId).length;
-  const inOperation = orders.filter((o) => ["call_pending", "scheduled", "in_route", "retry_pending"].includes(String(o.status)) || (o.status === "picked_up" && Boolean(o.messengerId))).length;
-  const delivered = orders.filter((o) => o.status === "delivered").length;
-  const failed = orders.filter((o) => o.status === "failed").length;
-  const chargeableFailed = orders.filter(isChargeableFailed).length;
-  const noCoverageFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "no_coverage").length;
-  const badOrderFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "bad_order_or_no_contact").length;
-  const badPhoneFailed = orders.filter((o) => o.status === "failed" && o.failedCategory === "bad_phone").length;
-  const cancelled = orders.filter((o) => o.status === "cancelled").length;
-  const liquidated = orders.filter((o) => o.status === "liquidated").length;
-  const pickedByDriver = orders.filter((o) => o.driverId && PICKED_BY_DRIVER_STATUSES.has(String(o.status))).length;
-  const dispatchable = Math.max(0, pickedByDriver - noCoverageFailed - badOrderFailed - badPhoneFailed);
-  const dispatchRate = pickedByDriver > 0 ? Math.round((dispatchable / pickedByDriver) * 100) : 0;
-  const closedDispatchable = delivered + chargeableFailed + liquidated;
-  const openDispatchable = Math.max(0, dispatchable - closedDispatchable);
-  const completionRate = dispatchable > 0 ? Math.round((closedDispatchable / dispatchable) * 100) : 0;
-  const deliveryRate = dispatchable > 0 ? Math.round((delivered / dispatchable) * 100) : 0;
-  const returnRate = dispatchable > 0 ? Math.round((chargeableFailed / dispatchable) * 100) : 0;
-  return {
-    totalPedidos: total,
-    embudo: {
-      pendienteConfirmar: pendingConfirm,
-      listoSinLider: readyWithoutLeader,
-      asignadoPendienteRecoger: assignedPendingPickup,
-      recogidoSinMensajero: pickedWithoutMessenger,
-      enGestionORuta: inOperation,
-      entregados: delivered,
-      fallidos: failed,
-      cancelados: cancelled,
-      liquidados: liquidated
-    },
-    indicadores: {
-      tomadosPorDomiciliario: pickedByDriver,
-      despachables: dispatchable,
-      abiertosDespachables: openDispatchable,
-      porcentajeDespacho: dispatchRate,
-      porcentajeTerminacion: completionRate,
-      porcentajeEntrega: deliveryRate,
-      porcentajeDevolucion: returnRate
-    },
-    fallidosPorCategoria: {
-      fallidoConVisita: chargeableFailed,
-      sinCobertura: noCoverageFailed,
-      pedidoMaloNoContesta: badOrderFailed,
-      sinTelefonoLineaInactiva: badPhoneFailed
-    },
-    formulas: {
-      tomadosPorDomiciliario: "pedidos con domiciliario asignado en estado llamada/agendado/recogido/en ruta/reintento/entregado/fallido/liquidado",
-      despachables: "tomados por domiciliario menos fallidos sin cobertura, pedido malo/no contesta y sin telefono/linea inactiva",
-      porcentajeDespacho: "despachables / tomados por domiciliario",
-      porcentajeTerminacion: "(entregados + fallidos con visita + liquidados) / despachables",
-      porcentajeEntrega: "entregados / despachables",
-      porcentajeDevolucion: "fallidos con visita / despachables"
-    }
-  };
-}
-
-
-function buildPaymentInfo(
-  order: OrderDoc,
-  sellerEntries: WalletEntryDoc[],
-  settlementsById: Map<string, SettlementDoc>,
-  codReceived: Set<string>
-) {
-  const entries = sellerEntries.filter((entry) => entry.orderId === order.id && entry.type !== "platform_margin");
-  const netCop = Math.round(entries.reduce((sum, entry) => sum + Number(entry.amountCop || 0), 0));
-  const settlementIds = Array.from(new Set(entries.map((entry) => entry.settlementId).filter(Boolean))) as string[];
-  const unsettledCount = entries.filter((entry) => !entry.settlementId).length;
-  const settlementStatuses = settlementIds.map((id) => String(settlementsById.get(id)?.status ?? "desconocido"));
-  const allSettled = entries.length > 0 && unsettledCount === 0;
-  const allPaid = allSettled && settlementStatuses.every((status) => status === "paid" || status === "reconciled");
-  const eligible = order.paymentMethod === "prepaid" || codReceived.has(String(order.id));
-  const estado = entries.length === 0
-    ? "sin_movimientos"
-    : allPaid
-      ? "pagado"
-      : allSettled
-        ? "en_liquidacion"
-        : eligible
-          ? "pendiente_habilitado"
-          : "pendiente_bloqueado_cod";
-  return {
-    estado,
-    pagado: allPaid,
-    habilitadoParaPago: eligible,
-    netoCop: netCop,
-    // Desglose real por pedido para que la tienda no asuma el flete (13.500/12.000).
-    desglose: {
-      codCop: sumType(entries, ["cod_revenue", "cod_remittance"]),
-      fleteCop: chargeMagnitude(entries, ["delivery_fee"]),
-      failedFeeCop: chargeMagnitude(entries, ["failed_fee"]),
-      fulfillmentCop: chargeMagnitude(entries, ["fulfillment_fee"]),
-      costoProductoCop: chargeMagnitude(entries, ["product_cost"])
-    },
-    movimientos: entries.length,
-    movimientosSinLiquidar: unsettledCount,
-    settlementIds,
-    settlements: settlementIds.map((id) => ({
-      id,
-      status: String(settlementsById.get(id)?.status ?? "desconocido"),
-      paidAt: settlementsById.get(id)?.paidAt ?? null
-    }))
-  };
-}
-
-function orderPayload(order: OrderDoc) {
-  return {
-    id: order.id,
-    trackingCode: order.trackingCode ?? null,
-    shopifyOrderId: order.shopifyOrderId ?? null,
-    status: order.status,
-    failedCategory: order.failedCategory ?? null,
-    failedReason: order.failedReason ?? null,
-    paymentMethod: order.paymentMethod ?? null,
-    totalCop: Math.round(Number(order.totalCop || 0)),
-    customerName: order.customerName ?? null,
-    createdAt: order.createdAt ?? null,
-    updatedAt: order.updatedAt ?? null,
-    fecha: orderDateValue(order)
-  };
-}
-
-export const storeApi = onRequest(async (request, response) => {
-  if (request.method !== "GET") {
-    response.set("Allow", "GET");
-    response.status(405).json({ ok: false, error: "method_not_allowed" });
+  // Paso 3 (solo rutas nuevas; las viejas no validan parametros).
+  const parameters = validateQueryParameters(match, request.query);
+  if (!parameters.ok) {
+    response.status(parameters.httpStatus).json(parameters.body);
     return;
   }
 
-  // Ruta: /kpis | /orders | /settlements (con o sin el prefijo del nombre de la función).
-  const path = (request.path || "/").replace(/^\/storeApi/, "") || "/";
-  const resource = path.replace(/^\/+|\/+$/g, "") || "docs";
-
-  const sellerId = String(request.query.sellerId ?? "").trim();
-  const suppliedKey = String(request.query.key ?? request.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "");
-  if (!sellerId || !suppliedKey) {
-    response.status(401).json({ ok: false, error: "missing_credentials", hint: "sellerId y key (query) o Authorization: Bearer <key>" });
+  if (match.kind === "new" && isWriteRoute(match.route)) {
+    // Escrituras (T11, T12): el resto de la precedencia (cabecera Idempotency-Key y cuerpo, tasa, atajo de
+    // idempotencia, ejecutor) vive en store-api-write.ts.
+    const reply = await handleStoreApiWrite(
+      { db, deleteField: deps.deleteField ?? productionDeleteField },
+      {
+        route: match.route,
+        method: request.method,
+        orderId: match.orderId,
+        sellerId,
+        keyLast4: credentials.keyLast4,
+        rawBody: request.rawBody,
+        idempotencyKey: request.get("idempotency-key"),
+        now: (deps.now ? deps.now() : new Date()).toISOString()
+      }
+    );
+    // `Retry-After` del 429 (paso 3a).
+    for (const [name, value] of Object.entries(reply.headers ?? {})) response.set(name, value);
+    response.status(reply.httpStatus).json(reply.body);
     return;
   }
 
-  const db = getFirestore();
-  const configSnap = await db.collection("storeApiConfigs").doc(sellerId).get();
-  const config = configSnap.data() ?? {};
-  const expectedKey = String(config.apiKey ?? "");
-  if (!configSnap.exists || config.status !== "active" || !expectedKey || !safeEqual(suppliedKey, expectedKey)) {
-    response.status(401).json({ ok: false, error: "invalid_key" });
+  if (match.kind === "new" && match.route === "order_history") {
+    // T13: propiedad del pedido antes que el historial (mismo 404 que GET /orders/{id}).
+    const reply = await readStoreOrderHistory(db, { sellerId, orderId: match.orderId });
+    response.status(reply.httpStatus).json(reply.body);
     return;
   }
+
+  if (match.kind === "new") {
+    const reply = await readStoreOrder(db, { sellerId, orderId: match.orderId });
+    response.status(reply.httpStatus).json(reply.body);
+    return;
+  }
+
+  const resource = match.resource;
+  const nowIso = (deps.now ? deps.now() : new Date()).toISOString();
 
   const from = String(request.query.from ?? "").trim();
   const to = String(request.query.to ?? "").trim();
@@ -297,7 +223,7 @@ export const storeApi = onRequest(async (request, response) => {
   if (resource === "docs") {
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       endpoints: {
         "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
         "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
@@ -305,8 +231,28 @@ export const storeApi = onRequest(async (request, response) => {
         "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
       },
       autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>.",
-      avisos: [STORE_BALANCE_NOTICE]
+      avisos: [STORE_BALANCE_NOTICE],
+      // RF_20: las claves de arriba conservan su valor de siempre; lo de la spec 029 va solo en claves nuevas.
+      ...buildStoreApiIndexAdditions(await readHistorySince(db))
     });
+    return;
+  }
+
+  // RF_02: GET /orders?shopifyOrderId= busca solo ese numero en la tienda de la key (carga dirigida).
+  if (resource === "orders" && request.query.shopifyOrderId !== undefined) {
+    const shopifyOrderId = request.query.shopifyOrderId;
+    if (!isValidShopifyOrderId(shopifyOrderId)) {
+      response.status(400).json({ ok: false, error: "invalid_shopify_order_id" });
+      return;
+    }
+    const reply = await listStoreOrdersByShopifyOrderId(db, {
+      sellerId,
+      sellerName,
+      shopifyOrderId: String(shopifyOrderId),
+      statusFilter,
+      limit
+    });
+    response.status(reply.httpStatus).json(reply.body);
     return;
   }
 
@@ -318,7 +264,7 @@ export const storeApi = onRequest(async (request, response) => {
   if (resource === "kpis") {
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       rango: { desde: from || null, hasta: to || null },
       kpis: computeKpis(rangeOrders)
     });
@@ -351,7 +297,7 @@ export const storeApi = onRequest(async (request, response) => {
         settlements: allSettlements,
         settings: (settingsSnap.data() ?? {}) as Record<string, unknown>,
         zones: zoneSnaps.filter((snap) => snap.exists).map((snap) => ({ id: snap.id, ...snap.data() })),
-        now: new Date().toISOString()
+        now: nowIso
       }));
       // RF_22: con asientos que no se pueden atribuir a un pedido no se devuelve una cifra parcial;
       // la app muestra error en ese caso y la API tiene que decir lo mismo.
@@ -361,7 +307,7 @@ export const storeApi = onRequest(async (request, response) => {
       }
       response.status(200).json({
         ok: true,
-        tienda: config.sellerName ?? sellerId,
+        tienda: sellerName,
         ...buildStoreSummary(sellerEntries, settlementsById, balance, sellerSettlements)
       });
       return;
@@ -374,14 +320,10 @@ export const storeApi = onRequest(async (request, response) => {
         .slice(0, limit);
       response.status(200).json({
         ok: true,
-        tienda: config.sellerName ?? sellerId,
+        tienda: sellerName,
         rango: { desde: from || null, hasta: to || null },
         total: filtered.length,
-        pedidos: filtered.map((order) => ({
-          ...orderPayload(order),
-          operacion: classifyOrder(order),
-          pago: buildPaymentInfo(order, sellerEntries, settlementsById, codReceived)
-        }))
+        pedidos: filtered.map((order) => storeOrderItem(order, sellerEntries, settlementsById, codReceived))
       });
       return;
     }
@@ -393,7 +335,7 @@ export const storeApi = onRequest(async (request, response) => {
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       total: sellerSettlements.length,
       significado: {
         netoCop: "Valor liquidado del corte segun los pedidos incluidos.",
@@ -429,4 +371,6 @@ export const storeApi = onRequest(async (request, response) => {
   }
 
   response.status(404).json({ ok: false, error: "unknown_resource", recursos: ["/resumen", "/kpis", "/orders", "/settlements"] });
-});
+}
+
+export const storeApi = onRequest((request, response) => handleStoreApiRequest(request, response, { db: getFirestore() }));

@@ -1,8 +1,9 @@
 {
   "version": 2,
   "phase": "release",
+  "activeTask": "T27",
   "activeSpec": {
-    "file": "specs/026_efectivo_que_no_llega_a_un_corte.md",
+    "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
   },
   "ui": {
@@ -11,6 +12,44 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
+    "T1": { "requirements": ["RF_01", "RF_02", "RF_08", "RF_10", "RF_22", "RF_27", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt"], "testWritten": true, "done": true },
+    "T2": { "requirements": ["RNF_05", "RF_01", "RF_02", "RF_17"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t2-query-check.txt", "firestore.indexes.json"], "testWritten": true, "done": true },
+    "T3": { "requirements": ["RNF_01", "RNF_02", "RF_25", "RF_26", "RF_20"], "files": ["functions/src/store-api-auth.ts", "src/lib/store-api-auth.test.ts"], "testWritten": true, "done": true },
+    "T4": { "requirements": ["RF_04", "RF_05", "RF_06", "RF_13", "RF_14", "RF_15", "RF_19", "RF_21", "RNF_02"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts"], "testWritten": true, "done": true },
+    "T5": { "requirements": ["RF_07", "RF_08", "RF_09", "RF_10", "RF_11", "RF_12", "RF_16", "RF_22", "RF_23", "RNF_02"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts"], "testWritten": true, "done": true },
+    "T6": { "requirements": ["RF_19", "RF_04", "RF_11", "RF_13"], "files": ["functions/src/order-seller-actions-run.ts", "functions/src/order-import-merge.ts", "src/lib/spec-017-guards.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": true, "done": true },
+    "T6b": { "requirements": ["RF_19", "RF_11", "RF_16"], "files": ["functions/src/orders.ts", "src/lib/spec-017-guards.test.ts", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/mutacion-rf19.txt", "functions/src/order-seller-actions-run.ts", "src/lib/order-seller-actions-run.test.ts", "src/lib/spec-013-guards.test.ts"], "testWritten": true, "done": true },
+    "T7": { "requirements": ["RF_16", "RF_17", "RF_24"], "files": ["firestore.rules", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T8": { "requirements": ["RF_03", "RF_09", "RF_12", "RF_13", "RNF_02", "RNF_04"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T9": { "requirements": ["RF_01", "RF_20"], "files": ["functions/src/store-api-orders.ts", "functions/src/store-api.ts", "src/lib/store-api-orders.test.ts"], "testWritten": true, "done": true },
+    "T10": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_20", "RNF_01", "RNF_05"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
+    "T11": { "requirements": ["RF_04", "RF_07", "RF_10", "RF_13", "RF_19", "RNF_01", "RNF_02"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
+    "T12": { "requirements": ["RNF_03", "RNF_04"], "files": ["functions/src/store-api-request.ts", "functions/src/store-api-write.ts", "functions/src/order-seller-actions-run.ts", "src/lib/store-api-request.test.ts", "src/lib/order-seller-actions-run.test.ts", "src/lib/store-api-write.test.ts", "functions/src/store-api.ts"], "testWritten": true, "done": true },
+    "T13": { "requirements": ["RF_17", "RF_18", "RF_20", "RF_24"], "files": ["functions/src/store-api-history.ts", "functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/store-api-history.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
+    "T14": { "requirements": ["RF_27", "RF_18"], "files": ["functions/src/store-api-history.ts", "functions/src/orders.ts", "src/lib/store-api-history.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T15": { "requirements": ["RF_16"], "files": ["functions/src/orders.ts", "src/lib/spec-029-guards.test.ts", "src/lib/order-seller-actions.test.ts"], "testWritten": true, "done": true },
+    "T16": { "requirements": ["RF_16", "RF_24"], "files": ["functions/src/orders.ts", "functions/src/order-corrections.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T17": { "requirements": ["RF_25", "RF_26"], "files": ["functions/src/store-api-keys.ts", "functions/src/index.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-auth.test.ts"], "testWritten": true, "done": true },
+    "T18": { "requirements": ["RF_25", "RF_27"], "files": ["src/lib/types.ts", "src/lib/firebase/auth.ts", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T19": { "requirements": ["RF_25", "RF_27", "RF_17"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts", "src/lib/order-audit-trail-view.ts", "src/lib/order-audit-trail-view.test.ts"], "testWritten": true, "done": true },
+    "T20": { "requirements": ["RF_25", "RF_26"], "files": ["src/components/store-api-write-key.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T21": { "requirements": ["RF_25", "RF_26"], "files": ["src/components/store-api-keys-admin.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T22": { "requirements": ["RF_27", "RF_17", "RF_24"], "files": ["src/components/order-audit-trail.tsx", "src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T23": { "requirements": ["RF_25"], "files": ["src/components/operations-app.tsx", "src/lib/spec-029-guards.test.ts", "src/lib/spec-013-guards.test.ts"], "testWritten": true, "done": true },
+    "T24": { "requirements": ["RF_20", "RF_01"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json"], "testWritten": true, "done": true },
+    "T25": { "requirements": ["RF_11", "RF_16"], "files": ["src/lib/fixtures/029-kovia-order.json", "src/lib/order-seller-actions.test.ts", "scripts/verify-029.js", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T26": { "requirements": ["RF_17", "RNF_01", "RNF_02"], "files": ["src/app/api-tiendas/page.tsx", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
+    "T27": { "requirements": ["RF_01", "RF_11", "RF_20", "RF_27", "RF_16", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-smoke.txt", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t27-registro.json"], "testWritten": true, "done": true },
+    "T28": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/app/api-tiendas/page.tsx", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
+    "T29": { "requirements": ["RF_12", "RNF_03"], "files": ["functions/src/store-api-write.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
+    "T30": { "requirements": ["RF_13"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": true, "done": true },
+    "T31": { "requirements": ["RF_27", "RF_18"], "files": ["functions/src/orders.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-history.test.ts"], "testWritten": true, "done": true },
+    "T32": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/store-api-write.test.ts", "src/app/api-tiendas/page.tsx"], "testWritten": true, "done": true },
+    "T33": { "requirements": ["RF_25"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts"], "testWritten": true, "done": true }
+  },
+  "plan": "specs/029_plan.md",
+  "tasksFile": "specs/029_tasks.md",
+  "archivedTasks026": {
     "T1": {
       "requirements": [
         "RNF_01",
@@ -521,6 +560,22 @@
       "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
       "status": "borrador",
       "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
+    },
+    "029": {
+      "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
+      "status": "aprobada",
+      "approved": "2026-10-04 (respuestas propuestas por Claude, aceptadas por el responsable; decisiones 2, 6 y 7 ratificadas)",
+      "origen": "peticion de CENTRAL (Kovia/ONEP) 2026-10-02; renumerada de 028 el 2026-10-04 (028 = abrir la app no escribe nada, otra sesion)"
+    },
+    "030": {
+      "file": "specs/030_webhook_firmado_hacia_la_tienda.md",
+      "status": "borrador",
+      "origen": "OPC_01 de la 029 (2026-10-04)"
+    },
+    "031": {
+      "file": "specs/031_historial_de_importaciones_y_chatby.md",
+      "status": "borrador",
+      "origen": "fuera de alcance de RF_16 de la 029 (decision del responsable 2026-10-04)"
     }
   },
   "archivedTasks": {
@@ -2521,7 +2576,5 @@
       }
     }
   },
-  "plan": "specs/026_plan.md",
-  "tasksFile": "specs/026_tasks.md",
   "migrations": []
 }

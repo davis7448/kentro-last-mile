@@ -1,0 +1,15 @@
+{
+  "story": "HU_05",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "button", "name": "Historial del pedido" },
+    { "role": "note", "name": "Que incluye el historial" },
+    { "role": "list", "name": "Cambios del pedido" },
+    { "role": "listitem", "name": "Datos de entrega corregidos" },
+    { "role": "listitem", "name": "Confirmado" },
+    { "role": "listitem", "name": "Cambio de estado" },
+    { "role": "listitem", "name": "Editado antes de confirmar" }
+  ],
+  "threshold": { "missing": 0 }
+}

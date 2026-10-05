@@ -471,12 +471,45 @@ export type OrderAuditEntry = {
   createdAt: string;
   action: string;
   actorId: string;
-  actorLabel: string;
+  /** Nombre del actor. No viene para la tienda: ella solo recibe `actorTag` (RF_27). */
+  actorLabel?: string;
   actorEmail?: string;
   actorRole?: string;
+  /** Lo unico que la tienda sabe de quien actuo. */
+  actorTag?: "Kentro" | "Tu tienda" | "API";
+  /** Via del cambio (p. ej. `api`), desde `orderHistory` o el propio evento. */
+  origin?: string;
+  /** Antes/Ahora por campo, cuando el evento tiene registro en `orderHistory`. */
+  changes?: OrderAuditChange[];
+  /** Solo admin, solo eventos de la API: ultimos cuatro de la key que actuo. */
+  apiKeyLast4?: string;
   fromStatus?: string;
   toStatus?: string;
   summary: string;
+};
+
+export type OrderAuditChange = { field: unknown; from: unknown; to: unknown };
+
+/** Respuesta de `getOrderAuditTrail`: eventos y desde cuando hay historial detallado. */
+export type OrderAuditTrail = { events: OrderAuditEntry[]; historySince: string | null };
+
+export type StoreApiKeyReadStatus = { exists: boolean; status: "active" | "inactive" | "none" };
+
+/** Lo que se muestra de las keys de una tienda (RF_25), tal como lo devuelven `getStoreApiKeyStatus` y
+ *  `listStoreApiKeys`. Nunca la key, la huella ni el prefijo. */
+export type StoreApiKeyStatus = {
+  sellerId: string;
+  sellerName: string;
+  canManageWrite: boolean;
+  read: StoreApiKeyReadStatus;
+  write: { exists: false } | { exists: true; last4: string; generatedAt: string; generatedByLabel: string };
+};
+
+/** Respuesta de `rotateStoreWriteKey`: la key en claro se muestra una sola vez. */
+export type RotateStoreWriteKeyResult = {
+  status: StoreApiKeyStatus;
+  writeKey: string;
+  previousLast4: string | null;
 };
 
 /** Las cuatro correcciones administrativas de estado que admite el callable

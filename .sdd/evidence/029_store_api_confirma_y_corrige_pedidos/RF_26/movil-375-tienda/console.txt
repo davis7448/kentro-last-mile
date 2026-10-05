@@ -1,0 +1,7 @@
+# errores de consola: 2 (no contemplados: 0)
+[error] Failed to load resource: the server responded with a status of 403 ()
+[error] Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+# consola completa
+[error] Failed to load resource: the server responded with a status of 403 ()
+[error] Failed to load resource: the server responded with a status of 500 (Internal Server Error)

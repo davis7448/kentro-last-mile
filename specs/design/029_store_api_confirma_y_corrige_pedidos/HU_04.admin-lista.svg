@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860">
+  <title>HU_04 - Claves de API de tiendas, lista por tienda (admin, escritorio)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7cc4ff" stop-opacity="0.10"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.08"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="1280" height="860" fill="#0e1116"/>
+  <circle cx="220" cy="120" r="320" fill="url(#ga)"/>
+  <circle cx="1180" cy="200" r="360" fill="url(#gb)"/>
+  <circle cx="640" cy="760" r="340" fill="url(#gc)"/>
+
+  <!-- Riel (admin) -->
+  <rect x="0" y="0" width="84" height="860" fill="#191e25"/>
+  <line x1="84" y1="0" x2="84" y2="860" stroke="#ffffff" stroke-opacity="0.06"/>
+  <circle cx="42" cy="40" r="18" fill="#c6f24e"/>
+  <text x="42" y="46" text-anchor="middle" font-size="16" font-weight="800" fill="#10140c">K</text>
+  <g font-size="10" text-anchor="middle">
+    <rect x="31" y="100" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="140" fill="#9aa5b3">Operacion</text>
+    <rect x="31" y="166" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="206" fill="#9aa5b3">Wallet</text>
+    <rect x="31" y="232" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="272" fill="#9aa5b3">Inventario</text>
+    <rect x="12" y="290" width="60" height="58" rx="18" fill="#ffffff" fill-opacity="0.06"/>
+    <rect x="31" y="298" width="22" height="22" rx="7" fill="#c6f24e"/><text x="42" y="338" fill="#f4f6f8" font-weight="700">Tiendas</text>
+    <rect x="31" y="364" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="404" fill="#9aa5b3">Cortes</text>
+    <rect x="31" y="430" width="22" height="22" rx="7" fill="#9aa5b3" fill-opacity="0.5"/><text x="42" y="470" fill="#9aa5b3">Ajustes</text>
+  </g>
+
+  <text x="116" y="62" font-size="34" font-weight="800" fill="#f4f6f8" letter-spacing="-1.2">Integraciones</text>
+  <text x="116" y="88" font-size="14" fill="#9aa5b3">Shopify, webhooks, UChat, claves de API e incidencias</text>
+
+  <!-- Paneles plegados -->
+  <rect x="116" y="110" width="1132" height="56" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M134 133 l5 5 l-5 5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="154" y="134" font-size="14" font-weight="700" fill="#f4f6f8">Tiendas Shopify</text>
+  <text x="154" y="152" font-size="12" fill="#9aa5b3">12 conectadas</text>
+  <rect x="116" y="176" width="1132" height="56" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M134 199 l5 5 l-5 5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="154" y="200" font-size="14" font-weight="700" fill="#f4f6f8">Incidencias de sincronizacion</text>
+  <text x="154" y="218" font-size="12" fill="#9aa5b3">0 sin resolver</text>
+
+  <!-- Claves de API de tiendas (desplegado) -->
+  <rect x="116" y="244" width="1132" height="596" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M132 270 l5 5 l5 -5" fill="none" stroke="#9aa5b3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="154" y="272" font-size="14" font-weight="700" fill="#f4f6f8">Claves de API de tiendas</text>
+  <text x="154" y="290" font-size="12" fill="#9aa5b3">3 de 14 tiendas con clave de escritura</text>
+  <rect x="948" y="258" width="268" height="44" rx="22" fill="#212832" stroke="#ffffff" stroke-opacity="0.10"/>
+  <circle cx="972" cy="279" r="6" fill="none" stroke="#9aa5b3" stroke-width="1.8"/>
+  <line x1="976.5" y1="283.5" x2="981" y2="288" stroke="#9aa5b3" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="992" y="285" font-size="14" fill="#9aa5b3">Buscar tienda</text>
+
+  <text x="148" y="334" font-size="13" fill="#9aa5b3">La clave de escritura confirma, corrige y cancela pedidos sin lider. Se muestra completa una sola vez: Kentro guarda solo su huella.</text>
+  <text x="148" y="352" font-size="13" fill="#9aa5b3">Generarla o rotarla no toca la clave de lectura, y queda registrado quien lo hizo.</text>
+
+  <!-- Tabla "Claves de API por tienda" -->
+  <g font-size="12" font-weight="600" fill="#9aa5b3">
+    <text x="148" y="390">Tienda</text>
+    <text x="360" y="390">Lectura</text>
+    <text x="500" y="390">Escritura</text>
+    <text x="760" y="390">Generada</text>
+  </g>
+  <line x1="148" y1="402.5" x2="1216" y2="402.5" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <!-- Fila 1 -->
+  <text x="148" y="436" font-size="14" font-weight="700" fill="#f4f6f8">Kovia</text>
+  <text x="360" y="436" font-size="14" fill="#cbd3dc">Activa</text>
+  <rect x="500" y="418" width="66" height="26" rx="13" fill="none" stroke="#c6f24e" stroke-opacity="0.6"/>
+  <text x="533" y="436" text-anchor="middle" font-size="12" font-weight="600" fill="#c6f24e">Activa</text>
+  <text x="578" y="436" class="n" font-size="13" fill="#cbd3dc">termina en c41e</text>
+  <text x="760" y="436" class="n" font-size="13" fill="#f4f6f8">6 oct 2026, 10:42 <tspan fill="#9aa5b3">· por la tienda</tspan></text>
+  <rect x="1120" y="409" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <text x="1168" y="436" text-anchor="middle" font-size="14" font-weight="700" fill="#ff8b7c">Rotar</text>
+  <line x1="148" y1="458.5" x2="1216" y2="458.5" stroke="#ffffff" stroke-opacity="0.05"/>
+
+  <!-- Fila 2 -->
+  <text x="148" y="492" font-size="14" font-weight="700" fill="#f4f6f8">ONEP</text>
+  <text x="360" y="492" font-size="14" fill="#cbd3dc">Activa</text>
+  <rect x="500" y="474" width="66" height="26" rx="13" fill="none" stroke="#c6f24e" stroke-opacity="0.6"/>
+  <text x="533" y="492" text-anchor="middle" font-size="12" font-weight="600" fill="#c6f24e">Activa</text>
+  <text x="578" y="492" class="n" font-size="13" fill="#cbd3dc">termina en 0b93</text>
+  <text x="760" y="492" class="n" font-size="13" fill="#f4f6f8">7 oct 2026, 09:15 <tspan fill="#9aa5b3">· por Laura Gomez</tspan></text>
+  <rect x="1120" y="465" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <text x="1168" y="492" text-anchor="middle" font-size="14" font-weight="700" fill="#ff8b7c">Rotar</text>
+  <line x1="148" y1="514.5" x2="1216" y2="514.5" stroke="#ffffff" stroke-opacity="0.05"/>
+
+  <!-- Fila 3 -->
+  <text x="148" y="548" font-size="14" font-weight="700" fill="#f4f6f8">DANDA</text>
+  <text x="360" y="548" font-size="14" fill="#cbd3dc">Activa</text>
+  <rect x="500" y="530" width="66" height="26" rx="13" fill="none" stroke="#c6f24e" stroke-opacity="0.6"/>
+  <text x="533" y="548" text-anchor="middle" font-size="12" font-weight="600" fill="#c6f24e">Activa</text>
+  <text x="578" y="548" class="n" font-size="13" fill="#cbd3dc">termina en 5e07</text>
+  <text x="760" y="548" class="n" font-size="13" fill="#f4f6f8">7 oct 2026, 16:30 <tspan fill="#9aa5b3">· por la tienda</tspan></text>
+  <rect x="1120" y="521" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <text x="1168" y="548" text-anchor="middle" font-size="14" font-weight="700" fill="#ff8b7c">Rotar</text>
+  <line x1="148" y1="570.5" x2="1216" y2="570.5" stroke="#ffffff" stroke-opacity="0.05"/>
+
+  <!-- Fila 4 -->
+  <text x="148" y="604" font-size="14" font-weight="700" fill="#f4f6f8">Bella Mujer</text>
+  <text x="360" y="604" font-size="14" fill="#cbd3dc">Activa</text>
+  <rect x="500" y="586" width="80" height="26" rx="13" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+  <text x="540" y="604" text-anchor="middle" font-size="12" font-weight="600" fill="#cbd3dc">Sin clave</text>
+  <text x="760" y="604" font-size="13" fill="#9aa5b3">—</text>
+  <rect x="1120" y="577" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1168" y="604" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Generar</text>
+  <line x1="148" y1="626.5" x2="1216" y2="626.5" stroke="#ffffff" stroke-opacity="0.05"/>
+
+  <!-- Fila 5 -->
+  <text x="148" y="660" font-size="14" font-weight="700" fill="#f4f6f8">Senziacol</text>
+  <text x="360" y="660" font-size="14" fill="#cbd3dc">Activa</text>
+  <rect x="500" y="642" width="80" height="26" rx="13" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+  <text x="540" y="660" text-anchor="middle" font-size="12" font-weight="600" fill="#cbd3dc">Sin clave</text>
+  <text x="760" y="660" font-size="13" fill="#9aa5b3">—</text>
+  <rect x="1120" y="633" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1168" y="660" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Generar</text>
+  <line x1="148" y1="682.5" x2="1216" y2="682.5" stroke="#ffffff" stroke-opacity="0.05"/>
+
+  <!-- Fila 6 -->
+  <text x="148" y="716" font-size="14" font-weight="700" fill="#f4f6f8">E-master</text>
+  <text x="360" y="716" font-size="14" fill="#9aa5b3">Sin clave</text>
+  <rect x="500" y="698" width="80" height="26" rx="13" fill="none" stroke="#9aa5b3" stroke-opacity="0.7"/>
+  <text x="540" y="716" text-anchor="middle" font-size="12" font-weight="600" fill="#cbd3dc">Sin clave</text>
+  <text x="760" y="716" font-size="13" fill="#9aa5b3">—</text>
+  <rect x="1120" y="689" width="96" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1168" y="716" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Generar</text>
+  <line x1="148" y1="738.5" x2="1216" y2="738.5" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <!-- Paginacion -->
+  <text x="148" y="788" class="n" font-size="13" fill="#9aa5b3">Tiendas 1 a 6 de 14</text>
+  <rect x="1004" y="762" width="100" height="44" rx="22" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="1054" y="789" text-anchor="middle" font-size="14" font-weight="600" fill="#9aa5b3">Anterior</text>
+  <rect x="1112" y="762" width="104" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="1164" y="789" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Siguiente</text>
+</svg>

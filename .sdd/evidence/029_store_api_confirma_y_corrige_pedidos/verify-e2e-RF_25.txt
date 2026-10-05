@@ -1,0 +1,55 @@
+# Spec 029 — verify E2E contra la app desplegada (2026-10-05T12:07:51.281Z)
+  https://kentro-last-mile.web.app · solo datos de seller-test-029
+
+## RF_25/movil-375-admin — PASA
+  HU_04 admin: panel "Claves de API de tiendas", buscar, generar desde la fila -> recien generada
+  OK    T23: Integraciones del admin no tiene botones "?" (sus paneles no llevan ayuda)
+  OK    resumen "N de M tiendas con clave de escritura"
+  OK    movil: tarjetas "Claves de API por tienda"
+  OK    buscar "test-029" deja la fila de la tienda de pruebas con "Generar"
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso de admin: "Entregala a la tienda por un canal seguro" y "Queda registrado que la generaste tu"
+  OK    aviso mudo "Si cierras sin copiarla, tendras que rotarla."
+  OK    la fila "Generada por" del dialogo dice el nombre una sola vez, sin "por" duplicado (Generada porPrueba 029 adminRotar clave de escritura)
+  OK    la fila pasa a "Activa · termina en e_Yl"
+  OK    columna "Generada" dice "por Prueba 029 admin" una sola vez (por Prueba )
+  OK    la fila ofrece ahora "Rotar clave de escritura de Tienda de pruebas test-029"
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 16
+
+## RF_25/escritorio-1280-admin — PASA
+  HU_04 admin: panel "Claves de API de tiendas", buscar, generar desde la fila -> recien generada
+  OK    T23: Integraciones del admin no tiene botones "?" (sus paneles no llevan ayuda)
+  OK    resumen "N de M tiendas con clave de escritura"
+  OK    escritorio: tabla "Claves de API por tienda"
+  OK    buscar "test-029" deja la fila de la tienda de pruebas con "Generar"
+  OK    la clave sale completa en dos lineas de 24 caracteres (kw_ + 45 base64url)
+  OK    aviso de admin: "Entregala a la tienda por un canal seguro" y "Queda registrado que la generaste tu"
+  OK    aviso mudo "Si cierras sin copiarla, tendras que rotarla."
+  OK    la fila "Generada por" del dialogo dice el nombre una sola vez, sin "por" duplicado (Generada porPrueba 029 adminRotar clave de escritura)
+  OK    la fila pasa a "Activa · termina en l7Bs"
+  OK    columna "Generada" dice "por Prueba 029 admin" una sola vez (por tiendaTiendaLecturaEscrituraG | por Prueba )
+  OK    la fila ofrece ahora "Rotar clave de escritura de Tienda de pruebas test-029"
+  consola: 1 errores (no contemplados 0) · red 4xx/5xx/fallidas: 1 (no contempladas 0) · secretos tapados en trace: 16
+
+## Limpieza
+  cleanup orderHistory: borrados=0 · quedan=0
+  cleanup walletEntries: borrados=0 · quedan=0
+  cleanup auditEvents: borrados=3 · quedan=0
+  cleanup storeWebhookSamples: borrados=0 · quedan=0
+  cleanup shopifySyncIssues: borrados=0 · quedan=0
+  cleanup storeApiIdempotency: borrados=0 · quedan=0
+  cleanup storeApiRateLimits: borrados=0 · quedan=0
+  cleanup importRuns: borrados=0 · quedan=0
+  cleanup orders: borrados=0 · quedan=0
+  cleanup storeWebhookConfigs: borrados=0 · quedan=0
+  cleanup shopifyStores: borrados=0 · quedan=0
+  cleanup inventory: borrados=0 · quedan=0
+  cleanup productCatalog: borrados=0 · quedan=0
+  cleanup storeApiConfigs: borrados=1 · quedan=0
+  cleanup authUsers: borrados=3 · quedan=0
+  cleanup sellers: borrados=1 · quedan=0
+  cleanup: sin error del modo cleanup -> cero en todas las colecciones
+  t27-registro.json restaurado e igual a HEAD: si
+
+Secretos en la evidencia: ninguno
+VERIFY OK

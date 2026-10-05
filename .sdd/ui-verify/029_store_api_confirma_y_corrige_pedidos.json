@@ -1,0 +1,760 @@
+{
+  "runs": [
+    {
+      "screen": "HU_04.admin-lista-movil",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.086Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "4581a79dcfbabdc34896252a8a76d677217e8ab3d4fc987ef45ffb2bf2632fc8",
+        "contractSha": "ff0d6df6257bdd8ae8d273da6d0fc915e420207c1e105d4a9391a54da8d2f274",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.admin-lista",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.088Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 1280,
+          "height": 860
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "a0aac30da50f9ab90c45bea77b4fdcdd08f199d1912df90b59b4c4cefda84b00",
+        "contractSha": "4e939cfd1c7ca3d186d4d9662cfed8840a1e1501095e2d6a53f687b6506646d6",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.admin-recien-generada",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.089Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "63769e0bf526889a6dd09960e50bb8c28cb44aeaf0b7f5a7abd0688b5af725f1",
+        "contractSha": "cfd17bff1c08acd7c26713fe5b164c403d4548ce4170aeb8ed83cc178e21d1df",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.tienda-activa",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.091Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "7a9d8e3680030b85eb755725b9f5ba38451caf700ff8a29d770c5792eaf9b5fb",
+        "contractSha": "02e1f6592a595de5a6a193c1e9f5fbe286bff37eb6f7dcc6e62390482b079d92",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.tienda-error",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.092Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "bb6551d86aac018aa6c29f9340719e2da4a950f6d2e64efebe3f9ee0e08841a4",
+        "contractSha": "86b8343c4f293b64e5b5aab1285fede6fde012dd7e2dd7b6628d6d3c18af3922",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.tienda-recien-generada",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.093Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 960
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "ae86a359ac4fd7140693fdc028aa464dc313e1c6bec3f9e05fed0c61b6de6108",
+        "contractSha": "31771c42485ea7dc7d4b00b86b7d9cc869723f1ceeeb9807bbd28fe00edc4eb9",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.tienda-rotar",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.095Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "48bcd70180bfd8e97003156adb30df261e35fa6584dabd288867da3d5557b1ff",
+        "contractSha": "a36178af36913e71b63e2cc7ec711a2bd24fbe181ddfa04df4dfa67b7059f123",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_04.tienda-sin-clave",
+      "story": "HU_04",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.096Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "d57e73ca4639885960cd48040ec1e4f595251ab51fd47fad925c07ce5c1724a6",
+        "contractSha": "235c27bac0b4be5523e7d6386f96e027fc10a21043055af41da23175516f24af",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.admin-escritorio",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.097Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "c460382619785eb242b5c2bacd4f90c7d494739681598e7b5828f8eb71df55ba",
+        "contractSha": "a3f62cf0d7fbe5a05a62b4e3532c8215511ff85cb2d41387c65b73c404aaabab",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.admin",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.098Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "492427124005df11b6199528bedf3eb62bedf3cebe729f0a95cc4dcbb979848e",
+        "contractSha": "1f43d950f626529fa241ab0366b271573f7778bd393823ce4aa5891dac520133",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.error",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.101Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "e3a6ca7e35a835c7064198240f57947595deeac4da04688b17883a5b6c1eb3ef",
+        "contractSha": "0a5f72c30b7fcdfb66d21d0dd06a9a364b53063412e43a9067722cead321e7e2",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.tienda-escritorio",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.102Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "ae6a0775dc2507b49bee23c2570d6cdddf2ccd36012d425b8e671f97cf1fb171",
+        "contractSha": "d03491c2c2ec739a6d30903089d71490b6266667f1d876b75798cbf33149bc24",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.tienda",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.105Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "7b4157c5a6d797b7fd5ffccc0b9cadfedb55364f6a3cce89b7ef86b8aff96f95",
+        "contractSha": "1f43d950f626529fa241ab0366b271573f7778bd393823ce4aa5891dac520133",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    },
+    {
+      "screen": "HU_05.vacio",
+      "story": "HU_05",
+      "commit": "6e44d3de70acf7317f00b5a7b13618d596ccaa25",
+      "host": "srv995537",
+      "at": "2026-10-05T06:33:56.107Z",
+      "baseUrl": "https://kentro-last-mile.web.app",
+      "engine": {
+        "mcp": "@playwright/mcp@0.0.80",
+        "axe": "4.13.0"
+      },
+      "conditions": {
+        "browser": "chromium",
+        "headless": true,
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "reducedMotion": "reduce",
+        "locale": "es-ES",
+        "timezoneId": "UTC"
+      },
+      "visual": {
+        "design": "observed",
+        "threshold": {
+          "missing": 0
+        },
+        "missing": [],
+        "status": "unverified",
+        "reason": "no-route",
+        "detail": "sin instantanea",
+        "designSha": "084878d5b37320d6b8470e65472a74a9efadae4dc3aaa4838dad47aff29bf4c0",
+        "contractSha": "d25885f7168ed18ba7cbe5b1c815aca725f26568ee613e40cd73f7b0f750296c",
+        "evidence": null
+      },
+      "a11y": {
+        "level": "WCAG 2.2 AA",
+        "tags": [
+          "wcag2a",
+          "wcag2aa",
+          "wcag21a",
+          "wcag21aa",
+          "wcag22aa"
+        ],
+        "violations": [],
+        "incomplete": 0,
+        "note": "La comprobacion automatizada de accesibilidad es una cota inferior, no una garantia de que la interfaz sea usable.",
+        "status": "unverified",
+        "reason": "no-route",
+        "evidence": null
+      }
+    }
+  ]
+}

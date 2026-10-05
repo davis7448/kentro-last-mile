@@ -39,7 +39,8 @@ import {
   type OrderCorrectionPlan,
   planOrderCorrection
 } from "./order-corrections-plan";
-import { loadDriverCashInputs, newAuditRef, OPERATIONAL_TARGET_STATUSES } from "./orders";
+import { buildOrderHistoryRecord } from "./order-seller-actions";
+import { loadDriverCashInputs, newAuditRef, OPERATIONAL_TARGET_STATUSES, panelHistoryActor } from "./orders";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 import { resolveProductCostLinesForOrder, resolveTariffs } from "./wallet-entries";
 
@@ -254,12 +255,28 @@ export const correctOrderStatus = onCall(async (request) => {
     createdAt: now
   });
 
-  await batch.commit();
-
   const orderAfter = { ...order, ...plan.orderPatch };
   for (const [key, value] of Object.entries(plan.orderPatch)) {
     if (value === DELETE_FIELD) delete orderAfter[key];
   }
+
+  // Spec 029 (RF_16): el diff de campos registrados en el mismo batch, enlazado a su evento.
+  const historyRecord = buildOrderHistoryRecord(order, orderAfter, {
+    orderId: input.orderId,
+    sellerId,
+    origin: "panel",
+    action: plan.auditAction,
+    actor: panelHistoryActor(request.auth.uid, String(role)),
+    now,
+    auditEventId: auditRef.id
+  });
+  if (historyRecord) {
+    const historyRef = db.collection("orderHistory").doc();
+    batch.set(historyRef, { ...historyRecord, id: historyRef.id });
+  }
+
+  await batch.commit();
+
   return {
     dryRun: false,
     applied: true,

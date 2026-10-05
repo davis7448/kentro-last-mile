@@ -1,0 +1,20 @@
+# Spec 029 — T2 query-check (solo lectura, limit(1))
+Generado: 2026-10-05T00:58:56.092Z · proyecto kentro-last-mile
+Pedido de muestra: onstock-6601022111926 · sellerId=seller-1780762661093 · shopifyOrderId=#31033 (string)
+
+## Consultas
+- orders/{id} (lectura por id): orders · docs=1 · 88 ms · indice: no
+- orders where sellerId == + shopifyOrderId ==: orders · docs=1 · 132 ms · indice: no
+- walletEntries where orderId ==: walletEntries · docs=1 · 82 ms · indice: no
+- settlements where orderIds array-contains: settlements · docs=1 · 167 ms · indice: no
+- orderHistory where orderId == (sin orden: se ordena en memoria): orderHistory · docs=0 · 190 ms · indice: no
+- auditEvents where entityId ==: auditEvents · docs=1 · 142 ms · indice: no
+- cities where active ==: cities · docs=1 · 78 ms · indice: no
+
+## cashAllocations fuera de orderIds (plan 2.10, esperado 0)
+Cortes: 76
+cashAllocations fuera de orderIds: 0
+
+## Compuerta de T2
+- consultas que piden indice: ninguna
+- cashAllocations fuera de orderIds > 0: no

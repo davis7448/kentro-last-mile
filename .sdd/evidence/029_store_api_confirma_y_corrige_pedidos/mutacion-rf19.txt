@@ -1,0 +1,23 @@
+Spec 029 · T6b · mutacion manual de la guarda RF_19 anti-copia
+Fecha: 2026-10-05
+Archivo mutado: functions/src/orders.ts (callable confirmImportedOrder, ya delegando en runConfirm)
+
+Mutacion (temporal): se pego el parche de confirmar en el cuerpo de la callable, en el return:
+  - return { order: panelOrderOrThrow(result, "Invalid confirm order data.") };
+  + return { order: { ...panelOrderOrThrow(result, "Invalid confirm order data."), status: "ready_to_assign" } };
+
+Comando:
+  npx vitest run src/lib/spec-029-guards.test.ts -t "T6b"
+
+Salida con la mutacion (resumida):
+  x T6b · RF_19 anti-copia > confirmImportedOrder no conserva su propio parche (estado, addressRisk, sello)
+    AssertionError: expected 'export const confirmImportedOrder = o...' not to match /status:\s*"ready_to_assign"/
+  (ademas, las 3 de updateImportedOrder, rojas por la tarea pendiente, no por la mutacion)
+  Tests  4 failed | 6 passed | 48 skipped (58)
+
+Revertido (return original) y mismo comando:
+  confirmImportedOrder: sus dos pruebas en verde
+  Tests  3 failed | 7 passed | 48 skipped (58)   <- las 3 restantes son de updateImportedOrder (bloqueada, ver informe de T6b)
+
+Conclusion: la guarda distingue la delegacion limpia del parche pegado en la callable; la mutacion
+la pone en rojo con el patron exacto y el revertido la devuelve a verde.
