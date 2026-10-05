@@ -525,3 +525,57 @@ describe("T8 · limite unico, contenido de entrega en el nucleo y parseWriteBody
     expect(request()).not.toMatch(/from\s+["']firebase-(?:admin|functions)/);
   });
 });
+
+describe("T10 · RNF_05", () => {
+  /*
+   * Carga dirigida (plan 2.10, 5.2): `functions/src/store-api-write.ts` (rutas nuevas y filtro `shopifyOrderId`) nunca
+   * baja la tienda entera ni todos los cortes. Cada sentencia que filtra por `sellerId` lleva un segundo `.where(`.
+   * Y `store-api.ts` ya no compara keys por su cuenta: la unica regla de credenciales es `resolveStoreCredentials`
+   * (T3), la unica con comparaciones en tiempo constante.
+   */
+  const WRITE_MODULE = "functions/src/store-api-write.ts";
+  const LEGACY_MODULE = "functions/src/store-api.ts";
+  const AUTH_MODULE = "functions/src/store-api-auth.ts";
+  const SELLER_FILTER = /\.where\(\s*["'`]sellerId["'`]\s*,\s*["'`]==["'`]/;
+
+  it("store-api-write.ts existe", () => {
+    expect(existsSync(absolute(WRITE_MODULE))).toBe(true);
+  });
+
+  it("store-api-write.ts no filtra por sellerId sin un segundo filtro en la misma consulta", () => {
+    const source = existsSync(absolute(WRITE_MODULE)) ? sourceWithoutComments(WRITE_MODULE) : "";
+    const statements = source.split(";").filter((statement) => SELLER_FILTER.test(statement));
+    for (const statement of statements) {
+      const whereCount = (statement.match(/\.where\(/g) ?? []).length;
+      expect(whereCount, statement.trim()).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("store-api-write.ts no lee la coleccion settlements entera", () => {
+    const source = existsSync(absolute(WRITE_MODULE)) ? sourceWithoutComments(WRITE_MODULE) : "";
+    expect(source).not.toMatch(/collection\(\s*["'`]settlements["'`]\s*\)\s*\.get\(\s*\)/);
+  });
+
+  it("store-api.ts no conserva una comparacion de key propia", () => {
+    const source = sourceWithoutComments(LEGACY_MODULE);
+    expect(source).not.toMatch(/\bsafeEqual\(/);
+    expect(source).not.toMatch(/timingSafeEqual\(/);
+    expect(source).not.toMatch(/function\s+safeEqual\b/);
+  });
+
+  it("store-api.ts resuelve credenciales con resolveStoreCredentials", () => {
+    const source = sourceWithoutComments(LEGACY_MODULE);
+    expect(source).toMatch(/import\s*\{[^}]*\bresolveStoreCredentials\b[^}]*\}\s*from\s*["']\.\/store-api-auth["']/);
+    expect(source).toMatch(/resolveStoreCredentials\(/);
+  });
+
+  it("entre los modulos store-api*.ts, solo store-api-auth.ts compara en tiempo constante", () => {
+    const dir = absolute("functions/src");
+    const modules = readdirSync(dir).filter((name) => /^store-api.*\.ts$/.test(name));
+    for (const name of modules) {
+      const source = sourceWithoutComments(`functions/src/${name}`);
+      const compares = /\bsafeEqual\(|timingSafeEqual\(/.test(source);
+      expect(compares, name).toBe(`functions/src/${name}` === AUTH_MODULE);
+    }
+  });
+});

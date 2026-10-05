@@ -271,7 +271,11 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     cubierto, prepago, sin asientos) `buildPaymentInfo` con los cortes dirigidos == con todos los cortes;
     instantanea de un payload de `/orders` antes y despues de mover identica.
 
-- [ ] **T10: Autenticacion de todas las rutas, `GET /orders/{id}` y filtro por `shopifyOrderId`**
+- [x] **T10: Autenticacion de todas las rutas, `GET /orders/{id}` y filtro por `shopifyOrderId`**
+  * **Al cerrar (2026-10-05):** las rutas nuevas aun sin handler (`/history`, `confirm`, `cancel`, `PATCH`)
+    responden 404 `route_not_found` antes de autenticar: **no desplegar `storeApi` antes de T11-T13**.
+    `shopifyOrderId=""` → 400 a proposito (un `#` sin codificar llega vacio y, sin el 400, devolveria la lista
+    entera). Con el filtro, `rango` sale `{ desde: null, hasta: null }` porque no se aplica.
   * Requisitos cubiertos: RF_01, RF_02, RF_03, RF_20, RNF_01, RNF_05
   * Archivos: functions/src/store-api-write.ts, functions/src/store-api.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-write.test.ts
   * Accion: **conectar `resolveStoreCredentials` (T3) en `store-api.ts` para las rutas viejas** (sustituye su

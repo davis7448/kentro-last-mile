@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
@@ -11,7 +11,16 @@ import {
   type SettlementDoc,
   type WalletEntryDoc
 } from "./seller-ledger";
-import { buildPaymentInfo, classifyOrder, computeKpis, inRange, orderPayload } from "./store-api-orders";
+import { resolveStoreCredentials } from "./store-api-auth";
+import { computeKpis, inRange } from "./store-api-orders";
+import {
+  buildErrorBody,
+  isValidShopifyOrderId,
+  routeStoreApiRequest,
+  STORE_API_ERROR_HTTP,
+  validateQueryParameters
+} from "./store-api-request";
+import { listStoreOrdersByShopifyOrderId, readStoreOrder, storeOrderItem } from "./store-api-write";
 import { buildStoreSummary, STORE_BALANCE_NOTICE } from "./store-summary";
 
 /**
@@ -31,12 +40,6 @@ const createStoreApiKeySchema = z.object({
   sellerId: z.string().min(1),
   rotate: z.boolean().optional()
 });
-
-function safeEqual(left: string, right: string) {
-  const leftBuffer = Buffer.from(left, "utf8");
-  const rightBuffer = Buffer.from(right, "utf8");
-  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
 
 export const createStoreApiKey = onCall(async (request) => {
   const role = request.auth?.token.role;
@@ -95,32 +98,78 @@ export const createStoreApiKey = onCall(async (request) => {
 });
 
 
-export const storeApi = onRequest(async (request, response) => {
-  if (request.method !== "GET") {
-    response.set("Allow", "GET");
-    response.status(405).json({ ok: false, error: "method_not_allowed" });
+type StoreApiHttpRequest = {
+  method: string;
+  path: string;
+  query: Record<string, unknown>;
+  get(name: string): string | undefined;
+};
+
+type StoreApiHttpResponse = {
+  status(code: number): StoreApiHttpResponse;
+  json(body: unknown): unknown;
+  set(name: string, value: string): unknown;
+};
+
+export type StoreApiDeps = { db: Firestore; now?: () => Date };
+
+/**
+ * Handler de `storeApi` con el `db` inyectable (spec 029 T10). Orden de la precedencia (plan 2.1): ruta y
+ * metodo → credenciales (`resolveStoreCredentials`, unica regla de keys) → parametros → recurso.
+ */
+export async function handleStoreApiRequest(
+  request: StoreApiHttpRequest,
+  response: StoreApiHttpResponse,
+  deps: StoreApiDeps
+): Promise<void> {
+  // Paso 0: ruta y metodo. Las rutas de hoy conservan su 405 con la forma vieja.
+  const match = routeStoreApiRequest({ method: request.method, path: request.path || "/" });
+  if (!match.ok) {
+    if (match.allow) response.set("Allow", match.allow);
+    response.status(match.httpStatus).json(match.body);
+    return;
+  }
+  // Rutas nuevas que llegan en tareas posteriores (historial, escrituras): aun no existen.
+  if (match.kind === "new" && match.route !== "order_read") {
+    response.status(STORE_API_ERROR_HTTP.route_not_found).json(buildErrorBody("route_not_found"));
     return;
   }
 
-  // Ruta: /kpis | /orders | /settlements (con o sin el prefijo del nombre de la función).
-  const path = (request.path || "/").replace(/^\/storeApi/, "") || "/";
-  const resource = path.replace(/^\/+|\/+$/g, "") || "docs";
+  const db = deps.db;
+  // Pasos 1-2. Como hoy, la key de query manda sobre la Bearer (`query ?? bearer`).
+  const rawSellerId = String(request.query.sellerId ?? "");
+  const sellerIdForLookup = rawSellerId.trim();
+  const configSnap = sellerIdForLookup ? await db.collection("storeApiConfigs").doc(sellerIdForLookup).get() : null;
+  const config = (configSnap?.exists ? configSnap.data() : null) ?? null;
+  const credentials = resolveStoreCredentials({
+    route: match.access,
+    querySellerId: rawSellerId,
+    queryKey: request.query.key == null ? undefined : String(request.query.key),
+    bearer: request.get("authorization")?.replace(/^Bearer\s+/i, ""),
+    config
+  });
+  if (!credentials.ok) {
+    response.status(credentials.httpStatus).json(credentials.body);
+    return;
+  }
+  const sellerId = credentials.sellerId;
+  const sellerName = config?.sellerName ?? sellerId;
 
-  const sellerId = String(request.query.sellerId ?? "").trim();
-  const suppliedKey = String(request.query.key ?? request.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "");
-  if (!sellerId || !suppliedKey) {
-    response.status(401).json({ ok: false, error: "missing_credentials", hint: "sellerId y key (query) o Authorization: Bearer <key>" });
+  // Paso 3 (solo rutas nuevas; las viejas no validan parametros).
+  const parameters = validateQueryParameters(match, request.query);
+  if (!parameters.ok) {
+    response.status(parameters.httpStatus).json(parameters.body);
     return;
   }
 
-  const db = getFirestore();
-  const configSnap = await db.collection("storeApiConfigs").doc(sellerId).get();
-  const config = configSnap.data() ?? {};
-  const expectedKey = String(config.apiKey ?? "");
-  if (!configSnap.exists || config.status !== "active" || !expectedKey || !safeEqual(suppliedKey, expectedKey)) {
-    response.status(401).json({ ok: false, error: "invalid_key" });
+  if (match.kind === "new") {
+    const reply = await readStoreOrder(db, { sellerId, orderId: match.orderId });
+    response.status(reply.httpStatus).json(reply.body);
     return;
   }
+
+  const resource = match.resource;
+  const nowIso = (deps.now ? deps.now() : new Date()).toISOString();
 
   const from = String(request.query.from ?? "").trim();
   const to = String(request.query.to ?? "").trim();
@@ -130,7 +179,7 @@ export const storeApi = onRequest(async (request, response) => {
   if (resource === "docs") {
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       endpoints: {
         "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
         "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
@@ -143,6 +192,24 @@ export const storeApi = onRequest(async (request, response) => {
     return;
   }
 
+  // RF_02: GET /orders?shopifyOrderId= busca solo ese numero en la tienda de la key (carga dirigida).
+  if (resource === "orders" && request.query.shopifyOrderId !== undefined) {
+    const shopifyOrderId = request.query.shopifyOrderId;
+    if (!isValidShopifyOrderId(shopifyOrderId)) {
+      response.status(400).json({ ok: false, error: "invalid_shopify_order_id" });
+      return;
+    }
+    const reply = await listStoreOrdersByShopifyOrderId(db, {
+      sellerId,
+      sellerName,
+      shopifyOrderId: String(shopifyOrderId),
+      statusFilter,
+      limit
+    });
+    response.status(reply.httpStatus).json(reply.body);
+    return;
+  }
+
   // Pedidos de la tienda (scoping duro por sellerId).
   const ordersSnap = await db.collection("orders").where("sellerId", "==", sellerId).get();
   const allOrders = ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as OrderDoc);
@@ -151,7 +218,7 @@ export const storeApi = onRequest(async (request, response) => {
   if (resource === "kpis") {
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       rango: { desde: from || null, hasta: to || null },
       kpis: computeKpis(rangeOrders)
     });
@@ -184,7 +251,7 @@ export const storeApi = onRequest(async (request, response) => {
         settlements: allSettlements,
         settings: (settingsSnap.data() ?? {}) as Record<string, unknown>,
         zones: zoneSnaps.filter((snap) => snap.exists).map((snap) => ({ id: snap.id, ...snap.data() })),
-        now: new Date().toISOString()
+        now: nowIso
       }));
       // RF_22: con asientos que no se pueden atribuir a un pedido no se devuelve una cifra parcial;
       // la app muestra error en ese caso y la API tiene que decir lo mismo.
@@ -194,7 +261,7 @@ export const storeApi = onRequest(async (request, response) => {
       }
       response.status(200).json({
         ok: true,
-        tienda: config.sellerName ?? sellerId,
+        tienda: sellerName,
         ...buildStoreSummary(sellerEntries, settlementsById, balance, sellerSettlements)
       });
       return;
@@ -207,14 +274,10 @@ export const storeApi = onRequest(async (request, response) => {
         .slice(0, limit);
       response.status(200).json({
         ok: true,
-        tienda: config.sellerName ?? sellerId,
+        tienda: sellerName,
         rango: { desde: from || null, hasta: to || null },
         total: filtered.length,
-        pedidos: filtered.map((order) => ({
-          ...orderPayload(order),
-          operacion: classifyOrder(order),
-          pago: buildPaymentInfo(order, sellerEntries, settlementsById, codReceived)
-        }))
+        pedidos: filtered.map((order) => storeOrderItem(order, sellerEntries, settlementsById, codReceived))
       });
       return;
     }
@@ -226,7 +289,7 @@ export const storeApi = onRequest(async (request, response) => {
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
     response.status(200).json({
       ok: true,
-      tienda: config.sellerName ?? sellerId,
+      tienda: sellerName,
       total: sellerSettlements.length,
       significado: {
         netoCop: "Valor liquidado del corte segun los pedidos incluidos.",
@@ -262,4 +325,6 @@ export const storeApi = onRequest(async (request, response) => {
   }
 
   response.status(404).json({ ok: false, error: "unknown_resource", recursos: ["/resumen", "/kpis", "/orders", "/settlements"] });
-});
+}
+
+export const storeApi = onRequest((request, response) => handleStoreApiRequest(request, response, { db: getFirestore() }));
