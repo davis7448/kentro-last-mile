@@ -130,9 +130,14 @@ describe("guarda 2 — el pedido nuevo nace con su lider vacio (RF_10)", () => {
 });
 
 describe("guarda 3 — las exenciones estan declaradas donde vive la regla (RNF_01)", () => {
-  it("son cuatro, con su razon, y en el modulo", () => {
+  /**
+   * Spec 029 (T6): la quinta es el ejecutor de las acciones de tienda, que escribe pedidos fuera de
+   * `orders.ts` por panel y por API. Las rutas `store-api*.ts` NO entran: solo llaman al ejecutor.
+   */
+  it("son cinco, con su razon, y en el modulo", () => {
     expect(Object.keys(IMPORT_WRITE_EXEMPTIONS).sort()).toEqual([
       "order-corrections.ts",
+      "order-seller-actions-run.ts",
       "orders.ts",
       "uchat-pull.ts",
       "uchat-webhook.ts"
@@ -140,6 +145,18 @@ describe("guarda 3 — las exenciones estan declaradas donde vive la regla (RNF_
     for (const [file, reason] of Object.entries(IMPORT_WRITE_EXEMPTIONS)) {
       expect(reason.length, `${file} sin razon escrita`).toBeGreaterThan(40);
     }
+  });
+
+  it("la quinta (spec 029) dice que confirma, corrige y anula por panel o API sin crear pedidos ni tocar lider", () => {
+    const reason = IMPORT_WRITE_EXEMPTIONS["order-seller-actions-run.ts"] ?? "";
+    expect(reason).toMatch(/panel/i);
+    expect(reason).toMatch(/API/);
+    expect(reason).toMatch(/nunca crea pedidos/i);
+    expect(reason).toMatch(/lider/i);
+  });
+
+  it("ninguna ruta de la Store API se exime: solo llaman al ejecutor", () => {
+    expect(Object.keys(IMPORT_WRITE_EXEMPTIONS).filter((file) => file.startsWith("store-api"))).toEqual([]);
   });
 
   it("cada exento existe de verdad y escribe pedidos", () => {

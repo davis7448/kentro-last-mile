@@ -144,14 +144,15 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `MANUAL_EDIT_STAMP` presente en todo plan `applied` de correccion; historial sin `driverId`/`messengerId` y
     `null` sin cambios; el resultado pasado por `mergeImportedOrder` conserva cliente y direccion.
 
-- [ ] **T6: Ejecutor transaccional y carreras simuladas**
+- [x] **T6: Ejecutor transaccional y carreras simuladas**
   * Requisitos cubiertos: RF_19, RF_04, RF_11, RF_13
   * Archivos: functions/src/order-seller-actions-run.ts, functions/src/order-import-merge.ts, src/lib/spec-017-guards.test.ts, src/lib/order-seller-actions-run.test.ts
   * Accion: `runConfirm`, `runDeliveryCorrection`, `runCancel` (plan 2.2) con transaccion, `clear` por
     `FieldValue.delete()`, inventario, evento e historial; si el plan rechaza, ninguna escritura. Quinta
     exencion en `IMPORT_WRITE_EXEMPTIONS` con su razon y guarda 3 de la 017 de cuatro a cinco (el ejecutor es
     quien escribe `orders` fuera de `orders.ts`). **`cityId` entra en el grupo `customer` de `FIELD_GROUPS`
-    de `order-import-merge.ts`** (`pass` sin confirmar, `keep` editado/abierto/cerrado): las cinco vias de
+    de `order-import-merge.ts`** (`pass` sin confirmar, `keep-if-present` editado/abierto/cerrado: un pedido viejo sin `cityId` no tenia
+    correccion que proteger y recibe la de la importacion sin reportarse): las cinco vias de
     entrada escriben `cityId` (`"city-cali"` o el de la tienda) y, sin esto, una reimportacion revertiria la
     ciudad corregida por API (RF_11; hallazgo del RED de T5, 2026-10-05). `deliveryNotes` no la escribe ninguna
     via de entrada: no hace falta grupo.

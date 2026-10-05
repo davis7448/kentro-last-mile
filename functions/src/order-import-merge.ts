@@ -44,13 +44,14 @@ export const MANUAL_EDIT_STAMP = "manuallyEditedAt";
 /**
  * Quien puede escribir en `orders` sin pasar por aqui, y por que. Es codigo y no un comentario
  * porque la guarda de `spec-017-guards.test.ts` lee las fuentes SIN comentarios: una lista en la
- * cabecera le seria invisible. Ninguna de estas cuatro importa nada de fuera.
+ * cabecera le seria invisible. Ninguna de estas cinco importa nada de fuera.
  */
 export const IMPORT_WRITE_EXEMPTIONS: Record<string, string> = {
   "uchat-pull.ts": "Confirmacion por ChatBy (consulta programada): su trabajo es corregir la direccion con lo que dice el cliente, que es justo la correccion que el resto debe respetar.",
   "uchat-webhook.ts": "Confirmacion por ChatBy (webhook entrante): el gemelo del anterior, mismo trabajo por otra puerta.",
   "orders.ts": "Escrituras de la propia operacion: alta manual, transiciones de ciclo de vida y edicion de un pedido sin confirmar. Nacen de que una persona de la plataforma decide algo, no de una tienda.",
-  "order-corrections.ts": "Correccion administrativa de estados terminales: reescribe pedidos cerrados a proposito, por decision de una persona y con su propia spec."
+  "order-corrections.ts": "Correccion administrativa de estados terminales: reescribe pedidos cerrados a proposito, por decision de una persona y con su propia spec.",
+  "order-seller-actions-run.ts": "Ejecutor de las acciones de tienda (spec 029): confirma, corrige datos de entrega y anula un pedido que ya existe, desde el panel o desde la API de la tienda. Nunca crea pedidos y nunca asigna ni cambia el lider: solo escribe lo que decide el planificador puro de order-seller-actions.ts."
 };
 
 /** Lo unico que el nucleo necesita saber del pedido guardado. No es el documento entero. */
@@ -62,6 +63,7 @@ export type ExistingOrderFacts = {
   customerName?: string;
   customerPhone?: string;
   addressRaw?: string;
+  cityId?: string;
   normalizedAddress?: string;
   lat?: number;
   lng?: number;
@@ -170,6 +172,14 @@ const FIELD_GROUPS: FieldGroup[] = [
     group: "customer",
     fields: ["customerName", "customerPhone", "addressRaw"],
     policy: { unconfirmed: "pass", edited: "keep", open: "keep", closed: "keep" }
+  },
+  // Spec 029, RF_11: las cinco vias escriben `cityId` y la tienda lo corrige por API; sin esta fila una
+  // reimportacion revertiria la ciudad corregida. `keep-if-present` y no `keep`: un pedido guardado que
+  // nunca tuvo ciudad no tiene correccion que proteger, asi que la recibe (y no se reporta como conservada).
+  {
+    group: "customer",
+    fields: ["cityId"],
+    policy: { unconfirmed: "pass", edited: "keep-if-present", open: "keep-if-present", closed: "keep-if-present" }
   },
   // RF_18: al refrescar la direccion hay que descartar lo que se derivo de la anterior, o el pedido
   // queda apuntando a dos sitios a la vez. Se reporta dentro de `customer`, de donde cuelga.
