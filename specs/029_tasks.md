@@ -170,9 +170,13 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     puesto) entre la lectura y el commit de una correccion → el reintento responde 409 `order_not_editable` y no
     aplica ningun campo; (c) cancelar + cancelar → el segundo `unchanged`.
 
-- [ ] **T6b: Delegacion de las tres callables del panel, guardas 017 y anti-copia**
+- [x] **T6b: Delegacion de las tres callables del panel, guardas 017 y anti-copia**
   * Requisitos cubiertos: RF_19, RF_11, RF_16
-  * Archivos: functions/src/orders.ts, src/lib/spec-017-guards.test.ts, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/mutacion-rf19.txt
+  * Archivos: functions/src/orders.ts, src/lib/spec-017-guards.test.ts, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/mutacion-rf19.txt,
+    functions/src/order-seller-actions-run.ts, src/lib/order-seller-actions-run.test.ts, src/lib/spec-013-guards.test.ts
+    (ampliado el 2026-10-05: `resolveEditedOrderLines` necesita el pedido leido DENTRO de la transaccion, asi que
+    `runDeliveryCorrection` acepta `panelExtras` como funcion del pedido leido; y la guarda T4 de la 013 exigia
+    en `updateImportedOrder` el `action` y el `transaction.set(...merge)` que ahora viven en nucleo y ejecutor)
   * Accion: `confirmImportedOrder`, `updateImportedOrder` y `cancelOrder` delegan en el ejecutor de T6 con
     politica `panel`, sin cambiar sus mensajes ni sus codigos de error. `updateImportedOrder` traduce los campos
     extra (producto/`lineItems` via `resolveEditedOrderLines` intacto, pago, modo, valor, zona,

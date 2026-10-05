@@ -32,6 +32,7 @@ import {
   type CityFact,
   type ConfirmInput,
   type DeliveryCorrectionInput,
+  type PanelEditExtras,
   type PlanInput,
   type SellerActionPlan,
   type SellerActionPolicy,
@@ -74,7 +75,7 @@ async function runPlanned<TInput, TPlanInput>(
   deps: SellerActionRunDeps,
   request: RunRequest<TInput>,
   plan: Planner<TPlanInput>,
-  prepareInput: (transaction: Transaction, input: TInput) => Promise<TPlanInput>
+  prepareInput: (transaction: Transaction, input: TInput, order: OrderView) => Promise<TPlanInput>
 ): Promise<SellerActionRunResult> {
   const { db } = deps;
   const { orderId, policy, actor, input, now } = request;
@@ -85,7 +86,7 @@ async function runPlanned<TInput, TPlanInput>(
     if (!snapshot.exists) return { kind: "rejected", rejection: { code: "order_not_found" } };
     const order: OrderView = { ...(snapshot.data() ?? {}), id: orderId };
 
-    const planInput = await prepareInput(transaction, input);
+    const planInput = await prepareInput(transaction, input, order);
     const decision = plan({ policy, actor, order, input: planInput, now });
     if (!isPlan(decision)) return { kind: "rejected", rejection: decision };
     if (decision.outcome === "unchanged") return { kind: "unchanged", order };
@@ -149,14 +150,36 @@ export function runConfirm(deps: SellerActionRunDeps, request: RunRequest<Confir
   return runPlanned(deps, request, planConfirm, asIs);
 }
 
+/**
+ * Extras del panel como funcion del pedido LEIDO EN LA TRANSACCION (spec 029 T6b). `updateImportedOrder`
+ * resuelve las lineas con `resolveEditedOrderLines(input, current)`, y `current` tiene que ser el documento que
+ * se va a pisar: con una lectura previa, una reimportacion entre esa lectura y el commit dejaria lineas
+ * rearmadas desde campos planos encima de un pedido multilinea (el costo duplicado). Al evaluarse aqui, cada
+ * reintento de Firestore la vuelve a llamar con el documento nuevo.
+ */
+export type PanelExtrasSource = PanelEditExtras | ((order: OrderView) => PanelEditExtras);
+
+export type RunDeliveryCorrectionInput = Omit<DeliveryCorrectionInput, "city" | "panelExtras"> & {
+  panelExtras?: PanelExtrasSource;
+};
+
 export function runDeliveryCorrection(
   deps: SellerActionRunDeps,
-  request: RunRequest<Omit<DeliveryCorrectionInput, "city">>
+  request: RunRequest<RunDeliveryCorrectionInput>
 ): Promise<SellerActionRunResult> {
-  return runPlanned(deps, request, planDeliveryCorrection, async (transaction, input) => ({
-    ...input,
-    city: await readCity(deps, transaction, input.cityId)
-  }));
+  if (request.policy === "api" && request.input.panelExtras !== undefined) {
+    // Antes de abrir la transaccion y sin evaluar la funcion: con politica api es un error de programacion.
+    return Promise.reject(new Error("panelExtras solo existe con politica panel: la validacion de la API nunca lo produce."));
+  }
+  return runPlanned(deps, request, planDeliveryCorrection, async (transaction, input, order) => {
+    const { panelExtras, ...rest } = input;
+    const resolved = typeof panelExtras === "function" ? panelExtras(order) : panelExtras;
+    return {
+      ...rest,
+      ...(resolved !== undefined ? { panelExtras: resolved } : {}),
+      city: await readCity(deps, transaction, input.cityId)
+    };
+  });
 }
 
 export function runCancel(deps: SellerActionRunDeps, request: RunRequest<CancelInput>): Promise<SellerActionRunResult> {

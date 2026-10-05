@@ -263,3 +263,71 @@ describe("T2 · query-check: consultas exactas e indices", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("T6b · RF_19 anti-copia", () => {
+  /**
+   * Las tres callables del panel delegan en el ejecutor de T6 (politica `panel`) y no conservan su propia
+   * copia de la regla. El cuerpo de cada una se extrae por su nombre exportado: desde
+   * `^export const <name> = onCall(` hasta el primer `\n});\n` (cierre en columna 0). Si una callable deja
+   * de tener esa forma, la guarda cae en rojo por no encontrarla; no pasa en silencio.
+   */
+  const ORDERS = "functions/src/orders.ts";
+  const NUCLEO = "functions/src/order-seller-actions.ts";
+
+  function exportedCallableBody(source: string, name: string): string | null {
+    const start = source.search(new RegExp(`^export const ${name}\\s*=\\s*onCall\\(`, "m"));
+    if (start < 0) return null;
+    const end = source.indexOf("\n});\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  const CALLABLES = [
+    { name: "confirmImportedOrder", runner: "runConfirm" },
+    { name: "updateImportedOrder", runner: "runDeliveryCorrection" },
+    { name: "cancelOrder", runner: "runCancel" },
+  ] as const;
+
+  const FORBIDDEN = [/status:\s*"ready_to_assign"/, /status:\s*"cancelled"/, /addressRisk:\s*"accepted"/, /\[MANUAL_EDIT_STAMP\]/];
+
+  for (const { name, runner } of CALLABLES) {
+    it(`${name} llama a ${runner}(`, () => {
+      const body = exportedCallableBody(sourceWithoutComments(ORDERS), name);
+      expect(body, `no se encontro export const ${name} = onCall(`).not.toBeNull();
+      expect(body).toContain(`${runner}(`);
+    });
+
+    it(`${name} no conserva su propio parche (estado, addressRisk, sello)`, () => {
+      const body = exportedCallableBody(sourceWithoutComments(ORDERS), name) ?? "";
+      expect(body).not.toBe("");
+      for (const pattern of FORBIDDEN) expect(body).not.toMatch(pattern);
+    });
+  }
+
+  it("orders.ts importa los tres ejecutores de order-seller-actions-run", () => {
+    const source = sourceWithoutComments(ORDERS);
+    for (const runner of ["runConfirm", "runDeliveryCorrection", "runCancel"]) {
+      expect(source).toMatch(new RegExp(`import\\s*\\{[^}]*\\b${runner}\\b[^}]*\\}\\s*from\\s*["']\\./order-seller-actions-run["']`));
+    }
+  });
+
+  it("updateImportedOrder traduce producto y extras: resolveEditedOrderLines( y panelExtras", () => {
+    const body = exportedCallableBody(sourceWithoutComments(ORDERS), "updateImportedOrder") ?? "";
+    expect(body).toContain("resolveEditedOrderLines(");
+    expect(body).toContain("panelExtras");
+  });
+
+  it("cancelOrder ya no tiene su lista literal de estados cerrados", () => {
+    const body = exportedCallableBody(sourceWithoutComments(ORDERS), "cancelOrder") ?? "";
+    expect(body).not.toBe("");
+    expect(body).not.toMatch(/"delivered",\s*"failed",\s*"cancelled",\s*"liquidated"/);
+  });
+
+  it("el parche de cancelar del nucleo conserva driverId ?? null sobre el pedido leido", () => {
+    const source = sourceWithoutComments(NUCLEO);
+    const start = source.search(/^export function planCancel\s*\(/m);
+    expect(start, "no se encontro export function planCancel(").toBeGreaterThanOrEqual(0);
+    const end = source.indexOf("\n}\n", start);
+    const body = source.slice(start, end < 0 ? undefined : end + 2);
+    expect(body).toMatch(/driverId:\s*(?:current|order)\.driverId\s*\?\?\s*null/);
+  });
+});

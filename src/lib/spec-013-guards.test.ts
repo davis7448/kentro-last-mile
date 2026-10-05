@@ -485,6 +485,9 @@ describe("T3 — el Excel consume orderAddressLines (RF_08, RNF_02)", () => {
  */
 
 const SERVIDOR = "functions/src/orders.ts";
+/** Spec 029 T6b: la escritura y el evento de `updateImportedOrder` viven ahora en el ejecutor y el nucleo. */
+const EJECUTOR = "functions/src/order-seller-actions-run.ts";
+const NUCLEO = "functions/src/order-seller-actions.ts";
 const FUENTE_SERVIDOR = repoSourceWithoutComments(SERVIDOR);
 const AUTH = "src/lib/firebase/auth.ts";
 const FUENTE_AUTH = repoSourceWithoutComments(AUTH);
@@ -539,7 +542,10 @@ describe("T4 — el servidor y los wrappers aceptan deliveryNotes; las otras via
     expect(/\bconfirmImportedOrder\b/.test(callableCrear), "el callable de creacion se desborda hasta `confirmImportedOrder`").toBe(false);
 
     expect(callableEditar.length, "no se encuentra `export const updateImportedOrder = onCall(`").toBeGreaterThan(0);
-    expect(callableEditar.includes('action: "order.imported_updated"'), "el callable de edicion llega hasta su auditoria").toBe(true);
+    // Spec 029 T6b (RF_19): `updateImportedOrder` ya no arma su evento ni su escritura; delega en el ejecutor
+    // (`runDeliveryCorrection`) y el `action: "order.imported_updated"` vive en el nucleo. El ancla de fin del
+    // extractor pasa a ser la llamada al ejecutor.
+    expect(callableEditar.includes("runDeliveryCorrection("), "el callable de edicion llega hasta su delegacion en `runDeliveryCorrection(`").toBe(true);
     expect(/\bconfirmRetryOrder\b/.test(callableEditar), "el callable de edicion se desborda hasta `confirmRetryOrder`").toBe(false);
   });
 
@@ -586,9 +592,23 @@ describe("T4 — el servidor y los wrappers aceptan deliveryNotes; las otras via
       lineaNormalizada?.[0].trim() ?? "",
       "`normalizedAddress: input.normalizedAddress?.trim()` debe quedar EXACTAMENTE asi (sin `|| undefined` ni `|| \"\"`): un `\"\"` pisaria la corregida en cada edicion"
     ).toBe("normalizedAddress: input.normalizedAddress?.trim()");
+    // Spec 029 T6b (RF_19): la escritura ya no esta en el callable. El `merge: true` (con `stripUndefined`) vive
+    // en el ejecutor, que escribe el parche del nucleo, y el evento `order.imported_updated` en el nucleo
+    // (politica panel). Al callable se le exige delegar en `runDeliveryCorrection(`; lo demas, donde vive ahora.
     expect(
-      /transaction\.set\(\s*orderRef\s*,\s*updated\s*,\s*\{\s*merge:\s*true\s*\}\s*\)/.test(callableEditar),
-      "`transaction.set(orderRef, updated, { merge: true })` debe seguir ahi: sin `merge` la edicion borra la direccion corregida por el mensajero (RF_11)"
+      callableEditar.includes("runDeliveryCorrection("),
+      "`updateImportedOrder` debe delegar en `runDeliveryCorrection(` (spec 029 T6b, RF_19): una escritura propia seria una segunda copia de la regla"
+    ).toBe(true);
+    const fuenteEjecutor = repoSourceWithoutComments(EJECUTOR);
+    expect(
+      /transaction\.set\(\s*orderRef\s*,\s*stripUndefined\([\s\S]*?\)\s*,\s*\{\s*merge:\s*true\s*\}\s*\)/.test(fuenteEjecutor),
+      `${EJECUTOR} debe escribir el pedido con \`transaction.set(orderRef, stripUndefined(...), { merge: true })\`: sin \`merge\` la edicion borra la direccion corregida por el mensajero (RF_11)`
+    ).toBe(true);
+    const correccionNucleo = funcionesSeguras(repoSourceWithoutComments(NUCLEO)).get("planDeliveryCorrection") ?? "";
+    expect(correccionNucleo.length, `no se encuentra el cuerpo de \`planDeliveryCorrection\` en ${NUCLEO}`).toBeGreaterThan(0);
+    expect(
+      /policy\s*===\s*"panel"\s*\?\s*"order\.imported_updated"/.test(correccionNucleo),
+      `${NUCLEO}: con politica panel, \`planDeliveryCorrection\` debe auditar como \`"order.imported_updated"\` (la accion de hoy del panel)`
     ).toBe(true);
   });
 

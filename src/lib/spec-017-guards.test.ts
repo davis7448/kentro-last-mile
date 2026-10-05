@@ -212,9 +212,16 @@ describe("guarda 7 — las dos ediciones manuales sellan (RF_17)", () => {
   it("usando la constante del nucleo, no un literal", () => {
     const source = sourceWithoutComments("functions/src/orders.ts");
     expect(source).toMatch(/import\s*\{[^}]*MANUAL_EDIT_STAMP[^}]*\}\s*from\s*["']\.\/order-import-merge["']/);
-    // Una por cada edicion manual: `updateImportedOrder` y `updateOrderAdjustments`.
-    expect(source.match(/\[MANUAL_EDIT_STAMP\]:/g) ?? []).toHaveLength(2);
+    // Spec 029 T6b: siguen siendo dos ediciones manuales que sellan, pero `updateImportedOrder` ya no
+    // escribe el pedido: delega en el nucleo (`planDeliveryCorrection`, politica `panel`), que es el unico
+    // que pone el sello de esa edicion. En `orders.ts` queda solo el de `updateOrderAdjustments`, y el otro
+    // se cuenta donde vive ahora, en `order-seller-actions.ts`. Total: 2, como antes.
+    expect(source.match(/\[MANUAL_EDIT_STAMP\]:/g) ?? []).toHaveLength(1);
+    const nucleo = sourceWithoutComments("functions/src/order-seller-actions.ts");
+    expect(nucleo).toMatch(/import\s*\{[^}]*MANUAL_EDIT_STAMP[^}]*\}\s*from\s*["']\.\/order-import-merge["']/);
+    expect(nucleo.match(/\[MANUAL_EDIT_STAMP\]:/g) ?? []).toHaveLength(1);
     expect(source).not.toMatch(/manuallyEditedAt/);
+    expect(nucleo).not.toMatch(/manuallyEditedAt/);
   });
 
   /**
@@ -222,15 +229,19 @@ describe("guarda 7 — las dos ediciones manuales sellan (RF_17)", () => {
    * segunda es la que mas importa: decide si el admin puede ajustar producto y **recaudo**, asi que
    * si divergiera se podria mover el dinero de un pedido ya cerrado (principio 10).
    *
-   * Las dos copias de `closedStatuses` que quedan (anulacion e inventario) se dejaron a proposito:
-   * gobiernan otro ciclo y unificarlas seria refactor fuera del alcance de esta spec. La guarda fija
-   * ese numero para que nadie anada una tercera sin decidirlo.
+   * La copia de `closedStatuses` que queda (inventario) se dejo a proposito: gobierna otro ciclo y
+   * unificarla seria refactor fuera del alcance. La de anulacion desaparecio con la spec 029 (T6b),
+   * al delegar `cancelOrder` en el nucleo. La guarda fija ese numero para que nadie anada otra sin
+   * decidirlo.
    */
   it("y la lista de estados cerrados sale del nucleo donde importa", () => {
     const source = sourceWithoutComments("functions/src/orders.ts");
     expect(source).toMatch(/new Set<string>\(CLOSED_STATUSES\)/);
+    // Spec 029 T6b: `cancelOrder` delega en el nucleo (`planCancel`, que usa `CLOSED_STATUSES`), asi que
+    // su copia literal desaparece. Queda una sola: la de inventario (`reconcileInventoryReservations`),
+    // que gobierna otro ciclo y se deja a proposito.
     const literales = source.match(/\["delivered", "failed", "cancelled", "liquidated"\]/g) ?? [];
-    expect(literales).toHaveLength(2);
+    expect(literales).toHaveLength(1);
     for (const match of source.matchAll(/(\w+)\s*=\s*new Set\(\["delivered"/g)) {
       expect(match[1]).toBe("closedStatuses");
     }

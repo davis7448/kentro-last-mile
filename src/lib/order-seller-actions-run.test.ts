@@ -537,6 +537,102 @@ describe("T6 · ejecutor transaccional y carreras simuladas (RF_19, RF_04, RF_11
 });
 
 // ---------------------------------------------------------------------------------------------------
+// T6b: `panelExtras` como funcion del pedido leido DENTRO de la transaccion
+//
+// Contrato (ampliado el 2026-10-05): `runDeliveryCorrection` acepta en `input.panelExtras` un objeto (como en
+// T6) o una funcion `(order: OrderView) => PanelEditExtras`. Si es funcion, el ejecutor la llama con el pedido
+// que acaba de leer con `transaction.get` (el mismo `{ ...data, id }` que ve el planificador) y pasa lo que
+// devuelve al planificador como `panelExtras`. Como la llamada esta dentro de la funcion de la transaccion, un
+// reintento la vuelve a evaluar con el documento nuevo: `updateImportedOrder` resuelve las lineas con
+// `resolveEditedOrderLines(input, current)` y `current` tiene que ser el pedido que se va a pisar, no una
+// lectura previa. Con politica api, `panelExtras` (objeto o funcion) sigue siendo un error de programacion.
+// ---------------------------------------------------------------------------------------------------
+
+describe("T6b · panelExtras como funcion del pedido leido", () => {
+  const LINES_FIRST = [{ productName: "Crema", sku: "CR-1", quantity: 1 }];
+  const LINES_REIMPORTED = [
+    { productName: "Crema", sku: "CR-1", quantity: 1 },
+    { productName: "Serum", sku: "SR-1", quantity: 3 }
+  ];
+
+  /** Lo que haria `resolveEditedOrderLines`: derivar el producto de las lineas DEL PEDIDO que recibe. */
+  function extrasFromOrder(order: Data) {
+    const lines = (order.lineItems as Array<{ productName: string; sku: string; quantity: number }>) ?? [];
+    return {
+      lineItems: lines.map((line) => ({ ...line, quantity: line.quantity * 2 })),
+      productName: lines.map((line) => line.productName).join(" + "),
+      quantity: lines.reduce((sum, line) => sum + line.quantity * 2, 0)
+    };
+  }
+
+  it("la funcion recibe el pedido leido en la transaccion y su resultado se escribe como panelExtras", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb({ lineItems: LINES_FIRST });
+    const current = db.read("orders", "order-1") ?? {};
+    const seen: Data[] = [];
+    const panelExtras = (order: Data) => {
+      seen.push(structuredClone(order));
+      return extrasFromOrder(order);
+    };
+    const result = await runDeliveryCorrection(makeDeps(db), request("panel", { ...panelDeliveryOf(current), panelExtras }));
+    expect(result.kind, JSON.stringify(result)).toBe("applied");
+    expect(seen, "la funcion debe llamarse una vez, con el pedido leido").toHaveLength(1);
+    expect(seen[0]).toMatchObject({ id: "order-1", sellerId: SELLER, status: "imported", lineItems: LINES_FIRST });
+    const stored = db.read("orders", "order-1") ?? {};
+    expect(stored.lineItems).toEqual([{ productName: "Crema", sku: "CR-1", quantity: 2 }]);
+    expect(stored).toMatchObject({ productName: "Crema", quantity: 2, [STAMP]: NOW });
+    expect(db.all("auditEvents")).toHaveLength(1);
+    expect(db.all("auditEvents")[0]).toMatchObject({ action: "order.imported_updated" });
+  });
+
+  it("carrera: una reimportacion cambia lineItems antes del commit → el reintento llama la funcion con el documento nuevo y escribe lo de ese documento", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb({ lineItems: LINES_FIRST });
+    const current = db.read("orders", "order-1") ?? {};
+    const seen: Data[] = [];
+    const panelExtras = (order: Data) => {
+      seen.push(structuredClone(order));
+      return extrasFromOrder(order);
+    };
+    // Entre la lectura y el commit, la tienda reimporta el pedido con otra linea (sigue imported, sin lider).
+    db.beforeCommit.push(() => db.externalWrite("orders", "order-1", { lineItems: LINES_REIMPORTED }));
+    const result = await runDeliveryCorrection(makeDeps(db), request("panel", { ...panelDeliveryOf(current), panelExtras }));
+    expect(result.kind, JSON.stringify(result)).toBe("applied");
+    expect(db.attempts, "la transaccion tuvo que reintentar").toBeGreaterThanOrEqual(2);
+    expect(seen.length, "la funcion se evalua en cada intento").toBeGreaterThanOrEqual(2);
+    expect(seen[0].lineItems).toEqual(LINES_FIRST);
+    expect(seen[seen.length - 1].lineItems, "el ultimo intento ve la reimportacion").toEqual(LINES_REIMPORTED);
+    const stored = db.read("orders", "order-1") ?? {};
+    expect(stored.lineItems, "se escribe lo derivado del documento nuevo, no lo del primer intento").toEqual([
+      { productName: "Crema", sku: "CR-1", quantity: 2 },
+      { productName: "Serum", sku: "SR-1", quantity: 6 }
+    ]);
+    expect(stored).toMatchObject({ productName: "Crema + Serum", quantity: 8 });
+    expect(db.all("auditEvents"), "un solo evento: el intento descartado no deja rastro").toHaveLength(1);
+  });
+
+  it("politica api con panelExtras como objeto → rechaza sin escribir (como hoy)", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb();
+    await expect(
+      runDeliveryCorrection(makeDeps(db), request("api", { customerName: "Otro", panelExtras: { totalCop: 1 } }))
+    ).rejects.toThrow(/panelExtras/);
+    expect(guardedCalls(db, true)).toEqual([]);
+  });
+
+  it("politica api con panelExtras como funcion → rechaza sin escribir (como hoy)", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb();
+    const panelExtras = () => ({ totalCop: 1 });
+    await expect(
+      runDeliveryCorrection(makeDeps(db), request("api", { customerName: "Otro", panelExtras }))
+    ).rejects.toThrow(/panelExtras/);
+    expect(guardedCalls(db, true)).toEqual([]);
+    expect(db.read("orders", "order-1")?.totalCop).toBe(89000);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
 // RF_11: la ciudad corregida sobrevive a una reimportacion (cityId en el grupo `customer` de FIELD_GROUPS)
 // ---------------------------------------------------------------------------------------------------
 
