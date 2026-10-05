@@ -1,0 +1,3431 @@
+{
+  "captureAt": "2026-10-05T04:15:40.015Z",
+  "range": {
+    "from": "2026-09-04",
+    "to": "2026-10-03"
+  },
+  "stores": [
+    {
+      "sellerId": "seller-1778271867877",
+      "sellerName": "Kovia",
+      "kpis": {
+        "ok": true,
+        "tienda": "Kovia",
+        "rango": {
+          "desde": "2026-09-04",
+          "hasta": "2026-10-03"
+        },
+        "kpis": {
+          "totalPedidos": 26,
+          "embudo": {
+            "pendienteConfirmar": 1,
+            "listoSinLider": 4,
+            "asignadoPendienteRecoger": 0,
+            "recogidoSinMensajero": 0,
+            "enGestionORuta": 0,
+            "entregados": 12,
+            "fallidos": 4,
+            "cancelados": 5,
+            "liquidados": 0
+          },
+          "indicadores": {
+            "tomadosPorDomiciliario": 16,
+            "despachables": 12,
+            "abiertosDespachables": 0,
+            "porcentajeDespacho": 75,
+            "porcentajeTerminacion": 100,
+            "porcentajeEntrega": 100,
+            "porcentajeDevolucion": 0
+          },
+          "fallidosPorCategoria": {
+            "fallidoConVisita": 0,
+            "sinCobertura": 2,
+            "pedidoMaloNoContesta": 2,
+            "sinTelefonoLineaInactiva": 0
+          },
+          "formulas": {
+            "tomadosPorDomiciliario": "pedidos con domiciliario asignado en estado llamada/agendado/recogido/en ruta/reintento/entregado/fallido/liquidado",
+            "despachables": "tomados por domiciliario menos fallidos sin cobertura, pedido malo/no contesta y sin telefono/linea inactiva",
+            "porcentajeDespacho": "despachables / tomados por domiciliario",
+            "porcentajeTerminacion": "(entregados + fallidos con visita + liquidados) / despachables",
+            "porcentajeEntrega": "entregados / despachables",
+            "porcentajeDevolucion": "fallidos con visita / despachables"
+          }
+        }
+      },
+      "orders": {
+        "ok": true,
+        "tienda": "Kovia",
+        "rango": {
+          "desde": "2026-09-04",
+          "hasta": "2026-10-03"
+        },
+        "total": 26,
+        "pedidos": [
+          {
+            "id": "shopify-7594410803372",
+            "updatedAt": "2026-10-04T15:45:15.090Z",
+            "hash": "2ebe0f28c72feced804c8a06288f3d32bc4f9bcc73f70ae51c44a9deada6627c"
+          },
+          {
+            "id": "shopify-7594318758060",
+            "updatedAt": "2026-10-04T15:45:39.033Z",
+            "hash": "904016bdf1ea8d1ee2beb833257057ba86c7c64c0c4acc466052a8b772ab9c4b"
+          },
+          {
+            "id": "shopify-7592266137772",
+            "updatedAt": "2026-10-04T15:44:41.545Z",
+            "hash": "47fb9eb4cb9bd9dcc4d9278d02d8cbd4b70a2693a9a2a9e73daa93acd40da07d"
+          },
+          {
+            "id": "shopify-7587059269804",
+            "updatedAt": "2026-09-29T19:30:41.577Z",
+            "hash": "8a7f19359b40aad19b43954aa794124e3681b338a522a76ed3ecb6f518d92c7a"
+          },
+          {
+            "id": "shopify-7577386090668",
+            "updatedAt": "2026-10-01T18:35:42.277Z",
+            "hash": "e0e845ce44ff136cbff3abffc6e0ccab001a0fe97cdb027888ee4f8d0bcabfdb"
+          },
+          {
+            "id": "shopify-7576005083308",
+            "updatedAt": "2026-09-26T22:49:02.704Z",
+            "hash": "fee262d48958d93ae75be5cd0fcf4c605b2591433c9d0dd61a525468b511fc4f"
+          },
+          {
+            "id": "shopify-7573678260396",
+            "updatedAt": "2026-09-25T14:41:16.700Z",
+            "hash": "91483094185ed99d1c98291b238fcb5dc76163332ae7209b6b3dfdde739feb41"
+          },
+          {
+            "id": "shopify-7567008432300",
+            "updatedAt": "2026-09-19T20:37:40.241Z",
+            "hash": "34917743769db3bc4783ef24e83adabd9a7d83a4301530589c2aa93a9a3d5e24"
+          },
+          {
+            "id": "shopify-7561701458092",
+            "updatedAt": "2026-09-18T13:03:16.084Z",
+            "hash": "e6da4574ca5acaf7ec2fe7474e9bb0921799f70ef6963773f5c29cf339803f3e"
+          },
+          {
+            "id": "shopify-7561261154476",
+            "updatedAt": "2026-09-18T15:43:23.963Z",
+            "hash": "5b8f5c118c9285143e891dc7c6693b74a6541cb5b34739fbf8a204f46054fd7b"
+          },
+          {
+            "id": "shopify-7557016977580",
+            "updatedAt": "2026-09-18T14:58:46.206Z",
+            "hash": "7468b19e9ef6337f20e42d5165443ddcf6df3c95d79d344fa05982559ebb9bcc"
+          },
+          {
+            "id": "shopify-7554452488364",
+            "updatedAt": "2026-09-18T18:30:16.770Z",
+            "hash": "e2d433e15d9c85f4d337f68cc8225d790bab568876e8200417e1ed0c407cc54e"
+          },
+          {
+            "id": "shopify-7553450082476",
+            "updatedAt": "2026-09-16T17:01:41.741Z",
+            "hash": "3315c1d33ea2ee76262242f35bb0cb9f14b53209531fcb9cf6c458807e1d15fe"
+          },
+          {
+            "id": "shopify-7551329337516",
+            "updatedAt": "2026-09-16T15:45:42.522Z",
+            "hash": "86bac68360cedc6cb3bbb25825e79c4769ff7db5e5095a9e4f9d40062a9cb12b"
+          },
+          {
+            "id": "shopify-7551143510188",
+            "updatedAt": "2026-09-16T16:26:24.618Z",
+            "hash": "6b0bde80dda17818a8b3e4ef39c57f62bba55d46cdacf2e850d05dace8f83b39"
+          },
+          {
+            "id": "shopify-7548603891884",
+            "updatedAt": "2026-09-15T16:37:31.102Z",
+            "hash": "0f581d6adc0132c26aba5ec2b3e5ca6483029c6c45b1ff82cf30b4e2f9a4710b"
+          },
+          {
+            "id": "shopify-7547082473644",
+            "updatedAt": "2026-09-12T01:44:38.841Z",
+            "hash": "44f58e56f4f47258eb83a33f87111767dc41a8be8886cd9d271ba8014bf91a2b"
+          },
+          {
+            "id": "shopify-7546309443756",
+            "updatedAt": "2026-09-11T01:12:02.929Z",
+            "hash": "87910af9e4cbf4014dca1bb8f5fcaa733be59c0bed084f8b9156515bdc3a70d2"
+          },
+          {
+            "id": "shopify-7543972659372",
+            "updatedAt": "2026-09-10T12:58:49.429Z",
+            "hash": "8a20ed39d84e366a5b8567d2a48e376627b3e5f09072b348a1a81e4cc0e9e5f7"
+          },
+          {
+            "id": "shopify-7543303930028",
+            "updatedAt": "2026-09-09T14:24:20.667Z",
+            "hash": "2cedf44aa24a73745541e6b6ffeccc7b6dee8cf70584d6065326a71123924748"
+          },
+          {
+            "id": "shopify-7542980477100",
+            "updatedAt": "2026-09-11T13:23:25.768Z",
+            "hash": "572954fbc35ed60420584379026a66afa707d8cdc0575793beade5cb6d6d1372"
+          },
+          {
+            "id": "shopify-7542370861228",
+            "updatedAt": "2026-09-08T19:48:15.766Z",
+            "hash": "05d96d8fc7e3bb6b85402ac45d53f92b33e322bb20ecc0fe34ded51f9021de84"
+          },
+          {
+            "id": "shopify-7540908589228",
+            "updatedAt": "2026-09-08T19:55:39.178Z",
+            "hash": "ff1acbd71884235ed627c8e0ea6734921e0afac8cca5c723c26a379e7e6c3191"
+          },
+          {
+            "id": "shopify-7538092605612",
+            "updatedAt": "2026-09-07T12:36:11.813Z",
+            "hash": "e3ce2e7ed20176173511c29ebed3df97e3e2c5c9c7ad4c68687f22614e1aa3ae"
+          },
+          {
+            "id": "shopify-7537210654892",
+            "updatedAt": "2026-09-09T14:52:20.264Z",
+            "hash": "038cb938fee3f4a18f7f5f55bc4e3ea0d401cacea8d754ce751ed94a193a698f"
+          },
+          {
+            "id": "shopify-7536619454636",
+            "updatedAt": "2026-09-09T14:05:08.522Z",
+            "hash": "e19c87e72a770dec3c2e9e4895a66018aca5608717bf1c4f7171001b9bde0a97"
+          }
+        ]
+      },
+      "settlements": {
+        "ok": true,
+        "tienda": "Kovia",
+        "total": 3,
+        "significado": {
+          "netoCop": "Valor liquidado del corte segun los pedidos incluidos.",
+          "pagadoCop": "Valor realmente transferido por ese corte.",
+          "saldoDelCorteCop": "Diferencia entre el neto y lo transferido. Si es 0, el corte quedo saldado.",
+          "nota": "Aclaracion del corte cuando el pago no fue en un solo giro."
+        },
+        "liquidaciones": [
+          {
+            "id": "stl-1785717894102-seller-seller-1778271867877",
+            "updatedAt": "2026-08-03T12:34:52.274Z",
+            "hash": "d14e45d1195782a058a7c7c6fed6c7dbd4fe35392e68d3609d67dc2b8818f73a"
+          },
+          {
+            "id": "stl-1784817606203-seller-seller-1778271867877",
+            "updatedAt": "2026-07-23T14:40:25.328Z",
+            "hash": "a1be346e66d51d00940e3de923d9bdf13df792ea910258408c1bb4151a766add"
+          },
+          {
+            "id": "stl-1784125046790-seller-seller-1778271867877",
+            "updatedAt": "2026-07-17T05:01:10.598Z",
+            "hash": "69882cb82c82e8fa030f628ea7a0795ed55eb93dd847e8d05601a6f7bbc66fa2"
+          }
+        ]
+      },
+      "resumen": {
+        "ok": true,
+        "tienda": "Kovia",
+        "saldoPendiente": {
+          "disponibleCop": 135635,
+          "retenidoCop": 0,
+          "retenidoPedidos": 0,
+          "enLiquidacionCop": 0,
+          "bloqueadoCodCop": 122150,
+          "totalCop": 257785
+        },
+        "totales": {
+          "codCop": 6218775,
+          "cobrosCop": 849000,
+          "costoProductoCop": 1716550,
+          "abonadoCop": 1774666,
+          "liquidadoCop": 1613675
+        },
+        "pagos": [
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-15T14:17:29.773Z",
+            "montoCop": 1170575,
+            "referencia": "stl-1784125046790-seller-seller-1778271867877",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-23T14:40:07.027Z",
+            "montoCop": 305000,
+            "referencia": "stl-1784817606203-seller-seller-1778271867877",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-08-03T00:44:55.780Z",
+            "montoCop": 138100,
+            "referencia": "stl-1785717894102-seller-seller-1778271867877",
+            "nota": null
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-10T05:43:23.419Z",
+            "montoCop": 580000,
+            "referencia": "abono",
+            "nota": "Abono a tienda Kovia: PAGO SERVICIOS PUBLICOS, DESCUENTO DE SALDO KOVIA."
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-15T03:59:23.580Z",
+            "montoCop": 109683,
+            "referencia": "abono",
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-15T04:01:32.223Z",
+            "montoCop": 40938,
+            "referencia": "abono",
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-15T04:03:39.421Z",
+            "montoCop": 44045,
+            "referencia": "abono",
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-27T17:23:25.642Z",
+            "montoCop": 1000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda Kovia: abono a Camilo  por Kovia  en septiembre  23 del 2026 para pago arriendo apto Camí"
+          }
+        ],
+        "abonos": [
+          {
+            "fecha": "2026-09-10T05:43:23.419Z",
+            "montoCop": 580000,
+            "nota": "Abono a tienda Kovia: PAGO SERVICIOS PUBLICOS, DESCUENTO DE SALDO KOVIA."
+          },
+          {
+            "fecha": "2026-09-15T03:59:23.580Z",
+            "montoCop": 109683,
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "fecha": "2026-09-15T04:01:32.223Z",
+            "montoCop": 40938,
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "fecha": "2026-09-15T04:03:39.421Z",
+            "montoCop": 44045,
+            "nota": "Abono a tienda Kovia"
+          },
+          {
+            "fecha": "2026-09-27T17:23:25.642Z",
+            "montoCop": 1000000,
+            "nota": "Abono a tienda Kovia: abono a Camilo  por Kovia  en septiembre  23 del 2026 para pago arriendo apto Camí"
+          }
+        ],
+        "ajustes": [],
+        "avisos": [
+          {
+            "fecha": "2026-09-17",
+            "cambio": "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+            "campos": [
+              "disponibleCop",
+              "retenidoCop",
+              "retenidoPedidos",
+              "bloqueadoCodCop",
+              "totalCop"
+            ]
+          }
+        ],
+        "significado": {
+          "disponibleCop": "Saldo que la plataforma ya te puede pagar hoy, en pedidos completos (COD recibido del domiciliario o prepago), neto de abonos y sin la retencion.",
+          "retenidoPedidos": "Cuantos pedidos (o ajustes a tu favor) quedan enteros para el siguiente corte por la retencion.",
+          "retenidoCop": "Saldo pagable que queda para el siguiente corte mientras tengas pedidos en la calle que podrian volver como fallidos (se retiene el flete de devolucion). Los pedidos retenidos van enteros.",
+          "enLiquidacionCop": "Ya incluido en un corte creado pero aun no pagado.",
+          "bloqueadoCodCop": "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
+          "liquidadoCop": "Total neto ya liquidado en cortes pagados/conciliados.",
+          "abonadoCop": "Total de abonos (pagos parciales) que ya te hemos entregado.",
+          "ajustes": "Correcciones que reabren saldo a tu favor (por ejemplo, un corte cerrado por menos de lo transferido). No son pagos recibidos."
+        }
+      },
+      "index": {
+        "ok": true,
+        "tienda": "Kovia",
+        "endpoints": {
+          "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
+          "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
+          "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa, estado de pago y desglose financiero real por pedido (cod, flete, costo producto, neto).",
+          "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
+        },
+        "autenticacion": "sellerId y key por query string, o header Authorization: Bearer <key>.",
+        "avisos": [
+          {
+            "fecha": "2026-09-17",
+            "cambio": "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+            "campos": [
+              "disponibleCop",
+              "retenidoCop",
+              "retenidoPedidos",
+              "bloqueadoCodCop",
+              "totalCop"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "sellerId": "seller-1779315416119",
+      "sellerName": "DANDA",
+      "kpis": {
+        "ok": true,
+        "tienda": "DANDA",
+        "rango": {
+          "desde": "2026-09-04",
+          "hasta": "2026-10-03"
+        },
+        "kpis": {
+          "totalPedidos": 1311,
+          "embudo": {
+            "pendienteConfirmar": 42,
+            "listoSinLider": 105,
+            "asignadoPendienteRecoger": 0,
+            "recogidoSinMensajero": 132,
+            "enGestionORuta": 1,
+            "entregados": 705,
+            "fallidos": 326,
+            "cancelados": 0,
+            "liquidados": 0
+          },
+          "indicadores": {
+            "tomadosPorDomiciliario": 1164,
+            "despachables": 933,
+            "abiertosDespachables": 136,
+            "porcentajeDespacho": 80,
+            "porcentajeTerminacion": 85,
+            "porcentajeEntrega": 76,
+            "porcentajeDevolucion": 10
+          },
+          "fallidosPorCategoria": {
+            "fallidoConVisita": 92,
+            "sinCobertura": 40,
+            "pedidoMaloNoContesta": 187,
+            "sinTelefonoLineaInactiva": 4
+          },
+          "formulas": {
+            "tomadosPorDomiciliario": "pedidos con domiciliario asignado en estado llamada/agendado/recogido/en ruta/reintento/entregado/fallido/liquidado",
+            "despachables": "tomados por domiciliario menos fallidos sin cobertura, pedido malo/no contesta y sin telefono/linea inactiva",
+            "porcentajeDespacho": "despachables / tomados por domiciliario",
+            "porcentajeTerminacion": "(entregados + fallidos con visita + liquidados) / despachables",
+            "porcentajeEntrega": "entregados / despachables",
+            "porcentajeDevolucion": "fallidos con visita / despachables"
+          }
+        }
+      },
+      "orders": {
+        "ok": true,
+        "tienda": "DANDA",
+        "rango": {
+          "desde": "2026-09-04",
+          "hasta": "2026-10-03"
+        },
+        "total": 500,
+        "pedidos": [
+          {
+            "id": "shopify-18922790813846",
+            "updatedAt": "2026-10-04T04:42:41.729Z",
+            "hash": "e56d06ac4de694db93b62928ccebabaaa845323e2db6f61c78b54f2778747cf2"
+          },
+          {
+            "id": "shopify-18922783572118",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "1c6505942925c46fbbe12106d4b87e7a1afbc3a5879f5efaadb3d4f171c2288d"
+          },
+          {
+            "id": "shopify-18922724524182",
+            "updatedAt": "2026-10-04T17:04:12.433Z",
+            "hash": "747fc7050166206f0c263814327d1c6574e3fb668b69f0f0f9be17ef031957f9"
+          },
+          {
+            "id": "shopify-18922711154838",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "c4efe59df414ba30bc4326efb134820f42534bcf77f3ba4397a8a0ac1b7c74ef"
+          },
+          {
+            "id": "shopify-18922683367574",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "5f13bfe562c032e6a5d875ed81471f6ab6c14c7107a4222be8a2ad2328575572"
+          },
+          {
+            "id": "shopify-18922678157462",
+            "updatedAt": "2026-10-04T03:23:02.870Z",
+            "hash": "73e4ae60ca36e08056c45dc9803785999542d296fccc333717d2bb5fd5e4a123"
+          },
+          {
+            "id": "shopify-18922670194838",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "a00842101ba9e414c963ca713e4ef7973ec0ed3c229deebc2d35a0e8edc45851"
+          },
+          {
+            "id": "shopify-18922669310102",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "dc8828fa3d1e4659bec361bbaf29c78d4d70a29a8282251ba2d33428d1c9e1bc"
+          },
+          {
+            "id": "shopify-18922656694422",
+            "updatedAt": "2026-10-04T05:04:08.097Z",
+            "hash": "d91e42c6fbc667ad8fbb20840cf9b4cb68037105cfbee2615215df86675ade0d"
+          },
+          {
+            "id": "shopify-18922655645846",
+            "updatedAt": "2026-10-04T03:02:53.090Z",
+            "hash": "e1133b11091287e6599174802c75e1883314e7ac46e2335b01f293275285c59b"
+          },
+          {
+            "id": "shopify-18922644766870",
+            "updatedAt": "2026-10-04T03:04:07.643Z",
+            "hash": "8e300ede63601973568c7e7b713cc381cefba4ac0cf785c28f36cd0e4dd99029"
+          },
+          {
+            "id": "shopify-18922616553622",
+            "updatedAt": "2026-10-04T02:31:10.906Z",
+            "hash": "122ec9c1646e1b4d7c1cbd46172c4be5891dd3120c7a587766084757dbf5fd3f"
+          },
+          {
+            "id": "shopify-18922597646486",
+            "updatedAt": "2026-10-04T03:04:07.643Z",
+            "hash": "e24326904c2e01aec15d0e8ee04f80933f213af9bfb8ed32d0e57514a7d6005e"
+          },
+          {
+            "id": "shopify-18922587521174",
+            "updatedAt": "2026-10-04T03:04:07.643Z",
+            "hash": "868ee26f5c04ff2d7d6a37a070244670252b894006c51b207cba579f43f4a730"
+          },
+          {
+            "id": "shopify-18923429429361",
+            "updatedAt": "2026-10-04T13:04:12.109Z",
+            "hash": "9fcd53bddac04663c74671d7f9c41399289f51e1ea16a4c0ad62019caf259f58"
+          },
+          {
+            "id": "shopify-18922537418902",
+            "updatedAt": "2026-10-04T03:04:07.643Z",
+            "hash": "f63d84884dc0dca4da94812677798798729aaf336a6e64a0d19c7dee121fe155"
+          },
+          {
+            "id": "shopify-18922521395350",
+            "updatedAt": "2026-10-04T01:06:22.917Z",
+            "hash": "457819b7be6796e3efd0f2375b3865a5aa4fa6664b60b44b8fac9f8fb309188d"
+          },
+          {
+            "id": "shopify-18923395481713",
+            "updatedAt": "2026-10-04T01:04:10.491Z",
+            "hash": "8a726e0182e97ff59b97f8d52a0917356ceac4508428b729f609022b31797c66"
+          },
+          {
+            "id": "shopify-18923307663473",
+            "updatedAt": "2026-10-03T23:39:36.891Z",
+            "hash": "c68deec7ec5fbe6ab346618e78844d48c1404dc70c252e4f56bb889aa7edfd50"
+          },
+          {
+            "id": "shopify-18922395566230",
+            "updatedAt": "2026-10-04T03:04:07.643Z",
+            "hash": "6887e8fe88d5d443de74e82b2ed8c3c6ab9e0fc78ebcd34870d7b6350243918d"
+          },
+          {
+            "id": "shopify-18922388848790",
+            "updatedAt": "2026-10-04T01:04:10.491Z",
+            "hash": "f5cd54a72ecdb54e85ccbe5a040f4627e6115a69e6a15bc13d0d093eba3c24fb"
+          },
+          {
+            "id": "shopify-18923270701169",
+            "updatedAt": "2026-10-03T23:08:25.597Z",
+            "hash": "6736ae1e5e56089e18be17691b8a34d855da8622b282d87afb9de25f204705f9"
+          },
+          {
+            "id": "shopify-18922312630422",
+            "updatedAt": "2026-10-03T22:19:20.144Z",
+            "hash": "7f04ef46e0d18b00c72e1fd859131011b5110fcd185614a901e9480b724ec786"
+          },
+          {
+            "id": "shopify-18923188158577",
+            "updatedAt": "2026-10-03T23:04:09.847Z",
+            "hash": "a6fbc74028b20ab2f0131ab931ab1407f2fd90e2240130241eda159ecf0efe84"
+          },
+          {
+            "id": "shopify-18923175280753",
+            "updatedAt": "2026-10-04T07:04:09.169Z",
+            "hash": "8fc9e7b7bfc4f21e0fd7e105730ece960000df615d4811557a4a27eab053792e"
+          },
+          {
+            "id": "shopify-18922240508054",
+            "updatedAt": "2026-10-03T21:28:33.781Z",
+            "hash": "433d56538443da5c434efe006534f08842aa9ad7036b69e13be0f49905ee53b9"
+          },
+          {
+            "id": "shopify-18923127570545",
+            "updatedAt": "2026-10-03T23:04:09.847Z",
+            "hash": "c4fbd42c9c1d33328df192043b44a106efdc073e5ff0780b50dab4a6703bafc9"
+          },
+          {
+            "id": "shopify-18923123441777",
+            "updatedAt": "2026-10-03T23:04:09.847Z",
+            "hash": "39509e3abf7ce39fc37df3b376d23d4c222e2d1262f06412018e302cb81b22e8"
+          },
+          {
+            "id": "shopify-18923058954353",
+            "updatedAt": "2026-10-03T23:04:09.847Z",
+            "hash": "b7bd61bac1821fa9173c74944f1eda3cb7d96a7e2bdc8e9037a27c67de71c83c"
+          },
+          {
+            "id": "shopify-18922045145238",
+            "updatedAt": "2026-10-03T21:04:10.865Z",
+            "hash": "fd40041c43c0cc345e153bd35401d7295bbfaaf15614cc793a6f6e554022a211"
+          },
+          {
+            "id": "shopify-18922920149105",
+            "updatedAt": "2026-10-03T21:04:10.865Z",
+            "hash": "b4b9375df79b714ea904170d84c724aaa142e52c58a1c8e9527617cbba70b00f"
+          },
+          {
+            "id": "shopify-18921967124630",
+            "updatedAt": "2026-10-03T21:04:10.865Z",
+            "hash": "6931f7d253d1d68a390fb5287d9991ac8d7ddf99a606e645540fbb343f443549"
+          },
+          {
+            "id": "shopify-18921958277270",
+            "updatedAt": "2026-10-03T19:04:09.588Z",
+            "hash": "3bdb747ec78edbc622708b71471d162f62c7094c305f2258300df6c4ce6889b7"
+          },
+          {
+            "id": "shopify-18921908600982",
+            "updatedAt": "2026-10-03T21:04:10.865Z",
+            "hash": "7339b6c8e0db5c76e41ac1caea292bc431c0e81d9514adfe51bd006fcd0ba471"
+          },
+          {
+            "id": "shopify-18921866002582",
+            "updatedAt": "2026-10-03T19:04:09.588Z",
+            "hash": "45a21a8809483bfd62bea536ee25b76d6b4c3662aae9054b9d2c03794ffb7f36"
+          },
+          {
+            "id": "shopify-18921670475926",
+            "updatedAt": "2026-10-03T19:04:09.588Z",
+            "hash": "49d988b80741ea784bf723afd9f76132150ab2a56717fdcf40639df38c922403"
+          },
+          {
+            "id": "shopify-18921615949974",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "22b9a46d58b41b15036e24b7b20c8959ac0038c80e7a142ef8eef60cb7b03880"
+          },
+          {
+            "id": "shopify-18921568534678",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "7912bf0ae80661b592a9ccbc9cc11cd3e870bd2c91e5b61d65d49b6749589e11"
+          },
+          {
+            "id": "shopify-18921542942870",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "ed6b7f529edb8c1ed4075290ca0c1c33d6594282aafbe7f5cfd815f552b6c1d0"
+          },
+          {
+            "id": "shopify-18921518629014",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "1906d53a9ead4ac08e75833eff70c888b76071d1bcd4dc4f7a756768326b7baa"
+          },
+          {
+            "id": "shopify-18921501524118",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "c9a9893d932906679c297b5206f23efc1c32cc95f5eaa9f11b0d33ecf261fda5"
+          },
+          {
+            "id": "shopify-18922492493937",
+            "updatedAt": "2026-10-03T14:48:48.765Z",
+            "hash": "0aebdc3f40be613d271f8b63c4d65dba2b47fa1a5ae3f073f06567619c2bc930"
+          },
+          {
+            "id": "shopify-18921396437142",
+            "updatedAt": "2026-10-03T14:29:52.133Z",
+            "hash": "19ad636c0727beb9e9e4440087c3e4d17976aa6f09f97218f4d6033647846a4c"
+          },
+          {
+            "id": "shopify-18921394602134",
+            "updatedAt": "2026-10-03T15:04:07.322Z",
+            "hash": "777b16d5f99b24cdd90086ac73a263e0664286d272ac2cdb5748f45cd5ec38b3"
+          },
+          {
+            "id": "shopify-18921340666006",
+            "updatedAt": "2026-10-03T15:04:07.322Z",
+            "hash": "adac0fd997a7718ca77d02ed6e1d92845479be26b02c7ab07eff071e10660b09"
+          },
+          {
+            "id": "shopify-18921255207062",
+            "updatedAt": "2026-10-03T15:04:07.322Z",
+            "hash": "32c98e45c3b350100aa00ec97273a73a6030dab5d03cf71a865e26c84e6e9abd"
+          },
+          {
+            "id": "shopify-18921254879382",
+            "updatedAt": "2026-10-03T15:04:07.322Z",
+            "hash": "b0a11cb3a456903204faee530ecfdc0452f3c25dae4064de03da81b16fa14e78"
+          },
+          {
+            "id": "shopify-18921235054742",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "1ae3af8ebeee6877c5adef4b328cedb6eb70421784714496c5108a930cd0ccdf"
+          },
+          {
+            "id": "shopify-18921200353430",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "d1f181748ae50095526029fd9177dca367b881f73830b87eacfb7ce67369382d"
+          },
+          {
+            "id": "shopify-18921190621334",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "9fe521a5a24cb179d06f922fbf7ffd3699999756c381b3c1ba535d240882a270"
+          },
+          {
+            "id": "shopify-18921162506390",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "9d4bc950e8a051c27823b1b1db323b75a0467bc9c7de9fc1eb55643f4702ff73"
+          },
+          {
+            "id": "shopify-18922255155313",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "64858346158d2b8e673fb4f3ff34af96b0260ac015b77519c4337fcb594442ac"
+          },
+          {
+            "id": "shopify-18921066397846",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "3a2e3252bfa5f6921f3580eedd9465ebb764fb6da9eb68a4a85b534e5677a1be"
+          },
+          {
+            "id": "shopify-18922080436337",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "f28dc82719a15c87a1957611526b40b43fb67c2a68120352c25170641bef0400"
+          },
+          {
+            "id": "shopify-18922012639345",
+            "updatedAt": "2026-10-03T06:11:51.789Z",
+            "hash": "fe6e92bdd4ff9980e139fb4a78e1c000e83bd61ca8c0463dec8797cf0c6856a7"
+          },
+          {
+            "id": "shopify-18921821634673",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "139f94a96f8e67868a2189d6c34cf21a9b14184437d7009359193e0ac3f47470"
+          },
+          {
+            "id": "shopify-18920602894486",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "8452abf1e70448534855ede642f7df4bee44be5e03c780076e38257eee56e86d"
+          },
+          {
+            "id": "shopify-18920582217878",
+            "updatedAt": "2026-10-03T03:25:26.468Z",
+            "hash": "a8e384216fc85f7702b0f23025728ff00ab1a82e8076a7240a152ad317cb8ad4"
+          },
+          {
+            "id": "shopify-18921776545905",
+            "updatedAt": "2026-10-03T15:04:07.322Z",
+            "hash": "dfa90ada27f8777e8d88298d8349978bc72b621b7a0b9b785a62f6708e42699a"
+          },
+          {
+            "id": "shopify-18921771171953",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "8ac2d086e7a181b88f6afe4bab9a34856d186bbd49cb19d3f1e723d004b684e2"
+          },
+          {
+            "id": "shopify-18921711370353",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "82ed94be8ffe09a6347334f90cc7cd3f06e426f77becc57d1f7cdccdb3b4f141"
+          },
+          {
+            "id": "shopify-18920459042966",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "52c8725531acfd4e5aa58b5dbbe5c23213ae496ee6609e57097e620f5885a306"
+          },
+          {
+            "id": "shopify-18920456323222",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "2eb27201cb3b323364ee4c9ac0b88993740d468647b9f75b92ddfce08c09bc16"
+          },
+          {
+            "id": "shopify-18920456290454",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "a68145e686a81194b28e667b6876ecd466d6c5f3612bcab0e2b0f7832411d43b"
+          },
+          {
+            "id": "shopify-18920443216022",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "6c489b132b1023e0c85bee59f2e13bcad9945d16f97eef25d0b9400e8574cd6b"
+          },
+          {
+            "id": "shopify-18921667821681",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "a2179c843f83396fb41e3a0c6ff9e01b152851f8c9ae232e925c542d5700aedf"
+          },
+          {
+            "id": "shopify-18920420573334",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "5c07951baf27df994e81d150f6882ad204c57d98b1486ca29b76a8c011d104f0"
+          },
+          {
+            "id": "shopify-18920369750166",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "c9c5450367dbf667baa4915bb583d805ab1e86503662d8362f2ae0ca2935ef53"
+          },
+          {
+            "id": "shopify-18920364048534",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "88a4085fd53df1a5a0a20d2f5f5169355e9d27f620f4edfe4fb02e2aaf97f1b7"
+          },
+          {
+            "id": "shopify-18921600516209",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "cd71513882fba267e138fe070741ccfd6e718ebf8a2088e79f5a8133a344e39b"
+          },
+          {
+            "id": "shopify-18920337768598",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "67c9e05e3d74ddf10f0683a6da04d2b91bb9516769cfb534e9ea1aab5e023b79"
+          },
+          {
+            "id": "shopify-18920319746198",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "afef0093831f92cfd1e00ef94c02fbc951c28558ddf48d48809f8528b8349910"
+          },
+          {
+            "id": "shopify-18920301297814",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "b7b066b967ba949860d6d7af1c2ba6d143b6868d2d50604f300ca7e1e54c4605"
+          },
+          {
+            "id": "shopify-18920243462294",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "54eb0dd6e75d3627f045c2e0d2c55ad2d10cf5090a024b61620ccee0a797d5d2"
+          },
+          {
+            "id": "shopify-18920225341590",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "ce223555b9a49811eb98b552622e61533016663e99593a628ce36e82f4d5a743"
+          },
+          {
+            "id": "shopify-18920112652438",
+            "updatedAt": "2026-10-02T21:12:06.620Z",
+            "hash": "0f61ee9fcac65d605ec851a57e33aedb502515aae848e483fbaf32e03534560b"
+          },
+          {
+            "id": "shopify-18920086536342",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "66df2c4a37b7889d7d03192cbf514563be5a98016170769d7d4cc98a1c0acfaf"
+          },
+          {
+            "id": "shopify-18920015331478",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "9083f60c803e1e87f4193a2601f3d9c1dc686a0f3e28ff48fbeb088df28e6949"
+          },
+          {
+            "id": "shopify-18920006156438",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "7f78d14bedb3e6f1f3517f5be400655ee9a0359453a27f59f2d5ad6c82f8dacd"
+          },
+          {
+            "id": "shopify-18919981842582",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "c7cdfd13edeadeebe2857c99b399c1581550ded12a6f8cfae58631e8cd77dc53"
+          },
+          {
+            "id": "shopify-18919902773398",
+            "updatedAt": "2026-10-02T19:02:38.683Z",
+            "hash": "16bbc934422cff80782a04e4d870e2d1eef6b9d14f677e1813a6882663305702"
+          },
+          {
+            "id": "shopify-18919897366678",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "59eadc1abf1dd6c85027cd019839962d2206635f16f0698c2bb66f57b2ecc26a"
+          },
+          {
+            "id": "shopify-18919856078998",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "2915ed25d1eda1e9912732c27e23b86ba6b6f2f2f114e1d4cb62c14b49d749f2"
+          },
+          {
+            "id": "shopify-18919853392022",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "116b3a140b3f06adab6a16ea6fad97cb72b162a18d268c166316fda610fe4b5a"
+          },
+          {
+            "id": "shopify-18921038381169",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "5aede4d383ca5d747acc2423ad1b4535883df2abbf0bbf3c3a54d0b9f28c4780"
+          },
+          {
+            "id": "shopify-18919751483542",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "bdf7ffe784039aade7d4f1167d1f93909f02c29e5f70d6b9737fe21e45de242f"
+          },
+          {
+            "id": "shopify-18919652753558",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "e79e267a8fa3b2e1d6b6053620fa164b4df78667275f1af8e420f61d30632148"
+          },
+          {
+            "id": "shopify-18919607140502",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "64f6af04761c1274cbdfee17d4eccc243e381dc3f533e02231f02c6aa36fa26e"
+          },
+          {
+            "id": "shopify-18919605403798",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "ad90bbd769c6d5fdfc25be5610cbdd8bfec48091fde21c9683aa406b8fe3ebf1"
+          },
+          {
+            "id": "shopify-18920771092593",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "f25f7f8f405393917dda31a835ccd83c8a2256f914fb0f5b25fce2473e2301b4"
+          },
+          {
+            "id": "shopify-18920769880177",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "a794e75cb7eedcf6b656903b2e6f1583f814e0b79a4085bb5a9c9a54f87b8978"
+          },
+          {
+            "id": "shopify-18919395819670",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "63096d8de7e615d3cd25d8eff266c7a1a719ba8552b8883c59daa60491f8c5de"
+          },
+          {
+            "id": "shopify-18919319568534",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "87a2b0bd3f14a0215a2f967bbf1fd0c01867cbc235475d82189dfa5d1c0f36a5"
+          },
+          {
+            "id": "shopify-18920620458097",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "c993424f14c3027289b6c2b15970bad6854a776e2dcb0e6bfafa125ca5e08203"
+          },
+          {
+            "id": "shopify-18919241908374",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "1c6f2cd4d3ea167b213fee82d5600bf75786f1844651d3ae2884fe2d72ab3629"
+          },
+          {
+            "id": "shopify-18920591163505",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "9a2c8d56c7b9cf66d91c897c6d887bb6886ceb2685a5df804fd7acbd95e6e8c8"
+          },
+          {
+            "id": "shopify-18919222804630",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "2b602f7dcbcfc027408e50934a4d3891f4a158bb66231ddd01321746f7839ab5"
+          },
+          {
+            "id": "shopify-18920573075569",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "61580a1313961f62b07ef1fb8f273793380a8a780c9f5af16a26f9883e055849"
+          },
+          {
+            "id": "shopify-18920566751345",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "ca716eda407bd4b2732bd9737694d71b7d2d0f42c83d9872bf76fc7470bd9662"
+          },
+          {
+            "id": "shopify-18919192002710",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "7564b9d40eb4befa664f044d4b968d36753477fc7a6571e274e7e36a3d08de3f"
+          },
+          {
+            "id": "shopify-18919190790294",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "9f739d1a0a8c4d82044cbfdbc356c4f080081dc66bac546084b3a24aafc34a70"
+          },
+          {
+            "id": "shopify-18919107821718",
+            "updatedAt": "2026-10-04T02:30:04.715Z",
+            "hash": "19393c8ab35ca2e4c3075c206ee812ed73b4c9f876b08486b18a62221a50bd55"
+          },
+          {
+            "id": "shopify-18919090258070",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "65a36bbb383a3ac85c49d3b09a3d1e6289260c41bb822194084925e743043a39"
+          },
+          {
+            "id": "shopify-18920478998641",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "829535733b8fd6c2fd40acded09bafebcae13867738b81c1556c383ac6ff717e"
+          },
+          {
+            "id": "shopify-18919081017494",
+            "updatedAt": "2026-10-03T17:23:37.235Z",
+            "hash": "7cc80a64bac350d7710e10b846d15cffc883a14fb34f6d002e12054b933d224c"
+          },
+          {
+            "id": "shopify-18919080394902",
+            "updatedAt": "2026-10-04T02:28:44.242Z",
+            "hash": "4381d18583c0d9f95acf847f5a23b4b0fc6e8212538de5ac9e10b34d58fac72f"
+          },
+          {
+            "id": "shopify-18919056703638",
+            "updatedAt": "2026-10-03T16:04:42.674Z",
+            "hash": "387ac9a6314b744ef3da282cb6d076bba1edd19f44ea74e2822f72415497bc06"
+          },
+          {
+            "id": "shopify-18918955090070",
+            "updatedAt": "2026-10-02T10:34:35.665Z",
+            "hash": "20b781a015b5c42b2e0daa7a9af10706f772ae3c3eede53913c826a744599ca4"
+          },
+          {
+            "id": "shopify-18920405696625",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "e477722fede8353c3a1a37cda9deb034a5863158c31a961323e92bc26c2833f6"
+          },
+          {
+            "id": "shopify-18918928777366",
+            "updatedAt": "2026-10-03T16:04:05.824Z",
+            "hash": "a514082c23c679ef32d286c23d36a247b691935943984e496d21eb92dff8ab33"
+          },
+          {
+            "id": "shopify-18918917210262",
+            "updatedAt": "2026-10-03T13:51:55.989Z",
+            "hash": "bf3894b6cfafcf82f22b30fc2eef51b28dcbf6069c28b43f8984d4e2adc3f524"
+          },
+          {
+            "id": "shopify-18920362705009",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "e4bd4a422cec8b5fec6edbc8479a6646c4ba2c693f441797ff97dfa43d1ab67e"
+          },
+          {
+            "id": "shopify-18918881886358",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "5244fff5ade42899901d3949acc5d828a3b01cd63a222c2b829760f1690b81f6"
+          },
+          {
+            "id": "shopify-18920343797873",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "59a8049e5bc1dfabddf73b67b6c1e044ab8829f8115fb98bf66e1f81dfaae8a9"
+          },
+          {
+            "id": "shopify-18918711984278",
+            "updatedAt": "2026-10-03T15:30:26.670Z",
+            "hash": "fa6ce794b88ec33c83d75dcb63465e71eea7239c6ef5976aaba714a2d6870bef"
+          },
+          {
+            "id": "shopify-18918695698582",
+            "updatedAt": "2026-10-03T13:04:10.873Z",
+            "hash": "285a7d46d04064ab1db4227b31715d95e75ec17f4e5e8ef83b60b7ebbe9d6b1f"
+          },
+          {
+            "id": "shopify-18918437978262",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "9d764a6df29fb1cce173db5cce7936bb8fe94379fe4f0a55685445ed7ffc55ff"
+          },
+          {
+            "id": "shopify-18919924629617",
+            "updatedAt": "2026-10-03T17:01:38.620Z",
+            "hash": "6de03e152e580e65e52f80a3314187397924a4255b6256b65cd3e481adc54b51"
+          },
+          {
+            "id": "shopify-18919923679345",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "ad4f965ad0b9d9dcfce707fc65081adbfd593f33c5e1cf0e770b5601c93b5587"
+          },
+          {
+            "id": "shopify-18918371328150",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "15df73f1dcbf98b9d6ccebde2e55b98f517c4590694cda9f06dae00a9dd55610"
+          },
+          {
+            "id": "shopify-18918365298838",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "3021a15691474fb013c6fd69980b6b72af2963a22eb51a129aa32a01dc4049f5"
+          },
+          {
+            "id": "shopify-18918352814230",
+            "updatedAt": "2026-10-03T13:41:28.489Z",
+            "hash": "65408aa2eda201fd3ee833c440f57f0f88c24fde06e9ff9c152a5a832e10ff2f"
+          },
+          {
+            "id": "shopify-18918345605270",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "86a2b9c129a00a2922be847de9c594f372743debe76c929f9bb7871f54c13db6"
+          },
+          {
+            "id": "shopify-18919842709617",
+            "updatedAt": "2026-10-03T16:29:18.566Z",
+            "hash": "79d53b9b7369dd6855adf4978022753a028f0507ec9e479ad77967eb4b76b2fa"
+          },
+          {
+            "id": "shopify-18919822917745",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "7f947cf28d4721f25d8505d8d4cc5bf8387a0256ccf539737e989341f6169748"
+          },
+          {
+            "id": "shopify-18918233997462",
+            "updatedAt": "2026-10-03T16:02:47.243Z",
+            "hash": "c61eb59ec1a2548acbeb390a57ac38ba133f891656ecc637627455045599f924"
+          },
+          {
+            "id": "shopify-18919743684721",
+            "updatedAt": "2026-10-03T17:15:19.862Z",
+            "hash": "c47bb80cd3191ad487c1e7e5bf0b20d9853cd02cc2ecad57b39826de854aec03"
+          },
+          {
+            "id": "shopify-18919723565169",
+            "updatedAt": "2026-10-03T18:51:32.027Z",
+            "hash": "faefc966b85ab0e5b339b32763425f3d0833e2a3ef8e80e10f9ac9df386d852b"
+          },
+          {
+            "id": "shopify-18918171607190",
+            "updatedAt": "2026-10-02T00:03:36.969Z",
+            "hash": "fc111546a89a4d5668b5b0af456519321c9990791166cb467c5f63a53748b491"
+          },
+          {
+            "id": "shopify-18918162497686",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "6ef8af963920530f00b363c8a66dc7737f87f28d4a5a5988b9fcb4b60174fe11"
+          },
+          {
+            "id": "shopify-18918094307478",
+            "updatedAt": "2026-10-03T15:32:02.243Z",
+            "hash": "9ac6227ac2252a000864d08256442c33ee6956dc0bbc90690b7284f0bd225d5d"
+          },
+          {
+            "id": "shopify-18918086344854",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "a4f26d8a4dea3ecf540d0b17bd282dfd817606f5cbb0723c13f770519ba5278d"
+          },
+          {
+            "id": "shopify-18918067929238",
+            "updatedAt": "2026-10-03T15:53:20.468Z",
+            "hash": "46ea50808f167ef92d9aeaf2e133c8943dc2e7a5848ee8cd83ed79964f54a8a2"
+          },
+          {
+            "id": "shopify-18918061506710",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "20ca1ab0f99f51753067d323be29781b56bda8b3d754ebf6e636e50b46619839"
+          },
+          {
+            "id": "shopify-18919562477681",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "b7abb331f1277d630853d111449a1d48fed98df41b2fbe8ddc435a79e729da2f"
+          },
+          {
+            "id": "shopify-18918026641558",
+            "updatedAt": "2026-10-03T13:38:52.119Z",
+            "hash": "6f20193d9d5b4fe7814dccc5dbd02fb2ecea4e3dbc2a4b3e473161d432a84eac"
+          },
+          {
+            "id": "shopify-18918019334294",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "9da71fec4c2b481df5dbf39f3a8a0191780d4ef854b8c14840aded357e9f9f4f"
+          },
+          {
+            "id": "shopify-18917966905494",
+            "updatedAt": "2026-10-03T15:32:44.914Z",
+            "hash": "9f42c7ea6dc26ec375b1dc3dec6b9ba529e97e082eac768b4f8e1eba5bb0ca58"
+          },
+          {
+            "id": "shopify-18917915590806",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "807cebf34eea36c1fba447e366a0e014b57eb140da7f847d3e540ca9a3c8458b"
+          },
+          {
+            "id": "shopify-18919394017393",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "18184a12f1c812790bfe8862b10796a7329a7273aa1cfb86e38a435c3c54fe3b"
+          },
+          {
+            "id": "shopify-18919365312625",
+            "updatedAt": "2026-10-03T18:52:02.729Z",
+            "hash": "a2d207713cac3df6cfb44a8a7f19b28645ce6f3676f107fb621b88aeb261dbcb"
+          },
+          {
+            "id": "shopify-18917859917974",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "d3f744dc419c49b05d484c1fc0c53554e65af34a49a8a0b3b55bf6c9b9b5b879"
+          },
+          {
+            "id": "shopify-18917835473046",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "ffb6238adfeb3e90f33226e55bc6d5d17c97dabbd46ed3bd6ead971a73016bdf"
+          },
+          {
+            "id": "shopify-18917805785238",
+            "updatedAt": "2026-10-03T13:39:57.924Z",
+            "hash": "6d200c9e4b4273ecc5348c415048c8a5c7e38601f24b4952e313ee49528f8722"
+          },
+          {
+            "id": "shopify-18917780783254",
+            "updatedAt": "2026-10-03T17:04:08.868Z",
+            "hash": "5fe24edee468ab2f59b3e88501e8ae0203127e12ffef8291e50e39147e89cad4"
+          },
+          {
+            "id": "shopify-18917763252374",
+            "updatedAt": "2026-10-03T13:04:59.288Z",
+            "hash": "b3c9bc15e884d98e9ca332c76e9c04cce49820bdd5f3a859a8802ab26e4ab4a2"
+          },
+          {
+            "id": "shopify-18917721309334",
+            "updatedAt": "2026-10-03T14:11:24.269Z",
+            "hash": "cb8887538f4ec3e100e2df8e451c9128e8a66c3d341c3110adf6b9a6d88eea93"
+          },
+          {
+            "id": "shopify-18917550293142",
+            "updatedAt": "2026-10-03T14:55:40.269Z",
+            "hash": "fd64392d7f6f6bb1a02d65cc5cd35791d70d04cbee54859fae6b9a19389f9726"
+          },
+          {
+            "id": "shopify-18917358174358",
+            "updatedAt": "2026-10-03T17:51:30.082Z",
+            "hash": "4128d50c0cc407e58c61839991b5421a36e44a8fc9f1f22137f8766ae8acf718"
+          },
+          {
+            "id": "shopify-18918950371441",
+            "updatedAt": "2026-10-03T18:50:57.531Z",
+            "hash": "a189922ae79d103ff4099c0b381c50307c2ab50d8e7627b5eb275e22f4d4b67c"
+          },
+          {
+            "id": "shopify-18917323440278",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "fbcdee1d5252b6b875e19c91236f5332aa7a90a0d7cd92792fff3ead43562777"
+          },
+          {
+            "id": "shopify-18917252333718",
+            "updatedAt": "2026-10-03T00:18:25.127Z",
+            "hash": "8a2563076b155587226feecad7e63659d99fb7f0331b867e22e774b37a5ec46e"
+          },
+          {
+            "id": "shopify-18918885818481",
+            "updatedAt": "2026-10-02T13:19:12.284Z",
+            "hash": "81694bcc3cc21a6f5464e4cdbb705d5f0659fa3adafcb7e4e08bfa2403ab26ec"
+          },
+          {
+            "id": "shopify-18917238636694",
+            "updatedAt": "2026-10-03T17:08:23.253Z",
+            "hash": "13c7456ef53d7ed07329bfe05bc6262a8e014c9a9f88a1661b7009f8f4e8ee30"
+          },
+          {
+            "id": "shopify-18917234114710",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "a748170edb2b563abffd9f03adbbee2a68837ac8c0847c49a864f20da6221c23"
+          },
+          {
+            "id": "shopify-18917195972758",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "9bfc5f681b40be79c4ec5fa056d07681f8f8833106144dfc095e865a7cdb2b20"
+          },
+          {
+            "id": "shopify-18917195448470",
+            "updatedAt": "2026-10-03T18:57:20.599Z",
+            "hash": "2abda8fd6fe41d198a2dad2d97722c9e6191d64a640f34420b500a217bb85292"
+          },
+          {
+            "id": "shopify-18917141610646",
+            "updatedAt": "2026-10-03T16:03:10.791Z",
+            "hash": "c351ea210de41fee5aa3126bf07fddc609790e02cbc00b3caa30568fde815d27"
+          },
+          {
+            "id": "shopify-18917120868502",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "c99ff6d484b13c6d7e6ca81f80ab8eeae0c8fa4a473d402acf872403ffdf3a93"
+          },
+          {
+            "id": "shopify-18917071028374",
+            "updatedAt": "2026-10-02T17:29:37.035Z",
+            "hash": "73861b591034df185406700d50dca1e504aea1b7a9c6e8b4635d40f919d5aa86"
+          },
+          {
+            "id": "shopify-18917055889558",
+            "updatedAt": "2026-10-02T17:30:38.743Z",
+            "hash": "d6a8a03f00bba251417ad4b2ba25504f8742b8bbd9cc896c755b98fa37e097ba"
+          },
+          {
+            "id": "shopify-18917050318998",
+            "updatedAt": "2026-10-02T17:35:59.576Z",
+            "hash": "73f2ba1317896724ecaa3a35620ac3fb304d85a6dd61b6ff61669254e6169084"
+          },
+          {
+            "id": "shopify-18917008867478",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "f1694ae1ef8f61be625806c7a0d8f95c00844d11d0509809a1a111a6520512fd"
+          },
+          {
+            "id": "shopify-18916992581782",
+            "updatedAt": "2026-10-02T19:11:43.124Z",
+            "hash": "479530df2264c8bd33b5760f3460f66fb60a819cefbdbdea3ea2d7f3f87e7a7a"
+          },
+          {
+            "id": "shopify-18916988780694",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "e1ced0db0aa6f253016aea21d0fe7af08e8c65647e75add6054ea49c10cb3d88"
+          },
+          {
+            "id": "shopify-18918677184625",
+            "updatedAt": "2026-10-02T16:55:23.839Z",
+            "hash": "c0f3db43462992cb88b5e771db00cc3ca83ca4c63368ed05c3fc1d89ef5d4366"
+          },
+          {
+            "id": "shopify-18916957388950",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "9c3fd8b797c669f26874add85eee2a52dfa93841633c7cf51a5f2c99bbba7b7f"
+          },
+          {
+            "id": "shopify-18916940054678",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "a18b1b51c0e1552d6f0d277f8a3d2dc75b67f5a781de676677bfe64bff548d66"
+          },
+          {
+            "id": "shopify-18918640582769",
+            "updatedAt": "2026-10-02T14:41:46.899Z",
+            "hash": "27804aedc7c397477a29c85fb7b796987fa401376bb9604ce0dd553a6528f3e0"
+          },
+          {
+            "id": "shopify-18918630457457",
+            "updatedAt": "2026-10-04T02:30:30.289Z",
+            "hash": "f5324b1bb8428d65332fdb0d7e5a89875867218306a100e105615467207e8a5d"
+          },
+          {
+            "id": "shopify-18916901060758",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "4d2e08e470fedd74421bbf1c4741f71c2cd2feb5575a6111843404b6b57bee80"
+          },
+          {
+            "id": "shopify-18918622560369",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "3c75a41f17deaf1967c49067b31fee2571430a715a11fec866e761606669e564"
+          },
+          {
+            "id": "shopify-18916867735702",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "60d01b4589e255af5137204a612a74ecc5d0e0649eea9239500800103d50798d"
+          },
+          {
+            "id": "shopify-18916786864278",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "10e2183b9cbf23ad83df7df77dba9f9eb6f075a93497461dac256fa694e5ffbb"
+          },
+          {
+            "id": "shopify-18916786602134",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "41c1017659b3ba065ab3039d5c91312d49066e1afaf9a352c8c56f091715106b"
+          },
+          {
+            "id": "shopify-18916771299478",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "a45352ff45d737a143b5c013ad4cb70707c9fafe003684736e3a1add550e34bd"
+          },
+          {
+            "id": "shopify-18916701569174",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "dfbc37901f568c90dd77b797174e9649e1fd1dfc048ac59ae531f0d5f8c20ee3"
+          },
+          {
+            "id": "shopify-18916695670934",
+            "updatedAt": "2026-10-02T15:19:30.417Z",
+            "hash": "ec44922acc2ba028c88928cad606fbb7d9a60b7aea21a188152360a8d6aa4872"
+          },
+          {
+            "id": "shopify-18916589830294",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "afcb7638a4b9424e8916941c9dfeeafff373a48f7fcae568489b70481792c261"
+          },
+          {
+            "id": "shopify-18916502143126",
+            "updatedAt": "2026-10-03T00:17:37.378Z",
+            "hash": "65ac00ecdd8891b5caa9a85edf99e7a71a9f565e0f52143a50926e0be723dbf3"
+          },
+          {
+            "id": "shopify-18916299505814",
+            "updatedAt": "2026-10-03T15:31:26.797Z",
+            "hash": "fac7f259a5716e78df4e787d3804f864281da1969057a7002f801ba642b456e5"
+          },
+          {
+            "id": "shopify-18916289544342",
+            "updatedAt": "2026-10-03T15:24:53.725Z",
+            "hash": "0078a203a1217be847198ebca9e5ac11793f318e6716a8e47178c1fe8bc2509f"
+          },
+          {
+            "id": "shopify-18916270473366",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "fa561a52361c1a3c57ca3cafb1195c9a75664659f717e26436016112d832a128"
+          },
+          {
+            "id": "shopify-18918106595441",
+            "updatedAt": "2026-10-02T14:07:32.068Z",
+            "hash": "b0e96ab2acf068e22a58c61af045aabddde5657b3a33594839b71c23ac4f828c"
+          },
+          {
+            "id": "shopify-18916257693846",
+            "updatedAt": "2026-10-02T19:12:20.732Z",
+            "hash": "08f6d66775c5ccea4868838a4739f7619c786a74c8d3d900d99fe761223f82c3"
+          },
+          {
+            "id": "shopify-18916257267862",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "f0645ace609e3b87bc4bc99068a15a6b85ca0590baefda4ccb040164ffa85529"
+          },
+          {
+            "id": "shopify-18916233052310",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "0421caf005e861accc9decc37e671f1dff987b19893bf61a14f89760ce7ae266"
+          },
+          {
+            "id": "shopify-18918072713329",
+            "updatedAt": "2026-10-03T16:03:35.298Z",
+            "hash": "fb201bfb5008c5224a24e03fcdad0c99a2135b947bf115937a788c8e47b32372"
+          },
+          {
+            "id": "shopify-18916190617750",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "145afe6dad0dbb974c22ffe33f627af75c6b4812e023c5cbd9ec0ce69a948c88"
+          },
+          {
+            "id": "shopify-18916162044054",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "cc51b7636e6105ae2e9153daace62aba52485a1f217cc6c297eb4c253dbf8fa5"
+          },
+          {
+            "id": "shopify-18916161978518",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "a59cdb738e90c07daf81425eceb3fb1fb55136c1692d6afacffea9e171663100"
+          },
+          {
+            "id": "shopify-18916105552022",
+            "updatedAt": "2026-10-03T16:38:07.279Z",
+            "hash": "61c6caa9d7b0dc0f2bdfd84ba40e84e18af69f090038bea76ff291cc676b769c"
+          },
+          {
+            "id": "shopify-18916097720470",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "cb4218095147abf7ca708008132ebff2423239d7477d27c469f027e8d2955c57"
+          },
+          {
+            "id": "shopify-18917990531185",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "f2f8a2a2558665db7380e7a080b1c166b9e3aaea28c6c9ccb0fc4008c5099ce3"
+          },
+          {
+            "id": "shopify-18916095000726",
+            "updatedAt": "2026-10-02T17:01:50.621Z",
+            "hash": "9d94eebe4ba55579d0fb065097a963d032c26132b0318515ca3f50df78105386"
+          },
+          {
+            "id": "shopify-18916064395414",
+            "updatedAt": "2026-10-02T13:39:18.385Z",
+            "hash": "f3b004b30ac046b8161de7258f261910716988e8b37c065b636fe42b73dce307"
+          },
+          {
+            "id": "shopify-18915992010902",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "756dd4e1ee4f6a8013afcf58a2c7c94db093c469f8f23c332e24e4469e560636"
+          },
+          {
+            "id": "shopify-18915985326230",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "45acd178783f01d83cbc36dcb5b49f41164444c78850ad44c0af65bf60ca8335"
+          },
+          {
+            "id": "shopify-18917909561457",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "4cb31ca25d26cc314e8752b0c6481c2d79c4e3cf7b7c8e546a2137918a988b17"
+          },
+          {
+            "id": "shopify-18915945742486",
+            "updatedAt": "2026-10-02T15:36:57.155Z",
+            "hash": "802e7f6f8117f8ed577562bb15878d152ec883ba8ed8b0b6e8cc24a4356fe0fe"
+          },
+          {
+            "id": "shopify-18917870534769",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "ae3b229b6aa2667272c6c703b83c41a9dcdcc99f3c78903d23d8e5b1c20549b6"
+          },
+          {
+            "id": "shopify-18915931619478",
+            "updatedAt": "2026-10-02T15:36:34.147Z",
+            "hash": "64f641508683e1718c80d41793545ef3a1eb7c1683c9646831d70526f3704814"
+          },
+          {
+            "id": "shopify-18917815222385",
+            "updatedAt": "2026-10-02T16:31:37.391Z",
+            "hash": "213255f8731854277b5acdfffab88113ae3a857ed9d6fd64ef30367105844082"
+          },
+          {
+            "id": "shopify-18915753558166",
+            "updatedAt": "2026-10-02T13:28:53.999Z",
+            "hash": "9bc3e06b77b8fa758790dfcd5ddcea2a642418569ea177eb4dc14a34795ae2f6"
+          },
+          {
+            "id": "shopify-18915747365014",
+            "updatedAt": "2026-10-02T16:31:04.768Z",
+            "hash": "751aa0d63da1c9b62baebd0242153096603e4279faef79df1103807f927bcb7a"
+          },
+          {
+            "id": "shopify-18915723673750",
+            "updatedAt": "2026-10-04T02:29:40.582Z",
+            "hash": "1b057da47fcb401b633d37514f4a5701ce12a3331ec38f038af898550251e96d"
+          },
+          {
+            "id": "shopify-18917645647985",
+            "updatedAt": "2026-10-04T02:29:14.884Z",
+            "hash": "6c294551e7a11d40ea2b254e5e37958229c425d5fc2136beae21ebba99c5c144"
+          },
+          {
+            "id": "shopify-18917636046961",
+            "updatedAt": "2026-10-02T13:43:48.285Z",
+            "hash": "97f7d19da71b03ed4418354b3e2ae70424fafdc49b93e7b311c2b406f97d271b"
+          },
+          {
+            "id": "shopify-18915680190614",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "c200da5c3561fca58092a863227785dfc67b399a0674c573c0125cad54e0eecf"
+          },
+          {
+            "id": "shopify-18915675898006",
+            "updatedAt": "2026-10-02T14:40:27.481Z",
+            "hash": "3944f15fd5e8b8c32b78dec89b796f9ea6950d83f39b5af82c1acb4e8ae14f44"
+          },
+          {
+            "id": "shopify-18917619368049",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "b2c7a4fb95b185b0cdf685c7165c40d84d625fa01c507f085e27ba4256bc4a5b"
+          },
+          {
+            "id": "shopify-18915662889110",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "70785932b3eb508f7830af73768a750bcc4817f22dcc176751e4185b800d107f"
+          },
+          {
+            "id": "shopify-18915656794262",
+            "updatedAt": "2026-10-02T16:31:37.101Z",
+            "hash": "e94acbed8ac635ec411dcf999443e97fac81857421979b30270957148c8b75b8"
+          },
+          {
+            "id": "shopify-18915650109590",
+            "updatedAt": "2026-10-02T14:49:28.700Z",
+            "hash": "2ce920a04a7db21f0a40c27503ee6beee191d94d68a35cb90b040f9f665dadd6"
+          },
+          {
+            "id": "shopify-18915640901782",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "83f462e43030a3edf165d4a2b59f51336fd638a793773f94fd042de620a77966"
+          },
+          {
+            "id": "shopify-18917583880305",
+            "updatedAt": "2026-10-02T13:23:39.614Z",
+            "hash": "842350f0d8708fa38b9232df23b72c776035b3c459b617fbd8dc6ec2d3d14378"
+          },
+          {
+            "id": "shopify-18915624517782",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "1205e38ffa2bc15d1835eb2317890f8384886a430f90dd06eae6dc5636236105"
+          },
+          {
+            "id": "shopify-18915608133782",
+            "updatedAt": "2026-10-02T15:31:37.549Z",
+            "hash": "ce110a09abb828a5fdbb99830e515b0fd5df1fed1c83a5cbe531302b0591c08d"
+          },
+          {
+            "id": "shopify-18915582115990",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "a90bee2e51b8d14d90840a60ef62626494c47394a622e3e8c8e9a37d400a3560"
+          },
+          {
+            "id": "shopify-18915501146262",
+            "updatedAt": "2026-10-02T17:06:26.606Z",
+            "hash": "47a97052c049998b64389db8053d25e9fc2bb67a1379b10216fbb7a20ae7e528"
+          },
+          {
+            "id": "shopify-18915467821206",
+            "updatedAt": "2026-09-30T19:32:44.429Z",
+            "hash": "3a99f2a7dcc99701359b7cbff1ae3631570b4539a6a5813066d647ec6057cc6a"
+          },
+          {
+            "id": "shopify-18915404841110",
+            "updatedAt": "2026-10-02T18:00:41.332Z",
+            "hash": "221a8f65dfcc3c3de9c5b57c77bf6f9f702988b781d78bf74586d3b53d5aa905"
+          },
+          {
+            "id": "shopify-18915339829398",
+            "updatedAt": "2026-10-02T14:37:12.357Z",
+            "hash": "e1c7c2728763e3fa3944f4ee909f75c7d7a1e32a58ef9fd0005c93315e016347"
+          },
+          {
+            "id": "shopify-18915330621590",
+            "updatedAt": "2026-10-02T15:35:54.198Z",
+            "hash": "581fa958506c12b2993eec1479556eeb44c5f6d2cea8b3bffeefbbe1515c7c65"
+          },
+          {
+            "id": "shopify-18915279962262",
+            "updatedAt": "2026-10-03T20:17:53.224Z",
+            "hash": "b985e8d38b9a516745c694dbbe8cb3254edf9187e9e9f47fa03a131e6d0bfc55"
+          },
+          {
+            "id": "shopify-18915268427926",
+            "updatedAt": "2026-10-02T16:01:29.267Z",
+            "hash": "5d3661b47d44fe46f844cd5249a46c7bb1c4469c626275f1cf92898d5e29884c"
+          },
+          {
+            "id": "shopify-18917050876017",
+            "updatedAt": "2026-10-02T15:10:49.873Z",
+            "hash": "5fb12f139966a1be4dcaeba484ed06dea0dfa4f9e6032aeb95567d91ab6a3304"
+          },
+          {
+            "id": "shopify-18916977770609",
+            "updatedAt": "2026-10-02T14:17:28.819Z",
+            "hash": "4060993c8f2da896be799356817c661085c546439667348f28198548eda77be7"
+          },
+          {
+            "id": "shopify-18915140534422",
+            "updatedAt": "2026-10-02T19:45:00.335Z",
+            "hash": "94114a00cf540b3e0f56180869caf1d86dd5f4e4d36a0b2505fd2c84b02a25d2"
+          },
+          {
+            "id": "shopify-18915068936342",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "5831e0e3c5722427fc5fa186a42a61060512c6a9195c1173c132e16be5bc4378"
+          },
+          {
+            "id": "shopify-18915003400342",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "450a5d1c9ece7924b48b9a2ca4ca609945a115c61dc6ac88979edbdf850f44e3"
+          },
+          {
+            "id": "shopify-18914902114454",
+            "updatedAt": "2026-10-03T15:30:45.583Z",
+            "hash": "88be65b0530e411f197487509fa166b2e96d24d9040259f76e72cce62bcee87b"
+          },
+          {
+            "id": "shopify-18914887532694",
+            "updatedAt": "2026-09-30T14:34:49.097Z",
+            "hash": "c68e2f177af085d2ffd17f174374d193550d0f4d5376b7ce37b14563c0e8d2f9"
+          },
+          {
+            "id": "shopify-18916782080113",
+            "updatedAt": "2026-10-01T17:59:40.538Z",
+            "hash": "47231221d862a4000c573a2f6a8d4bc91d30a9eabda8951f3578be51f95ab808"
+          },
+          {
+            "id": "shopify-18914867544214",
+            "updatedAt": "2026-10-02T19:10:04.659Z",
+            "hash": "4126af2752ac03c7568e6b6edeeb9aea187e945270de39903d1c5690686dac00"
+          },
+          {
+            "id": "shopify-18914810429590",
+            "updatedAt": "2026-10-01T13:27:47.745Z",
+            "hash": "d0104eb3573a05de968e642cb5b2fa95959655b957abeecb7cf2df3d5028d40b"
+          },
+          {
+            "id": "shopify-18916636164209",
+            "updatedAt": "2026-10-01T19:00:22.945Z",
+            "hash": "62ebe0f925a3b5f791838b643ffd14e4263bafccbb8cc4c19fdb1e94f1f1e3ad"
+          },
+          {
+            "id": "shopify-18916625023089",
+            "updatedAt": "2026-10-01T14:20:48.196Z",
+            "hash": "0e401c3d89c2b68fc01a3c433d04dbdc78f3baaae8a00dcb42fa8659f42573b8"
+          },
+          {
+            "id": "shopify-18916573642865",
+            "updatedAt": "2026-10-01T13:05:25.717Z",
+            "hash": "45ff593774b13aaa2c6e582c4b48195ace7bee408deaf731514a0cc3ce4ff45f"
+          },
+          {
+            "id": "shopify-18914637873302",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "193c34172ed30413232d0e5595483d3d38f189f6c34bfb4c7bb8d1eea3fbe444"
+          },
+          {
+            "id": "shopify-18914629615766",
+            "updatedAt": "2026-10-01T17:51:05.225Z",
+            "hash": "0bf8e2e857a58b8515d491a2d19d938b02abcbb040c10c24fe6d9ebe7142190f"
+          },
+          {
+            "id": "shopify-18914617000086",
+            "updatedAt": "2026-10-01T13:46:08.261Z",
+            "hash": "982c810df2e4534d23b0ae082ffb1f6b4e860aee3588c9692d091e38df656558"
+          },
+          {
+            "id": "shopify-18914566209686",
+            "updatedAt": "2026-10-02T14:40:56.767Z",
+            "hash": "d1070f9fcd29706b98bfeebd715728c6c6988c6d4ad5824df3fbf349ed7ebab4"
+          },
+          {
+            "id": "shopify-18916426776689",
+            "updatedAt": "2026-10-02T16:12:29.945Z",
+            "hash": "de798689d6c314900adb10e7d1cac24aa7f2ae92457851cd6561a838c3112cd3"
+          },
+          {
+            "id": "shopify-18916304027761",
+            "updatedAt": "2026-10-03T15:28:19.057Z",
+            "hash": "8a44c7b1c0865b7748ad19dccd57723b3f4425b887645e033df0141f37786fab"
+          },
+          {
+            "id": "shopify-18916256710769",
+            "updatedAt": "2026-10-01T17:56:18.134Z",
+            "hash": "49d57d75022922a1db594f34b88bc371e43b44651a6c350bb2af1dbe72d9f042"
+          },
+          {
+            "id": "shopify-18914062762134",
+            "updatedAt": "2026-10-03T15:29:40.329Z",
+            "hash": "35452dce82452dd658b0e7919486654120dad200f6191f2d55086667d759471d"
+          },
+          {
+            "id": "shopify-18914003845270",
+            "updatedAt": "2026-10-01T14:47:42.035Z",
+            "hash": "72783f6211d40d299f6325a0979a9c48fc8009d334c72a39d4233847e3adb08d"
+          },
+          {
+            "id": "shopify-18913965932694",
+            "updatedAt": "2026-10-04T23:58:54.024Z",
+            "hash": "b95877ebc8e86765002be00fd5cfe0e580ff6e5f15338a5ef60d6a6f35cb840d"
+          },
+          {
+            "id": "shopify-18916014358641",
+            "updatedAt": "2026-10-02T14:41:23.265Z",
+            "hash": "88b8c63fc7849b2c2be7372d8a12693071cfae54430104c28df8325ed31aebe0"
+          },
+          {
+            "id": "shopify-18913925660822",
+            "updatedAt": "2026-10-03T15:20:01.964Z",
+            "hash": "080c7eba09f2485d54cca1c6bc2b2404a8ccd58ce05bfc7b69c82662b9045a77"
+          },
+          {
+            "id": "shopify-18915976577137",
+            "updatedAt": "2026-10-01T18:56:06.885Z",
+            "hash": "e79918eb38a10f7e51ff8baa45ee11d5f3a8562931e4a34b0c795b5cf1478d87"
+          },
+          {
+            "id": "shopify-18913880408214",
+            "updatedAt": "2026-10-02T00:42:52.838Z",
+            "hash": "fa3536ff00ebe667af2e41646c5f30e212584b31b17caa57442624901224048e"
+          },
+          {
+            "id": "shopify-18913861107862",
+            "updatedAt": "2026-09-30T19:56:21.002Z",
+            "hash": "073b534e13062b34f91d85a75f11973801fb7c1885b0abea5426f46acc4eb8a5"
+          },
+          {
+            "id": "shopify-18913851768982",
+            "updatedAt": "2026-09-30T01:24:18.165Z",
+            "hash": "8532f49003766bea045178fe9c081b8960c62d9054e73056cad5553dcb042ccb"
+          },
+          {
+            "id": "shopify-18913816084630",
+            "updatedAt": "2026-10-02T15:08:08.151Z",
+            "hash": "f6e1cccf44f885947f77fd349616c69d6cbc4d41808688db640e5328ec32a4f1"
+          },
+          {
+            "id": "shopify-18913788199062",
+            "updatedAt": "2026-10-01T16:57:09.195Z",
+            "hash": "08abefe9772fd2af75af44a821565a17c1caf66dff3b441aa2825d88c863d692"
+          },
+          {
+            "id": "shopify-18913756512406",
+            "updatedAt": "2026-09-30T00:06:03.004Z",
+            "hash": "58f31fdca1e7b20d725785d593182c74e412dd255b14d3807da895552e012975"
+          },
+          {
+            "id": "shopify-18913736523926",
+            "updatedAt": "2026-10-02T17:31:05.126Z",
+            "hash": "19ad04afe40e01b42a77abee85fb32de1bf5ffa397f0adb552eb2ce48a7f6d61"
+          },
+          {
+            "id": "shopify-18915804643441",
+            "updatedAt": "2026-10-01T13:03:01.558Z",
+            "hash": "0bec4a48fc0bda6a9e3e99a02a66af7e178756e3676cb155b6b1d7f16f2a2179"
+          },
+          {
+            "id": "shopify-18913719320726",
+            "updatedAt": "2026-10-01T13:39:11.941Z",
+            "hash": "485479571dc377922f652f67a1cbc428768828040f1766be9f6fa0fda5b92e24"
+          },
+          {
+            "id": "shopify-18915728261233",
+            "updatedAt": "2026-10-02T13:43:16.473Z",
+            "hash": "fb76ca7f5537d25d78e43331060dc01c6ce688765f837203d42c1106563a81f9"
+          },
+          {
+            "id": "shopify-18913615282326",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "a1f064d1da6db572779622aff22b4a784653aa00e97ca85a1245fb4d77bd30b5"
+          },
+          {
+            "id": "shopify-18913521827990",
+            "updatedAt": "2026-10-02T00:37:01.703Z",
+            "hash": "75240d08e3249e38d2bfd10ec34956a88055b172a00ecf0343a288ac0f2a4a58"
+          },
+          {
+            "id": "shopify-18913373520022",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "9cbab0f2654f4e8f8a76a8cb41f855b64d476eab850532bc2e141b24dac15265"
+          },
+          {
+            "id": "shopify-18913349763222",
+            "updatedAt": "2026-10-01T17:02:22.748Z",
+            "hash": "698c19ea64a8fa3b86e62f8f5635f857497f6f0aa956a658253c4f90b1e4d6d5"
+          },
+          {
+            "id": "shopify-18913179926678",
+            "updatedAt": "2026-10-01T17:44:07.958Z",
+            "hash": "cb2fb4db22719e3858186d344668a06c7a5efb943550170f678ef6ce8f7b5fa9"
+          },
+          {
+            "id": "shopify-18915182805105",
+            "updatedAt": "2026-10-01T15:34:12.904Z",
+            "hash": "efc405b93e6a20cf155aa1995bfe779762da207caef6d06f2f174e3fac63274a"
+          },
+          {
+            "id": "shopify-8148653637782",
+            "updatedAt": "2026-10-01T18:15:18.415Z",
+            "hash": "57d4fefe53ad9ebc47157ab016276a7b7a161f10780f5e4cb27510f7bdec416f"
+          },
+          {
+            "id": "shopify-8148646232214",
+            "updatedAt": "2026-10-01T15:20:48.524Z",
+            "hash": "3b6a1ada9d875a11d39dfa94e273fa95ccb8b970b2e73ac1ad7d411b98d78b32"
+          },
+          {
+            "id": "shopify-8148612907158",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "4966546c8b64400540d2cf0119df3990cad07d3e1467d562530fd186f03ca0a4"
+          },
+          {
+            "id": "shopify-8148602880150",
+            "updatedAt": "2026-10-01T17:50:34.497Z",
+            "hash": "76badd2949acd10b5eeb3d83ca0e483467a5944a8e28c3bb6dadb2006578f1fb"
+          },
+          {
+            "id": "shopify-8148600815766",
+            "updatedAt": "2026-10-01T19:07:19.276Z",
+            "hash": "3bad35a204229b8458daca6edf7428affad732f05f8896a2b94e71160a2daa00"
+          },
+          {
+            "id": "shopify-8148585709718",
+            "updatedAt": "2026-10-01T15:36:34.973Z",
+            "hash": "88192a9a87af0f0117be396bee853d3ea16c5c0ddfdca73e042184ef58f16dd3"
+          },
+          {
+            "id": "shopify-8148532068502",
+            "updatedAt": "2026-10-01T19:33:07.792Z",
+            "hash": "5319ab3e14d0a2f75e4e99376cc76a01693f3d589002a16d467e9eec2b70198a"
+          },
+          {
+            "id": "shopify-8148489437334",
+            "updatedAt": "2026-10-01T14:33:03.934Z",
+            "hash": "7bdb03320e4934a8325578e41284c27f54ea1a8fd80f62a19caa1e9f6e65d662"
+          },
+          {
+            "id": "shopify-18914936684657",
+            "updatedAt": "2026-10-01T15:36:03.053Z",
+            "hash": "6855d614a2110d72e48cca30b06f951f8a0455ea5f634986ea24c02a108024e0"
+          },
+          {
+            "id": "shopify-8148419281046",
+            "updatedAt": "2026-10-01T16:48:49.682Z",
+            "hash": "6103f03d628a45c489f63619a702ddaa766da0c9f2051331156060a715c93891"
+          },
+          {
+            "id": "shopify-8148364001430",
+            "updatedAt": "2026-10-03T14:34:32.270Z",
+            "hash": "b6c37586a096f394609772cdbc9bcb303fe7e6666be323a9d5f4826c188853c5"
+          },
+          {
+            "id": "shopify-18914855649393",
+            "updatedAt": "2026-10-03T14:59:11.617Z",
+            "hash": "a8873401c1e7362786a65085968ae4399b6562a08ecb7a57735485fab5ff8969"
+          },
+          {
+            "id": "shopify-18914842083441",
+            "updatedAt": "2026-10-01T17:51:23.735Z",
+            "hash": "d4a57425a0bf37a53b67bd606c328693de1bf2e952dca22b82c6c4b7716daa82"
+          },
+          {
+            "id": "shopify-8148270022806",
+            "updatedAt": "2026-10-01T13:55:34.907Z",
+            "hash": "7a5b9ac27d9c1652f2546b453f4277664af2c394ae0076bcd14680baef9f8058"
+          },
+          {
+            "id": "shopify-8148192723094",
+            "updatedAt": "2026-10-03T14:37:58.848Z",
+            "hash": "548273c151cf8ee61410657a27a4b716b598f2152cce093491a3f5a56018b21d"
+          },
+          {
+            "id": "shopify-8148173029526",
+            "updatedAt": "2026-09-30T13:58:40.145Z",
+            "hash": "caf9e6512e4cdda2631ea7fc189a0621ae9fb96ca085bdf35999c5a6e19bd977"
+          },
+          {
+            "id": "shopify-8147996868758",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "1eadec3280d4113e474931b2ac098ca2b8d1300a572ef6d6f01dda25ed5cc65c"
+          },
+          {
+            "id": "shopify-18914583740529",
+            "updatedAt": "2026-10-01T15:37:33.530Z",
+            "hash": "17a0e995afadc01c931bbc282145ae18978e8f4dd78b07f8aacfcf81de910f79"
+          },
+          {
+            "id": "shopify-8147886407830",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "0cea7513d816a91c5c80bef1c9e61ceab4fc2abb8604215ae9088dedfc877f23"
+          },
+          {
+            "id": "shopify-8147861995670",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "895bfa9396c75f6a0f3ec0ce915b2f1f0c09d02322c032e6d9f9448fd47e69c1"
+          },
+          {
+            "id": "shopify-8147858227350",
+            "updatedAt": "2026-10-03T15:18:58.660Z",
+            "hash": "04398cd5eeff253b64f9cdd42867917f8060400c8bbd495c04b6c1bd97ac1c57"
+          },
+          {
+            "id": "shopify-8147847381142",
+            "updatedAt": "2026-10-02T19:09:27.644Z",
+            "hash": "ea0101304a9dab6fa71305592ad4eb50f6469c5b74ec90c50f3b383dbd8bc411"
+          },
+          {
+            "id": "shopify-8147786825878",
+            "updatedAt": "2026-10-02T18:32:56.333Z",
+            "hash": "141e82fa01a0f3f1c50f90c52bc46572e0a55c0753016a0140e7298ed008f436"
+          },
+          {
+            "id": "shopify-8147765493910",
+            "updatedAt": "2026-10-01T15:16:13.824Z",
+            "hash": "a1cbd5b9b355ece6d692e96ae7e2507ccc74deff5afab36623bc337f15b8fce8"
+          },
+          {
+            "id": "shopify-8147737444502",
+            "updatedAt": "2026-10-01T00:41:54.957Z",
+            "hash": "d41027abc75686004b7eb07f63bbb0935c2125c4a0a2463b81424216cb2a2cf2"
+          },
+          {
+            "id": "shopify-8147724075158",
+            "updatedAt": "2026-10-03T14:06:50.564Z",
+            "hash": "7ece742beb4271e38c35f731d2b71084077891a528ccb06bf724b08b6adf421d"
+          },
+          {
+            "id": "shopify-18914314649713",
+            "updatedAt": "2026-10-01T13:09:21.562Z",
+            "hash": "9571f3fc7eaf5e42b4ab58d540f1ed863679b24167758ce88eb34a5238d9d025"
+          },
+          {
+            "id": "shopify-8147702382742",
+            "updatedAt": "2026-10-02T15:38:04.337Z",
+            "hash": "cb68c1c3db03598b90630e2bf71c3d878d1b54de5827a41c072e340f17ad2f22"
+          },
+          {
+            "id": "shopify-8147682623638",
+            "updatedAt": "2026-09-30T14:51:55.944Z",
+            "hash": "580ba6015c21589f0e425c1ef9d2327237bc803748ba82828268eb46a98036f3"
+          },
+          {
+            "id": "shopify-8147660144790",
+            "updatedAt": "2026-09-29T12:55:34.232Z",
+            "hash": "70d6b4890576915c1443c1980e30f65baf5c466b6db01ff6d461e836a2e8d986"
+          },
+          {
+            "id": "shopify-8147610140822",
+            "updatedAt": "2026-10-03T14:23:12.598Z",
+            "hash": "908156d2e2db9e33ab15504c9c3f648e85c1258fe74a25167a4f024c8c4f8c01"
+          },
+          {
+            "id": "shopify-8147594346646",
+            "updatedAt": "2026-09-30T15:46:48.252Z",
+            "hash": "33f971432c170e7741157bad001993387a84fd2103ab0c13b0c3bd418d13549b"
+          },
+          {
+            "id": "shopify-8147586547862",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "0a6ab4df65ffbb79ee70bbef14914b8b0160b2aabbd14e7b413c413445b82c32"
+          },
+          {
+            "id": "shopify-8147541622934",
+            "updatedAt": "2026-09-30T12:57:41.733Z",
+            "hash": "2bcbe5772fb58cad8962bd11233113722b1ec4dd84812cc8edf4f1de67810c98"
+          },
+          {
+            "id": "shopify-8147526844566",
+            "updatedAt": "2026-10-01T14:15:17.042Z",
+            "hash": "30b9df62b54bb225f3fd3052c09779caa76d925ecf53585cf36b4d2d0af3828f"
+          },
+          {
+            "id": "shopify-8147503054998",
+            "updatedAt": "2026-10-03T14:38:50.832Z",
+            "hash": "ceb0e95646985a05ed61775294de6b44d6c8af9df8c3a777fa3e853eb163f432"
+          },
+          {
+            "id": "shopify-8147486146710",
+            "updatedAt": "2026-10-01T16:42:52.781Z",
+            "hash": "050caeb1352903e5c3f56eee74aaa5da4262d1845288e320a4fbea6c348d74cf"
+          },
+          {
+            "id": "shopify-8147473072278",
+            "updatedAt": "2026-09-30T14:35:38.659Z",
+            "hash": "1d0bccdc182ca6c0cd799d56152db2ba7c172f5e9337822131849c44683bea1e"
+          },
+          {
+            "id": "shopify-8147457573014",
+            "updatedAt": "2026-09-30T16:44:54.750Z",
+            "hash": "f320bd225e6f8bf71fb46ecc6a356723f14492da3ff68d84e6a5cbd4d1130106"
+          },
+          {
+            "id": "shopify-8147457474710",
+            "updatedAt": "2026-09-30T15:00:47.853Z",
+            "hash": "9e2278499bbe90539247e0593ef0974f108d4112af2809c6e0f789b8a206c3cd"
+          },
+          {
+            "id": "shopify-18914053849201",
+            "updatedAt": "2026-09-30T14:09:57.409Z",
+            "hash": "f193a0310f1732f6d0cd66879c72e6138a460a6f16391e400409b70f6d44b4b4"
+          },
+          {
+            "id": "shopify-8147445219478",
+            "updatedAt": "2026-09-30T17:11:20.947Z",
+            "hash": "94c916aec2ed8d0b695e77550fc287ad930824606c9100029b85b5cb3f1cc4cf"
+          },
+          {
+            "id": "shopify-8147395543190",
+            "updatedAt": "2026-09-30T15:12:34.051Z",
+            "hash": "c0b68da52ba2d39a4154165117712bc6a25d625571a460b5ab8610c21a1d97df"
+          },
+          {
+            "id": "shopify-8147307167894",
+            "updatedAt": "2026-09-30T16:31:09.401Z",
+            "hash": "9d88512e6d4c748adb879e86b243502ebf631efd6b75670bd251bd19d3d50795"
+          },
+          {
+            "id": "shopify-8147297763478",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "f8e8f4ff87b3def30003518855cf08840b6fb0586ee63796f257bd38e3942fdf"
+          },
+          {
+            "id": "shopify-8147292455062",
+            "updatedAt": "2026-10-02T16:20:40.033Z",
+            "hash": "53ae1811ea3c264f2428c093f14d379f95358817005a945e35e08ae602e15b2c"
+          },
+          {
+            "id": "shopify-8147274072214",
+            "updatedAt": "2026-10-01T00:32:10.372Z",
+            "hash": "2641e41f5762a8848326d49f107db5b9cc59c78623c993308f686519b89e3558"
+          },
+          {
+            "id": "shopify-18913743011953",
+            "updatedAt": "2026-09-30T13:06:52.464Z",
+            "hash": "796b39a20cc695ea9da356c277123c188305a9988de8265ec5419d1ccfb62978"
+          },
+          {
+            "id": "shopify-8147149291670",
+            "updatedAt": "2026-09-30T16:14:46.767Z",
+            "hash": "084e41d89d82b19c70a1354e39faaa0a2a8645d15c921ec02c69de5c9f24042a"
+          },
+          {
+            "id": "shopify-8147071107222",
+            "updatedAt": "2026-10-01T16:16:56.161Z",
+            "hash": "b56e52c348fb2fad59c4b2d482da65dff3c50f9084514334c6615873f3ea355c"
+          },
+          {
+            "id": "shopify-8147044040854",
+            "updatedAt": "2026-10-01T00:37:12.441Z",
+            "hash": "31b5ab77d43c999547a173c0e88295f63c0d9264f6a1870fb6704c9b208c42ed"
+          },
+          {
+            "id": "shopify-8147017760918",
+            "updatedAt": "2026-09-30T14:41:40.705Z",
+            "hash": "391ec33aa32c0f3d468dd9d7f2ef2899182013dcde7e7c847085d642d92be4fa"
+          },
+          {
+            "id": "shopify-18913485193329",
+            "updatedAt": "2026-10-01T13:59:41.810Z",
+            "hash": "304b16b3ecfc1fb077a7b5972ed8f28087c34c3c0f36728708590120869c2827"
+          },
+          {
+            "id": "shopify-8146963071126",
+            "updatedAt": "2026-10-01T00:35:06.931Z",
+            "hash": "d8103b418c03df07bfa359313c31a93c480f135b7011e2bbe0d153e07678e85a"
+          },
+          {
+            "id": "shopify-8146939674774",
+            "updatedAt": "2026-10-02T18:45:52.820Z",
+            "hash": "566634ab13209bf0feb6feb5923b8fe691929746c682a87939fb172e93a5d66c"
+          },
+          {
+            "id": "shopify-8146848186518",
+            "updatedAt": "2026-10-02T15:24:14.348Z",
+            "hash": "ceba198e7ef4b70eb8c4719a058d2880b3beca37a0389e1f214a1faaf3f5946a"
+          },
+          {
+            "id": "shopify-8146803130518",
+            "updatedAt": "2026-09-30T18:01:00.616Z",
+            "hash": "9fcf364fd7eed70d525ca8b87a2efd761822ace6759e48f4396067fa6a5ea874"
+          },
+          {
+            "id": "shopify-8146801229974",
+            "updatedAt": "2026-10-01T21:09:23.880Z",
+            "hash": "d1b9b3a077aa1506fc3395288a58e952b4f9dfc924feff573e6125c1bc0a633c"
+          },
+          {
+            "id": "shopify-8146746933398",
+            "updatedAt": "2026-10-01T16:43:28.724Z",
+            "hash": "30c44473c15ce83124d3b9a0a396f40346cacd88747a440a34be6d6b11ae0d34"
+          },
+          {
+            "id": "shopify-8146739396758",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "b74b936e45e22daebd9a4fe158e7b86bb972fc5b51a43fc61e7c69c4f1c5c5b7"
+          },
+          {
+            "id": "shopify-8146737660054",
+            "updatedAt": "2026-10-01T18:00:27.470Z",
+            "hash": "b9834f3543d6d0fd345455c3c531b5def22a9805a5f27f66ed991af42c206c7a"
+          },
+          {
+            "id": "shopify-18912730349681",
+            "updatedAt": "2026-09-30T16:37:14.807Z",
+            "hash": "b016242d5f45142e2a4b7184f050b3bc04f6a38a3ae12a5ea6aa205f806b217e"
+          },
+          {
+            "id": "shopify-8146526830742",
+            "updatedAt": "2026-09-28T21:38:07.690Z",
+            "hash": "b0dcf270dacfd6dc575756554f2856271c327f560f6097decf5db1eb3be82b84"
+          },
+          {
+            "id": "shopify-8146511626390",
+            "updatedAt": "2026-10-03T14:44:14.208Z",
+            "hash": "48bd7cdcac959921811a00ffe5be4a70f7db3558153ccdb8d3a81f5e82430147"
+          },
+          {
+            "id": "shopify-8146504581270",
+            "updatedAt": "2026-09-29T17:05:20.698Z",
+            "hash": "4902cb0ddf0833975c1024a7d3873f660700a8b7fded6d0f21233c27c9b092bf"
+          },
+          {
+            "id": "shopify-8146497601686",
+            "updatedAt": "2026-10-01T00:34:47.412Z",
+            "hash": "9d9aa6f98a15e48a9e0512796dac8cdf685da653db7911db12b6c02f6a04c7c9"
+          },
+          {
+            "id": "shopify-8146489966742",
+            "updatedAt": "2026-09-29T16:30:33.683Z",
+            "hash": "62fea0d911fed8a35c3356c2775b7a5b0ee6721356cd4435902e9cb3bfcaba5a"
+          },
+          {
+            "id": "shopify-8146474926230",
+            "updatedAt": "2026-09-29T18:24:53.066Z",
+            "hash": "9d9859e8cbb723614421ab842e2250391eb454184cdf390e28424066bc09982f"
+          },
+          {
+            "id": "shopify-8146456477846",
+            "updatedAt": "2026-09-29T21:42:21.863Z",
+            "hash": "b8d28f58d9772fa8a24eb458c440b51905b67e696d039b5b7db02d9553565bbe"
+          },
+          {
+            "id": "shopify-8146437800086",
+            "updatedAt": "2026-09-29T21:39:04.710Z",
+            "hash": "bc2bb4bf826ccc17cb593b47b6029120a527a7989339efc9b6deebe8a552f6cb"
+          },
+          {
+            "id": "shopify-8146372755606",
+            "updatedAt": "2026-09-29T15:04:34.339Z",
+            "hash": "a90285c8e5ce644b901bea95ca7e9fb1fcc6c712f1984dbc04110bde3d93f3fc"
+          },
+          {
+            "id": "shopify-8146322751638",
+            "updatedAt": "2026-09-30T14:35:28.319Z",
+            "hash": "75b4bd53f0775917a762364246d058473414cbe293f96b8f55eb1420569699d9"
+          },
+          {
+            "id": "shopify-8146308726934",
+            "updatedAt": "2026-10-03T14:52:44.779Z",
+            "hash": "26523b9330b720c7694e915f63fb7d3a646f42451ab4e5b463fe47fee3fe035e"
+          },
+          {
+            "id": "shopify-8146179195030",
+            "updatedAt": "2026-10-01T00:42:58.944Z",
+            "hash": "dd2808b8637bec6c676a72c936a9c0df09dd5538c03f2810a3a4c67a39b97166"
+          },
+          {
+            "id": "shopify-8146167791766",
+            "updatedAt": "2026-09-29T15:26:56.863Z",
+            "hash": "b1ed162d2e7489956d7373e4561ae48aeb7868b7a5f36a101d81d5a7463685ce"
+          },
+          {
+            "id": "shopify-8146106220694",
+            "updatedAt": "2026-10-03T14:39:40.588Z",
+            "hash": "ea86d6986164d65ee22a94a55617bdec50652879f07515b9c865c4050fd4dac0"
+          },
+          {
+            "id": "shopify-8146101043350",
+            "updatedAt": "2026-10-03T14:49:15.087Z",
+            "hash": "c6bcc33e01c94caac32a6c3e838a5fd96761177a23323e610c9d48bbbafe1c6d"
+          },
+          {
+            "id": "shopify-8146095177878",
+            "updatedAt": "2026-10-01T15:37:02.713Z",
+            "hash": "09617a715ae23e785c0c2d207d84f23b2bb69635c2210f94af846569fb6c7703"
+          },
+          {
+            "id": "shopify-8146057527446",
+            "updatedAt": "2026-09-29T14:16:41.434Z",
+            "hash": "4ad3ec6d95057b9cca7711ee6a990b096e8d879812506bb101b46fb859ed8c18"
+          },
+          {
+            "id": "shopify-8146052972694",
+            "updatedAt": "2026-10-03T14:12:24.599Z",
+            "hash": "557180a4a636a0c5daef5439f8f45a6d0731796b42a95b7e5aeef6b07562672c"
+          },
+          {
+            "id": "shopify-8145892278422",
+            "updatedAt": "2026-09-30T17:24:13.266Z",
+            "hash": "037483c777fefd9bc9ce84d124e424ec17c96820e9a830e3b1694a574387c7d0"
+          },
+          {
+            "id": "shopify-8145712578710",
+            "updatedAt": "2026-10-03T14:54:51.955Z",
+            "hash": "b6c4a374af8bf0636fd3fd038a9a81afb58ff28c786fdf08fc3e93c0d4064519"
+          },
+          {
+            "id": "shopify-8145705205910",
+            "updatedAt": "2026-10-03T14:30:26.732Z",
+            "hash": "37187c08835fb0447d3dff1f934d7ad3b5e9cf2b01b2f17329dc45a637d37a97"
+          },
+          {
+            "id": "shopify-8145656086678",
+            "updatedAt": "2026-09-30T15:24:46.193Z",
+            "hash": "23193791fac9985231d15b1e11d28e55a341a87702bd8d1f2259516a52ff509b"
+          },
+          {
+            "id": "shopify-8145643765910",
+            "updatedAt": "2026-09-29T17:30:48.954Z",
+            "hash": "a16df46e6868664822a89660c3714d4814f0c50e8d1f5fdb4159344e03a70c64"
+          },
+          {
+            "id": "shopify-8145561944214",
+            "updatedAt": "2026-09-29T18:45:43.325Z",
+            "hash": "c066330ea5cd5d20f02ee492cb2ad93fc027405a6c2ee80813939795bbd2bebf"
+          },
+          {
+            "id": "shopify-8145560010902",
+            "updatedAt": "2026-10-02T13:57:35.134Z",
+            "hash": "df247eed09ab03f82821f2d2ae84583be44a731fadcd5d6949402355015517da"
+          },
+          {
+            "id": "shopify-8145530060950",
+            "updatedAt": "2026-10-02T19:11:02.666Z",
+            "hash": "737bbf69bac25d7dd748c4b01804d595a101fda3f4125364a8f6a6b5cd15d9a7"
+          },
+          {
+            "id": "shopify-8145495752854",
+            "updatedAt": "2026-09-29T18:08:55.119Z",
+            "hash": "5e6d2d37b4af4b73fe02599db74d2c7471f11d98711a3ed19100e1fd2b300f62"
+          },
+          {
+            "id": "shopify-8145455579286",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "9f18435b05e4541bcd01e087033e571433f30bf8cdad251032c606981b3f5d7d"
+          },
+          {
+            "id": "shopify-8145442046102",
+            "updatedAt": "2026-09-29T17:47:56.742Z",
+            "hash": "4fb2b58f8b1275ca1d6f52479ed0f56238f58dfab8403f9f04a12b7d3b5bec8c"
+          },
+          {
+            "id": "shopify-8145428906134",
+            "updatedAt": "2026-09-29T15:26:18.225Z",
+            "hash": "36a7d008fe41694c80275a350e584bb12e876ad4a4a5b73e4a73f68868f3b402"
+          },
+          {
+            "id": "shopify-8145424547990",
+            "updatedAt": "2026-09-28T21:38:07.690Z",
+            "hash": "94a3eb8b6a74b8cccf83c5ff087bb5fee77dff84625c05eecb687c9eb2ecaa56"
+          },
+          {
+            "id": "shopify-8145422614678",
+            "updatedAt": "2026-09-28T00:23:28.981Z",
+            "hash": "f985568d023c0d0a88d45fd7eea749f4d81b1049e38933451a80b03a1839633e"
+          },
+          {
+            "id": "shopify-8145409704086",
+            "updatedAt": "2026-10-03T15:16:15.524Z",
+            "hash": "707a1c04ac18ef844e000fbaf7a7c50a4aa8a9092ea5fc2a69d1a167275188c5"
+          },
+          {
+            "id": "shopify-8145404231830",
+            "updatedAt": "2026-09-29T19:28:19.459Z",
+            "hash": "d0b5154b1d1d571c6bf13fa5362f222b1be31ffa4c302fd8856e4d78fc2bac2a"
+          },
+          {
+            "id": "shopify-8145403609238",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "0368198d87ea6a3eed1537bf0a72f5f7e941850c10ce6346fd382dfd67310360"
+          },
+          {
+            "id": "shopify-8145377788054",
+            "updatedAt": "2026-09-29T20:12:23.603Z",
+            "hash": "0e2224d80ca9b30f2dc7bd37e167eb0f0544d39bd7bb6e6059f6c10d24350bec"
+          },
+          {
+            "id": "shopify-8145370022038",
+            "updatedAt": "2026-10-03T14:47:44.724Z",
+            "hash": "07f77f3fe434db90e4469816c0dc60b535be6b63d0371cc56c93748ef9535e36"
+          },
+          {
+            "id": "shopify-8145331912854",
+            "updatedAt": "2026-09-30T13:23:49.465Z",
+            "hash": "9d049389e801574248280b5fac9f3974de56226dd0300df0a4b6fa3cf2333b25"
+          },
+          {
+            "id": "shopify-8145317298326",
+            "updatedAt": "2026-09-30T01:41:05.090Z",
+            "hash": "628898b8d6caae302b08afea80283f65b535202ce9a9194757a73641e43f5a18"
+          },
+          {
+            "id": "shopify-8145312186518",
+            "updatedAt": "2026-10-01T13:36:47.397Z",
+            "hash": "64fae6bbd686c9fbc7d1db9ac0b89cbce8da31e83714dc63e077581e2e4e08ac"
+          },
+          {
+            "id": "shopify-8145286201494",
+            "updatedAt": "2026-09-29T14:06:24.494Z",
+            "hash": "0813d853f6fffdca24446d7f14563f346e79f2117b0cd08115a086068d8056c3"
+          },
+          {
+            "id": "shopify-8145274470550",
+            "updatedAt": "2026-10-02T00:41:39.841Z",
+            "hash": "f1485d155e53f5367d65d1473d27fa688f2dfd603770386451bd61468febb3fb"
+          },
+          {
+            "id": "shopify-8145257300118",
+            "updatedAt": "2026-10-01T17:28:08.441Z",
+            "hash": "0a00b197ea1e84aece14a87c6d8875676258db3b6d3ddce2fd4afeda939ea884"
+          },
+          {
+            "id": "shopify-8145257267350",
+            "updatedAt": "2026-09-29T14:55:26.569Z",
+            "hash": "b25cf5c1cfd4f028fb91b80a0d1d1fab8fadbbb1ddc576b1c72470eeb4671bc4"
+          },
+          {
+            "id": "shopify-8145247699094",
+            "updatedAt": "2026-09-29T13:32:53.880Z",
+            "hash": "aea447735746769f144b9662ff1b5856f60d2ea927bd88cd44870fe05782aa4c"
+          },
+          {
+            "id": "shopify-8145242456214",
+            "updatedAt": "2026-10-01T17:18:39.864Z",
+            "hash": "fdec435956fc22af502bcbd70d00db10588eefc29f1513f0f7461527adb8a7b2"
+          },
+          {
+            "id": "shopify-8145240424598",
+            "updatedAt": "2026-10-03T15:17:28.886Z",
+            "hash": "4020b05215b64912d0b77ee3be9e43953d9d337ef9d63d8c6e09d56dafa7e430"
+          },
+          {
+            "id": "shopify-8145232560278",
+            "updatedAt": "2026-09-29T19:08:07.337Z",
+            "hash": "a3bf6a137ade7b02dfba883a492ac426905994f796ecaa884bffa3d0c1b15bda"
+          },
+          {
+            "id": "shopify-8145116790934",
+            "updatedAt": "2026-09-29T15:33:27.937Z",
+            "hash": "4cedc4f008a47c587920ab865ed53396e5f7e29195b7939d9a1ac9e6f7f306b2"
+          },
+          {
+            "id": "shopify-8145107648662",
+            "updatedAt": "2026-09-30T22:06:25.122Z",
+            "hash": "2d1b771c6c5685d642a25a88f44d6485fd7f0c051f30043cce6ed7a69fde120e"
+          },
+          {
+            "id": "shopify-8145102700694",
+            "updatedAt": "2026-09-28T21:38:07.690Z",
+            "hash": "07a46834ef21a98482a93234272ce63f1f57f334b14bd6fdc9e8ba2d448b413b"
+          },
+          {
+            "id": "shopify-8145099227286",
+            "updatedAt": "2026-10-03T14:58:11.841Z",
+            "hash": "8bf7da5fd3c76c24f8d82de6c97b6cc87aac4d8299abd2d18307e4158b59dd83"
+          },
+          {
+            "id": "shopify-8145070653590",
+            "updatedAt": "2026-09-27T20:08:07.803Z",
+            "hash": "e1637c334c68f72aee1e04917b3a2dc20dfe097fc1893d4c2028bd0f82a85e27"
+          },
+          {
+            "id": "shopify-8145054826646",
+            "updatedAt": "2026-09-30T01:32:08.327Z",
+            "hash": "7709c02d5c44c698f0abe3d792e4cf732b7f5e9de947be39afb757f532ab6245"
+          },
+          {
+            "id": "shopify-8145054138518",
+            "updatedAt": "2026-10-01T18:01:04.616Z",
+            "hash": "bf162b1e468e409308d1a4ab956ff1f7e68dfb0b6915c4de7f14083e80acbda5"
+          },
+          {
+            "id": "shopify-8145051746454",
+            "updatedAt": "2026-09-30T01:46:05.317Z",
+            "hash": "8ff17c64c8cceaef88517b9855685555bee2732814b9accc6e2428e14b35ab5f"
+          },
+          {
+            "id": "shopify-8144977821846",
+            "updatedAt": "2026-10-01T00:33:09.654Z",
+            "hash": "410192fe93cd32074929c2d2284a5d09db17edd340798adffaa00b7da5520308"
+          },
+          {
+            "id": "shopify-8144918085782",
+            "updatedAt": "2026-09-29T18:17:12.704Z",
+            "hash": "2c7f87953d7f8b2129f25f65c5519359a1e7d449386153c526d0ec0fc0a05810"
+          },
+          {
+            "id": "shopify-8144831316118",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "15b8ac8b3126eda68be30c1b9595a4a9c0f212447b56cdca15aac3ccf4063d50"
+          },
+          {
+            "id": "shopify-8144828301462",
+            "updatedAt": "2026-09-30T15:01:06.518Z",
+            "hash": "aafce0e393d57a4cb2cdd4efe09ab52656bc017bc67d623e164c787f6888cffc"
+          },
+          {
+            "id": "shopify-8144783638678",
+            "updatedAt": "2026-10-02T17:20:48.051Z",
+            "hash": "5a4304fe8ffed6a2573544cad7480ae59a64b9605d0bac8a0951a2c361703483"
+          },
+          {
+            "id": "shopify-8144714629270",
+            "updatedAt": "2026-09-29T17:59:45.361Z",
+            "hash": "b92d6ebd15c9a2fade6f411659de4fac17fe1468521cc703cdda6c6f35c101d5"
+          },
+          {
+            "id": "shopify-8144708075670",
+            "updatedAt": "2026-10-02T00:37:47.632Z",
+            "hash": "963c13b105a4c8c94a1c69c984cee2129219626b0a7708b279c8ebbc72aa2c78"
+          },
+          {
+            "id": "shopify-8144600629398",
+            "updatedAt": "2026-09-29T14:33:32.616Z",
+            "hash": "aa720889bcbe47a37c09108640f02880f440eded71f9aa60ff88ab23c4303ad2"
+          },
+          {
+            "id": "shopify-8144599842966",
+            "updatedAt": "2026-10-03T14:41:42.214Z",
+            "hash": "c7636d57fe7374ee1c93a8b97ff6d92c89a3d5f45430d1f93f06deb6e67fb15f"
+          },
+          {
+            "id": "shopify-8144547315862",
+            "updatedAt": "2026-10-03T14:36:16.622Z",
+            "hash": "e9fc9a8e835a7d201ff4ecfe8af084f86837bb86c7127ec59099c59a9b5864ca"
+          },
+          {
+            "id": "shopify-8144537387158",
+            "updatedAt": "2026-10-03T15:15:13.106Z",
+            "hash": "b8bfd260eb9bee129c495c62131d54d3aac793808fd90fc2f2198c5498fd8a52"
+          },
+          {
+            "id": "shopify-8144456777878",
+            "updatedAt": "2026-09-29T16:44:57.373Z",
+            "hash": "f9c7c3d62ed0191975d13dc56dfe13aa42a13c933752c200564d4b55a3b66f4e"
+          },
+          {
+            "id": "shopify-8144444063894",
+            "updatedAt": "2026-09-29T19:17:57.742Z",
+            "hash": "63914b8b0f46c86f83cc69c6f45d7a3e32793d9c2e884ac1d4adbd3dd8261e10"
+          },
+          {
+            "id": "shopify-8144375185558",
+            "updatedAt": "2026-09-30T01:39:32.458Z",
+            "hash": "650c74f660353507d29a99c4700774068f5a75a18789acb238c67a5033aa7182"
+          },
+          {
+            "id": "shopify-8144331079830",
+            "updatedAt": "2026-10-01T12:57:35.452Z",
+            "hash": "720d6042e3442313dbfe6f2a831eb6a6d895763a73ac56e619c8a775e37b772b"
+          },
+          {
+            "id": "shopify-8144322986134",
+            "updatedAt": "2026-09-29T16:22:42.327Z",
+            "hash": "82ad28c0155d24b551c690ab5af9c5234ae1e1cf1cd024772e41f2bf483645c2"
+          },
+          {
+            "id": "shopify-8144313155734",
+            "updatedAt": "2026-10-03T14:31:42.052Z",
+            "hash": "1c9960de2b6f9422e7e69fbcabfee6f8488439835e024a3504e8ebbb3e1d24d4"
+          },
+          {
+            "id": "shopify-8144266723478",
+            "updatedAt": "2026-09-29T17:20:25.100Z",
+            "hash": "ca3c8470cab2ff31ddf071cbc50e8dd9e4eccaf80632576c530fc78bfae565b8"
+          },
+          {
+            "id": "shopify-8144263348374",
+            "updatedAt": "2026-09-29T15:56:23.289Z",
+            "hash": "e90fdaac912f78051e02477b1f00402fae8d898b348f930195cda2246d1a205c"
+          },
+          {
+            "id": "shopify-8144256073878",
+            "updatedAt": "2026-10-03T00:21:15.918Z",
+            "hash": "65545b2070b6daec56c2b73fa8bbfc0decb1d9a4fcf96862481aae52b008243f"
+          },
+          {
+            "id": "shopify-18910883315825",
+            "updatedAt": "2026-10-01T15:52:17.634Z",
+            "hash": "2b590756d4ec2d56215116405867da963982eeabc9d8c09091f3392d7e2efa11"
+          },
+          {
+            "id": "shopify-8144240672918",
+            "updatedAt": "2026-09-30T01:36:47.298Z",
+            "hash": "f39b166f94f70c048c245c4ad76931a8191bcab1a1570571df32cc72f54cd51e"
+          },
+          {
+            "id": "shopify-8144225239190",
+            "updatedAt": "2026-09-28T21:38:07.690Z",
+            "hash": "0d08cb3126fb92a960c94ac85758f09692eafdd500eaddeb515bc7bacc9b2033"
+          },
+          {
+            "id": "shopify-8144221569174",
+            "updatedAt": "2026-09-30T15:35:46.929Z",
+            "hash": "a9cb62c693db3e27f69acdf8a2f65224f3e9555df5f3d993fecfdaa149db3f35"
+          },
+          {
+            "id": "shopify-8144167207062",
+            "updatedAt": "2026-09-30T16:54:07.937Z",
+            "hash": "3916ca965b5761b1eca6a7d228f6bf15d99aba0267e166abe9cf62948869e4e7"
+          },
+          {
+            "id": "shopify-18910805688433",
+            "updatedAt": "2026-10-03T14:50:35.474Z",
+            "hash": "db41e4be54e2759cb72ec05e451cc235915276cd0f426dc743c9971301081798"
+          },
+          {
+            "id": "shopify-8144163831958",
+            "updatedAt": "2026-09-30T14:23:43.234Z",
+            "hash": "6bfa7e0d64a0922581acebd6e4a68eec2d318b531f7d66c69626fee5c675701a"
+          },
+          {
+            "id": "shopify-8143625257110",
+            "updatedAt": "2026-10-01T01:02:54.299Z",
+            "hash": "7e411bf51d5fb1ad82fee04445404721d07381af249c883b35881db4a926d941"
+          },
+          {
+            "id": "shopify-8143579873430",
+            "updatedAt": "2026-10-01T16:28:20.680Z",
+            "hash": "b419e8a78078089ebf13b5fcbf8a7ac5fb90e0f51deae972afecac2661c66ca7"
+          },
+          {
+            "id": "shopify-8143544975510",
+            "updatedAt": "2026-09-29T14:16:52.238Z",
+            "hash": "842f5b600750edfd130df33b39ccf3b5fbe56f1446dbe1b2419ac3056ebe44ad"
+          },
+          {
+            "id": "shopify-8143535767702",
+            "updatedAt": "2026-10-01T17:09:08.552Z",
+            "hash": "52ca5e932b3eb2033214500139b3d8ef5d02cd14de8d25bd04ebf280b76b2da9"
+          },
+          {
+            "id": "shopify-8143511257238",
+            "updatedAt": "2026-09-29T21:46:11.595Z",
+            "hash": "e44875af81b5a2facdef019807ae997af9168e4826e3eec65dec17b84cbac4af"
+          },
+          {
+            "id": "shopify-8143439986838",
+            "updatedAt": "2026-09-29T17:02:32.470Z",
+            "hash": "1ef5eeb7bd418fdcd64918d2de0822a734af2f44365d2de39debd0ac9c7404ef"
+          },
+          {
+            "id": "shopify-8143364587670",
+            "updatedAt": "2026-09-30T17:12:13.566Z",
+            "hash": "a9942062a58691b7e53462e04ba239cc3624c10758ab08eb87ffb0dcd5380822"
+          },
+          {
+            "id": "shopify-8143258517654",
+            "updatedAt": "2026-09-28T15:21:05.861Z",
+            "hash": "4ae48cfaeb9dc2848c2f8bcce465e68a1e176fb573e091c3128d79eb6bb0c594"
+          },
+          {
+            "id": "shopify-8143241904278",
+            "updatedAt": "2026-09-30T15:54:18.070Z",
+            "hash": "9d956634c6f7c069a8c8c1fe1326b2c29874084badebcb4003f91beeedc488be"
+          },
+          {
+            "id": "shopify-8143203172502",
+            "updatedAt": "2026-09-29T21:41:16.028Z",
+            "hash": "8fdc4fc884477ab669814b7cc37c1e2644649595ed1d790c9abc5ea83627a0a5"
+          },
+          {
+            "id": "shopify-18909942546545",
+            "updatedAt": "2026-09-30T15:11:04.423Z",
+            "hash": "46f31427f2d050621d8e6e2a9a7c89e211d3df44d0824909009278ee12aeec89"
+          },
+          {
+            "id": "shopify-8143156379798",
+            "updatedAt": "2026-09-30T22:18:43.039Z",
+            "hash": "bd126e1333bf738c3d7f41df6468d760cedafc97af2a8b49e50e19a52b1c4656"
+          },
+          {
+            "id": "shopify-8143118893206",
+            "updatedAt": "2026-09-29T20:57:50.533Z",
+            "hash": "3ec511782af392e015ca7c3ddf962bcb39d5b0a4be513bc86ad004b92a246220"
+          },
+          {
+            "id": "shopify-8143041888406",
+            "updatedAt": "2026-09-29T13:55:33.723Z",
+            "hash": "224c32c6339e23f00622bd3c1bb30edbc38c0f1bb478ad49d62963f5d6d29c91"
+          },
+          {
+            "id": "shopify-8143034941590",
+            "updatedAt": "2026-09-29T16:17:15.298Z",
+            "hash": "94f570717a7bdb96a34b368a994ef011e2411425f36a66c16464fa473dc5a032"
+          },
+          {
+            "id": "shopify-8142955053206",
+            "updatedAt": "2026-09-29T16:51:13.743Z",
+            "hash": "63eb013e0c8393517555bae873f40b44ca9c255e49271f78e0a421f1af33d622"
+          },
+          {
+            "id": "shopify-8142769815702",
+            "updatedAt": "2026-10-01T00:43:52.156Z",
+            "hash": "cd43275872d09a298783b7da35600a4375506d4317542f59d53be285c79c2154"
+          },
+          {
+            "id": "shopify-8142691041430",
+            "updatedAt": "2026-09-29T15:17:37.613Z",
+            "hash": "af02cba8ede7f9cbb057d6bc394788c98abb25fcf1e50637fecab328b611c2ab"
+          },
+          {
+            "id": "shopify-18909434413169",
+            "updatedAt": "2026-09-29T16:25:50.464Z",
+            "hash": "28217031fede7086aac1266147fa46db7e250751edd4c464782a3e7770ebf3d7"
+          },
+          {
+            "id": "shopify-8142535295126",
+            "updatedAt": "2026-09-30T01:42:03.935Z",
+            "hash": "02cf44c65728fbecbcb5910213ef6354caffc5bc37aa49a639108256557a2f80"
+          },
+          {
+            "id": "shopify-8142467825814",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "4abc8616cdfb75de3e6a144e635d87905f35d3ecb62cd5d2e3f92b71b74a6c96"
+          },
+          {
+            "id": "shopify-8142463041686",
+            "updatedAt": "2026-10-03T15:21:12.319Z",
+            "hash": "eb2a5894a96116b911e6ba67670392289b59d155f972f236a9971dfc0284dde6"
+          },
+          {
+            "id": "shopify-8142458159254",
+            "updatedAt": "2026-09-29T15:39:30.433Z",
+            "hash": "6165d5e89e00c851709b46a8ac0e96509a9e84493424367ef2d8457d32186f7d"
+          },
+          {
+            "id": "shopify-8142435778710",
+            "updatedAt": "2026-09-30T14:22:46.779Z",
+            "hash": "546d3a1dba0843c2daa7678076513f8000a46590d20f19e1b813a0a96b391734"
+          },
+          {
+            "id": "shopify-8142416707734",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "c46f3496bdd69d056ffa0b49984cfec4003e6640c207b99e4f5ac53c1597f55f"
+          },
+          {
+            "id": "shopify-8142397112470",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "eb0c46e55ea49f69dd20c55be1b7131d102262169427cf8a4770e1e4ab04bc95"
+          },
+          {
+            "id": "shopify-8142353006742",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "35b3489c8199f609ca6a5f53c2f6bed838f3ef58bc72d8093f08eee57db887ce"
+          },
+          {
+            "id": "shopify-8142298939542",
+            "updatedAt": "2026-10-03T15:14:04.164Z",
+            "hash": "5048a993972671baf1dde2c1610dc435b1e91e70b805db48fcfd54c4bef28c07"
+          },
+          {
+            "id": "shopify-8142298349718",
+            "updatedAt": "2026-09-29T23:06:40.059Z",
+            "hash": "851233eab63ef71ae2d1dbedfe6cbccf119dd8b1eeb19bd1d3ec8f1ecd8392a1"
+          },
+          {
+            "id": "shopify-8142275608726",
+            "updatedAt": "2026-09-29T15:42:36.381Z",
+            "hash": "15a9763d4a7fc8a3e10a86c094b05ee38d54ae6bead2e40d018a69f6ac2d96b0"
+          },
+          {
+            "id": "shopify-8142269644950",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "08bbe98d1025a8284f4418ea54d2e6d0a50db452eb7b5dc6e2bd74f19832375f"
+          },
+          {
+            "id": "shopify-8142261616790",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "027cdb999710979432f5efc4de63f6ab4a40c36836703cf01c3ec263830e4f44"
+          },
+          {
+            "id": "shopify-8142260011158",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "2b832648a700b9a669511f551418e64e373cbd446dc2a504ca4b6c8c514e54df"
+          },
+          {
+            "id": "shopify-8142256406678",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "00188f21e85cd2d14af10d5bbd9710da1d78a3fcdf15997124d971aa92dcf0c0"
+          },
+          {
+            "id": "shopify-8142253326486",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "6d6159b979f68d8343a67cdee4902e55a48e40e2f28356990181a63967b6dba1"
+          },
+          {
+            "id": "shopify-8142231011478",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "95ed8b373bdcac2b8c897b14540005afb2d12c65e127abc3797946dcfe444846"
+          },
+          {
+            "id": "shopify-8142200012950",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "471c6aab6d1dc6e1cfa9192305fb251c9c4f626725c6d99d06257d5e8eb52686"
+          },
+          {
+            "id": "shopify-8142198767766",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "31f365a40e1a905f445f8dc671d9fd6b8c49eb84840b7a1ce6ec125528e8f227"
+          },
+          {
+            "id": "shopify-8142195032214",
+            "updatedAt": "2026-09-30T01:44:51.635Z",
+            "hash": "64be3fa14c6a4a527715d0ed0e001255b1fe290328bccd5bd71cd29d1e7e9ab8"
+          },
+          {
+            "id": "shopify-8142189265046",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "82d14fb4b68e6d5284ff1f2ec6712ac14d2b63f4aafd2c505b4f5e96ad91e996"
+          },
+          {
+            "id": "shopify-8142186807446",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "57936202a166b9265a3865f84b9696844b8b627ccad1daeee8a1670d4ccc3565"
+          },
+          {
+            "id": "shopify-8142169604246",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "6c694b01b8c841e20111652c54d6c7f3d86fd567ffb43db156ea79cce8a5fc98"
+          },
+          {
+            "id": "shopify-8142137491606",
+            "updatedAt": "2026-09-29T14:19:22.650Z",
+            "hash": "d7c47103aefe394e31053e0e5713198433e442330ecc195b79151bfc8c3625b5"
+          },
+          {
+            "id": "shopify-8142129201302",
+            "updatedAt": "2026-09-30T22:20:34.879Z",
+            "hash": "da3d322a6eb74d6a2086d9fec41fc4780b5e9c7336519490e69117b6b5befb20"
+          },
+          {
+            "id": "shopify-8142066909334",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "15fe21bb56cb371d761722af960943ea01bf583035ffbfe4f89d5237d0b8f14c"
+          },
+          {
+            "id": "shopify-8142063206550",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "fef5ebd71f02375bcc0a8547dde53525c130b65030abc89da8d2dbcc0373a782"
+          },
+          {
+            "id": "shopify-8141940621462",
+            "updatedAt": "2026-10-03T14:22:04.239Z",
+            "hash": "03b59883cf2405a261ef9aff1a5e35ed8401e9b02651ed36ee0a91dbe3c8b96b"
+          },
+          {
+            "id": "shopify-8141872890006",
+            "updatedAt": "2026-10-02T13:04:37.644Z",
+            "hash": "9648be3493052d5f1425c2658a0a1674c115c895f583e113c2ad1bfce1bf1974"
+          },
+          {
+            "id": "shopify-8141790281878",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "770eca2d06c2b35ebbd8016be303d19a6da46e288ce8549e5703d9a0bdd4e786"
+          },
+          {
+            "id": "shopify-8141741686934",
+            "updatedAt": "2026-10-03T15:12:21.791Z",
+            "hash": "a743ef7ce1a02733c9099e313846a10e9a0690796451f9912e41924af666ca3e"
+          },
+          {
+            "id": "shopify-8141641678998",
+            "updatedAt": "2026-09-28T17:01:34.214Z",
+            "hash": "c6649d6813bd5526b244dd1eb38ff50e5b56864797f1914e6ed0b5b9ea1c623b"
+          },
+          {
+            "id": "shopify-8141638041750",
+            "updatedAt": "2026-10-03T14:20:36.092Z",
+            "hash": "1c65e333b970bd32dc8622d51d56524fcd38562be1587d5c9b9498d6276aaada"
+          },
+          {
+            "id": "shopify-8141600784534",
+            "updatedAt": "2026-09-26T17:36:27.114Z",
+            "hash": "c04fb1e1ba4c76ff4de684ebdf84d2ae1de20afac12a26c57a0f649b4ddcb27f"
+          },
+          {
+            "id": "shopify-8141505659030",
+            "updatedAt": "2026-09-28T22:59:11.886Z",
+            "hash": "3674524cca14e660c797eba7bf4dc331c3fe7559d9e9e6f234b9e98d07620f7d"
+          },
+          {
+            "id": "shopify-8141494812822",
+            "updatedAt": "2026-09-28T19:53:46.685Z",
+            "hash": "69c5cc65515743102e8ba1832c3955ebe5e1fb015d85a25051baaa4765778d39"
+          },
+          {
+            "id": "shopify-8141405356182",
+            "updatedAt": "2026-09-28T18:47:14.695Z",
+            "hash": "322e854ad8d3b936d7c9c6c3d9ac75e878f3a4bc37210c95052971e6b7d6292b"
+          },
+          {
+            "id": "shopify-8141403422870",
+            "updatedAt": "2026-09-29T17:14:22.363Z",
+            "hash": "bae48a3aba623fdbc47675367028d637db81841c06a3f4d7d1f77e0e65a1d529"
+          },
+          {
+            "id": "shopify-8141374062742",
+            "updatedAt": "2026-09-28T16:18:06.717Z",
+            "hash": "101f93632610af15051bd212bbf24239ca1b95033f2b4e224eef7be654245328"
+          },
+          {
+            "id": "shopify-8141373636758",
+            "updatedAt": "2026-09-28T20:38:05.276Z",
+            "hash": "262a027c440129899df5964b77f17023952ca5ae31a714dd053eb9162411e283"
+          },
+          {
+            "id": "shopify-8141349224598",
+            "updatedAt": "2026-09-28T13:36:28.075Z",
+            "hash": "e3d136f2d417229cd8fe3b0ed9debd24bb8458fd1fc76721c58cac53ac939635"
+          },
+          {
+            "id": "shopify-8141319045270",
+            "updatedAt": "2026-10-03T14:56:26.089Z",
+            "hash": "2f6aae91a57dc33201a7d2367d80c8b513ac354f4ca50b1a275d16e91963e158"
+          },
+          {
+            "id": "shopify-8141292437654",
+            "updatedAt": "2026-09-29T04:04:46.498Z",
+            "hash": "850229048550ba156b528c32e93de4e653a13e530012944a650b07cb794b3686"
+          },
+          {
+            "id": "shopify-8141282934934",
+            "updatedAt": "2026-09-28T15:47:52.440Z",
+            "hash": "b01664ef27e8ae6423766128669e0da16a6af1ae7b9ba7a7671574f0b4a77074"
+          },
+          {
+            "id": "shopify-8141275955350",
+            "updatedAt": "2026-10-03T15:00:06.691Z",
+            "hash": "95c11da5b8781a4e349b831658b56c31ad0e673e89dca718b91db709efc4adc1"
+          },
+          {
+            "id": "shopify-8141272645782",
+            "updatedAt": "2026-09-30T16:05:44.243Z",
+            "hash": "cd5d7aea4201195fab1f347847b21609546fecb9ccdfbd003095aaafbb1473ff"
+          },
+          {
+            "id": "shopify-8141170540694",
+            "updatedAt": "2026-09-28T18:21:49.412Z",
+            "hash": "5c53ef4e57ecaa0e8d2e296d0c306d712336091fb2c577076721e7b3e2d8fc1e"
+          },
+          {
+            "id": "shopify-8141134200982",
+            "updatedAt": "2026-09-28T15:16:55.697Z",
+            "hash": "379c58a02e81111d232ee0c0089571651198fbe33f849ee31ee80121bfc33fa3"
+          },
+          {
+            "id": "shopify-8141130793110",
+            "updatedAt": "2026-09-30T17:12:33.688Z",
+            "hash": "62668ab2e68b0840768e591b7a8d70f2446701836e3820f595a07df46351616b"
+          },
+          {
+            "id": "shopify-8141125681302",
+            "updatedAt": "2026-09-28T16:06:36.429Z",
+            "hash": "ac00de6fcc613fa5877ad499cd72549e8cdfb61133c1d0fc4b72d1a9f7a1d43c"
+          },
+          {
+            "id": "shopify-8141088620694",
+            "updatedAt": "2026-09-28T21:38:07.690Z",
+            "hash": "1a19fbad3da2907701699c07c04535ed8b838acc32c060e1294f2d6995ecbc90"
+          },
+          {
+            "id": "shopify-8141074661526",
+            "updatedAt": "2026-09-28T14:16:24.676Z",
+            "hash": "ef62bad2496c15089bb57f2026f65ccc410936b05fc521a3eeaa292e2bb7c350"
+          },
+          {
+            "id": "shopify-8141064011926",
+            "updatedAt": "2026-09-28T16:48:33.274Z",
+            "hash": "f2b0e36ffc784912a1aa7ce66a43233fac6160e5074496bef6695b7ba90deafc"
+          },
+          {
+            "id": "shopify-18907996291185",
+            "updatedAt": "2026-09-30T16:11:47.309Z",
+            "hash": "ed57fe1a7b7f2f8162a53ea2957f51e897613397738919d403ff19378ce367a2"
+          },
+          {
+            "id": "shopify-6969484148849",
+            "updatedAt": "2026-09-28T23:01:44.598Z",
+            "hash": "fb121443b12acb2dc3b192bd35413427c09fa1d355f833da2e58f9ae4ece069c"
+          },
+          {
+            "id": "shopify-8140703596694",
+            "updatedAt": "2026-09-28T13:36:21.743Z",
+            "hash": "5bd151671946c8973ca02bad0aeec12367937262ec504282f9c2b6db6bf0a5e5"
+          },
+          {
+            "id": "shopify-8140692521110",
+            "updatedAt": "2026-09-29T13:19:13.760Z",
+            "hash": "c09d2488d4f4385b6287838162858802293c1fca9a8e8f2f12a43eff27093702"
+          },
+          {
+            "id": "shopify-8140656410774",
+            "updatedAt": "2026-10-03T14:53:57.598Z",
+            "hash": "91d8d3243b44bbe4d9ccb1a922e5c87db1c3eb1c778126e1ae04b9b14f252869"
+          },
+          {
+            "id": "shopify-8140638781590",
+            "updatedAt": "2026-09-29T13:41:13.281Z",
+            "hash": "07a5e932456bd7337d1fda11d9aa5b5c2e7b7beba723dead71172e6673f447e6"
+          },
+          {
+            "id": "shopify-8140485722262",
+            "updatedAt": "2026-09-28T14:30:00.630Z",
+            "hash": "e751556151c3d6ac1c7cdceac691bd24fcf5dd0fce4ab41193e4f8f864e96e42"
+          },
+          {
+            "id": "shopify-8140471337110",
+            "updatedAt": "2026-09-30T16:52:29.113Z",
+            "hash": "b64a94227972ab08a8bfa1d394a1d37972998f64393a81d7f245d1f962ee38a2"
+          },
+          {
+            "id": "shopify-8140403245206",
+            "updatedAt": "2026-09-28T17:36:17.966Z",
+            "hash": "3742fa056c6c4e93ad9ea5da3fb89e2ca89e0ec120591a7702e99ed0a5264e4a"
+          },
+          {
+            "id": "shopify-8140353339542",
+            "updatedAt": "2026-09-28T17:28:50.665Z",
+            "hash": "0c9df3c819477b45d347a86f187e85e909b44a9b65f72b30d7590ba9d5109680"
+          },
+          {
+            "id": "shopify-8140326600854",
+            "updatedAt": "2026-09-28T13:49:15.073Z",
+            "hash": "2f059af582ca059f715509ccf36a6b4018375d61b1d48fda8e336bac065fab24"
+          },
+          {
+            "id": "shopify-8140320145558",
+            "updatedAt": "2026-09-30T22:19:51.365Z",
+            "hash": "e15c5258d392aec213952996edf9d2066b527770dd54b5ddd818d5ac0be20d68"
+          },
+          {
+            "id": "shopify-8140236488854",
+            "updatedAt": "2026-09-28T17:16:45.352Z",
+            "hash": "56b278b7a9f22c3365ea09779cf2c96658b86228bac60cedf539c6f510d6e613"
+          },
+          {
+            "id": "shopify-8140234260630",
+            "updatedAt": "2026-10-03T15:23:16.999Z",
+            "hash": "4868ae5ed10974f192e75467b12b5d6737ecaeb7d70917fdd58e3bb44004ff73"
+          },
+          {
+            "id": "shopify-8140186058902",
+            "updatedAt": "2026-10-03T14:26:37.887Z",
+            "hash": "8c2b87e6f9fd110d32930490778f5c06bf77448e0a1ba4bc821f3dcc9f3575df"
+          }
+        ]
+      },
+      "settlements": {
+        "ok": true,
+        "tienda": "DANDA",
+        "total": 18,
+        "significado": {
+          "netoCop": "Valor liquidado del corte segun los pedidos incluidos.",
+          "pagadoCop": "Valor realmente transferido por ese corte.",
+          "saldoDelCorteCop": "Diferencia entre el neto y lo transferido. Si es 0, el corte quedo saldado.",
+          "nota": "Aclaracion del corte cuando el pago no fue en un solo giro."
+        },
+        "liquidaciones": [
+          {
+            "id": "stl-1790816617989-seller-seller-1779315416119",
+            "updatedAt": "2026-10-01T01:04:12.998Z",
+            "hash": "0f315f8082c9461469ae157aa4f0d43a5a37e37641cb38bcc11b76a762bec985"
+          },
+          {
+            "id": "stl-1790529628153-seller-seller-1779315416119",
+            "updatedAt": "2026-09-30T01:29:36.336Z",
+            "hash": "ee943d0074931f2dfc4117bcf035e66f162e633af6f329c65cffb4f816c637e2"
+          },
+          {
+            "id": "stl-1790005359708-seller-seller-1779315416119",
+            "updatedAt": "2026-09-21T15:52:33.517Z",
+            "hash": "a2df751cbe930d12c75727d36c22bf26f741fee116b367745bb85cf2f156025c"
+          },
+          {
+            "id": "stl-1789406631261-seller-seller-1779315416119",
+            "updatedAt": "2026-09-14T17:24:17.833Z",
+            "hash": "a1998994c655ded1c70f0e4c0e4d0cb4b3eee74d774092e58e7795cf98fb5282"
+          },
+          {
+            "id": "stl-1788479934874-seller-seller-1779315416119",
+            "updatedAt": "2026-09-04T00:20:25.963Z",
+            "hash": "3bbb15b3e03dbe5f2752d1f127804de8e758abc12f1c01083a5de2a05b3b0fff"
+          },
+          {
+            "id": "stl-1788054284333-seller-seller-1779315416119",
+            "updatedAt": "2026-08-30T01:45:05.834Z",
+            "hash": "e55f07121fc5c6f58643267e016b507a4d7276e12a591b2ea1606ae29da177db"
+          },
+          {
+            "id": "stl-1787519501834-seller-seller-1779315416119",
+            "updatedAt": "2026-08-23T21:11:53.809Z",
+            "hash": "a81e206b944d7332db779acc372df6b1c1a7a756912fe06d2acc356841437caa"
+          },
+          {
+            "id": "stl-1787060088036-seller-seller-1779315416119",
+            "updatedAt": "2026-08-19T22:41:21.958Z",
+            "hash": "3543d366478bb9e633166815dca8bc7276bad832918d9d3658e29c5c10a32d35"
+          },
+          {
+            "id": "stl-1785987073266-seller-seller-1779315416119",
+            "updatedAt": "2026-08-06T03:31:40.591Z",
+            "hash": "2c36c7b3baf29003b1d008b3f1ebac4fc1deeabcf6257478bbe13250b0c2bfb9"
+          },
+          {
+            "id": "stl-1785434706953-seller-seller-1779315416119",
+            "updatedAt": "2026-08-03T15:35:33.902Z",
+            "hash": "25f68e81c412cbd7821697f1ba3c999a4ee87442998ea63fbe8baec0c0e1fabd"
+          },
+          {
+            "id": "stl-1784860062475-seller-seller-1779315416119",
+            "updatedAt": "2026-07-27T14:28:55.214Z",
+            "hash": "a9bb6c41df2b7f5684bfc1f12bdedb5c2c516da67c3b34e2347cabce86a6f65b"
+          },
+          {
+            "id": "stl-1783972053036-seller-seller-1779315416119",
+            "updatedAt": "2026-07-13T19:49:18.399Z",
+            "hash": "9b40fe31d5750d1878ccb53a70b0a075ce6f665495c8421aaf1d880f75ba423e"
+          },
+          {
+            "id": "stl-1783307034429-seller-seller-1779315416119",
+            "updatedAt": "2026-07-06T18:02:49.361Z",
+            "hash": "cfcc29a506ed1cdee8095cb3b3e1678288deb363e074ddea52b1a97bf0fd387d"
+          },
+          {
+            "id": "stl-1782530912448-seller-seller-1779315416119",
+            "updatedAt": "2026-06-27T03:31:05.160Z",
+            "hash": "20f8d52079c56bc4818ae49823c970d8e9f82c82670c9e17929d027c3f7bdfe3"
+          },
+          {
+            "id": "stl-1782157340308-seller-seller-1779315416119",
+            "updatedAt": "2026-06-25T01:15:14.237Z",
+            "hash": "75d76e60678621b6ad9ce165984e484e93508be313527fcbeb212cdc700e1844"
+          },
+          {
+            "id": "stl-1781290398679-seller-seller-1779315416119",
+            "updatedAt": "2026-06-12T18:53:24.530Z",
+            "hash": "4472a24c70ba3492dac3e947bcd4bc7db6a3e920bde18207037e0998055debb5"
+          },
+          {
+            "id": "stl-1781111771448-seller-seller-1779315416119",
+            "updatedAt": "2026-06-10T17:16:54.352Z",
+            "hash": "dbddcf7315291031e9f8680562739e64e91184a1553b38c18ca49902eed29045"
+          },
+          {
+            "id": "stl-1780063328986-seller-seller-1779315416119",
+            "updatedAt": "2026-06-03T18:10:31.841Z",
+            "hash": "de06bea9a7c6e228b8212d6af6985b5c0a14d3f093dad8e8d3b7d461aaff26be"
+          }
+        ]
+      },
+      "resumen": {
+        "ok": true,
+        "tienda": "DANDA",
+        "saldoPendiente": {
+          "disponibleCop": 20400,
+          "retenidoCop": 0,
+          "retenidoPedidos": 0,
+          "enLiquidacionCop": 0,
+          "bloqueadoCodCop": 3345500,
+          "totalCop": 3365900
+        },
+        "totales": {
+          "codCop": 304175250,
+          "cobrosCop": 38215500,
+          "costoProductoCop": 0,
+          "abonadoCop": 95640696,
+          "liquidadoCop": 166879484
+        },
+        "pagos": [
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-05-29T14:02:14.854Z",
+            "montoCop": 5994700,
+            "referencia": "stl-1780063328986-seller-seller-1779315416119",
+            "nota": "Incluye reversas de KNT-000056 para que DANDA no tenga cobro ni COD por fallido.\nIncluye reversas de KNT-000056 para que DANDA no tenga cobro ni COD por fallido."
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-06-10T17:16:13.256Z",
+            "montoCop": 4152900,
+            "referencia": "stl-1781111771448-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-06-12T18:53:19.652Z",
+            "montoCop": 3619700,
+            "referencia": "stl-1781290398679-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-06-22T19:42:23.708Z",
+            "montoCop": 11461100,
+            "referencia": "stl-1782157340308-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-06-27T03:28:35.811Z",
+            "montoCop": 9141700,
+            "referencia": "stl-1782530912448-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-06T03:04:00.234Z",
+            "montoCop": 23743600,
+            "referencia": "stl-1783307034429-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-13T19:47:43.214Z",
+            "montoCop": 7857300,
+            "referencia": "stl-1783972053036-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-15T14:14:17.526Z",
+            "montoCop": 5750000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-17T05:32:43.829Z",
+            "montoCop": 4970000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-17T23:23:12.721Z",
+            "montoCop": 10000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-23T14:13:56.135Z",
+            "montoCop": 10000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-24T02:24:28.571Z",
+            "montoCop": 3500000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-24T02:27:50.925Z",
+            "montoCop": 6195650,
+            "referencia": "stl-1784860062475-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-07-28T01:43:56.965Z",
+            "montoCop": 4992000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-07-30T18:05:09.302Z",
+            "montoCop": 8758000,
+            "referencia": "stl-1785434706953-seller-seller-1779315416119",
+            "nota": "Pago en dos giros: 2026-07-30 por 6.200.000 y 2026-08-03 por 2.558.000. Total transferido 8.758.000, igual al neto del corte. El corte quedo saldado. Entre el 2026-08-02 y el 2026-08-03 el saldo disponible mostro 2.558.000 adicionales por un ajuste temporal que registraba el segundo giro pendiente; al completarse la transferencia el ajuste se retiro. Ninguna suma quedo sin pagar."
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-08-04T19:08:35.290Z",
+            "montoCop": 600000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono  por concepto pago a Luisito"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-08-05T23:42:30.199Z",
+            "montoCop": 3000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono tranferencia de cuenta bancolombia kentro agosto 5 del 2026"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-08-06T03:31:16.856Z",
+            "montoCop": 8634100,
+            "referencia": "stl-1785987073266-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-08-18T13:34:51.756Z",
+            "montoCop": 12158000,
+            "referencia": "stl-1787060088036-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-08-23T21:11:45.118Z",
+            "montoCop": 13493200,
+            "referencia": "stl-1787519501834-seller-seller-1779315416119",
+            "nota": "pago efecivo  entregado a camilo agosto 23 del 2026"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-08-28T19:21:51.805Z",
+            "montoCop": 6000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: Caja en nómina"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-08-29T20:46:34.422Z",
+            "montoCop": 5000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono por transferencia nequi agosto 29 del 2026"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-08-29T21:04:52.469Z",
+            "montoCop": 6717200,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: pago efectivo  agosto 29 del 2026"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-08-30T01:44:49.268Z",
+            "montoCop": 0,
+            "referencia": "stl-1788054284333-seller-seller-1779315416119",
+            "nota": null
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-03T23:07:37.152Z",
+            "montoCop": 18590000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono  en efectivo  entregado a Camilo para Daniel sept 3 del 2026"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-09-03T23:58:59.446Z",
+            "montoCop": 1848974,
+            "referencia": "stl-1788479934874-seller-seller-1779315416119",
+            "nota": "abono transferencia nequi camilo de $6.000.000"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-08T00:08:29.436Z",
+            "montoCop": 3561026,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: ABONO TRANSFERENCIA PRESTAMO 24M DANIEL USECHE"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-09-14T17:23:55.609Z",
+            "montoCop": 12189530,
+            "referencia": "stl-1789406631261-seller-seller-1779315416119",
+            "nota": "pago efectivo a Daniel  se le entrego a luiis  $13.000 000"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-09-18T01:26:10.320Z",
+            "montoCop": 810470,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono en efectivo entregado a Luisito  el dia 12 de septiembre para un total de $13.000.000"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-09-21T15:42:44.539Z",
+            "montoCop": 16273130,
+            "referencia": "stl-1790005359708-seller-seller-1779315416119",
+            "nota": "pago efectivo entrego  luisito  $16273.130 SEPTEMBRE 20  DEL 2026"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-09-27T17:20:32.902Z",
+            "montoCop": 12710000,
+            "referencia": "stl-1790529628153-seller-seller-1779315416119",
+            "nota": "pago Daniel lo entrego a Camilo septiembre  27 del 2026"
+          },
+          {
+            "tipo": "liquidacion",
+            "fecha": "2026-10-01T01:03:43.061Z",
+            "montoCop": 8570000,
+            "referencia": "stl-1790816617989-seller-seller-1779315416119",
+            "nota": "pago efectivo para Daniel entregado a camilo en septiembre 30 del 2026"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-10-05T00:02:45.906Z",
+            "montoCop": 4150000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono efectivo correspondiente a pago daniel entregado a camilo octubre 4 del 2026"
+          },
+          {
+            "tipo": "abono",
+            "fecha": "2026-10-05T00:05:40.608Z",
+            "montoCop": 8000000,
+            "referencia": "abono",
+            "nota": "Abono a tienda DANDA: abono teansferencia  a danda de bancolombia y nequi  octubre 4 del 2026"
+          }
+        ],
+        "abonos": [
+          {
+            "fecha": "2026-07-15T14:14:17.526Z",
+            "montoCop": 5750000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-07-17T05:32:43.829Z",
+            "montoCop": 4970000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-07-17T23:23:12.721Z",
+            "montoCop": 10000000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-07-23T14:13:56.135Z",
+            "montoCop": 10000000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-07-24T02:24:28.571Z",
+            "montoCop": 3500000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-07-28T01:43:56.965Z",
+            "montoCop": 4992000,
+            "nota": "Abono a tienda DANDA"
+          },
+          {
+            "fecha": "2026-08-04T19:08:35.290Z",
+            "montoCop": 600000,
+            "nota": "Abono a tienda DANDA: abono  por concepto pago a Luisito"
+          },
+          {
+            "fecha": "2026-08-05T23:42:30.199Z",
+            "montoCop": 3000000,
+            "nota": "Abono a tienda DANDA: abono tranferencia de cuenta bancolombia kentro agosto 5 del 2026"
+          },
+          {
+            "fecha": "2026-08-28T19:21:51.805Z",
+            "montoCop": 6000000,
+            "nota": "Abono a tienda DANDA: Caja en nómina"
+          },
+          {
+            "fecha": "2026-08-29T20:46:34.422Z",
+            "montoCop": 5000000,
+            "nota": "Abono a tienda DANDA: abono por transferencia nequi agosto 29 del 2026"
+          },
+          {
+            "fecha": "2026-08-29T21:04:52.469Z",
+            "montoCop": 6717200,
+            "nota": "Abono a tienda DANDA: pago efectivo  agosto 29 del 2026"
+          },
+          {
+            "fecha": "2026-09-03T23:07:37.152Z",
+            "montoCop": 18590000,
+            "nota": "Abono a tienda DANDA: abono  en efectivo  entregado a Camilo para Daniel sept 3 del 2026"
+          },
+          {
+            "fecha": "2026-09-08T00:08:29.436Z",
+            "montoCop": 3561026,
+            "nota": "Abono a tienda DANDA: ABONO TRANSFERENCIA PRESTAMO 24M DANIEL USECHE"
+          },
+          {
+            "fecha": "2026-09-18T01:26:10.320Z",
+            "montoCop": 810470,
+            "nota": "Abono a tienda DANDA: abono en efectivo entregado a Luisito  el dia 12 de septiembre para un total de $13.000.000"
+          },
+          {
+            "fecha": "2026-10-05T00:02:45.906Z",
+            "montoCop": 4150000,
+            "nota": "Abono a tienda DANDA: abono efectivo correspondiente a pago daniel entregado a camilo octubre 4 del 2026"
+          },
+          {
+            "fecha": "2026-10-05T00:05:40.608Z",
+            "montoCop": 8000000,
+            "nota": "Abono a tienda DANDA: abono teansferencia  a danda de bancolombia y nequi  octubre 4 del 2026"
+          }
+        ],
+        "ajustes": [],
+        "avisos": [
+          {
+            "fecha": "2026-09-17",
+            "cambio": "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+            "campos": [
+              "disponibleCop",
+              "retenidoCop",
+              "retenidoPedidos",
+              "bloqueadoCodCop",
+              "totalCop"
+            ]
+          }
+        ],
+        "significado": {
+          "disponibleCop": "Saldo que la plataforma ya te puede pagar hoy, en pedidos completos (COD recibido del domiciliario o prepago), neto de abonos y sin la retencion.",
+          "retenidoPedidos": "Cuantos pedidos (o ajustes a tu favor) quedan enteros para el siguiente corte por la retencion.",
+          "retenidoCop": "Saldo pagable que queda para el siguiente corte mientras tengas pedidos en la calle que podrian volver como fallidos (se retiene el flete de devolucion). Los pedidos retenidos van enteros.",
+          "enLiquidacionCop": "Ya incluido en un corte creado pero aun no pagado.",
+          "bloqueadoCodCop": "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
+          "liquidadoCop": "Total neto ya liquidado en cortes pagados/conciliados.",
+          "abonadoCop": "Total de abonos (pagos parciales) que ya te hemos entregado.",
+          "ajustes": "Correcciones que reabren saldo a tu favor (por ejemplo, un corte cerrado por menos de lo transferido). No son pagos recibidos."
+        }
+      },
+      "index": {
+        "ok": true,
+        "tienda": "DANDA",
+        "endpoints": {
+          "GET /resumen": "Saldo consolidado autoritativo: pendiente por bucket (disponibleCop, retenidoCop por pedidos en la calle, enLiquidacionCop, bloqueadoCodCop; ver avisos), totales (COD, cobros, costo producto, abonado, liquidado), y el historial de pagos recibidos (liquidaciones + abonos con fecha). Usa este numero, no lo reconstruyas.",
+          "GET /kpis?from=YYYY-MM-DD&to=YYYY-MM-DD": "KPIs operativos del rango, calculados igual que el dashboard (tomados por domiciliario, despachables, % despacho, entregados, fallidos por categoria).",
+          "GET /orders?from=&to=&status=&limit=": "Pedidos de la tienda con clasificacion operativa, estado de pago y desglose financiero real por pedido (cod, flete, costo producto, neto).",
+          "GET /settlements": "Liquidaciones de la tienda con sus pedidos, montos y estado (pending/paid/reconciled)."
+        },
+        "autenticacion": "sellerId y key por query string, o header Authorization: Bearer <key>.",
+        "avisos": [
+          {
+            "fecha": "2026-09-17",
+            "cambio": "Desde el 2026-09-17, disponibleCop es lo que Kentro te puede pagar hoy en pedidos completos y ya descuenta la retencion por pedidos en la calle (el flete de devolucion que se cobraria si fallan). Lo que queda fuera aparece en los campos nuevos retenidoCop y retenidoPedidos. Antes disponibleCop no descontaba esa retencion, por eso puede verse menor. Es la misma cifra que ves en la app y que el admin liquida.",
+            "campos": [
+              "disponibleCop",
+              "retenidoCop",
+              "retenidoPedidos",
+              "bloqueadoCodCop",
+              "totalCop"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

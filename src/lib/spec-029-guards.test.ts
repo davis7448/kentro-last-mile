@@ -1949,3 +1949,329 @@ describe("T23 · el \"?\" de CollapsiblePanel mide 44 px (RF_25, WCAG 2.2 AA)", 
     expect(/size=\{16\}|text-sm/.test(inner), "el \"?\" conserva su tamano de 16 px").toBe(true);
   });
 });
+
+describe("T24 · capture-reads: lecturas reales congeladas antes de desplegar (RF_20, RF_01)", () => {
+  /*
+   * Contrato (T24, plan 5.3 "Lecturas reales"):
+   *  - `COMMANDS` registra `"capture-reads": <fn>`, funcion de primer nivel; no esta en WRITE_MODES. El modo
+   *    y toda funcion de primer nivel que alcance (cierre transitivo por nombre) solo hacen GET: hay `fetch(`,
+   *    ningun `method:` distinto de "GET" ni literales POST/PATCH/PUT/DELETE, ninguna escritura de Firestore.
+   *  - Contra tiendas reales solo la key de lectura: ese cierre no nombra `writeKey*` ni `kw_`; la key viaja
+   *    por `Bearer` o por `key=` (como hoy) y nunca a la evidencia.
+   *  - Evidencia `t24-reads-antes.json`: `{ captureAt: ISO, range: { from, to }, stores: [{ sellerId, kpis,
+   *    orders, settlements, resumen, index }] }` (cada cuerpo, la respuesta JSON con `ok: true`), al menos
+   *    tres tiendas, `from <= to < dia de captureAt`, sin ninguna key (48 hex ni `kw_`).
+   *  - Funcion pura exportada: `module.exports = { compareReads, IGNORED_RESPONSE_FIELDS, ... }` con el
+   *    `require.main === module` de siempre. `compareReads(before, after, { captureAt })` recibe dos objetos
+   *    `{ kpis, orders, settlements, resumen, index }` (cuerpos de respuesta; en `settlements.liquidaciones`
+   *    cada elemento lleva el `updatedAt` del corte, que la captura anota) y devuelve
+   *    `{ ok: boolean, differences: Array<{ resource, path, ... }>, excluded: { orders: n, settlements: n } }`.
+   *    `/orders` y `/settlements` comparan por valor solo los elementos con `updatedAt < captureAt` que
+   *    conservan ese `updatedAt` en `after`; el resto se excluye de los dos lados y se cuenta. `/kpis` por
+   *    valor; `/resumen` solo por claves y tipos (con la razon en un comentario: resume el estado de hoy y
+   *    ningun rango lo congela); el indice, valor identico de cada clave de `before`, admitiendo solo claves
+   *    nuevas de primer nivel. Tolerancia cero salvo `IGNORED_RESPONSE_FIELDS` (marcas de tiempo de la
+   *    propia respuesta).
+   */
+  const SCRIPT = "scripts/verify-029.js";
+  const EVIDENCE = ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json";
+  const source = () => sourceWithoutComments(SCRIPT);
+
+  function captureReadsName(): string | null {
+    const commands = source().match(/const\s+COMMANDS\s*=\s*\{([^}]*)\}/)?.[1] ?? "";
+    return commands.match(/["']capture-reads["']\s*:\s*([A-Za-z_$][\w$]*)/)?.[1] ?? null;
+  }
+
+  /** Cuerpos del modo y de toda funcion de primer nivel que alcanza por nombre. */
+  function captureClosure(): string {
+    const root = captureReadsName();
+    if (!root) return "";
+    const src = source();
+    const topLevel = [...src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map((match) => match[1]);
+    const seen = new Set<string>([root]);
+    const queue = [root];
+    const bodies: string[] = [];
+    while (queue.length) {
+      const body = topLevelFunctionBody(src, queue.shift() as string) ?? "";
+      bodies.push(body);
+      for (const name of topLevel) {
+        if (!seen.has(name) && new RegExp(`\\b${name}\\b`).test(body)) {
+          seen.add(name);
+          queue.push(name);
+        }
+      }
+    }
+    return bodies.join("\n");
+  }
+
+  type Compare = (before: unknown, after: unknown, options: { captureAt: string }) => {
+    ok: boolean;
+    differences: Array<{ resource: string; path?: string }>;
+    excluded: { orders: number; settlements: number };
+  };
+  async function loadScript(): Promise<{ compareReads: Compare; IGNORED_RESPONSE_FIELDS: string[] }> {
+    const { createRequire } = await import("node:module");
+    const mod = createRequire(import.meta.url)(absolute(SCRIPT));
+    return mod;
+  }
+
+  it("COMMANDS registra capture-reads con una funcion de primer nivel", () => {
+    expect(captureReadsName()).not.toBeNull();
+    expect(topLevelFunctionBody(source(), captureReadsName() ?? "") ?? "").not.toBe("");
+  });
+
+  it("capture-reads no esta en WRITE_MODES", () => {
+    const match = source().match(/const\s+WRITE_MODES\s*=\s*(?:Object\.freeze\()?\[([^\]]*)\]/);
+    expect(match).not.toBeNull();
+    const modes = [...(match?.[1] ?? "").matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+    expect(modes).not.toContain("capture-reads");
+  });
+
+  it("el modo hace peticiones HTTP con fetch(", () => {
+    expect(captureClosure()).toMatch(/\bfetch\(/);
+  });
+
+  it("el modo solo hace GET: ningun method distinto de GET ni verbo de escritura", () => {
+    const closure = captureClosure();
+    expect(closure).not.toBe("");
+    for (const method of closure.matchAll(/\bmethod\s*:\s*([^,}\n]+)/g)) {
+      expect(method[1].trim(), `method no permitido: ${method[0]}`).toMatch(/^["'`]GET["'`]$/);
+    }
+    expect(closure).not.toMatch(/["'`](POST|PATCH|PUT|DELETE)["'`]/);
+    expect(closure).not.toMatch(/\.(post|patch|put)\(/);
+  });
+
+  it.each(WRITE_CALLS)("el modo no escribe en Firestore: %s", (writeCall) => {
+    expect(captureClosure()).not.toBe("");
+    expect(captureClosure()).not.toContain(writeCall);
+  });
+
+  it("contra tiendas reales solo usa la key de lectura: no lee writeKey* ni kw_", () => {
+    expect(captureClosure()).not.toBe("");
+    expect(captureClosure()).not.toMatch(/writeKey/i);
+    expect(captureClosure()).not.toMatch(/kw_/);
+  });
+
+  it("lee la key de lectura de storeApiConfigs y la envia por Bearer o por key= (como hoy)", () => {
+    expect(captureClosure()).toMatch(/storeApiConfigs/);
+    expect(captureClosure()).toMatch(/Bearer|[?&]key=|["']key["']/);
+  });
+
+  it("pide /kpis, /orders, /settlements, /resumen y el indice con from/to", () => {
+    for (const route of ["kpis", "orders", "settlements", "resumen"]) {
+      expect(captureClosure()).toMatch(new RegExp(`/${route}\\b|["'\`]${route}["'\`]`));
+    }
+    expect(captureClosure()).toMatch(/\bfrom\b/);
+    expect(captureClosure()).toMatch(/\bto\b/);
+    expect(captureClosure()).toMatch(/captureAt/);
+    expect(captureClosure()).toContain("t24-reads-antes.json");
+  });
+
+  it("el guion declara IGNORED_RESPONSE_FIELDS como lista explicita", () => {
+    expect(source()).toMatch(/const\s+IGNORED_RESPONSE_FIELDS\s*=\s*(?:Object\.freeze\()?\[/);
+  });
+
+  it("deja escrita la razon de comparar /resumen solo por forma (ningun rango lo congela)", () => {
+    const raw = readFileSync(absolute(SCRIPT), "utf8");
+    const comments = [...raw.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n\s*\/\/[^\n]*)*/g)].map((match) => match[0]);
+    expect(comments.some((comment) => /resumen/i.test(comment) && /forma/i.test(comment) && /congela/i.test(comment))).toBe(true);
+  });
+
+  describe("compareReads (puro, con fixtures)", () => {
+    const CAPTURE_AT = "2026-10-05T12:00:00.000Z";
+    const order = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({ id, updatedAt, status: "delivered", codCop: 50000, ...extra });
+    const settlement = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({ id, updatedAt, status: "paid", netoCop: 10000, ...extra });
+    const snapshot = () => ({
+      kpis: { ok: true, tienda: "T", rango: { desde: "2026-09-01", hasta: "2026-09-30" }, kpis: { entregados: 10, fallidos: 2 } },
+      orders: { ok: true, tienda: "T", rango: { desde: "2026-09-01", hasta: "2026-09-30" }, total: 2, pedidos: [order("A", "2026-09-10T00:00:00.000Z"), order("B", "2026-09-11T00:00:00.000Z")] },
+      settlements: { ok: true, tienda: "T", total: 1, liquidaciones: [settlement("S1", "2026-09-20T00:00:00.000Z")] },
+      resumen: { ok: true, tienda: "T", disponibleCop: 1000, retenidoCop: 0, pagos: [{ fecha: "2026-09-01", montoCop: 5 }] },
+      index: { ok: true, tienda: "T", endpoints: { "GET /resumen": "x" }, autenticacion: "sellerId y key" }
+    });
+
+    it("exporta compareReads y IGNORED_RESPONSE_FIELDS (lista de strings, sin campos de datos)", async () => {
+      const mod = await loadScript();
+      expect(typeof mod.compareReads).toBe("function");
+      expect(Array.isArray(mod.IGNORED_RESPONSE_FIELDS)).toBe(true);
+      for (const field of mod.IGNORED_RESPONSE_FIELDS) expect(typeof field).toBe("string");
+      for (const dataField of ["kpis", "pedidos", "liquidaciones", "endpoints", "autenticacion", "netoCop", "codCop", "status"]) {
+        expect(mod.IGNORED_RESPONSE_FIELDS).not.toContain(dataField);
+      }
+    });
+
+    it("dos lecturas identicas: ok y sin diferencias", async () => {
+      const { compareReads } = await loadScript();
+      const result = compareReads(snapshot(), snapshot(), { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+      expect(result.ok).toBe(true);
+    });
+
+    it("/kpis por valor: un numero distinto es una diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot();
+      after.kpis.kpis.entregados = 11;
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.ok).toBe(false);
+      expect(result.differences.some((diff) => diff.resource === "kpis")).toBe(true);
+    });
+
+    it("/orders por valor: un pedido con el mismo updatedAt y otro valor es una diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot();
+      after.orders.pedidos[0] = order("A", "2026-09-10T00:00:00.000Z", { codCop: 49000 });
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.ok).toBe(false);
+      expect(result.differences.some((diff) => diff.resource === "orders")).toBe(true);
+    });
+
+    it("/orders: el pedido movido entre medias (otro updatedAt) se excluye y se cuenta", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot();
+      after.orders.pedidos[1] = order("B", "2026-10-06T08:00:00.000Z", { status: "failed", codCop: 0 });
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+      expect(result.ok).toBe(true);
+      expect(result.excluded.orders).toBe(1);
+    });
+
+    it("/orders: un pedido con updatedAt >= captureAt no se compara y se cuenta", async () => {
+      const { compareReads } = await loadScript();
+      const before = snapshot();
+      before.orders.pedidos.push(order("C", "2026-10-05T12:30:00.000Z"));
+      const after = snapshot();
+      after.orders.pedidos.push(order("C", "2026-10-05T12:30:00.000Z", { codCop: 1 }));
+      const result = compareReads(before, after, { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+      expect(result.excluded.orders).toBe(1);
+    });
+
+    it("/settlements: corte con el mismo updatedAt y otro valor es diferencia; uno movido se excluye y cuenta", async () => {
+      const { compareReads } = await loadScript();
+      const changed = snapshot();
+      changed.settlements.liquidaciones[0] = settlement("S1", "2026-09-20T00:00:00.000Z", { netoCop: 9999 });
+      expect(compareReads(snapshot(), changed, { captureAt: CAPTURE_AT }).differences.some((diff) => diff.resource === "settlements")).toBe(true);
+
+      const moved = snapshot();
+      moved.settlements.liquidaciones[0] = settlement("S1", "2026-10-07T00:00:00.000Z", { status: "reconciled" });
+      const result = compareReads(snapshot(), moved, { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+      expect(result.excluded.settlements).toBe(1);
+    });
+
+    it("/resumen solo por forma: otros valores con las mismas claves y tipos no son diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot();
+      after.resumen.disponibleCop = 777777;
+      after.resumen.retenidoCop = 12;
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+    });
+
+    it("/resumen: una clave que falta o cambia de tipo es diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const missing = snapshot() as Record<string, any>;
+      delete missing.resumen.retenidoCop;
+      expect(compareReads(snapshot(), missing, { captureAt: CAPTURE_AT }).differences.some((diff) => diff.resource === "resumen")).toBe(true);
+
+      const retyped = snapshot() as Record<string, any>;
+      retyped.resumen.disponibleCop = "1000";
+      expect(compareReads(snapshot(), retyped, { captureAt: CAPTURE_AT }).differences.some((diff) => diff.resource === "resumen")).toBe(true);
+    });
+
+    it("indice: una clave nueva de primer nivel se admite", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot() as Record<string, any>;
+      after.index.writeEndpoints = { "PATCH /orders/{id}": "nuevo" };
+      after.index.errorCodes = ["key_in_query"];
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.differences).toEqual([]);
+      expect(result.ok).toBe(true);
+    });
+
+    it("indice: anadir dentro de una clave actual es diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const after = snapshot() as Record<string, any>;
+      after.index.endpoints = { ...after.index.endpoints, "PATCH /orders/{id}": "nuevo" };
+      const result = compareReads(snapshot(), after, { captureAt: CAPTURE_AT });
+      expect(result.ok).toBe(false);
+      expect(result.differences.some((diff) => diff.resource === "index")).toBe(true);
+    });
+
+    it("indice: una clave actual con otro valor o que desaparece es diferencia", async () => {
+      const { compareReads } = await loadScript();
+      const changed = snapshot() as Record<string, any>;
+      changed.index.autenticacion = "solo Bearer";
+      expect(compareReads(snapshot(), changed, { captureAt: CAPTURE_AT }).differences.some((diff) => diff.resource === "index")).toBe(true);
+
+      const removed = snapshot() as Record<string, any>;
+      delete removed.index.autenticacion;
+      expect(compareReads(snapshot(), removed, { captureAt: CAPTURE_AT }).differences.some((diff) => diff.resource === "index")).toBe(true);
+    });
+
+    it("solo se ignoran los campos de IGNORED_RESPONSE_FIELDS (si hay alguno)", async () => {
+      const { compareReads, IGNORED_RESPONSE_FIELDS } = await loadScript();
+      for (const field of IGNORED_RESPONSE_FIELDS) {
+        const before = snapshot() as Record<string, any>;
+        const after = snapshot() as Record<string, any>;
+        before.kpis[field] = "2026-10-05T12:00:00.000Z";
+        after.kpis[field] = "2026-10-08T09:00:00.000Z";
+        expect(compareReads(before, after, { captureAt: CAPTURE_AT }).differences, field).toEqual([]);
+      }
+      const after = snapshot() as Record<string, any>;
+      after.kpis.campoNoDeclarado = 1;
+      expect(compareReads(snapshot(), after, { captureAt: CAPTURE_AT }).ok).toBe(false);
+    });
+  });
+
+  describe("evidencia t24-reads-antes.json", () => {
+    const evidenceRaw = () => (existsSync(absolute(EVIDENCE)) ? readFileSync(absolute(EVIDENCE), "utf8") : "");
+
+    it("la captura existe y es JSON valido", () => {
+      expect(existsSync(absolute(EVIDENCE))).toBe(true);
+      expect(() => JSON.parse(evidenceRaw())).not.toThrow();
+    });
+
+    it("no contiene ninguna key (48 hex ni kw_)", () => {
+      expect(evidenceRaw()).not.toBe("");
+      expect(evidenceRaw()).not.toMatch(/(?<![0-9a-f])[0-9a-f]{48}(?![0-9a-f])/i);
+      expect(evidenceRaw()).not.toMatch(/kw_/);
+    });
+
+    it("from <= to < dia de captureAt (rangos cerrados del pasado)", () => {
+      const data = JSON.parse(evidenceRaw() || "{}");
+      expect(typeof data.captureAt).toBe("string");
+      expect(Number.isNaN(Date.parse(data.captureAt))).toBe(false);
+      const captureDay = String(data.captureAt).slice(0, 10);
+      expect(data.range?.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.range?.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(data.range.from <= data.range.to).toBe(true);
+      expect(data.range.to < captureDay).toBe(true);
+    });
+
+    // Los pedidos y cortes reales llevan nombre, telefono y direccion de clientes: al repo solo va su huella
+    // (id, updatedAt y hash del elemento canonico), y la comparacion de T27 huellea igual el "despues".
+    it("pedidos y liquidaciones se guardan como huella (id, updatedAt, hash), sin datos de clientes", () => {
+      const data = JSON.parse(evidenceRaw() || "{}");
+      for (const store of (data.stores ?? []) as Array<Record<string, any>>) {
+        for (const item of [...(store.orders?.pedidos ?? []), ...(store.settlements?.liquidaciones ?? [])]) {
+          expect(Object.keys(item).sort()).toEqual(["hash", "id", "updatedAt"]);
+          expect(item.hash).toMatch(/^[0-9a-f]{64}$/);
+        }
+      }
+    });
+
+    // Se capturan todas las tiendas reales con key de lectura activa: el 2026-10-05 son dos (Kovia y DANDA;
+    // ONEP no tiene key), y crearle una a una tienda real solo para la prueba seria escribir en produccion.
+    it("al menos dos tiendas reales, cada una con sus cinco lecturas sin error", () => {
+      const data = JSON.parse(evidenceRaw() || "{}");
+      const stores: Array<Record<string, any>> = data.stores ?? [];
+      expect(stores.length).toBeGreaterThanOrEqual(2);
+      for (const store of stores) {
+        expect(store.sellerId).not.toBe("seller-test-029");
+        for (const resource of ["kpis", "orders", "settlements", "resumen", "index"]) {
+          expect(store[resource]?.ok, `${store.sellerId} ${resource}`).toBe(true);
+        }
+      }
+    });
+  });
+});

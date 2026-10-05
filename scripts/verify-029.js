@@ -4,6 +4,8 @@
  *
  *   node scripts/verify-029.js baseline      (T1) linea base SOLO LECTURA -> t1-linea-base.txt
  *   node scripts/verify-029.js query-check   (T2) consultas nuevas con limit(1), SOLO LECTURA -> t2-query-check.txt
+ *   node scripts/verify-029.js capture-reads (T24) GET de la Store API de las tiendas reales con su key de
+ *                                            LECTURA, rango cerrado del pasado -> t24-reads-antes.json (huellas)
  *
  * Los modos que escriben (T25 `kovia-replay`, T27 `set-history-since`/`run-all`/`cleanup`) se declaran en
  * WRITE_MODES cuando existan. Mientras la lista este vacia, la guarda de T1 (src/lib/spec-029-guards.test.ts)
@@ -23,6 +25,7 @@
  * Usa ADC con las librerias de functions/node_modules. storeApiConfigs se lee para saber si hay key, nunca
  * para mostrarla: la key solo se toca con Boolean / typeof.
  */
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const admin = require(path.join(__dirname, "../functions/node_modules/firebase-admin"));
@@ -410,7 +413,263 @@ async function queryCheck() {
   console.log(`\nEvidencia: ${path.relative(process.cwd(), QUERY_CHECK_FILE)} (t2-query-check.txt)`);
 }
 
-const COMMANDS = { "baseline": baseline, "query-check": queryCheck };
+// ---------------------------------------------------------------------------------------------------------
+// T24 · capture-reads y compareReads (plan 5.3 "Lecturas reales")
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Campos que se ignoran al comparar: SOLO marcas de tiempo de la propia respuesta (no datos). Hoy ninguna
+ * respuesta de lectura de la Store API lleva una (ni `/kpis`, ni `/orders`, ni `/settlements`, ni `/resumen`,
+ * ni el indice), asi que la lista esta vacia y la tolerancia es cero en todo lo que se compara por valor. Si
+ * una respuesta llega a incluir su propia hora de generacion, se anade aqui por nombre y en ningun otro sitio.
+ */
+const IGNORED_RESPONSE_FIELDS = Object.freeze([]);
+
+/** Tiendas que se prefieren para la captura (por nombre, sin distinguir mayusculas). */
+const CAPTURE_PREFERRED_STORES = ["kovia", "onep", "danda"];
+const CAPTURE_TEST_SELLER = "seller-test-029";
+// Se capturan TODAS las tiendas reales con key de lectura activa: son las unicas que usan la API hoy (el
+// 2026-10-05, Kovia y DANDA; ONEP no tiene key). Con menos de dos la comparacion no prueba nada.
+const CAPTURE_MIN_STORES = 2;
+const CAPTURE_RANGE_DAYS = 30;
+const STORE_API_BASE_URL = "https://us-central1-kentro-last-mile.cloudfunctions.net/storeApi";
+
+/** JSON con las claves de todo objeto ordenadas: la misma entrada da siempre el mismo texto. */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item === undefined ? null : item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+/**
+ * Huella de un pedido o corte: los reales llevan nombre, telefono y direccion de clientes, asi que al repo
+ * solo va `{ id, updatedAt, hash }` (sha256 hex del JSON canonico del elemento entero). T27 huellea igual el
+ * "despues" y `compareReads` compara la huella por valor: cualquier campo distinto cambia el hash.
+ */
+function fingerprintItem(item) {
+  const source = item && typeof item === "object" ? item : {};
+  return {
+    id: source.id ?? null,
+    updatedAt: source.updatedAt ?? null,
+    hash: crypto.hash("sha256", canonicalJson(source))
+  };
+}
+
+/** Copia de las lecturas de una tienda con `orders.pedidos` y `settlements.liquidaciones` como huellas. */
+function fingerprintCapture(store) {
+  const copy = { ...store };
+  if (store.orders && Array.isArray(store.orders.pedidos)) {
+    copy.orders = { ...store.orders, pedidos: store.orders.pedidos.map(fingerprintItem) };
+  }
+  if (store.settlements && Array.isArray(store.settlements.liquidaciones)) {
+    copy.settlements = { ...store.settlements, liquidaciones: store.settlements.liquidaciones.map(fingerprintItem) };
+  }
+  return copy;
+}
+
+const typeTag = (value) => (value === null ? "null" : Array.isArray(value) ? "array" : typeof value);
+const isPlainObject = (value) => typeTag(value) === "object";
+
+/** Cuerpo sin los campos ignorados de primer nivel (marcas de tiempo de la respuesta). */
+function withoutIgnoredFields(body) {
+  if (!isPlainObject(body)) return body;
+  return Object.fromEntries(Object.entries(body).filter(([key]) => !IGNORED_RESPONSE_FIELDS.includes(key)));
+}
+
+/** Diferencias por valor, recorriendo objetos y arrays (cero tolerancia). */
+function valueDifferences(resource, pathSoFar, before, after) {
+  if (isPlainObject(before) && isPlainObject(after)) {
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+    return keys.flatMap((key) => {
+      const childPath = pathSoFar ? `${pathSoFar}.${key}` : key;
+      if (!(key in after)) return [{ resource, path: childPath, kind: "missing" }];
+      if (!(key in before)) return [{ resource, path: childPath, kind: "added" }];
+      return valueDifferences(resource, childPath, before[key], after[key]);
+    });
+  }
+  if (Array.isArray(before) && Array.isArray(after)) {
+    if (before.length !== after.length) return [{ resource, path: pathSoFar, kind: "length", before: before.length, after: after.length }];
+    return before.flatMap((item, index) => valueDifferences(resource, `${pathSoFar}[${index}]`, item, after[index]));
+  }
+  if (canonicalJson(before) === canonicalJson(after)) return [];
+  return [{ resource, path: pathSoFar, kind: "value", before, after }];
+}
+
+/** Diferencias de forma: mismas claves y mismos tipos; los arrays solo como "array" (su largo es estado). */
+function shapeDifferences(resource, pathSoFar, before, after) {
+  if (typeTag(before) !== typeTag(after)) return [{ resource, path: pathSoFar, kind: "type", before: typeTag(before), after: typeTag(after) }];
+  if (!isPlainObject(before)) return [];
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+  return keys.flatMap((key) => {
+    const childPath = pathSoFar ? `${pathSoFar}.${key}` : key;
+    if (!(key in after)) return [{ resource, path: childPath, kind: "missing" }];
+    if (!(key in before)) return [{ resource, path: childPath, kind: "added" }];
+    return shapeDifferences(resource, childPath, before[key], after[key]);
+  });
+}
+
+/**
+ * Lista de pedidos o cortes: se compara por id y por valor solo lo que tenia `updatedAt < captureAt` en la
+ * captura y conserva ese mismo `updatedAt` despues. Lo demas (movido entre medias, o escrito despues de la
+ * captura) se excluye de los dos lados y se cuenta. El sobre de la respuesta se compara por valor salvo
+ * `total`, que es el largo de la lista y ya queda cubierto, elemento a elemento, por la comparacion por id.
+ */
+function compareListResource(resource, listKey, before, after, captureAt) {
+  const beforeBody = withoutIgnoredFields(before) ?? {};
+  const afterBody = withoutIgnoredFields(after) ?? {};
+  const envelope = (body) => Object.fromEntries(Object.entries(body).filter(([key]) => key !== listKey && key !== "total"));
+  const differences = valueDifferences(resource, "", envelope(beforeBody), envelope(afterBody));
+  const beforeItems = Array.isArray(beforeBody[listKey]) ? beforeBody[listKey] : [];
+  const afterItems = Array.isArray(afterBody[listKey]) ? afterBody[listKey] : [];
+  const afterById = Object.fromEntries(afterItems.map((item) => [String(item.id), item]));
+  const beforeIds = beforeItems.map((item) => String(item.id));
+  const captureMs = Date.parse(captureAt);
+  const settledBefore = (item) => typeof item.updatedAt === "string" && Date.parse(item.updatedAt) < captureMs;
+  const excludedIds = [];
+  for (const item of beforeItems) {
+    const id = String(item.id);
+    const counterpart = afterById[id];
+    if (!settledBefore(item)) {
+      excludedIds.push(id);
+      continue;
+    }
+    if (!counterpart) {
+      differences.push({ resource, path: `${listKey}[id=${id}]`, kind: "missing" });
+      continue;
+    }
+    if (counterpart.updatedAt !== item.updatedAt) {
+      excludedIds.push(id);
+      continue;
+    }
+    differences.push(...valueDifferences(resource, `${listKey}[id=${id}]`, item, counterpart));
+  }
+  // Un elemento que aparece despues: si se escribio tras la captura se excluye; si dice ser anterior, no
+  // deberia faltar en una lectura del pasado y es una diferencia.
+  for (const item of afterItems) {
+    const id = String(item.id);
+    if (beforeIds.includes(id)) continue;
+    if (settledBefore(item)) differences.push({ resource, path: `${listKey}[id=${id}]`, kind: "added" });
+    else excludedIds.push(id);
+  }
+  return { differences, excluded: new Set(excludedIds).size };
+}
+
+/**
+ * Compara dos lecturas `{ kpis, orders, settlements, resumen, index }` de una misma tienda (T24 captura el
+ * "antes"; T27, en `run-all`, el "despues" con los mismos rangos y huelleado con fingerprintCapture).
+ * Tolerancia cero salvo IGNORED_RESPONSE_FIELDS:
+ *  - `/kpis`: por valor, entero.
+ *  - `/orders` y `/settlements`: por valor solo los elementos estables (ver compareListResource).
+ *  - `/resumen`: SOLO por forma (claves y tipos). Resume el saldo de la tienda al dia de HOY (pendiente,
+ *    retenido, pagos recibidos hasta ahora) y no acepta rango: ningun rango lo congela, asi que entre la
+ *    captura y la comparacion sus valores cambian por la operacion normal sin que nada este roto.
+ *  - indice: cada clave de primer nivel del "antes" con valor identico; solo se admiten claves NUEVAS de
+ *    primer nivel (RF_20: lo de la spec 029 va en claves nuevas).
+ */
+function compareReads(before, after, options) {
+  const captureAt = String(options && options.captureAt);
+  const left = before || {};
+  const right = after || {};
+  const differences = [];
+  differences.push(...valueDifferences("kpis", "", withoutIgnoredFields(left.kpis), withoutIgnoredFields(right.kpis)));
+  const orders = compareListResource("orders", "pedidos", left.orders, right.orders, captureAt);
+  const settlements = compareListResource("settlements", "liquidaciones", left.settlements, right.settlements, captureAt);
+  differences.push(...orders.differences, ...settlements.differences);
+  differences.push(...shapeDifferences("resumen", "", withoutIgnoredFields(left.resumen), withoutIgnoredFields(right.resumen)));
+  const indexBefore = withoutIgnoredFields(left.index) ?? {};
+  const indexAfter = withoutIgnoredFields(right.index) ?? {};
+  for (const key of Object.keys(indexBefore).sort()) {
+    if (!(key in indexAfter)) differences.push({ resource: "index", path: key, kind: "missing" });
+    else differences.push(...valueDifferences("index", key, indexBefore[key], indexAfter[key]));
+  }
+  return { ok: differences.length === 0, differences, excluded: { orders: orders.excluded, settlements: settlements.excluded } };
+}
+
+/** Dia calendario YYYY-MM-DD en America/Bogota, desplazado `offsetDays` dias. */
+function bogotaDay(date, offsetDays) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  const shifted = new Date(`${today}T00:00:00.000Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + offsetDays);
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
+ * Tiendas reales con key de lectura activa: prioriza Kovia, ONEP y DANDA; nunca la tienda de pruebas. Solo
+ * se toma la key de lectura (por desestructuracion) y no sale de memoria.
+ */
+async function loadCaptureStores() {
+  const snap = await db.collection("storeApiConfigs").get();
+  const candidates = snap.docs
+    .map((doc) => {
+      const { apiKey: readKey, sellerId, sellerName, status } = doc.data();
+      return { sellerId: String(sellerId ?? doc.id), sellerName: String(sellerName ?? sellerId ?? doc.id), status, readKey };
+    })
+    .filter((store) => store.sellerId !== CAPTURE_TEST_SELLER && store.status === "active" && typeof store.readKey === "string" && store.readKey.length > 0);
+  const rank = (store) => {
+    const position = CAPTURE_PREFERRED_STORES.indexOf(store.sellerName.trim().toLowerCase());
+    return position < 0 ? CAPTURE_PREFERRED_STORES.length : position;
+  };
+  candidates.sort((left, right) => rank(left) - rank(right) || left.sellerName.localeCompare(right.sellerName));
+  if (candidates.length < CAPTURE_MIN_STORES) {
+    throw new Error(`capture-reads: hacen falta ${CAPTURE_MIN_STORES} tiendas reales con key de lectura activa y hay ${candidates.length} (${candidates.map((store) => store.sellerName).join(", ") || "ninguna"})`);
+  }
+  return candidates;
+}
+
+/** GET a la Store API de produccion con la key de lectura en la cabecera (nunca en la URL ni en logs). */
+async function storeApiGet(store, route, query) {
+  const params = new URLSearchParams({ sellerId: store.sellerId, ...query });
+  const url = `${STORE_API_BASE_URL}${route}?${params.toString()}`;
+  const response = await fetch(url, { method: "GET", headers: { Authorization: "Bearer " + store.readKey, Accept: "application/json" } });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || body.ok !== true) {
+    throw new Error(`capture-reads: GET ${route} de ${store.sellerName} respondio ${response.status} (${body && body.error ? body.error : "sin cuerpo JSON"})`);
+  }
+  return body;
+}
+
+/** Anota en cada liquidacion la hora de la ultima escritura de `settlements/{id}` (solo lectura). */
+async function annotateSettlementsUpdatedAt(settlementsBody) {
+  const items = Array.isArray(settlementsBody.liquidaciones) ? settlementsBody.liquidaciones : [];
+  if (items.length === 0) return settlementsBody;
+  const snaps = await db.getAll(...items.map((item) => db.collection("settlements").doc(String(item.id))));
+  // `updateTime` de Firestore y no el campo `updatedAt`: cambia con CUALQUIER escritura del corte, tambien
+  // con las que no tocan ese campo, asi que un corte movido entre medias nunca pasa por estable.
+  const updatedAtById = Object.fromEntries(snaps.map((snap) => [snap.id, snap.exists && snap.updateTime ? snap.updateTime.toDate().toISOString() : null]));
+  return { ...settlementsBody, liquidaciones: items.map((item) => ({ ...item, updatedAt: updatedAtById[String(item.id)] ?? null })) };
+}
+
+async function captureReads() {
+  const captureAt = new Date().toISOString();
+  // Rango cerrado del pasado: termina AYER (America/Bogota), asi ningun pedido nuevo cae dentro.
+  const range = { from: bogotaDay(new Date(captureAt), -CAPTURE_RANGE_DAYS), to: bogotaDay(new Date(captureAt), -1) };
+  if (!(range.from <= range.to && range.to < captureAt.slice(0, 10))) throw new Error(`capture-reads: rango invalido ${range.from}..${range.to}`);
+  const stores = await loadCaptureStores();
+  const captured = [];
+  for (const store of stores) {
+    const kpis = await storeApiGet(store, "/kpis", { from: range.from, to: range.to });
+    const orders = await storeApiGet(store, "/orders", { from: range.from, to: range.to });
+    const settlements = await annotateSettlementsUpdatedAt(await storeApiGet(store, "/settlements", { from: range.from, to: range.to }));
+    const resumen = await storeApiGet(store, "/resumen", {});
+    const index = await storeApiGet(store, "/", {});
+    captured.push(fingerprintCapture({ sellerId: store.sellerId, sellerName: store.sellerName, kpis, orders, settlements, resumen, index }));
+    console.log(`- ${store.sellerName} (${store.sellerId}): pedidos=${orders.total} · liquidaciones=${settlements.total}`);
+  }
+  const evidenceFile = path.join(EVIDENCE_DIR, "t24-reads-antes.json");
+  const text = `${JSON.stringify({ captureAt, range, stores: captured }, null, 2)}\n`;
+  // La key de lectura son 48 hex: si algo con esa forma llegara al texto, no se guarda. (La de escritura
+  // ni se lee en este modo, asi que no puede llegar.)
+  if (/(?<![0-9a-f])[0-9a-f]{48}(?![0-9a-f])/i.test(text)) throw new Error("capture-reads: la evidencia contiene algo con forma de key de lectura; no se guarda");
+  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+  fs.writeFileSync(evidenceFile, text);
+  console.log(`captureAt=${captureAt} · rango ${range.from}..${range.to} · tiendas=${captured.length}`);
+  console.log(`Evidencia: ${path.relative(process.cwd(), evidenceFile)}`);
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "capture-reads": captureReads };
 
 async function main() {
   const command = process.argv[2];
@@ -429,3 +688,5 @@ if (require.main === module) {
     process.exit(1);
   });
 }
+
+module.exports = { compareReads, IGNORED_RESPONSE_FIELDS, fingerprintItem, fingerprintCapture, canonicalJson };

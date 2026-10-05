@@ -549,7 +549,12 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Verificacion contra produccion y entrega
 
-- [ ] **T24: Captura de lecturas antes de desplegar**
+- [x] **T24: Captura de lecturas antes de desplegar**
+  * **Al cerrar (2026-10-05):** capturadas las DOS tiendas reales con key de lectura (Kovia 26 pedidos y 3
+    cortes, DANDA 500 y 18; ONEP no tiene key y crearsela seria escribir en una tienda real): minimo bajado de 3
+    a 2. Pedidos y cortes van como huella `{id, updatedAt, hash}` (sin datos de clientes); el `updatedAt` de los
+    cortes es el `updateTime` de Firestore. `/resumen` va completo (saldos y notas de pago de la tienda) pero se
+    compara solo por forma. Riesgo de falsa alarma en T27: un corte estable embebe el estado de sus pedidos.
   * Requisitos cubiertos: RF_20, RF_01
   * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t24-reads-antes.json
   * Accion: `capture-reads` de tres tiendas reales **solo con su key de lectura** (keys leidas del servidor,
