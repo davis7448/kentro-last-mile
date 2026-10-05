@@ -271,7 +271,7 @@ de la decision 12.
 
 ## 5. Requisitos no funcionales
 
-- **RNF_01 (seguridad):**
+- **RNF_01:** (seguridad)
   - Las escrituras MUST exigir la **key de escritura** en la cabecera `Authorization: Bearer`. Una key de
     lectura enviada **en esa cabecera** a una escritura MUST recibir 403 con `code: "read_only_key"`; es el unico
     caso de 403.
@@ -281,17 +281,17 @@ de la decision 12.
   - Una key de escritura (prefijo `kw_`) enviada por parametro de consulta MUST rechazarse con 401 tambien en las
     rutas de lectura, nuevas y existentes (en las existentes, con su forma de error de hoy, RF_20).
   - Escribir o leer un pedido de otra tienda MUST responder 404, igual que uno inexistente.
-- **RNF_02 (errores):** Toda respuesta fallida de las rutas nuevas MUST llevar su codigo HTTP real y el cuerpo
+- **RNF_02:** (errores) Toda respuesta fallida de las rutas nuevas MUST llevar su codigo HTTP real y el cuerpo
   `{ ok: false, code, message, fields? }`. Los `code` son estables: se agregan, no se renombran. Las rutas
   existentes conservan su forma (RF_20). Cuando aplican varios, se responde el primero segun la decision 12.
-- **RNF_03 (idempotencia):** Las escrituras MUST aceptar `Idempotency-Key`. La misma key con el mismo cuerpo
+- **RNF_03:** (idempotencia) Las escrituras MUST aceptar `Idempotency-Key`. La misma key con el mismo cuerpo
   durante 24 horas MUST devolver la misma respuesta sin aplicar el cambio dos veces, **tambien cuando la primera
   respuesta fue un error que depende del pedido** (409 por estado o `status_changed`, y 422 de validacion o
   cobertura): se repite el mismo error (decision 13). La misma key con otro cuerpo MUST responder 422 con
   `code: "idempotency_key_reused"`.
-- **RNF_04 (limites):** Al superar el limite de tasa, el sistema MUST responder 429 con `Retry-After`, nunca 403.
+- **RNF_04:** (limites) Al superar el limite de tasa, el sistema MUST responder 429 con `Retry-After`, nunca 403.
   El minimo es 60 escrituras por minuto por tienda. Hoy `/storeApi` no tiene limite de tasa: es nuevo.
-- **RNF_05 (latencia):** El p95 de las escrituras y de `GET /orders/{id}` SHOULD ser menor a 2 segundos. Para eso
+- **RNF_05:** (latencia) El p95 de las escrituras y de `GET /orders/{id}` SHOULD ser menor a 2 segundos. Para eso
   MUST NOT leer todos los pedidos de la tienda, como hace hoy `GET /orders`.
 
 ## 6. Casos limite

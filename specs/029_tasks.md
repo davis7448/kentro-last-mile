@@ -673,3 +673,45 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     key de lectura y con key de escritura **en el mismo momento** (llamadas consecutivas, sin escrituras entre
     medias) sobre `/resumen`, `/kpis`, `/orders` y `/settlements`, por valor; la key de lectura de la tienda de
     pruebas se crea con `createStoreApiKey` en el setup (y no se escribe en el registro).
+
+## Correcciones de la revision adversarial (ronda 1, 2026-10-05)
+
+- [ ] **T28: El filtro `shopifyOrderId` acepta todo numero que el sistema guarda (R1-RF_02-1)**
+  * Requisitos cubiertos: RF_02, RF_03
+  * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/app/api-tiendas/page.tsx
+  * Accion: `isValidShopifyOrderId` deja de exigir `^[0-9A-Za-z#._-]{1,64}$`: los pedidos manuales guardan texto
+    libre con `#` delante (espacios, tildes; 6 de 5.983 en produccion). Valido = texto, 1-200 caracteres tras
+    recortar, sin caracteres de control; lo demas (vacio, array, demasiado largo, control) sigue siendo 400 con la
+    forma vieja. Manual: el filtro admite cualquier numero que devuelva `GET /orders`, codificado en la URL.
+  * Verificacion: `#Marcela López` y `#Cra 98c #54-86 apto 501` son validos; vacio, 201 caracteres, `\n` y array
+    no; las pruebas de T8/T10 siguen verdes.
+
+- [ ] **T29: La huella de idempotencia cubre el cuerpo entero (R1-RF_12-1)**
+  * Requisitos cubiertos: RF_12, RNF_03
+  * Archivos: functions/src/store-api-write.ts, src/lib/store-api-write.test.ts
+  * Accion: `prepareWrite` calcula `bodyHash` sobre el cuerpo JSON recibido completo (canonico), no solo sobre
+    `input` permitido: dos cuerpos que difieren en un campo no permitido o de tipo invalido dan huellas distintas.
+  * Verificacion: con el db falso, `PATCH {customerName}` con key K (200) y luego la misma K con
+    `{customerName, totalCop, paymentMethod}` → 422 `idempotency_key_reused`, sin escribir; y al reves (primero el
+    422 `field_not_allowed`, luego el cuerpo corregido con la misma K) → 422 `idempotency_key_reused`; el reintento
+    identico sigue siendo `replay`.
+
+- [ ] **T30: Anular libera la reserva aunque el pedido este `imported` (R1-RF_13-1)**
+  * Requisitos cubiertos: RF_13
+  * Archivos: functions/src/order-seller-actions.ts, src/lib/order-seller-actions.test.ts
+  * Accion: `planCancel` libera inventario si y solo si `orderOwnsInventoryReservation(order)` (marca que solo
+    escribe `createManualOrder`), sin el filtro `status !== "imported"`: desde la 029 un `address_risk` manual con
+    reserva vuelve a `imported` al corregirse. Aprovechar para exportar `DELIVERY_FIELDS` y el validador del motivo
+    (deuda de T8) si cabe sin cambiar comportamiento.
+  * Verificacion: la prueba de T4 que fijaba `imported` + `inventoryReserved: true` → `none` pasa a `release`
+    (con su razon); `imported` sin marca → `none`; recorrido puro address_risk manual → correccion → cancelar →
+    `release`.
+
+- [ ] **T31: El historial de la tienda verifica eventos por el id real del documento (R1-RF_27-1)**
+  * Requisitos cubiertos: RF_27, RF_18
+  * Archivos: functions/src/orders.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-history.test.ts
+  * Accion: `getOrderAuditTrail` arma las filas con `{ ...doc.data(), id: doc.id }` (el `id` del cuerpo lo puede
+    escribir cualquier sesion: `auditEvents` permite `create` a todo usuario).
+  * Verificacion: guarda en `getOrderAuditTrail` (`id: doc.id` despues del spread de `doc.data()`); prueba pura de
+    `buildAuditTrailResponse` con una fila cuyo `id` real no esta en `orderHistory` aunque su cuerpo copie uno
+    verificado → descartada para la tienda.

@@ -1,6 +1,6 @@
 {
-  "spec": "specs/026_efectivo_que_no_llega_a_un_corte.md",
-  "expected": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_07", "RF_08", "RF_09"],
-  "reviewed": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_07", "RF_08", "RF_09"],
+  "spec": "specs/029_store_api_confirma_y_corrige_pedidos.md",
+  "expected": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_21", "RF_07", "RF_08", "RF_09", "RF_10", "RF_22", "RF_23", "RF_11", "RF_12", "RF_13", "RF_14", "RF_15", "RF_16", "RF_17", "RF_18", "RF_24", "RF_27", "RF_25", "RF_26", "RF_19", "RF_20"],
+  "reviewed": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RF_06", "RF_21", "RF_07", "RF_08", "RF_09", "RF_10", "RF_22", "RF_23", "RF_11", "RF_12", "RF_13", "RF_14", "RF_15", "RF_16", "RF_17", "RF_18", "RF_24", "RF_27", "RF_25", "RF_26", "RF_19", "RF_20"],
   "result": "partial"
 }
