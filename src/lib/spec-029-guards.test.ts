@@ -912,3 +912,200 @@ describe("T15 · historial en confirmar reintento, ajuste, transicion y cierre (
     );
   });
 });
+
+describe("T16 · historial por nombre: mensajero, recogida y correcciones (RF_16, RF_24)", () => {
+  /*
+   * Plan 2.6: clasificacion POR NOMBRE de cada `export const X = onCall(`/`onRequest(` de
+   * `functions/src/orders.ts` y `functions/src/order-corrections.ts`. Sin detector generico de escrituras
+   * y sin tocar `spec-017-guards.test.ts`. Una callable nueva en estos dos archivos sin clasificar pone
+   * esta guarda en rojo: hay que decidir en cual de las dos listas va, con su razon.
+   *
+   * Fuera de esta guarda, por la spec:
+   * - las cinco vias de importacion y ChatBy (`shopify.ts`, `index.ts`, `store-webhook.ts`,
+   *   `onstock-webhook.ts`, `contact-form.ts`, `uchat-pull.ts`, `uchat-webhook.ts`) viven en otros archivos y
+   *   quedan fuera del historial (spec 031); su escritura en `orders` la sigue vigilando la guarda 1 de la 017;
+   * - las escrituras directas del cliente bajo `operationalOrderUpdateByAssignee` no son codigo de servidor
+   *   (limite conocido de RF_16, spec 032).
+   */
+  const FILES = ["functions/src/orders.ts", "functions/src/order-corrections.ts"] as const;
+
+  const REGISTRAN_HISTORIAL = [
+    "confirmImportedOrder",
+    "updateImportedOrder",
+    "cancelOrder",
+    "confirmRetryOrder",
+    "updateOrderAdjustments",
+    "applyOrderTransition",
+    "closeOrder",
+    "assignMessengerToOrders",
+    "unassignMessengerFromOrders",
+    "createOrUpdatePickupBatch",
+    "correctOrderStatus"
+  ] as const;
+
+  const EXCLUIDAS_DEL_HISTORIAL: Record<string, string> = {
+    createManualOrder: "crea el pedido; RF_16 cubre cambios de un pedido existente",
+    classifyFailedOrder: "solo cambia failedCategory, que no es estado ni dato de entrega",
+    getOrderAuditTrail: "solo lee",
+    createMessengerProfile: "crea un perfil de mensajero; no toca pedidos",
+    reconcileInventoryReservations: "recalcula reservas de inventario; lee pedidos, no los escribe",
+    createSettlement: "corte financiero: escribe settlements y marca walletEntries, no pedidos",
+    updateSettlementStatus: "cambia el estado de un corte y sus asientos, no de un pedido",
+    recordDriverCashReceipt: "recibo de efectivo del lider: dinero, no pedidos",
+    recordSupplierAbono: "abono a proveedor: dinero, no pedidos",
+    recordSellerAbono: "abono a tienda: dinero, no pedidos",
+    requestSellerPayout: "solicitud de liquidacion (payouts), no pedidos",
+    rejectSellerPayout: "rechazo de liquidacion (payouts), no pedidos"
+  };
+
+  const WRITERS_THAT_DELEGATE: Record<string, string> = {
+    confirmImportedOrder: "runConfirm(",
+    updateImportedOrder: "runDeliveryCorrection(",
+    cancelOrder: "runCancel("
+  };
+
+  function exportedNames(source: string): string[] {
+    return [...source.matchAll(/^export const (\w+)\s*=\s*(?:onCall|onRequest)\(/gm)].map((m) => m[1]);
+  }
+
+  function exportedBody(source: string, name: string): string | null {
+    const start = source.search(new RegExp(`^export const ${name}\\s*=\\s*(?:onCall|onRequest)\\(`, "m"));
+    if (start < 0) return null;
+    const end = source.indexOf("\n});\n", start);
+    return source.slice(start, end < 0 ? undefined : end + 4);
+  }
+
+  function bodyOf(name: string): string {
+    for (const file of FILES) {
+      const body = exportedBody(sourceWithoutComments(file), name);
+      if (body) return body;
+    }
+    expect.fail(`no se encontro export const ${name} = onCall(/onRequest( en ${FILES.join(" ni ")}`);
+    return "";
+  }
+
+  const realNames = FILES.flatMap((file) => exportedNames(sourceWithoutComments(file)));
+  const excluded = Object.keys(EXCLUIDAS_DEL_HISTORIAL);
+
+  describe("(1) las dos listas cubren exactamente las callables reales", () => {
+    it("los exports de los dos archivos son exactamente la union de las listas", () => {
+      expect([...realNames].sort()).toEqual([...REGISTRAN_HISTORIAL, ...excluded].sort());
+    });
+
+    it("ningun nombre esta en las dos listas ni repetido", () => {
+      const all = [...REGISTRAN_HISTORIAL, ...excluded];
+      expect(new Set(all).size).toBe(all.length);
+      expect(REGISTRAN_HISTORIAL.filter((n) => excluded.includes(n))).toEqual([]);
+    });
+
+    it("ningun nombre de las listas deja de existir", () => {
+      expect([...REGISTRAN_HISTORIAL, ...excluded].filter((n) => !realNames.includes(n))).toEqual([]);
+    });
+
+    it("cada excluida lleva su razon", () => {
+      for (const [name, reason] of Object.entries(EXCLUIDAS_DEL_HISTORIAL)) {
+        expect(reason.trim().length, `${name} sin razon`).toBeGreaterThan(0);
+      }
+    });
+
+    it("un nombre real no se repite entre los dos archivos", () => {
+      expect(new Set(realNames).size).toBe(realNames.length);
+    });
+  });
+
+  describe("(2) cada callable de REGISTRAN_HISTORIAL contiene un escritor de historial", () => {
+    for (const name of REGISTRAN_HISTORIAL) {
+      it(name, () => {
+        const writer = WRITERS_THAT_DELEGATE[name] ?? "buildOrderHistoryRecord(";
+        expect(bodyOf(name), `${name} no contiene ${writer}`).toContain(writer);
+      });
+    }
+  });
+
+  describe("(3) prueba positiva: mensajero y recogida registran con buildOrderHistoryRecord(", () => {
+    for (const name of ["createOrUpdatePickupBatch", "assignMessengerToOrders", "unassignMessengerFromOrders"] as const) {
+      it(name, () => {
+        expect(REGISTRAN_HISTORIAL as readonly string[]).toContain(name);
+        expect(bodyOf(name)).toContain("buildOrderHistoryRecord(");
+      });
+    }
+
+    it("correctOrderStatus registra con buildOrderHistoryRecord( en su batch", () => {
+      const body = bodyOf("correctOrderStatus");
+      expect(body).toContain("buildOrderHistoryRecord(");
+      expect(body).toMatch(/collection\(\s*["']orderHistory["']\s*\)/);
+    });
+
+    it('createOrUpdatePickupBatch escribe un evento con action "order.picked_up"', () => {
+      expect(bodyOf("createOrUpdatePickupBatch")).toMatch(/action:\s*["']order\.picked_up["']/);
+    });
+
+    it('createOrUpdatePickupBatch crea su evento con newAuditRef( y lo enlaza con auditEventId', () => {
+      const body = bodyOf("createOrUpdatePickupBatch");
+      const auditVars = [...body.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*newAuditRef\(/g)].map((m) => m[1]);
+      expect(auditVars.length, "createOrUpdatePickupBatch no crea su auditEvent con newAuditRef(").toBeGreaterThan(0);
+      expect(auditVars.some((v) => new RegExp(`auditEventId:\\s*${v}\\.id\\b`).test(body))).toBe(true);
+    });
+  });
+
+  describe("(4) RF_24: nadie reconstruye historial desde auditEvents", () => {
+    function listTs(dir: string): string[] {
+      return readdirSync(absolute(dir)).flatMap((entry) => {
+        const rel = `${dir}/${entry}`;
+        if (statSync(absolute(rel)).isDirectory()) return listTs(rel);
+        return rel.endsWith(".ts") && !rel.endsWith(".test.ts") ? [rel] : [];
+      });
+    }
+
+    /** Posiciones de lecturas (`.where(`/`.get(`) sobre `collection("auditEvents")`, encadenadas o via variable. */
+    function auditEventsReads(source: string): number[] {
+      const positions: number[] = [];
+      const literal = /collection\(\s*["']auditEvents["']\s*\)/g;
+      for (const m of source.matchAll(literal)) {
+        const after = source.slice((m.index ?? 0) + m[0].length);
+        const chain = after.slice(0, after.search(/;|\n\s*\n|,\s*\n/) >>> 0);
+        if (/^\s*\.(?:where|get|orderBy|limit)\(/.test(chain) && /\.(?:where|get)\(/.test(chain)) positions.push(m.index ?? 0);
+      }
+      const vars = [...source.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*\w+\.collection\(\s*["']auditEvents["']\s*\)\s*;/g)];
+      for (const v of vars) {
+        for (const use of source.matchAll(new RegExp(`\\b${v[1]}\\s*\\.(?:where|get)\\(`, "g"))) positions.push(use.index ?? 0);
+      }
+      return positions;
+    }
+
+    it('getOrderAuditTrail es la unica funcion de functions/src que lee collection("auditEvents") con .where(/.get(', () => {
+      const offenders: string[] = [];
+      let insideTrail = 0;
+      for (const file of listTs("functions/src")) {
+        const source = sourceWithoutComments(file);
+        const reads = auditEventsReads(source);
+        if (reads.length === 0) continue;
+        const trail = file === "functions/src/orders.ts" ? exportedBody(source, "getOrderAuditTrail") : null;
+        const trailStart = trail ? source.indexOf(trail) : -1;
+        for (const at of reads) {
+          if (trail && at >= trailStart && at < trailStart + trail.length) insideTrail++;
+          else offenders.push(`${file}:${source.slice(0, at).split("\n").length}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+      expect(insideTrail, "getOrderAuditTrail deberia leer auditEvents").toBeGreaterThan(0);
+    });
+
+    it("getOrderAuditTrail no escribe (ni en orderHistory ni en nada)", () => {
+      const body = bodyOf("getOrderAuditTrail");
+      for (const call of [...WRITE_CALLS, ".add("]) expect(body, `getOrderAuditTrail contiene ${call}`).not.toContain(call);
+    });
+
+    it("scripts/verify-029.js no tiene modo que escriba orderHistory (el cleanup solo borra)", () => {
+      const source = sourceWithoutComments("scripts/verify-029.js");
+      const refVars = [...source.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*[^;]*collection\(\s*["']orderHistory["']\s*\)/g)].map((m) => m[1]);
+      const chained = [...source.matchAll(/collection\(\s*["']orderHistory["']\s*\)[^;]*?\.(set|add|update|create)\(/g)].map((m) => m[0]);
+      expect(chained, "escritura encadenada sobre orderHistory").toEqual([]);
+      const viaBatch = [...source.matchAll(/\.(?:set|update|create)\(\s*([^,)]+)/g)]
+        .map((m) => m[1].trim())
+        .filter((target) => /collection\(\s*["']orderHistory["']\s*\)/.test(target) || refVars.some((v) => new RegExp(`^${v}\\b`).test(target)));
+      expect(viaBatch, "set/update/create con destino orderHistory").toEqual([]);
+      for (const v of refVars) expect(source).not.toMatch(new RegExp(`\\b${v}\\s*\\.(?:doc\\([^)]*\\)\\s*\\.)?(?:set|add|update|create)\\(`));
+    });
+  });
+});

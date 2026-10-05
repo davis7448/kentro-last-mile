@@ -254,7 +254,7 @@ export function newAuditRef(db: FirebaseFirestore.Firestore) {
  * Actor de `orderHistory` para una callable del panel (spec 029, plan 2.6). `SellerActor` tipa el rol de las
  * acciones de tienda, pero el registro guarda el rol como texto: aqui tambien firman lider, mensajero y admin.
  */
-function panelHistoryActor(uid: string, role: string): SellerActor {
+export function panelHistoryActor(uid: string, role: string): SellerActor {
   return { kind: "user", uid, role } as SellerActor;
 }
 
@@ -893,14 +893,43 @@ export const createOrUpdatePickupBatch = onCall(async (request) => {
     };
     transaction.set(batchRef, batch);
     for (const { snap, data } of orders) {
-      transaction.set(snap.ref, {
+      const pickedUp = {
         ...data,
         driverId: driverClaim,
         pickupBatchId: batch.id,
         pickedUpAt: now,
         status: "picked_up",
         updatedAt: now
-      }, { merge: true });
+      };
+      transaction.set(snap.ref, pickedUp, { merge: true });
+      // Spec 029 (RF_16): la recogida queda como evento propio (sin identidades: la tienda lo lee) y su diff
+      // en orderHistory, en el mismo commit que el pedido.
+      const auditRef = newAuditRef(db);
+      transaction.set(auditRef, {
+        id: auditRef.id,
+        actorId: request.auth?.uid,
+        actorRole: role,
+        action: "order.picked_up",
+        entity: "order",
+        entityId: snap.id,
+        fromStatus: String(data.status ?? ""),
+        toStatus: "picked_up",
+        summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} recogido`,
+        createdAt: now
+      });
+      const historyRecord = buildOrderHistoryRecord(data, pickedUp, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: "order.picked_up",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: auditRef.id
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+      }
     }
     return { pickupBatch: batch };
   });
@@ -943,8 +972,10 @@ export const assignMessengerToOrders = onCall(async (request) => {
         updatedAt: now
       };
       transaction.set(snap.ref, updated, { merge: true });
+      let reassignAuditId: string | undefined;
       if (previousMessengerId && previousMessengerId !== parsed.data.messengerId) {
         const auditRef = newAuditRef(db);
+        reassignAuditId = auditRef.id;
         transaction.set(auditRef, {
           id: auditRef.id,
           actorId: request.auth?.uid,
@@ -955,6 +986,21 @@ export const assignMessengerToOrders = onCall(async (request) => {
           summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} reasignado de mensajero ${previousMessengerId} a ${parsed.data.messengerId} por el lider logistico`,
           createdAt: now
         });
+      }
+      // Spec 029 (RF_16): solo `status` es campo registrado (messengerId no), asi que hay registro solo cuando
+      // el pedido pasa de picked_up a call_pending. Ese caso no escribe auditEvent salvo reasignacion.
+      const historyRecord = buildOrderHistoryRecord(data, updated, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: reassignAuditId ? "order.messenger_reassigned" : "order.messenger_assigned",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: reassignAuditId
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
       }
       return updated;
     });
@@ -1009,6 +1055,20 @@ export const unassignMessengerFromOrders = onCall(async (request) => {
         summary: `Pedido ${data.trackingCode ?? data.shopifyOrderId ?? snap.id} devuelto a pendiente de mensajero (antes: ${previousMessengerId}) por el lider logistico`,
         createdAt: now
       });
+      // Spec 029 (RF_16): registro solo si cambia `status` (un pedido ya en picked_up no deja diff).
+      const historyRecord = buildOrderHistoryRecord(data, updated, {
+        orderId: snap.id,
+        sellerId: String(data.sellerId ?? ""),
+        origin: "panel",
+        action: "order.messenger_unassigned",
+        actor: panelHistoryActor(request.auth?.uid ?? "unknown", String(role)),
+        now,
+        auditEventId: auditRef.id
+      });
+      if (historyRecord) {
+        const historyRef = db.collection("orderHistory").doc();
+        transaction.set(historyRef, stripUndefined({ ...historyRecord, id: historyRef.id }));
+      }
       return updated;
     });
     return { orders: updatedOrders };

@@ -406,7 +406,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     contienen `buildOrderHistoryRecord(`; bloque en `order-seller-actions.test.ts`: ajuste registra
     `totalCop`/producto; cierre registra solo `status`.
 
-- [ ] **T16: Historial en mensajero, recogida y correcciones; clasificacion por nombre de las callables**
+- [x] **T16: Historial en mensajero, recogida y correcciones; clasificacion por nombre de las callables**
   * Requisitos cubiertos: RF_16, RF_24
   * Archivos: functions/src/orders.ts, functions/src/order-corrections.ts, src/lib/spec-029-guards.test.ts
   * Accion: `assignMessengerToOrders`, `unassignMessengerFromOrders` (solo `status`), `createOrUpdatePickupBatch`
@@ -481,6 +481,9 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     "Panel"), nombres de campo visibles (los cinco de entrega, `status` y los cuatro de producto y valor, con los
     textos del README), "Antes"/"Ahora", nota de alcance con la fecha de `historySince` (sin nota si es `null` o
     hay error).
+  * **Nota (2026-10-05, al cerrar T16):** el historial registra dos acciones nuevas sin evento propio o con uno
+    nuevo: `order.messenger_assigned` (asignar mensajero sin reasignacion; el registro va sin `auditEventId`) y
+    `order.messenger_unassigned`. Necesitan texto visible ratificado por `sdd-uxui` en el README antes de T19.
   * Verificacion: `store-api-keys-view.test.ts` y `order-audit-trail-view.test.ts` con un caso por estado del
     README (decisiones 3-7, 9-14); el estado "activa" contiene "termina en" + `last4`, la fecha de generacion y
     "generada por", y **no** contiene el prefijo `kw_` como dato ni una fecha de rotacion, ni nunca la key; cada
