@@ -483,9 +483,11 @@ describe("T6 · ejecutor transaccional y carreras simuladas (RF_19, RF_04, RF_11
       expect(db.read("orders", "order-1")).toMatchObject({ status: "cancelled", callNote: "cliente desiste", driverId: null });
     });
 
-    it("anular un imported (nunca reservo) no mueve inventario", async () => {
+    // T30 (R1-RF_13-1): "nunca reservo" es no tener la marca `inventoryReserved`, no estar `imported`: un manual
+    // address_risk con reserva vuelve a `imported` al corregirse y su reserva si se libera.
+    it("anular un imported (nunca reservo: sin la marca) no mueve inventario", async () => {
       const { runCancel } = await loadRun();
-      const db = seededDb({ inventoryReserved: true, sku: "CR-1", quantity: 2 });
+      const db = seededDb({ sku: "CR-1", quantity: 2 });
       seedInventory(db);
       const result = await runCancel(makeDeps(db), request("api", { reason: "cliente desiste" }));
       expect(result.kind).toBe("applied");

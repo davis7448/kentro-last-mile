@@ -210,9 +210,15 @@ describe("T4 · confirmar y cancelar (planificador puro)", () => {
       expect((await cancel("api", order({ status: "address_risk", inventoryReserved: true }), { reason: "x" })).inventory).toBe("release");
     });
 
-    it("no libera inventario si no reservo o si esta imported", async () => {
+    it("no libera inventario si no reservo (tampoco un imported sin marca)", async () => {
       expect((await cancel("api", order({ status: "ready_to_assign" }), { reason: "x" })).inventory).toBe("none");
-      expect((await cancel("api", order({ status: "imported", inventoryReserved: true }), { reason: "x" })).inventory).toBe("none");
+      expect((await cancel("api", order({ status: "imported" }), { reason: "x" })).inventory).toBe("none");
+    });
+
+    it("libera inventario si reservo aunque este imported (T30, R1-RF_13-1)", async () => {
+      // Desde la 029 un address_risk manual con reserva vuelve a imported al corregirse por la API, y solo
+      // createManualOrder escribe la marca: quien la tiene reservo, sea cual sea el estado.
+      expect((await cancel("api", order({ status: "imported", inventoryReserved: true }), { reason: "x" })).inventory).toBe("release");
     });
 
     it("panel (admin) cancelando un assigned → parche con el driverId actual, como hoy", async () => {
@@ -1208,5 +1214,56 @@ describe("T25 · forma de Kovia: fixture sintetico, correccion por API y reimpor
       expect(view.addressRaw).toBe(CORRECTION.addressRaw);
       expect(view.driverId).toBeNull();
     });
+  });
+});
+
+describe("T30 · anular libera la reserva de un manual address_risk corregido (R1-RF_13-1, RF_13)", () => {
+  /** Pedido manual con reserva (marca que solo escribe createManualOrder) caido en revision de direccion. */
+  const manualAtRisk = () => order({ status: "address_risk", inventoryReserved: true, addressRaw: "Cll 5 sin numero" });
+
+  async function correctedViaApi() {
+    const before = manualAtRisk();
+    const { planDeliveryCorrection } = await load();
+    const r = planDeliveryCorrection({
+      policy: "api",
+      actor: API_ACTOR,
+      order: before,
+      input: { city: null, addressRaw: "Calle 5 # 10-20 Apto 301" },
+      now: NOW
+    }) as AnyResult;
+    expectApplied(r);
+    const after: Record<string, unknown> = { ...before, ...(r.patch as AnyResult) };
+    for (const key of r.clear as string[]) delete after[key];
+    return { r, after };
+  }
+
+  it("la correccion por API lo devuelve a imported sin tocar la marca de reserva", async () => {
+    const { r, after } = await correctedViaApi();
+    expect((r.patch as AnyResult).status).toBe("imported");
+    expect(r.patch).not.toHaveProperty("inventoryReserved");
+    expect(r.clear).not.toContain("inventoryReserved");
+    expect(after.status).toBe("imported");
+    expect(after.inventoryReserved).toBe(true);
+  });
+
+  it("politica api: anular el pedido ya corregido libera la reserva", async () => {
+    const { after } = await correctedViaApi();
+    const r = await cancel("api", after, { reason: "Cliente desistio" });
+    expectApplied(r);
+    expect(r.inventory).toBe("release");
+  });
+
+  it("politica panel (admin): anular el pedido ya corregido libera la reserva", async () => {
+    const { after } = await correctedViaApi();
+    const r = await cancel("panel", after, {}, ADMIN_ACTOR);
+    expectApplied(r);
+    expect(r.inventory).toBe("release");
+  });
+
+  it("politica panel (tienda): anular el pedido ya corregido libera la reserva", async () => {
+    const { after } = await correctedViaApi();
+    const r = await cancel("panel", after, {}, SELLER_ACTOR);
+    expectApplied(r);
+    expect(r.inventory).toBe("release");
   });
 });

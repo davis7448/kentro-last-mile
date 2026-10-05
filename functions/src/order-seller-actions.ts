@@ -328,7 +328,7 @@ export type DeliveryCorrectionInput = DeliveryInput & {
 };
 
 /** Orden fijo: el de los problemas devueltos y el de los cambios del historial. */
-const DELIVERY_FIELDS: readonly DeliveryField[] = ["customerName", "customerPhone", "addressRaw", "deliveryNotes", "cityId"];
+export const DELIVERY_FIELDS: readonly DeliveryField[] = ["customerName", "customerPhone", "addressRaw", "deliveryNotes", "cityId"];
 const HISTORY_FIELDS: readonly OrderHistoryField[] = ["status", ...DELIVERY_FIELDS, "totalCop", "productName", "sku", "quantity"];
 
 const TEXT_MAX_LENGTH: Partial<Record<DeliveryField, number>> = { customerName: 120, addressRaw: 300, deliveryNotes: 500 };
@@ -546,7 +546,7 @@ const PANEL_SELLER_COLLECTED_STATUSES = new Set(["call_pending", "scheduled", "p
  * Motivo de anular por API. Si `parseWriteBody` ya anoto problemas, se responden esos tal cual; si no (o
  * si alguien llama sin pasar por el), el nucleo no deja pasar un motivo ausente, vacio o largo.
  */
-function cancelReasonProblems(input: CancelInput): FieldProblem[] {
+export function cancelReasonProblems(input: CancelInput): FieldProblem[] {
   if (input.fieldProblems && input.fieldProblems.length > 0) return input.fieldProblems;
   if (input.reason === undefined || input.reason === null) return [{ field: "reason", code: "required" }];
   if (typeof input.reason !== "string") return [{ field: "reason", code: "invalid_type" }];
@@ -585,8 +585,9 @@ export function planCancel(i: PlanInput<CancelInput>): SellerActionRejection | S
   const conflict = statusChanged(input, status);
   if (conflict) return conflict;
 
-  // Solo libera quien reservo, y un `imported` nunca reservo (misma regla que `cancelOrder`).
-  const releasesInventory = orderOwnsInventoryReservation({ inventoryReserved: order.inventoryReserved }) && status !== "imported";
+  // Libera si y solo si el pedido reservo (marca que solo escribe `createManualOrder`), sin mirar el estado:
+  // desde la 029 un `address_risk` manual con reserva vuelve a `imported` al corregirse (R1-RF_13-1).
+  const releasesInventory = orderOwnsInventoryReservation({ inventoryReserved: order.inventoryReserved });
   const meta = { policy, actor, order, now };
   const reason = typeof input.reason === "string" ? input.reason.trim() : "";
   return {

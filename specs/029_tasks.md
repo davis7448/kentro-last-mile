@@ -696,7 +696,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     422 `field_not_allowed`, luego el cuerpo corregido con la misma K) → 422 `idempotency_key_reused`; el reintento
     identico sigue siendo `replay`.
 
-- [ ] **T30: Anular libera la reserva aunque el pedido este `imported` (R1-RF_13-1)**
+- [x] **T30: Anular libera la reserva aunque el pedido este `imported` (R1-RF_13-1)**
   * Requisitos cubiertos: RF_13
   * Archivos: functions/src/order-seller-actions.ts, src/lib/order-seller-actions.test.ts
   * Accion: `planCancel` libera inventario si y solo si `orderOwnsInventoryReservation(order)` (marca que solo
