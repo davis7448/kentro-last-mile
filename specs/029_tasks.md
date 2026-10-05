@@ -676,7 +676,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Correcciones de la revision adversarial (ronda 1, 2026-10-05)
 
-- [ ] **T28: El filtro `shopifyOrderId` acepta todo numero que el sistema guarda (R1-RF_02-1)**
+- [x] **T28: El filtro `shopifyOrderId` acepta todo numero que el sistema guarda (R1-RF_02-1)**
   * Requisitos cubiertos: RF_02, RF_03
   * Archivos: functions/src/store-api-request.ts, src/lib/store-api-request.test.ts, src/app/api-tiendas/page.tsx
   * Accion: `isValidShopifyOrderId` deja de exigir `^[0-9A-Za-z#._-]{1,64}$`: los pedidos manuales guardan texto

@@ -207,12 +207,45 @@ describe("T8 · validador de shopifyOrderId (plan 2.10)", () => {
     expect(isValidShopifyOrderId(value)).toBe(true);
   });
 
+  // T28 (R1-RF_02-1): "con espacios", "con /" y "65 caracteres" ya no son invalidos; el limite pasa a 200
+  // y se aceptan espacios y signos. Ver el bloque T28 de abajo.
   it.each([
     ["vacio", ""],
-    ["65 caracteres", "1".repeat(65)],
-    ["con espacios", "10 01"],
-    ["con /", "10/01"],
     ["no texto", 1001],
+    ["undefined", undefined]
+  ])("%s es invalido", async (_label, value) => {
+    const { isValidShopifyOrderId } = await load();
+    expect(isValidShopifyOrderId(value)).toBe(false);
+  });
+});
+
+/*
+ * T28 · R1-RF_02-1. El patron viejo ^[0-9A-Za-z#._-]{1,64}$ rechazaba numeros que el propio sistema guarda:
+ * los pedidos manuales (src/lib/actions.ts) guardan texto libre con "#" delante, con espacios y tildes
+ * (6 de 5.983 en produccion). GET /orders devolvia ese numero y el filtro lo rechazaba con 400.
+ * Valido = texto de 1 a 200 caracteres tras recortar, sin caracteres de control.
+ */
+describe("T28 · shopifyOrderId acepta todo numero que el sistema guarda (R1-RF_02-1)", () => {
+  it.each([
+    ["#Marcela López", "#Marcela López"],
+    ["direccion como numero", "#Cra 98c #54-86 mirador de la alameda apto 501 torre 1"],
+    ["1001", "1001"],
+    ["#1001", "#1001"],
+    ["KOV-1001", "KOV-1001"],
+    ["200 caracteres", "x".repeat(200)]
+  ])("%s es valido", async (_label, value) => {
+    const { isValidShopifyOrderId } = await load();
+    expect(isValidShopifyOrderId(value)).toBe(true);
+  });
+
+  it.each([
+    ["vacio", ""],
+    ["solo espacios", "   "],
+    ["201 caracteres", "x".repeat(201)],
+    ["con salto de linea", "#10\n01"],
+    ["con NUL", "#10\u000001"],
+    ["array", ["1001"]],
+    ["numero", 1001],
     ["undefined", undefined]
   ])("%s es invalido", async (_label, value) => {
     const { isValidShopifyOrderId } = await load();

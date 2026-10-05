@@ -245,10 +245,18 @@ export function validateQueryParameters(
 // shopifyOrderId (plan 2.10)
 // ---------------------------------------------------------------------------------------------------------
 
-const SHOPIFY_ORDER_ID_PATTERN = /^[0-9A-Za-z#._-]{1,64}$/;
+// R1-RF_02-1: antes se exigia ^[0-9A-Za-z#._-]{1,64}$, pero los pedidos manuales guardan texto libre con "#"
+// delante (espacios, tildes) y GET /orders los devolvia con un numero que el filtro rechazaba. Ahora vale todo
+// texto de 1 a 200 caracteres (tras recortar) sin caracteres de control. El recorte es solo para medir: la
+// consulta usa el valor tal cual llega, que es como se guardo.
+const SHOPIFY_ORDER_ID_MAX_LENGTH = 200;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 
 export function isValidShopifyOrderId(value: unknown): boolean {
-  return typeof value === "string" && SHOPIFY_ORDER_ID_PATTERN.test(value);
+  if (typeof value !== "string") return false;
+  const length = value.trim().length;
+  return length >= 1 && length <= SHOPIFY_ORDER_ID_MAX_LENGTH && !CONTROL_CHARACTERS.test(value);
 }
 
 // ---------------------------------------------------------------------------------------------------------
