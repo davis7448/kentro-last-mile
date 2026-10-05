@@ -260,7 +260,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `null` como tipo valido (no `invalid_type`): `deliveryNotes: null` borra y los otros cuatro con `null` dan
     `empty` en la validacion de contenido de T5. Probar los cinco con `null`.
 
-- [ ] **T9: Forma de pedido extraida sin cambiar la salida**
+- [x] **T9: Forma de pedido extraida sin cambiar la salida**
   * Requisitos cubiertos: RF_01, RF_20
   * Archivos: functions/src/store-api-orders.ts, functions/src/store-api.ts, src/lib/store-api-orders.test.ts
   * Accion: mover `orderPayload`, `classifyOrder`, `buildPaymentInfo`, `computeKpis` y su ayudante de fecha a
