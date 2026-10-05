@@ -36,7 +36,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Medicion previa (compuertas)
 
-- [ ] **T1: Linea base contra produccion, solo lectura**
+- [x] **T1: Linea base contra produccion, solo lectura**
   * Requisitos cubiertos: RF_01, RF_02, RF_08, RF_10, RF_22, RF_27, RNF_05
   * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt
   * Accion: modo `baseline`: tipos de `shopifyOrderId` guardados (texto / numero / mixto) por tienda; pedidos

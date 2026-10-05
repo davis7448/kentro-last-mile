@@ -1,0 +1,194 @@
+# Spec 029 — T1 linea base (solo lectura)
+Generado: 2026-10-05T00:53:59.719Z · proyecto kentro-last-mile
+
+## 1. Tipo guardado de shopifyOrderId por tienda (sellerId)
+- Kovia (seller-1778271867877): texto · texto=124 · texto solo-digitos=0
+- DANDA (seller-1779315416119): texto · texto=5090 · texto solo-digitos=0
+- vive zen (seller-1780588345624): texto · texto=81 · texto solo-digitos=0
+- Mercadotienda (seller-1780688354552): texto · texto=19 · texto solo-digitos=0
+- OnStok (seller-1780762661093): texto · texto=83 · texto solo-digitos=0
+- Bodega ShopSeven (seller-1782319900402): texto · texto=1 · texto solo-digitos=0
+- Senziacol (seller-1782485190827): texto · texto=73 · texto solo-digitos=0
+- Bella Mujer (seller-1782496969817): texto · texto=406 · texto solo-digitos=0
+- ADMA COMERCIAL (seller-1783783071241): texto · texto=17 · texto solo-digitos=0
+- Nambu (seller-1786070878729): texto · texto=69 · texto solo-digitos=0
+- LuminXP (seller-1787069032596): texto · texto=3 · texto solo-digitos=0
+- koera (seller-1788980831922): texto · texto=1 · texto solo-digitos=0
+- CEPILLOS FULL (seller-cepillos-full): texto · texto=2 · texto solo-digitos=0
+Global (con shopifyOrderId): texto=5969
+Tiendas mixto: 0 · global mixto: no
+
+## 2. Pedidos por estado, con / sin driverId (lider) y messengerId
+- call_pending: 3 · con driverId=3 · sin driverId=0 · con messengerId=0
+- cancelled: 86 · con driverId=3 · sin driverId=83 · con messengerId=2
+- delivered: 3453 · con driverId=3453 · sin driverId=0 · con messengerId=2382
+- failed: 1945 · con driverId=1944 · sin driverId=1 · con messengerId=467
+- imported [editable]: 129 · con driverId=0 · sin driverId=129 · con messengerId=0
+- in_route: 1 · con driverId=1 · sin driverId=0 · con messengerId=1
+- picked_up: 142 · con driverId=142 · sin driverId=0 · con messengerId=0
+- ready_to_assign [editable]: 210 · con driverId=0 · sin driverId=210 · con messengerId=0
+Editables por tienda:
+  imported: 129
+    - Kovia (seller-1778271867877): 1 (con driverId=0, sin driverId=1)
+    - DANDA (seller-1779315416119): 84 (con driverId=0, sin driverId=84)
+    - OnStok (seller-1780762661093): 6 (con driverId=0, sin driverId=6)
+    - Senziacol (seller-1782485190827): 12 (con driverId=0, sin driverId=12)
+    - Bella Mujer (seller-1782496969817): 15 (con driverId=0, sin driverId=15)
+    - Nambu (seller-1786070878729): 11 (con driverId=0, sin driverId=11)
+  address_risk: 0
+  ready_to_assign: 210
+    - Kovia (seller-1778271867877): 7 (con driverId=0, sin driverId=7)
+    - DANDA (seller-1779315416119): 177 (con driverId=0, sin driverId=177)
+    - vive zen (seller-1780588345624): 5 (con driverId=0, sin driverId=5)
+    - Mercadotienda (seller-1780688354552): 4 (con driverId=0, sin driverId=4)
+    - Bella Mujer (seller-1782496969817): 13 (con driverId=0, sin driverId=13)
+    - ADMA COMERCIAL (seller-1783783071241): 4 (con driverId=0, sin driverId=4)
+address_risk con lider (driverId): 0
+
+## 3. cities
+- city-bog: Bogota · active=false
+- city-cali: Cali · active=true
+cities activas: 1 de 2 (Cali)
+
+## 4. auditEvents por action y por presencia de actorRole
+Total auditEvents: 22938
+- auth.user_created: 4 · con actorRole=4 · sin actorRole=0 · admin=1, driver=1, seller=2
+- order.adjusted: 5 · con actorRole=5 · sin actorRole=0 · admin=5
+- order.admin_correction: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- order.align_status_to_reversed_financials: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.cancelled [lista permitida]: 87 · con actorRole=87 · sin actorRole=0 · admin=24, seller=54, seller_logistics=2, system=7
+- order.city_corrected: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.clawback_delivered_financials: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- order.confirmed_uchat [lista permitida]: 3816 · con actorRole=3816 · sin actorRole=0 · system=3816
+- order.correct_cancelled_to_delivered: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.correct_cancelled_to_operational: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.correct_delivered_to_chargeable_failed: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.correct_delivered_to_failed: 7 · con actorRole=7 · sin actorRole=0 · admin=7
+- order.correct_failed_to_delivered: 4 · con actorRole=4 · sin actorRole=0 · admin=4
+- order.correct_retry_to_failed: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.corrected_delivered: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.corrected_to_failed: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.corrected_to_failed_with_reversal: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.delivered [lista permitida]: 3465 · con actorRole=3465 · sin actorRole=0 · driver=1280, messenger=2185
+- order.delivered_manual_correction: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.driver_restored: 34 · con actorRole=34 · sin actorRole=0 · system=34
+- order.failed [lista permitida]: 2004 · con actorRole=2004 · sin actorRole=0 · driver=1745, messenger=259
+- order.failed_classified [lista permitida]: 236 · con actorRole=236 · sin actorRole=0 · admin=236
+- order.failed_driver_pay_removed: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- order.failed_fee_removed: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- order.failed_manual_correction: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- order.imported_updated [lista permitida]: 679 · con actorRole=679 · sin actorRole=0 · admin=504, seller=94, seller_logistics=81
+- order.line_items_repaired: 19 · con actorRole=19 · sin actorRole=0 · admin=19
+- order.manual_created [lista permitida]: 147 · con actorRole=147 · sin actorRole=0 · admin=2, seller=140, seller_logistics=5
+- order.mark_failed_manual: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.messenger_unassigned: 180 · con actorRole=180 · sin actorRole=0 · driver=180
+- order.product_cost_corrected: 10 · con actorRole=10 · sin actorRole=0 · admin=10
+- order.reopened_for_retry: 4 · con actorRole=4 · sin actorRole=0 · admin=4
+- order.repaired_from_snapshot: 233 · con actorRole=233 · sin actorRole=0 · admin=233
+- order.retry_confirmed [lista permitida]: 12 · con actorRole=12 · sin actorRole=0 · admin=9, seller=3
+- order.retry_scheduled [lista permitida]: 22 · con actorRole=22 · sin actorRole=0 · driver=13, messenger=9
+- order.seller_confirmed [lista permitida]: 644 · con actorRole=644 · sin actorRole=0 · admin=500, seller=89, seller_logistics=55
+- order.status_repaired: 177 · con actorRole=177 · sin actorRole=0 · admin=177
+- order.status_restored: 19 · con actorRole=19 · sin actorRole=0 · admin=19
+- order.transition [lista permitida]: 9800 · con actorRole=9800 · sin actorRole=0 · admin=4, driver=2503, messenger=7293
+- order.warranty_no_cod: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- order.webhook_imported [lista permitida]: 832 · con actorRole=832 · sin actorRole=0 · system=832
+- product_catalog.cost_updated: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- product_catalog.costs_assigned: 3 · con actorRole=3 · sin actorRole=0 · admin=3
+- product_catalog.removed: 3 · con actorRole=3 · sin actorRole=0 · admin=3
+- seller.abono: 24 · con actorRole=24 · sin actorRole=0 · admin=24
+- seller.split: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- settlement.cash_received: 167 · con actorRole=167 · sin actorRole=0 · admin=167
+- settlement.corrected_danda_failed: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- settlement.correction_attached: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- settlement.created: 77 · con actorRole=77 · sin actorRole=0 · admin=77
+- settlement.note_added: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- settlement.offset: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- settlement.paid: 36 · con actorRole=36 · sin actorRole=0 · admin=36
+- settlement.reconcile_failed_fees: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- settlement.reconciled: 78 · con actorRole=78 · sin actorRole=0 · admin=78
+- settlement.supplier_abono: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- store_api_key.created: 2 · con actorRole=2 · sin actorRole=0 · seller=2
+- store_api_key.viewed: 2 · con actorRole=2 · sin actorRole=0 · seller=2
+- tariffs.driver_pay_updated: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- user.password_reset_link_generated: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- wallet.adjustment_removed: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- wallet.danda_delivery_fee_adjusted: 63 · con actorRole=63 · sin actorRole=0 · admin=63
+- wallet.driver_history_repriced: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- wallet.failed_fee_corrected: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+- wallet.product_cost_corrected: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- wallet.product_cost_retro: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- wallet.product_cost_retro_reverted: 2 · con actorRole=2 · sin actorRole=0 · admin=2
+- wallet.settlement_underpayment_adjusted: 1 · con actorRole=1 · sin actorRole=0 · admin=1
+
+## 4b. summary de la lista permitida (plan 2.7) que nombra a alguien
+Identidades comparadas: 50 personas (auth + drivers + messengers), 22 nombres (17 descartados por ser el nombre de una tienda), 108 ids, mas patron de correo
+Eventos de la lista permitida: 21744 · con identidad en summary: 0
+Plantillas de summary de la lista permitida (cifras e ids como #):
+  10 · order.cancelled | Pedido # anulado por admin
+  14 · order.cancelled | Pedido # anulado por admin: Anulado: la tienda nunca lo entrego para recogida y ya no lo despacha (planilla de bodega #/#/#).
+  2 · order.cancelled | Pedido # anulado por logistico tienda
+  54 · order.cancelled | Pedido # anulado por vendedor
+  4 · order.cancelled | Pedido # cancelado en Kentro: Dropi ya lo envia (guia generada via LucidBot). Evita despacho duplicado.
+  3 · order.cancelled | Pedido # cancelado en Kentro: el cliente lo cancelo en LucidBot (Estado_pedido=CANCELADO).
+  3813 · order.confirmed_uchat | Pedido # confirmado por Chateapro/Chatby (pull API) · direccion sincronizada
+  3 · order.confirmed_uchat | Pedido # confirmado por UChat/ChatBy (pull API)
+  3465 · order.delivered | Pedido entregado y wallet actualizada
+  2004 · order.failed | Pedido fallido y wallet actualizada
+  89 · order.failed_classified | Fallido # clasificado como bad_order_or_no_contact
+  2 · order.failed_classified | Fallido # clasificado como bad_phone
+  142 · order.failed_classified | Fallido # clasificado como failed_visit
+  3 · order.failed_classified | Fallido # clasificado como no_coverage
+  679 · order.imported_updated | Pedido # editado antes de confirmar
+  57 · order.manual_created | Pedido manual # creado
+  70 · order.manual_created | Pedido manual # creado (# linea, # unidad)
+  7 · order.manual_created | Pedido manual # creado (# linea, # unidades)
+  6 · order.manual_created | Pedido manual # creado (# lineas, # unidades)
+  7 · order.manual_created | Pedido manual ## creado
+  12 · order.retry_confirmed | Reintento confirmado para #
+  22 · order.retry_scheduled | Visita reagendada por el cliente
+  500 · order.seller_confirmed | Pedido # confirmado por admin
+  144 · order.seller_confirmed | Pedido # confirmado por vendedor
+  2 · order.transition | Transicion assigned -> call_pending
+  77 · order.transition | Transicion call_pending -> call_pending
+  3240 · order.transition | Transicion call_pending -> scheduled
+  1644 · order.transition | Transicion picked_up -> call_pending
+  2378 · order.transition | Transicion picked_up -> in_route
+  1 · order.transition | Transicion ready_to_assign -> assigned
+  15 · order.transition | Transicion retry_pending -> in_route
+  2443 · order.transition | Transicion scheduled -> picked_up
+  73 · order.webhook_imported | Pedido # importado desde webhook OnStock
+  3 · order.webhook_imported | Pedido # importado desde webhook OnStok
+  1 · order.webhook_imported | Pedido # importado desde webhook Onstok
+  755 · order.webhook_imported | Pedido # importado desde webhook Shopify
+
+## 5. storeApiConfigs (solo presencia y status; la key no se imprime)
+- seller-1778271867877: sellerId=seller-1778271867877 (Kovia) · status=active · key presente=si (string) · actualizado=2026-08-17T17:38:41.626Z
+- seller-1779315416119: sellerId=seller-1779315416119 (DANDA) · status=active · key presente=si (string) · actualizado=2026-09-11T14:01:32.194Z
+storeApiConfigs: 2
+
+## 6. settlements con algun cashAllocations[].orderId fuera de su orderIds (plan 2.10, esperado 0)
+Cortes: 76 · con cashAllocations: 43
+cashAllocations fuera de orderIds: 0
+
+## 7. ChatBy confirma dentro de una transaccion de Firestore (comprobacion en codigo)
+- uchat-pull.ts: transacciones=1 · escrituras ready_to_assign=1 · linea 355: dentro=si, via transaction=si -> OK
+- uchat-webhook.ts: transacciones=1 · escrituras ready_to_assign=1 · linea 244: dentro=si, via transaction=si -> OK
+
+## Compuertas de T1
+- shopifyOrderId mixto: no -> igualdad simple
+- cashAllocations fuera de orderIds > 0: no
+- ChatBy sin transaccion: no
+- accion historica con identidad en summary dentro de la lista permitida: no
+
+## Lecturas
+- cities: 2 docs · 726 ms
+- sellers (nombres): 29 docs · 730 ms
+- storeApiConfigs: 2 docs · 733 ms
+- settlements (select): 76 docs · 1211 ms
+- orders (select): 5969 docs · 1893 ms
+- auditEvents (select): 22938 docs · 3567 ms
+- drivers (nombres): 2 docs · 83 ms
+- messengers (nombres): 7 docs · 225 ms
+- auth listUsers: 41 docs · 0 ms
+Total documentos leidos: 29066
