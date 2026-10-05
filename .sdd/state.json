@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "phase": "release",
+  "phase": "released",
   "activeTask": "T27",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",

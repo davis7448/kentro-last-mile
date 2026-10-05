@@ -1,7 +1,9 @@
 {
-  "scope": "deploy-prod",
-  "commitSha": "a7cabf6c4952d8d7a905066354200a5f0cec98f4",
+  "scope": "merge-main",
+  "commitSha": "38481fdc4e07e30e8732f85c0b030fa14e825a7d",
   "approvedBy": "codex@local@srv995537",
-  "approvedAt": "2026-10-05T07:00:00Z",
-  "expiresAt": "2026-10-05T08:00:00Z"
+  "approvedAt": "2026-10-05T12:21:30Z",
+  "expiresAt": "2026-10-05T13:21:30Z",
+  "consumed": true,
+  "consumedAt": "2026-10-05T12:22:18.263Z"
 }
