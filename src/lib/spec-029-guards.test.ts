@@ -2888,3 +2888,508 @@ describe("T26 · manual de la API en /api-tiendas (RF_17, RNF_01, RNF_02, DoD 5)
     expect(source).toContain("Ver clave de lectura");
   });
 });
+
+describe("T27 · despliegue, recorrido real en un solo proceso y limpieza (RF_01, RF_11, RF_20, RF_27, RF_16, RNF_05, DoD 3)", () => {
+  /*
+   * Contrato (T27, plan 5.3 y 10; el guion NO se ejecuta contra produccion en esta tarea: el despliegue y
+   * `run-all` los lanza la sesion principal con aprobacion humana). Todo sobre `scripts/verify-029.js`:
+   *
+   * WRITE_MODES incluye "set-history-since", "run-all" y "cleanup"; COMMANDS los registra con funciones de
+   * primer nivel (`cleanup` se llama exactamente `cleanup`: la guarda de T7 lo excluye por ese nombre).
+   *
+   *   set-history-since   escribe `settings/storeApi` con `.create(` (nunca `.set(`/`.update(`), campo
+   *                       `historySince` = `new Date(...)...`, sin literal de fecha.
+   *   run-all             UNA funcion: nada que cree antes de su `try {`; `cleanup(` dentro de su `finally {`; sin
+   *                       fork/spawn/exec de otro proceso. Su cierre (funciones alcanzadas por nombre) contiene:
+   *                       createStoreApiKey, rotateStoreWriteKey, createManualOrder (con `addressRisk: "review"`),
+   *                       getOrderAuditTrail, STORE_ORDER_WEBHOOK_URL, `koviaReplay({ ... writeKey ... })`,
+   *                       `rememberSecret(` de la key de escritura, el pedido "con lider" (`status: "assigned"`,
+   *                       `driverId: TEST_DRIVER_ID`, texto "fuera del canal del cliente"), los CA_01-CA_12, la siembra
+   *                       de "order.transition" y "order.messenger_reassigned", p95 con umbral 2000 ms, y las tres
+   *                       funciones de comparacion de primer nivel:
+   *     compareRealStoreReads   tiendas reales contra t24-reads-antes.json con `compareReads(`; solo GET; no nombra
+   *                             writeKey.
+   *     compareReadWriteKeys    tienda de pruebas: /resumen, /kpis, /orders y /settlements con readKey y writeKey en
+   *                             llamadas consecutivas (solo GET), por valor (`canonicalJson(` o `valueDifferences(`).
+   *     compareOrdersById       GET /orders/{id} contra su elemento de GET /orders (20 pedidos reales): solo GET, con
+   *                             readKey, sin writeKey, por valor.
+   *   Escrituras: toda `.set(`/`.create(`/`.update(`/`.add(`/`batch(`/`runTransaction(`/`createUser(` de una funcion
+   *   del cierre de run-all (salvo safeDelete) va precedida en la misma funcion de `recordCreated(` o
+   *   `assertIsTestOrder(`. En funciones del cierre que escriben (no solo-lectura), todo `sellerId:` vale
+   *   TEST_SELLER_ID (sin abreviatura `{ sellerId }`) y todo `driverId:` vale TEST_DRIVER_ID.
+   *   Usuarios: `setCustomUserClaims(uid, { role: "<literal>", ... })` con role en seller | seller_logistics (con
+   *   `sellerId: TEST_SELLER_ID`) | admin (sin sellerId, como mucho una llamada); cada `createUser(` precedido de
+   *   `recordCreated("authUsers"`. Sin "drivers" ni "pickupBatches" en los modos que escriben.
+   *   Siembra de RF_27: la funcion que escribe `collection("auditEvents")` solo toca esa coleccion, anota con
+   *   `recordCreated("auditEvents"` y su `entityId:` es una variable comprobada antes con `assertIsTestOrder(`.
+   *   El `imported` entra por STORE_ORDER_WEBHOOK_URL desde una funcion que antes llama a
+   *   `assertNotExists(\`orders/shopify-${...}\`)` y a `recordCreated("orders"`, usa TEST_EXTERNAL_ID_PREFIX y no
+   *   menciona createManualOrder.
+   *   cleanup: lee el registro con `readRegistro(` (y "--from-registro" existe en el guion); su cierre solo escribe
+   *   via safeDelete, nombra entre comillas las 16 clases de la tabla 5.3 (c), consulta por `orderId`/`entityId`, usa
+   *   TEST_SELLER_DOC_PREFIX, imprime con console.* y lanza (`throw`) si queda algo.
+   *   Secretos: ningun identificador writeKey/readKey/webhookKey/password/idToken en args de console.*, fs.write* o
+   *   append*, process.stdout.write, recordCreated ni JSON.stringify, ni interpolado en una plantilla `${}`; quien
+   *   escribe t27-smoke.txt comprueba `kw_` y 48 hex antes.
+   * Evidencia (tras run-all; se salta mientras no exista): t27-smoke.txt y t27-registro.json, sin keys.
+   */
+  const SCRIPT = "scripts/verify-029.js";
+  const EV = ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos";
+  const SMOKE = `${EV}/t27-smoke.txt`;
+  const REGISTRO = `${EV}/t27-registro.json`;
+  const source = () => sourceWithoutComments(SCRIPT);
+  const NEW_MODES = ["set-history-since", "run-all", "cleanup"];
+  const READ_ONLY_MODES = ["baseline", "query-check", "capture-reads"];
+  const CLEANUP_KINDS = [
+    "orders", "auditEvents", "orderHistory", "walletEntries", "storeWebhookSamples", "shopifySyncIssues",
+    "storeApiIdempotency", "storeApiRateLimits", "importRuns", "storeWebhookConfigs", "shopifyStores", "inventory",
+    "productCatalog", "storeApiConfigs", "authUsers", "sellers"
+  ];
+  const SECRET_IDENT = /\b[A-Za-z_$]*(?:writeKey|readKey|webhookKey|password|idToken)[\w$]*/i;
+
+  const writeModes = (): string[] => {
+    const match = source().match(/const\s+WRITE_MODES\s*=\s*(?:Object\.freeze\()?\[([^\]]*)\]/);
+    return [...(match?.[1] ?? "").matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+  };
+  const commandFn = (mode: string): string | null => {
+    const commands = source().match(/const\s+COMMANDS\s*=\s*\{([^}]*)\}/)?.[1] ?? "";
+    return commands.match(new RegExp(`["']${mode.replace(/-/g, "\\-")}["']\\s*:\\s*([A-Za-z_$][\\w$]*)`))?.[1] ?? null;
+  };
+  const topLevelNames = (src: string) => [...src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map((m) => m[1]);
+  const bodyOf = (name: string) => topLevelFunctionBody(source(), name) ?? "";
+  const closureNames = (root: string | null): string[] => {
+    if (!root || !topLevelFunctionBody(source(), root)) return [];
+    const names = topLevelNames(source());
+    const seen = new Set<string>([root]);
+    const queue = [root];
+    while (queue.length) {
+      const body = bodyOf(queue.shift() as string);
+      for (const name of names) {
+        if (!seen.has(name) && new RegExp(`\\b${name}\\b`).test(body)) {
+          seen.add(name);
+          queue.push(name);
+        }
+      }
+    }
+    return [...seen];
+  };
+  const closureBody = (root: string | null) => closureNames(root).map(bodyOf).join("\n");
+  const runAllFn = () => commandFn("run-all");
+  const runAllClosure = () => closureBody(runAllFn());
+  /** Quita `createHmac(...).update(` / `createHash(...).update(`: no son escrituras de Firestore. */
+  const withoutHashUpdates = (text: string) => text.replace(/create(?:Hmac|Hash)\([^)]*\)\s*\.update\(/g, "createHashChain(");
+  const OWN_WRITE = /\.(?:set|create|update|add|delete)\(|\bbatch\(|runTransaction\(|createUser\(|setCustomUserClaims\(|deleteUser\(/;
+  const writesOwn = (body: string) => {
+    if (OWN_WRITE.test(withoutHashUpdates(body))) return true;
+    return [...body.matchAll(/\bmethod\s*:\s*([^,}\n]+)/g)].some((m) => !/^["'`]GET["'`]$/.test(m[1].trim()));
+  };
+  const isReadOnlyFn = (name: string) => !closureNames(name).some((n) => writesOwn(bodyOf(n)));
+  const callArgs = (text: string, open: number) => {
+    let depth = 0;
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === "(") depth += 1;
+      if (text[i] === ")") {
+        depth -= 1;
+        if (depth === 0) return text.slice(open + 1, i);
+      }
+    }
+    return text.slice(open + 1);
+  };
+  const withoutStringText = (text: string) =>
+    text
+      .replace(/`(?:[^`\\]|\\.)*`/g, (tpl) => [...tpl.matchAll(/\$\{([^}]*)\}/g)].map((m) => ` ${m[1]} `).join(" "))
+      .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, '""');
+  /** Texto del bloque `{ ... }` que abre en `open` (llaves equilibradas). */
+  const block = (text: string, open: number) => {
+    let depth = 0;
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === "{") depth += 1;
+      if (text[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return text.slice(open + 1, i);
+      }
+    }
+    return text.slice(open + 1);
+  };
+  const writingFunctionsOfRunAll = () => closureNames(runAllFn()).filter((name) => name !== "safeDelete" && !isReadOnlyFn(name));
+
+  describe("modos y registro en COMMANDS", () => {
+    it.each(NEW_MODES)("%s esta en WRITE_MODES y COMMANDS lo registra con una funcion de primer nivel", (mode) => {
+      expect(writeModes()).toContain(mode);
+      const fn = commandFn(mode);
+      expect(fn, `COMMANDS no registra ${mode}`).not.toBeNull();
+      expect(bodyOf(fn ?? "__none__")).not.toBe("");
+    });
+
+    it("el modo cleanup es la funcion `cleanup` (la guarda de T7 la exime por ese nombre)", () => {
+      expect(commandFn("cleanup")).toBe("cleanup");
+    });
+
+    it("los modos de solo lectura siguen fuera de WRITE_MODES", () => {
+      for (const mode of READ_ONLY_MODES) expect(writeModes()).not.toContain(mode);
+    });
+  });
+
+  describe("set-history-since (plan 2.4)", () => {
+    const body = () => closureBody(commandFn("set-history-since"));
+
+    it("escribe settings/storeApi con .create( (falla si ya existe)", () => {
+      expect(body()).not.toBe("");
+      expect(body()).toMatch(/["']settings["']/);
+      expect(body()).toMatch(/["']storeApi["']|settings\/storeApi/);
+      expect(body()).toContain(".create(");
+      expect(body()).toContain("historySince");
+    });
+
+    it("no usa .set( ni .update( (no se puede mover hacia adelante por error)", () => {
+      expect(body()).not.toBe("");
+      expect(withoutHashUpdates(body())).not.toMatch(/\.(?:set|update)\(/);
+    });
+
+    it("el valor es la hora real (new Date), sin literal de fecha", () => {
+      expect(body()).toMatch(/new Date\(/);
+      expect(body()).not.toMatch(/["'`]20\d\d-\d\d/);
+    });
+  });
+
+  describe("run-all: un solo proceso con cleanup en finally", () => {
+    it("su funcion tiene try { ... } finally { cleanup(...) }", () => {
+      const body = bodyOf(runAllFn() ?? "__none__");
+      expect(body).not.toBe("");
+      const finallyAt = body.search(/\bfinally\s*\{/);
+      expect(finallyAt, "run-all no tiene finally").toBeGreaterThanOrEqual(0);
+      const finallyBlock = block(body, body.indexOf("{", finallyAt));
+      expect(finallyBlock).toMatch(/\bcleanup\(/);
+      expect(body.search(/\btry\s*\{/)).toBeGreaterThanOrEqual(0);
+      expect(body.search(/\btry\s*\{/)).toBeLessThan(finallyAt);
+    });
+
+    it("antes de su try { no crea nada (ni anota, ni escribe, ni llama a nada que escriba)", () => {
+      const body = bodyOf(runAllFn() ?? "__none__");
+      const tryAt = body.search(/\btry\s*\{/);
+      expect(tryAt).toBeGreaterThanOrEqual(0);
+      const head = body.slice(0, tryAt);
+      expect(head).not.toContain("recordCreated(");
+      expect(writesOwn(head)).toBe(false);
+      for (const name of topLevelNames(source())) {
+        if (name !== runAllFn() && new RegExp(`\\b${name}\\(`).test(head)) {
+          expect(isReadOnlyFn(name), `run-all llama a ${name} (que escribe) antes de su try`).toBe(true);
+        }
+      }
+    });
+
+    it("no lanza otros procesos (fork/spawn/exec ni node de nuevo)", () => {
+      const closure = runAllClosure();
+      expect(closure).not.toBe("");
+      expect(closure).not.toMatch(/\b(?:fork|spawn|spawnSync|exec|execSync)\(/);
+      expect(closure).not.toMatch(/process\.execPath/);
+      expect(closure).not.toMatch(/execFileSync\(\s*["']node["']/);
+    });
+
+    it.each([
+      ["la key de lectura de la tienda de pruebas", "createStoreApiKey"],
+      ["la key de escritura con la callable", "rotateStoreWriteKey"],
+      ["el alta manual (address_risk e inventario)", "createManualOrder"],
+      ["el historial con sesion real (RF_27)", "getOrderAuditTrail"],
+      ["el imported por el webhook de tienda", "STORE_ORDER_WEBHOOK_URL"],
+      ["la comparacion con la captura de T24", "t24-reads-antes.json"],
+      ["la evidencia del smoke", "t27-smoke.txt"]
+    ])("el cierre de run-all incluye %s (%s)", (_label, needle) => {
+      expect(runAllClosure()).toContain(needle);
+    });
+
+    it("pasa la key de escritura a koviaReplay en memoria y la registra con rememberSecret", () => {
+      const closure = runAllClosure();
+      expect(closure).toMatch(/koviaReplay\(\s*\{[^}]*writeKey/);
+      const remembered = [...closure.matchAll(/rememberSecret\(/g)].map((m) => callArgs(closure, (m.index ?? 0) + "rememberSecret".length));
+      expect(remembered.some((args) => /writeKey/i.test(args)), "ningun rememberSecret( de la key de escritura").toBe(true);
+    });
+
+    it("el alta manual en revision lleva addressRisk: \"review\"", () => {
+      expect(runAllClosure()).toMatch(/addressRisk\s*:\s*["']review["']/);
+    });
+
+    it("recorre los CA_01-CA_12 del anexo A", () => {
+      const closure = runAllClosure();
+      for (let n = 1; n <= 12; n += 1) expect(closure).toContain(`CA_${String(n).padStart(2, "0")}`);
+    });
+
+    it("mide p95 con umbral de 2 s", () => {
+      expect(runAllClosure()).toMatch(/p95/i);
+      expect(runAllClosure()).toMatch(/\b2000\b/);
+    });
+  });
+
+  describe("la key de escritura (y los demas secretos) solo en variables del proceso", () => {
+    it("ningun secreto en args de console.*, fs.write*/append*, process.stdout.write, recordCreated ni JSON.stringify", () => {
+      const src = source();
+      const offenders: string[] = [];
+      for (const match of src.matchAll(/(?:console\.\w+|fs\.(?:write\w*|append\w*)|process\.stdout\.write|recordCreated|JSON\.stringify)\s*\(/g)) {
+        const open = (match.index ?? 0) + match[0].length - 1;
+        const args = withoutStringText(callArgs(src, open));
+        if (SECRET_IDENT.test(args)) offenders.push(`${match[0]}${callArgs(src, open).slice(0, 80)}`);
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("ningun secreto interpolado en una plantilla ${...}", () => {
+      const offenders = [...source().matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1]).filter((expr) => SECRET_IDENT.test(expr));
+      expect(offenders).toEqual([]);
+    });
+
+    it("quien escribe t27-smoke.txt comprueba antes que no lleva kw_ ni 48 hex", () => {
+      const src = source();
+      const constant = src.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*t27-smoke\.txt/)?.[1];
+      expect(constant, "falta la constante con la ruta de t27-smoke.txt").toBeTruthy();
+      const writers = topLevelNames(src).filter((name) => new RegExp(`fs\\.(?:write|append)\\w*\\(\\s*${constant}\\b`).test(bodyOf(name)));
+      expect(writers.length, "nadie escribe t27-smoke.txt").toBeGreaterThan(0);
+      for (const name of writers) {
+        const closure = closureBody(name);
+        expect(closure, `${name} no comprueba kw_`).toContain("kw_");
+        expect(closure, `${name} no comprueba 48 hex`).toMatch(/\{48\}/);
+      }
+    });
+  });
+
+  describe("solo ids de prueba en lo que escribe", () => {
+    it("toda escritura del cierre de run-all va precedida, en su funcion, de recordCreated( o assertIsTestOrder(", () => {
+      const offenders: string[] = [];
+      for (const name of closureNames(runAllFn())) {
+        if (name === "safeDelete") continue;
+        const body = withoutHashUpdates(bodyOf(name));
+        for (const match of body.matchAll(/\.(?:set|create|update|add)\(|\bbatch\(|runTransaction\(|createUser\(/g)) {
+          const before = body.slice(0, match.index ?? 0);
+          if (!/recordCreated\(|assertIsTestOrder\(/.test(before)) offenders.push(`${match[0]} en ${name}`);
+        }
+      }
+      expect(runAllClosure()).not.toBe("");
+      expect(offenders).toEqual([]);
+    });
+
+    it("en las funciones del cierre que escriben, todo sellerId: es TEST_SELLER_ID (sin abreviatura)", () => {
+      const names = writingFunctionsOfRunAll();
+      expect(names.length).toBeGreaterThan(0);
+      const offenders: string[] = [];
+      for (const name of names) {
+        const body = bodyOf(name);
+        for (const m of body.matchAll(/\bsellerId\s*:\s*([^,}\n]+)/g)) if (m[1].trim() !== "TEST_SELLER_ID") offenders.push(`${name}: sellerId: ${m[1].trim()}`);
+        if (/[{,]\s*sellerId\s*[,}]/.test(body)) offenders.push(`${name}: { sellerId } abreviado`);
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("el unico driverId que escribe es TEST_DRIVER_ID, y prepara el pedido con lider (status assigned)", () => {
+      const offenders: string[] = [];
+      for (const name of writingFunctionsOfRunAll()) {
+        for (const m of bodyOf(name).matchAll(/\bdriverId\s*:\s*([^,}\n]+)/g)) if (m[1].trim() !== "TEST_DRIVER_ID") offenders.push(`${name}: driverId: ${m[1].trim()}`);
+      }
+      expect(offenders).toEqual([]);
+      expect(runAllClosure()).toMatch(/driverId\s*:\s*TEST_DRIVER_ID/);
+      expect(runAllClosure()).toMatch(/status\s*:\s*["']assigned["']/);
+    });
+
+    it("declara en la evidencia el paso del driverId como fuera del canal del cliente", () => {
+      expect(runAllClosure()).toMatch(/fuera del canal del cliente/i);
+    });
+
+    it("el imported entra por STORE_ORDER_WEBHOOK_URL tras assertNotExists(orders/shopify-...) y recordCreated(\"orders\", sin createManualOrder", () => {
+      const senders = closureNames(runAllFn()).filter((name) => bodyOf(name).includes("STORE_ORDER_WEBHOOK_URL"));
+      expect(senders.length, "run-all no envia al storeOrderWebhook").toBeGreaterThan(0);
+      for (const name of senders) {
+        const body = bodyOf(name);
+        const send = body.indexOf("STORE_ORDER_WEBHOOK_URL");
+        const before = body.slice(0, send);
+        expect(before, `${name}: falta assertNotExists(orders/shopify-...)`).toMatch(/assertNotExists\(\s*`orders\/shopify-\$\{/);
+        expect(before, `${name}: falta recordCreated("orders"`).toMatch(/recordCreated\(\s*["']orders["']/);
+        expect(body, `${name}: el id externo no usa TEST_EXTERNAL_ID_PREFIX`).toContain("TEST_EXTERNAL_ID_PREFIX");
+        expect(body, `${name}: no debe crear el imported con createManualOrder`).not.toContain("createManualOrder");
+      }
+    });
+  });
+
+  describe("usuarios desechables: solo de la tienda de pruebas y como mucho un admin", () => {
+    const claimCalls = () => {
+      const src = source();
+      return [...src.matchAll(/setCustomUserClaims\(/g)].map((m) => callArgs(src, (m.index ?? 0) + "setCustomUserClaims".length));
+    };
+
+    it("crea usuarios seller y seller_logistics con sellerId: TEST_SELLER_ID", () => {
+      const calls = claimCalls();
+      const roleOf = (args: string) => args.match(/\brole\s*:\s*["']([^"']+)["']/)?.[1] ?? null;
+      expect(calls.map(roleOf)).toEqual(expect.arrayContaining(["seller", "seller_logistics"]));
+      for (const args of calls) {
+        const role = roleOf(args);
+        expect(role, `claims sin role literal: ${args.slice(0, 80)}`).not.toBeNull();
+        expect(["seller", "seller_logistics", "admin"]).toContain(role);
+        if (role === "admin") expect(args).not.toMatch(/sellerId/);
+        else expect(args).toMatch(/\bsellerId\s*:\s*TEST_SELLER_ID\b/);
+      }
+    });
+
+    it("como mucho un admin desechable", () => {
+      const admins = claimCalls().filter((args) => /\brole\s*:\s*["']admin["']/.test(args));
+      expect(admins.length).toBeLessThanOrEqual(1);
+    });
+
+    it("cada createUser( va precedido, en su funcion, de recordCreated(\"authUsers\"", () => {
+      const src = source();
+      const owners = topLevelNames(src).filter((name) => bodyOf(name).includes("createUser("));
+      expect(owners.length, "el guion no crea usuarios").toBeGreaterThan(0);
+      for (const name of owners) {
+        const body = bodyOf(name);
+        for (const m of body.matchAll(/createUser\(/g)) {
+          expect(body.slice(0, m.index ?? 0), `${name}: createUser sin recordCreated("authUsers" antes`).toMatch(/recordCreated\(\s*["']authUsers["']/);
+        }
+      }
+    });
+
+    it("ningun modo que escribe toca drivers ni pickupBatches", () => {
+      for (const mode of writeModes()) {
+        const closure = closureBody(commandFn(mode));
+        expect(closure, mode).not.toMatch(/["']drivers["']|["']pickupBatches["']/);
+      }
+    });
+  });
+
+  describe("RF_27: siembra de auditEvents historicos solo sobre pedidos de prueba", () => {
+    const seeders = () =>
+      closureNames(runAllFn()).filter((name) => {
+        const body = bodyOf(name);
+        return /collection\(\s*["']auditEvents["']\s*\)/.test(body) && /\.(?:set|create|add)\(/.test(body);
+      });
+
+    it("siembra order.transition (permitida) y order.messenger_reassigned (fuera de la lista)", () => {
+      expect(runAllClosure()).toContain("order.transition");
+      expect(runAllClosure()).toContain("order.messenger_reassigned");
+    });
+
+    it("la funcion de siembra existe, solo escribe auditEvents y anota con recordCreated(\"auditEvents\"", () => {
+      expect(seeders().length, "nadie siembra auditEvents").toBeGreaterThan(0);
+      for (const name of seeders()) {
+        const body = bodyOf(name);
+        const collections = [...body.matchAll(/collection\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]);
+        expect(new Set(collections), name).toEqual(new Set(["auditEvents"]));
+        expect(body).toMatch(/recordCreated\(\s*["']auditEvents["']/);
+      }
+    });
+
+    it("el entityId sembrado es un pedido comprobado antes con assertIsTestOrder(", () => {
+      expect(seeders().length).toBeGreaterThan(0);
+      for (const name of seeders()) {
+        const body = bodyOf(name);
+        const entityIds = [...body.matchAll(/\bentityId\s*:\s*([^,}\n]+)/g)];
+        expect(entityIds.length, `${name} no declara entityId`).toBeGreaterThan(0);
+        for (const m of entityIds) {
+          const expr = m[1].trim();
+          expect(expr, `${name}: entityId literal`).toMatch(/^[A-Za-z_$][\w$.]*$/);
+          const checks = [...body.slice(0, m.index ?? 0).matchAll(/assertIsTestOrder\(/g)].map((c) => callArgs(body, (c.index ?? 0) + "assertIsTestOrder".length));
+          expect(checks.some((args) => new RegExp(`\\b${expr.replace(/[.$]/g, "\\$&")}\\b`).test(args)), `${name}: ${expr} sin assertIsTestOrder antes`).toBe(true);
+        }
+      }
+    });
+
+    it("comprueba con la sesion de tienda que el permitido llega sin identidades y con \"Kentro\"", () => {
+      const closure = runAllClosure();
+      for (const field of ["actorId", "actorLabel", "actorEmail", "actorRole"]) expect(closure).toContain(field);
+      expect(closure).toMatch(/["']Kentro["']/);
+    });
+  });
+
+  describe("comparaciones de lectura (RF_20, RF_01, nota 13)", () => {
+    const methodsAreGet = (closure: string) => [...closure.matchAll(/\bmethod\s*:\s*([^,}\n]+)/g)].every((m) => /^["'`]GET["'`]$/.test(m[1].trim()));
+
+    it.each(["compareRealStoreReads", "compareReadWriteKeys", "compareOrdersById"])("%s es de primer nivel, solo GET, sin escrituras, y run-all la llama", (name) => {
+      expect(bodyOf(name), `falta function ${name}`).not.toBe("");
+      const closure = closureBody(name);
+      expect(closure).toMatch(/\bfetch\(|storeApiGet\(/);
+      expect(methodsAreGet(closure)).toBe(true);
+      expect(closure).not.toMatch(/["'`](POST|PATCH|PUT|DELETE)["'`]/);
+      expect(isReadOnlyFn(name)).toBe(true);
+      expect(closureNames(runAllFn())).toContain(name);
+    });
+
+    it("compareRealStoreReads: contra t24-reads-antes.json con compareReads(, sin key de escritura", () => {
+      const closure = closureBody("compareRealStoreReads");
+      expect(closure).toContain("t24-reads-antes.json");
+      expect(closure).toContain("compareReads(");
+      expect(closure).toMatch(/excluded/);
+      expect(closure).not.toMatch(/writeKey/i);
+    });
+
+    it("compareReadWriteKeys: tienda de pruebas, cuatro recursos con key de lectura y de escritura, por valor", () => {
+      const body = bodyOf("compareReadWriteKeys");
+      expect(body).toContain("TEST_SELLER_ID");
+      expect(body).toMatch(/readKey/);
+      expect(body).toMatch(/writeKey/);
+      for (const route of ["resumen", "kpis", "orders", "settlements"]) expect(body).toMatch(new RegExp(`/${route}\\b`));
+      expect(closureBody("compareReadWriteKeys")).toMatch(/canonicalJson\(|valueDifferences\(/);
+    });
+
+    it("compareOrdersById: 20 pedidos reales, GET /orders/{id} contra GET /orders con key de lectura, por valor", () => {
+      const closure = closureBody("compareOrdersById");
+      expect(closure).toMatch(/readKey/);
+      expect(closure).not.toMatch(/writeKey/i);
+      expect(closure).toMatch(/\/orders\/\$\{/);
+      expect(closure).toMatch(/\b20\b/);
+      expect(closure).toMatch(/canonicalJson\(|valueDifferences\(/);
+    });
+  });
+
+  describe("cleanup (finally y --from-registro)", () => {
+    const closure = () => closureBody("cleanup");
+
+    it("existe --from-registro y cleanup lee el registro con readRegistro(", () => {
+      expect(source()).toContain("--from-registro");
+      expect(closure()).toContain("readRegistro(");
+    });
+
+    it("solo borra mediante safeDelete: fuera de safeDelete su cierre no escribe", () => {
+      expect(closure()).toContain("safeDelete(");
+      const others = closureNames("cleanup").filter((name) => name !== "safeDelete").map(bodyOf).join("\n");
+      expect(withoutHashUpdates(others)).not.toMatch(OWN_WRITE);
+    });
+
+    it.each(CLEANUP_KINDS)("recorre %s", (kind) => {
+      expect(closure()).toMatch(new RegExp(`["']${kind}["']`));
+    });
+
+    it("busca por orderId y entityId de los pedidos de prueba y por el prefijo seller-test-029__", () => {
+      expect(closure()).toMatch(/["']orderId["']/);
+      expect(closure()).toMatch(/["']entityId["']/);
+      expect(closure()).toContain("TEST_SELLER_DOC_PREFIX");
+    });
+
+    it("imprime recuento por coleccion y lanza si queda algo", () => {
+      expect(closure()).toMatch(/console\.\w+\(/);
+      expect(closure()).toMatch(/throw\s+new\s+Error/);
+    });
+  });
+
+  describe("evidencia (se escribe al ejecutar run-all en produccion; mientras no exista, se salta)", () => {
+    const hasSmoke = existsSync(absolute(SMOKE));
+    const hasRegistro = existsSync(absolute(REGISTRO));
+
+    it.skipIf(!hasSmoke)("t27-smoke.txt recoge CA, driverId, kovia-replay, RF_27, compare-reads, GET /orders/{id}, p95 y cleanup", () => {
+      const text = readFileSync(absolute(SMOKE), "utf8");
+      for (let n = 1; n <= 12; n += 1) expect(text).toContain(`CA_${String(n).padStart(2, "0")}`);
+      for (const needle of ["fuera del canal del cliente", "replay 1", "PATCH", "replay 2", "RF_11", "RF_27", "compare-reads", "excluidos", "GET /orders/{id}", "p95", "cleanup"]) {
+        expect(text).toContain(needle);
+      }
+    });
+
+    it.skipIf(!hasSmoke)("t27-smoke.txt no contiene keys (kw_ ni 48 hex)", () => {
+      const text = readFileSync(absolute(SMOKE), "utf8");
+      expect(text).not.toMatch(/kw_/);
+      expect(text).not.toMatch(/[0-9a-f]{48}/i);
+    });
+
+    it.skipIf(!hasRegistro)("t27-registro.json solo lleva ids de clases con regla de limpieza y ninguna key", async () => {
+      const text = readFileSync(absolute(REGISTRO), "utf8");
+      expect(text).not.toMatch(/kw_/);
+      expect(text).not.toMatch(/[0-9a-f]{48}/i);
+      const parsed = JSON.parse(text) as { entries: Array<{ kind: string; id: string }> };
+      expect(Array.isArray(parsed.entries)).toBe(true);
+      for (const entry of parsed.entries) expect(CLEANUP_KINDS).toContain(entry.kind);
+    });
+  });
+});

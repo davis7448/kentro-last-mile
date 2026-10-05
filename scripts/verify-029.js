@@ -44,7 +44,7 @@ if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile"
 const db = admin.firestore();
 
 /** Modos que escriben en Firestore. `baseline`, `query-check` y `capture-reads` nunca. */
-const WRITE_MODES = ["kovia-replay"];
+const WRITE_MODES = ["kovia-replay", "set-history-since", "run-all", "cleanup"];
 
 // Ids sinteticos de la verificacion (plan 5.3 (b)). Cada literal aparece UNA sola vez en el guion: el resto
 // los usa por nombre, y la guarda de T25 lo comprueba.
@@ -977,7 +977,765 @@ async function koviaReplay(context) {
   return { orderId, statusBefore, checks };
 }
 
-const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "capture-reads": captureReads, "kovia-replay": koviaReplay };
+// ---------------------------------------------------------------------------------------------------------
+// T27 · set-history-since, run-all y cleanup (plan 2.4, 5.3 y 10). Ninguno se ejecuta sin aprobacion humana.
+// ---------------------------------------------------------------------------------------------------------
+
+const IDENTITY_SIGN_IN_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword";
+const TEST_CITY_ID = "city-cali";
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const orderRoute = (orderId, suffix) => `/orders/${encodeURIComponent(orderId)}${suffix || ""}`;
+const codeOf = (reply) => (reply && reply.body && typeof reply.body.code === "string" ? reply.body.code : "");
+
+/** Plan 2.4: `settings/storeApi.historySince` con la hora real, UNA vez y con create (falla si ya existe). */
+async function setHistorySince() {
+  const historySince = new Date().toISOString();
+  await db.collection("settings").doc("storeApi").create({ historySince });
+  console.log(`settings/storeApi.historySince = ${historySince}`);
+}
+
+/** La web API key publica del cliente (no es secreta); se lee del fuente para no repetirla. */
+function readWebApiKey() {
+  const text = fs.readFileSync(path.join(__dirname, "../src/lib/firebase/client.ts"), "utf8");
+  const match = text.match(/AIza[0-9A-Za-z_-]{35}/);
+  if (!match) throw new Error("run-all: no se encontro la web API key en src/lib/firebase/client.ts");
+  return match[0];
+}
+
+/** signInWithPassword por REST (createCustomToken no funciona con ADC). Devuelve el token solo a memoria. */
+async function signInTestUser(email, pass) {
+  const signInBody = { email, password: pass, returnSecureToken: true };
+  const response = await fetch(IDENTITY_SIGN_IN_URL + "?key=" + encodeURIComponent(readWebApiKey()), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signInBody)
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || typeof body.idToken !== "string") throw new Error(`run-all: el inicio de sesion de prueba respondio ${response.status}`);
+  return body.idToken;
+}
+
+/** Usuario desechable de la tienda de pruebas (o el admin desechable). Anota el uid ANTES de crearlo. */
+async function createTestUser(kind) {
+  const uid = `t029${kind.replace(/_/g, "")}${crypto.randomBytes(6).toString("hex")}`;
+  const email = `${uid}@verify-029.example.com`;
+  const pass = crypto.randomBytes(24).toString("base64url");
+  rememberSecret(pass);
+  recordCreated("authUsers", uid);
+  await admin.auth().createUser({ uid, email, password: pass, displayName: "Prueba 029" });
+  if (kind === "seller") await admin.auth().setCustomUserClaims(uid, { role: "seller", sellerId: TEST_SELLER_ID });
+  else if (kind === "seller_logistics") await admin.auth().setCustomUserClaims(uid, { role: "seller_logistics", sellerId: TEST_SELLER_ID });
+  else if (kind === "admin") await admin.auth().setCustomUserClaims(uid, { role: "admin" });
+  else throw new Error(`run-all: rol de prueba no previsto ${kind}`);
+  const token = await signInTestUser(email, pass);
+  rememberSecret(token);
+  return { uid, kind, idToken: token };
+}
+
+/** Callable por HTTP con la sesion de prueba (canal del cliente). */
+async function callCallable(name, session, data) {
+  const started = Date.now();
+  const response = await fetch(FUNCTIONS_BASE_URL + "/" + name, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + session.idToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ data })
+  });
+  const body = await response.json().catch(() => null);
+  return {
+    status: response.status,
+    ms: Date.now() - started,
+    result: body && Object.prototype.hasOwnProperty.call(body, "result") ? body.result : null,
+    error: body && body.error ? body.error : null
+  };
+}
+
+async function requireCallable(name, session, data) {
+  const reply = await callCallable(name, session, data);
+  if (reply.status !== 200 || reply.error) {
+    throw new Error(`run-all: ${name} (${session.kind}) respondio ${reply.status} (${reply.error && reply.error.status ? reply.error.status : "sin estado"})`);
+  }
+  return reply.result || {};
+}
+
+/** Escritura en la Store API, SIEMPRE con sellerId de la tienda de pruebas. La key va por cabecera salvo CA_11. */
+async function storeApiWrite(run, request) {
+  const query = request.keyInQuery ? { sellerId: TEST_SELLER_ID, key: request.key } : { sellerId: TEST_SELLER_ID };
+  const headers = { "Content-Type": "application/json" };
+  if (request.key && !request.keyInQuery) headers.Authorization = "Bearer " + request.key;
+  if (request.idempotencyKey) headers["Idempotency-Key"] = request.idempotencyKey;
+  const started = Date.now();
+  const response = await fetch(STORE_API_BASE_URL + request.route + "?" + new URLSearchParams(query).toString(), {
+    method: request.method,
+    headers,
+    body: JSON.stringify(request.body || {})
+  });
+  const ms = Date.now() - started;
+  if (request.measure !== false) run.writeMs.push(ms);
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body, retryAfter: response.headers.get("retry-after"), ms };
+}
+
+/** GET a la Store API con la key indicada (lectura o escritura) por cabecera. Solo GET. */
+async function storeApiGetWithKey(sellerId, key, route, query) {
+  const params = new URLSearchParams({ ...(query || {}), sellerId: sellerId });
+  const started = Date.now();
+  const response = await fetch(STORE_API_BASE_URL + route + "?" + params.toString(), {
+    method: "GET",
+    headers: { Authorization: "Bearer " + key, Accept: "application/json" }
+  });
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body, ms: Date.now() - started };
+}
+
+/** Lectura (Admin SDK) de un pedido para comprobar que "nada cambia". */
+async function readTestOrder(orderId) {
+  const snap = await db.collection("orders").doc(orderId).get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  return { data, text: canonicalJson(data) };
+}
+
+async function countHistory(orderId) {
+  const historySnap = await db.collection("orderHistory").where("orderId", "==", orderId).get();
+  return historySnap.size;
+}
+
+async function readInventoryReserved(inventoryId) {
+  const snap = await db.collection("inventory").doc(inventoryId).get();
+  return snap.exists ? Number(snap.get("reserved")) || 0 : null;
+}
+
+/** El `imported` entra como entran los reales de esa via: por el webhook de tienda, con id externo de prueba. */
+async function sendImportedOrder(run, label) {
+  const externalId = `${TEST_EXTERNAL_ID_PREFIX}${label}-${run.tag}`;
+  const orderId = `shopify-${externalId}`;
+  await assertNotExists(`orders/shopify-${externalId}`);
+  recordCreated("orders", orderId);
+  const payload = {
+    id: externalId,
+    name: `#${TEST_ORDER_NUMBER_PREFIX}${label}-${run.tag}`,
+    total_price: "89000",
+    financial_status: "pending",
+    tags: "ADMA",
+    shipping_address: {
+      name: "Cliente Sintetico 029",
+      phone: "300 029 0011",
+      address1: "Calle 5 # 40-20",
+      address2: "Barrio Sintetico",
+      city: "Cali",
+      province: "Valle del Cauca",
+      country: "Colombia"
+    },
+    line_items: [{ name: "Producto sintetico 029", sku: `${TEST_ORDER_NUMBER_PREFIX}SKU-WEBHOOK`, quantity: 1 }]
+  };
+  const query = new URLSearchParams({ sellerId: TEST_SELLER_ID, key: run.webhookKey });
+  const response = await fetch(STORE_ORDER_WEBHOOK_URL + "?" + query.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const body = await response.json().catch(() => null);
+  if (response.status !== 201 || !body || body.orderId !== orderId) {
+    throw new Error(`run-all: el webhook de tienda respondio ${response.status} (${body && body.reason ? body.reason : "sin pedido"})`);
+  }
+  await assertIsTestOrder(`orders/${orderId}`);
+  return { id: orderId, shopifyOrderId: payload.name };
+}
+
+/**
+ * Alta manual con la sesion `seller` (la via que hoy produce `address_risk`). El id lo decide el servidor, asi
+ * que se anota en cuanto vuelve; si el proceso cae justo antes, el cleanup lo encuentra por sellerId.
+ */
+async function createTestManualOrder(run, options) {
+  const result = await requireCallable("createManualOrder", run.sessions.seller, {
+    sellerId: TEST_SELLER_ID,
+    customerName: "Cliente Sintetico 029",
+    customerPhone: "300 029 0022",
+    addressRaw: "Carrera 10 # 20-30, Barrio Sintetico, Cali",
+    paymentMethod: "cod",
+    fulfillmentMode: "seller_pickup",
+    totalCop: 75000,
+    lineItems: [{ productName: "Producto sintetico 029", sku: options.sku, quantity: 1 }],
+    addressRisk: options.addressRisk
+  });
+  const orderId = result.order && typeof result.order.id === "string" ? result.order.id : "";
+  if (!orderId) throw new Error("run-all: createManualOrder no devolvio el pedido");
+  recordCreated("orders", orderId);
+  await assertIsTestOrder(`orders/${orderId}`);
+  return orderId;
+}
+
+/** Pedido "con lider": Admin SDK, fuera del canal del cliente (no hay usuarios de lider de prueba). */
+async function prepareLeaderOrder(orderId) {
+  await assertIsTestOrder(`orders/${orderId}`);
+  await db.collection("orders").doc(orderId).update({ status: "assigned", driverId: TEST_DRIVER_ID, updatedAt: new Date().toISOString() });
+}
+
+/** RF_27: dos eventos con la forma de antes de la spec (sin origin ni orderHistory) sobre un pedido de prueba. */
+async function seedHistoricalAuditEvents(run, orderId) {
+  await assertIsTestOrder(`orders/${orderId}`);
+  const createdAt = new Date(Date.now() - 60 * 1000).toISOString();
+  const allowedId = `${TEST_EXTERNAL_ID_PREFIX}audit-transition-${run.tag}`;
+  const hiddenId = `${TEST_EXTERNAL_ID_PREFIX}audit-reassigned-${run.tag}`;
+  recordCreated("auditEvents", allowedId);
+  await db.collection("auditEvents").doc(allowedId).create({
+    id: allowedId,
+    actorId: run.sessions.admin.uid,
+    actorRole: "admin",
+    action: "order.transition",
+    entity: "order",
+    entityId: orderId,
+    fromStatus: "ready_to_assign",
+    toStatus: "assigned",
+    summary: "Estado del pedido: ready_to_assign -> assigned",
+    createdAt
+  });
+  recordCreated("auditEvents", hiddenId);
+  await db.collection("auditEvents").doc(hiddenId).create({
+    id: hiddenId,
+    actorId: TEST_DRIVER_ID,
+    actorRole: "driver",
+    action: "order.messenger_reassigned",
+    entity: "order",
+    entityId: orderId,
+    summary: "Mensajero reasignado a Mensajero Sintetico 029",
+    createdAt
+  });
+  return { allowedId, hiddenId };
+}
+
+function checkCa(run, label, ok, detail) {
+  run.smoke.push(`${label} ${ok ? "OK" : "FALLA"} · ${detail}`);
+  if (!ok) run.failures.push(label);
+}
+
+/** RF_27 con sesion real: tienda (seller y seller_logistics) sin identidades y con "Kentro"; admin ve los dos. */
+async function checkAuditTrail(run, orderId, seeded) {
+  const identityFields = ["actorId", "actorLabel", "actorEmail", "actorRole"];
+  const storeView = async (session) => {
+    const trail = await requireCallable("getOrderAuditTrail", session, { orderId });
+    const events = Array.isArray(trail.events) ? trail.events : [];
+    const allowed = events.find((event) => event.id === seeded.allowedId);
+    return Boolean(allowed) && identityFields.every((field) => !(field in allowed)) && allowed.actorTag === "Kentro" && !events.some((event) => event.id === seeded.hiddenId);
+  };
+  const sellerOk = await storeView(run.sessions.seller);
+  const logisticsOk = await storeView(run.sessions.seller_logistics);
+  const adminTrail = await requireCallable("getOrderAuditTrail", run.sessions.admin, { orderId });
+  const adminEvents = Array.isArray(adminTrail.events) ? adminTrail.events : [];
+  const adminOk = [seeded.allowedId, seeded.hiddenId].every((id) => adminEvents.some((event) => event.id === id));
+  checkCa(run, "RF_27", sellerOk && logisticsOk && adminOk, `tienda (seller ${sellerOk ? "si" : "no"}, seller_logistics ${logisticsOk ? "si" : "no"}): order.transition sin actorId/actorLabel/actorEmail/actorRole y con etiqueta "Kentro", order.messenger_reassigned ausente · admin ve los dos: ${adminOk ? "si" : "no"}`);
+}
+
+/** Setup: tienda, inventario y catalogo, usuarios, webhook de tienda, key de lectura y de escritura (memoria). */
+async function setupTestStore(run) {
+  const now = new Date().toISOString();
+  recordCreated("sellers", TEST_SELLER_ID);
+  await db.collection("sellers").doc(TEST_SELLER_ID).create({
+    id: TEST_SELLER_ID,
+    name: "Tienda de pruebas 029",
+    shopDomain: TEST_SHOP_DOMAIN,
+    cityId: TEST_CITY_ID,
+    bankAccount: "Cuenta sintetica 029",
+    pickupPointName: "Punto sintetico 029",
+    pickupAddress: "Calle 1 # 1-01, Cali",
+    createdAt: now,
+    updatedAt: now
+  });
+  recordCreated("inventory", run.inventoryId);
+  await db.collection("inventory").doc(run.inventoryId).create({
+    id: run.inventoryId,
+    sellerId: TEST_SELLER_ID,
+    sku: run.inventorySku,
+    name: "Producto sintetico 029",
+    available: 10,
+    reserved: 0,
+    createdAt: now,
+    updatedAt: now
+  });
+  const catalogId = `${TEST_SELLER_DOC_PREFIX}catalogo`;
+  recordCreated("productCatalog", catalogId);
+  await db.collection("productCatalog").doc(catalogId).create({
+    id: catalogId,
+    sellerId: TEST_SELLER_ID,
+    supplierId: "proveedor-sintetico-029",
+    sku: run.inventorySku,
+    name: "Producto sintetico 029",
+    productCostCop: 20000,
+    productCostConfigured: true,
+    active: true,
+    createdAt: now,
+    updatedAt: now
+  });
+
+  run.sessions.seller = await createTestUser("seller");
+  run.sessions.seller_logistics = await createTestUser("seller_logistics");
+  run.sessions.admin = await createTestUser("admin");
+
+  recordCreated("storeWebhookConfigs", TEST_SELLER_ID);
+  const webhook = await requireCallable("createStoreWebhookConfig", run.sessions.seller, { sellerId: TEST_SELLER_ID, skuContains: "*", tagContains: "*" });
+  const { config: { webhookKey } = {} } = webhook;
+  if (typeof webhookKey !== "string" || webhookKey.length === 0) throw new Error("run-all: createStoreWebhookConfig no devolvio la clave del webhook");
+  rememberSecret(webhookKey);
+  run.webhookKey = webhookKey;
+
+  recordCreated("storeApiConfigs", TEST_SELLER_ID);
+  const created = await requireCallable("createStoreApiKey", run.sessions.seller, { sellerId: TEST_SELLER_ID });
+  const { config: { apiKey: readKey } = {} } = created;
+  if (typeof readKey !== "string" || !/^[0-9a-f]{48}$/.test(readKey)) throw new Error("run-all: createStoreApiKey no devolvio una key de lectura");
+  rememberSecret(readKey);
+  run.readKey = readKey;
+
+  const generated = await requireCallable("rotateStoreWriteKey", run.sessions.seller, { sellerId: TEST_SELLER_ID, rotate: false });
+  const { writeKey } = generated;
+  if (typeof writeKey !== "string" || !writeKey.startsWith("kw_") || writeKey.length !== 48) throw new Error("run-all: rotateStoreWriteKey no devolvio una key de escritura");
+  rememberSecret(writeKey);
+  run.writeKey = writeKey;
+  run.smoke.push("setup: tienda de pruebas con inventario y catalogo, usuarios seller / seller_logistics / admin desechables, webhook de tienda de prueba, key de lectura (createStoreApiKey) y key de escritura (rotateStoreWriteKey, solo en memoria)");
+}
+
+/** Pedidos de prueba: imported por webhook, address_risk y "con lider" por alta manual, y uno con inventario. */
+async function createTestOrders(run) {
+  const imported = await sendImportedOrder(run, "a");
+  const risk = await createTestManualOrder(run, { addressRisk: "review", sku: `${TEST_ORDER_NUMBER_PREFIX}SKU-SIN-FICHA` });
+  const leader = await createTestManualOrder(run, { addressRisk: "accepted", sku: `${TEST_ORDER_NUMBER_PREFIX}SKU-SIN-FICHA` });
+  await prepareLeaderOrder(leader);
+  run.smoke.push(`pedido con lider ${leader}: status assigned y driverId sintetico puestos con el Admin SDK (paso fuera del canal del cliente)`);
+  const withInventory = await createTestManualOrder(run, { addressRisk: "accepted", sku: run.inventorySku });
+  run.smoke.push(`pedidos de prueba: imported ${imported.id} (webhook de tienda), address_risk ${risk}, con lider ${leader}, con inventario ${withInventory}`);
+  return { imported, risk, leader, withInventory };
+}
+
+/** Anexo A, CA_01-CA_11, uno a uno y por el canal del cliente (Store API con la key de la tienda de pruebas). */
+async function runAcceptanceCriteria(run, orders) {
+  const imported = orders.imported.id;
+  const write = (method, orderId, suffix, body, extra) =>
+    storeApiWrite(run, { method, route: orderRoute(orderId, suffix), key: run.writeKey, body, ...(extra || {}) });
+
+  // CA_01: buscar por numero; inexistente = 200 con lista vacia (RF_02); y GET /orders/{id}.
+  const found = await storeApiGetWithKey(TEST_SELLER_ID, run.readKey, "/orders", { shopifyOrderId: orders.imported.shopifyOrderId });
+  const missing = await storeApiGetWithKey(TEST_SELLER_ID, run.readKey, "/orders", { shopifyOrderId: `#${TEST_ORDER_NUMBER_PREFIX}no-existe-${run.tag}` });
+  const byId = await storeApiGetWithKey(TEST_SELLER_ID, run.readKey, orderRoute(imported), {});
+  run.readByIdMs.push(byId.ms);
+  const foundList = found.body && Array.isArray(found.body.pedidos) ? found.body.pedidos : [];
+  const missingList = missing.body && Array.isArray(missing.body.pedidos) ? missing.body.pedidos : null;
+  const byIdOk = byId.status === 200 && Boolean(byId.body && byId.body.pedido) && byId.body.pedido.id === imported;
+  checkCa(run, "CA_01", found.status === 200 && foundList.length === 1 && foundList[0].id === imported && missing.status === 200 && Array.isArray(missingList) && missingList.length === 0 && byIdOk,
+    `GET /orders?shopifyOrderId= -> ${found.status} (${foundList.length} pedido) · numero inexistente -> ${missing.status} con ${missingList ? missingList.length : "?"} pedidos · GET /orders/{id} -> ${byId.status}`);
+
+  // CA_05 en imported: los cinco datos de entrega, y el cambio en /history.
+  const correction = { customerName: "Cliente Sintetico Corregido", customerPhone: "300 029 0033", addressRaw: "Calle 7 # 30-15, Barrio Sintetico, Cali", deliveryNotes: "Porteria sintetica", cityId: TEST_CITY_ID };
+  const patched = await write("PATCH", imported, "", correction);
+  const afterPatch = await readTestOrder(imported);
+  const history = await storeApiGetWithKey(TEST_SELLER_ID, run.writeKey, orderRoute(imported, "/history"), {});
+  const records = history.body && Array.isArray(history.body.registros) ? history.body.registros : [];
+  const saved = ["customerName", "addressRaw", "deliveryNotes"].every((field) => afterPatch.data[field] === correction[field]);
+  checkCa(run, "CA_05", patched.status === 200 && Boolean(patched.body) && patched.body.changed === true && saved && records.some((record) => record.origin === "api"),
+    `PATCH en imported -> ${patched.status} · guardado=${saved ? "si" : "no"} · /history ${history.status} con ${records.length} registros`);
+
+  // CA_06: campos que no se tocan.
+  const beforeForbidden = await readTestOrder(imported);
+  const forbidden = await write("PATCH", imported, "", { totalCop: 1, productName: "Otro producto" });
+  const forbiddenFields = forbidden.body && Array.isArray(forbidden.body.fields) ? forbidden.body.fields.map((item) => item.field) : [];
+  const afterForbidden = await readTestOrder(imported);
+  checkCa(run, "CA_06", forbidden.status === 422 && codeOf(forbidden) === "field_not_allowed" && forbiddenFields.includes("totalCop") && forbiddenFields.includes("productName") && afterForbidden.text === beforeForbidden.text,
+    `PATCH con totalCop y productName -> ${forbidden.status} ${codeOf(forbidden)} (${forbiddenFields.join(", ")}) · sin cambios=${afterForbidden.text === beforeForbidden.text ? "si" : "no"}`);
+
+  // CA_09: ciudad fuera de cobertura.
+  const outside = await write("PATCH", imported, "", { cityId: `${TEST_EXTERNAL_ID_PREFIX}ciudad-inexistente` });
+  const cities = outside.body && Array.isArray(outside.body.activeCities) ? outside.body.activeCities : [];
+  const afterOutside = await readTestOrder(imported);
+  checkCa(run, "CA_09", outside.status === 422 && codeOf(outside) === "out_of_coverage" && cities.length > 0 && afterOutside.text === beforeForbidden.text,
+    `ciudad inexistente -> ${outside.status} ${codeOf(outside)} · ciudades activas en la respuesta: ${cities.length}`);
+
+  // CA_10: idempotencia.
+  const idempotencyKey = `${TEST_EXTERNAL_ID_PREFIX}idem-${run.tag}`;
+  const historyBefore = await countHistory(imported);
+  const first = await write("PATCH", imported, "", { deliveryNotes: "Porteria sintetica 2" }, { idempotencyKey });
+  const historyAfterFirst = await countHistory(imported);
+  const repeated = await write("PATCH", imported, "", { deliveryNotes: "Porteria sintetica 2" }, { idempotencyKey });
+  const historyAfterRepeat = await countHistory(imported);
+  const beforeReuse = await readTestOrder(imported);
+  const reused = await write("PATCH", imported, "", { deliveryNotes: "Otra porteria" }, { idempotencyKey });
+  const afterReuse = await readTestOrder(imported);
+  checkCa(run, "CA_10", first.status === 200 && repeated.status === first.status && canonicalJson(repeated.body) === canonicalJson(first.body) && historyAfterFirst === historyBefore + 1 && historyAfterRepeat === historyAfterFirst && reused.status === 422 && codeOf(reused) === "idempotency_key_reused" && afterReuse.text === beforeReuse.text,
+    `misma Idempotency-Key y cuerpo -> ${first.status} y ${repeated.status} identicos, historial +${historyAfterRepeat - historyBefore} · otro cuerpo -> ${reused.status} ${codeOf(reused)}`);
+
+  // CA_02 (y la repeticion de CA_07): confirmar un imported sin lider; repetir es exito sin cambios.
+  const confirmed = await write("POST", imported, "/confirm", { expectedStatus: "imported" });
+  const again = await write("POST", imported, "/confirm", { expectedStatus: "imported" });
+  const confirmedStatus = confirmed.body && confirmed.body.pedido ? confirmed.body.pedido.status : "?";
+  const againUnchanged = again.status === 200 && Boolean(again.body) && again.body.changed === false;
+  checkCa(run, "CA_02", confirmed.status === 200 && confirmed.body.changed === true && confirmedStatus === "ready_to_assign",
+    `confirmar imported -> ${confirmed.status} estado ${confirmedStatus} · repetir -> ${again.status} sin cambios=${againUnchanged ? "si" : "no"}`);
+
+  // CA_05 tambien en ready_to_assign sin lider.
+  const readyPatch = await write("PATCH", imported, "", { customerName: "Cliente Sintetico Listo" });
+  checkCa(run, "CA_05", readyPatch.status === 200 && Boolean(readyPatch.body) && readyPatch.body.changed === true, `PATCH en ready_to_assign sin lider -> ${readyPatch.status}`);
+
+  // CA_03: confirmar un address_risk se rechaza y nada cambia.
+  const beforeRisk = await readTestOrder(orders.risk);
+  const riskConfirm = await write("POST", orders.risk, "/confirm", {});
+  const afterRisk = await readTestOrder(orders.risk);
+  checkCa(run, "CA_03", riskConfirm.status === 409 && codeOf(riskConfirm) === "address_review_pending" && afterRisk.text === beforeRisk.text,
+    `confirmar address_risk -> ${riskConfirm.status} ${codeOf(riskConfirm)} · sin cambios=${afterRisk.text === beforeRisk.text ? "si" : "no"}`);
+
+  // CA_04: corregir la direccion de un address_risk sin lider -> imported; despues confirmar funciona.
+  const riskPatch = await write("PATCH", orders.risk, "", { addressRaw: "Calle 9 # 8-07, Barrio Sintetico, Cali" });
+  const riskStatus = riskPatch.body && riskPatch.body.pedido ? riskPatch.body.pedido.status : "?";
+  const riskConfirmed = await write("POST", orders.risk, "/confirm", { expectedStatus: "imported" });
+  const riskConfirmedStatus = riskConfirmed.body && riskConfirmed.body.pedido ? riskConfirmed.body.pedido.status : "?";
+  checkCa(run, "CA_04", riskPatch.status === 200 && riskStatus === "imported" && riskConfirmed.status === 200 && riskConfirmedStatus === "ready_to_assign",
+    `PATCH direccion en address_risk -> ${riskPatch.status} estado ${riskStatus} · confirmar -> ${riskConfirmed.status} estado ${riskConfirmedStatus}`);
+
+  // CA_07: pedido con lider.
+  const beforeLeader = await readTestOrder(orders.leader);
+  const leaderPatch = await write("PATCH", orders.leader, "", { customerName: "No deberia cambiar" });
+  const leaderCancel = await write("POST", orders.leader, "/cancel", { reason: "No deberia cancelarse" });
+  const leaderConfirm = await write("POST", orders.leader, "/confirm", {});
+  const afterLeader = await readTestOrder(orders.leader);
+  const leaderUnchanged = afterLeader.text === beforeLeader.text;
+  const leaderConfirmNoop = leaderConfirm.status === 200 && Boolean(leaderConfirm.body) && leaderConfirm.body.changed === false;
+  checkCa(run, "CA_07", leaderPatch.status === 409 && codeOf(leaderPatch) === "order_not_editable" && leaderCancel.status === 409 && codeOf(leaderCancel) === "order_not_editable" && leaderConfirmNoop && leaderUnchanged && againUnchanged,
+    `con lider: PATCH -> ${leaderPatch.status} ${codeOf(leaderPatch)} · cancelar -> ${leaderCancel.status} ${codeOf(leaderCancel)} · confirmar -> ${leaderConfirm.status} sin cambios=${leaderConfirmNoop ? "si" : "no"} · pedido intacto=${leaderUnchanged ? "si" : "no"} · reconfirmar ready_to_assign sin cambios=${againUnchanged ? "si" : "no"}`);
+
+  // CA_08: cancelar con motivo; sin motivo o >500 se rechaza; libera el inventario reservado (RF_13).
+  const reservedBefore = await readInventoryReserved(run.inventoryId);
+  const noReason = await write("POST", orders.withInventory, "/cancel", {});
+  const longReason = await write("POST", orders.withInventory, "/cancel", { reason: "x".repeat(501) });
+  const cancelled = await write("POST", orders.withInventory, "/cancel", { reason: "Cancelado en la verificacion 029" });
+  const cancelledStatus = cancelled.body && cancelled.body.pedido ? cancelled.body.pedido.status : "?";
+  const reservedAfter = await readInventoryReserved(run.inventoryId);
+  const cancelAgain = await write("POST", orders.withInventory, "/cancel", { reason: "Cancelado en la verificacion 029" });
+  const confirmCancelled = await write("POST", orders.withInventory, "/confirm", {});
+  const cancelAgainNoop = cancelAgain.status === 200 && Boolean(cancelAgain.body) && cancelAgain.body.changed === false;
+  checkCa(run, "CA_08", noReason.status === 422 && codeOf(noReason) === "validation_failed" && longReason.status === 422 && codeOf(longReason) === "validation_failed" && cancelled.status === 200 && cancelledStatus === "cancelled" && reservedAfter === reservedBefore - 1 && cancelAgainNoop && confirmCancelled.status === 409 && codeOf(confirmCancelled) === "order_cancelled",
+    `sin motivo -> ${noReason.status} ${codeOf(noReason)} · 501 caracteres -> ${longReason.status} ${codeOf(longReason)} · con motivo -> ${cancelled.status} ${cancelledStatus} · inventario reservado ${reservedBefore} -> ${reservedAfter} · repetir -> ${cancelAgain.status} · confirmar cancelado -> ${confirmCancelled.status} ${codeOf(confirmCancelled)}`);
+
+  // CA_11: claves. La "tienda ajena" se prueba con un id INEXISTENTE (mismo 404), nunca con un pedido real.
+  const noKey = await storeApiWrite(run, { method: "POST", route: orderRoute(imported, "/confirm"), body: {} });
+  const withRead = await storeApiWrite(run, { method: "POST", route: orderRoute(imported, "/confirm"), key: run.readKey, body: {} });
+  const inQuery = await storeApiWrite(run, { method: "POST", route: orderRoute(imported, "/confirm"), key: run.writeKey, keyInQuery: true, body: {} });
+  const retired = run.writeKey;
+  const rotated = await requireCallable("rotateStoreWriteKey", run.sessions.admin, { sellerId: TEST_SELLER_ID, rotate: true });
+  const { writeKey } = rotated;
+  if (typeof writeKey !== "string" || !writeKey.startsWith("kw_")) throw new Error("run-all: la rotacion no devolvio una key de escritura");
+  rememberSecret(writeKey);
+  run.writeKey = writeKey;
+  const withRetired = await storeApiWrite(run, { method: "POST", route: orderRoute(imported, "/confirm"), key: retired, body: {} });
+  const foreignId = `${TEST_EXTERNAL_ID_PREFIX}ajeno-${run.tag}`;
+  await assertNotExists(`orders/${foreignId}`);
+  const foreign = await write("PATCH", foreignId, "", { customerName: "Nadie" });
+  checkCa(run, "CA_11", noKey.status === 401 && codeOf(noKey) === "missing_credentials" && withRead.status === 403 && codeOf(withRead) === "read_only_key" && inQuery.status === 401 && codeOf(inQuery) === "key_in_query" && withRetired.status === 401 && codeOf(withRetired) === "invalid_key" && foreign.status === 404 && codeOf(foreign) === "order_not_found",
+    `sin clave -> ${noKey.status} ${codeOf(noKey)} · de lectura -> ${withRead.status} ${codeOf(withRead)} · en la URL -> ${inQuery.status} ${codeOf(inQuery)} · la anterior tras rotar (admin) -> ${withRetired.status} ${codeOf(withRetired)} · pedido de otra tienda (id inexistente) -> ${foreign.status} ${codeOf(foreign)}`);
+}
+
+/** CA_12: historial con fecha y origen, y 429 con Retry-After pasadas las 120 escrituras del minuto. */
+async function runCaLimit(run, orderId) {
+  const history = await storeApiGetWithKey(TEST_SELLER_ID, run.writeKey, orderRoute(orderId, "/history"), {});
+  const records = history.body && Array.isArray(history.body.registros) ? history.body.registros : [];
+  const historyOk = history.status === 200 && records.filter((record) => record.origin === "api").length >= 3 && records.every((record) => typeof record.at === "string" && typeof record.origin === "string");
+  // Ventana fija por minuto: se empieza al principio de un minuto para que la rafaga caiga en una sola.
+  const second = new Date().getUTCSeconds();
+  if (second > 15) await sleep((61 - second) * 1000);
+  let limited = null;
+  let sent = 0;
+  while (!limited && sent < 140) {
+    const burst = await Promise.all(Array.from({ length: 10 }, () => storeApiWrite(run, { method: "POST", route: orderRoute(orderId, "/confirm"), key: run.writeKey, body: {}, measure: false })));
+    sent += burst.length;
+    limited = burst.find((reply) => reply.status === 429) || null;
+  }
+  const retryAfter = limited ? Number(limited.retryAfter) : NaN;
+  checkCa(run, "CA_12", historyOk && Boolean(limited) && codeOf(limited) === "rate_limited" && retryAfter >= 1,
+    `/history ${history.status}: ${records.length} registros con fecha y origen · rafaga de ${sent} confirmaciones -> ${limited ? `429 ${codeOf(limited)} Retry-After=${retryAfter}` : "sin 429"}`);
+  // Se espera a la ventana siguiente para que las escrituras de despues no choquen con el limite.
+  await sleep(((Number.isFinite(retryAfter) ? Math.min(retryAfter, 60) : 60) + 2) * 1000);
+}
+
+/** Nota 13: en la tienda de pruebas, key de lectura y de escritura en llamadas consecutivas, por valor. Solo GET. */
+async function compareReadWriteKeys(readKey, writeKey) {
+  const range = { from: bogotaDay(new Date(), -30), to: bogotaDay(new Date(), 0) };
+  const resources = [["/resumen", {}], ["/kpis", range], ["/orders", range], ["/settlements", range]];
+  const results = [];
+  for (const [route, query] of resources) {
+    const withRead = await storeApiGetWithKey(TEST_SELLER_ID, readKey, route, query);
+    const withWrite = await storeApiGetWithKey(TEST_SELLER_ID, writeKey, route, query);
+    const differences = withRead.status === withWrite.status ? valueDifferences(route, "", withRead.body, withWrite.body) : [{ resource: route, path: "", kind: "status" }];
+    results.push({ route, status: withRead.status, differences: differences.length });
+  }
+  return results;
+}
+
+/** compare-reads (RF_20): tiendas reales con SU key de lectura contra t24-reads-antes.json. Solo GET. */
+async function compareRealStoreReads() {
+  const capture = JSON.parse(fs.readFileSync(path.join(EVIDENCE_DIR, "t24-reads-antes.json"), "utf8"));
+  const stores = await loadCaptureStores();
+  const range = { from: capture.range.from, to: capture.range.to };
+  const results = [];
+  for (const before of capture.stores) {
+    const store = stores.find((candidate) => candidate.sellerId === before.sellerId);
+    if (!store) {
+      results.push({ sellerName: before.sellerName, differences: 1, paths: ["sin key de lectura activa"], excluded: { orders: 0, settlements: 0 } });
+      continue;
+    }
+    const kpis = await storeApiGet(store, "/kpis", range);
+    const orders = await storeApiGet(store, "/orders", range);
+    const settlements = await annotateSettlementsUpdatedAt(await storeApiGet(store, "/settlements", range));
+    const resumen = await storeApiGet(store, "/resumen", {});
+    const index = await storeApiGet(store, "/", {});
+    const after = fingerprintCapture({ sellerId: store.sellerId, sellerName: store.sellerName, kpis, orders, settlements, resumen, index });
+    const comparison = compareReads(before, after, { captureAt: capture.captureAt });
+    results.push({
+      sellerName: store.sellerName,
+      differences: comparison.differences.length,
+      paths: comparison.differences.slice(0, 5).map((item) => `${item.resource}:${item.path}:${item.kind}`),
+      excluded: comparison.excluded
+    });
+  }
+  return results;
+}
+
+/** RF_01: GET /orders/{id} contra su elemento de GET /orders sobre 20 pedidos reales, key de lectura, solo GET. */
+async function compareOrdersById() {
+  const stores = await loadCaptureStores();
+  const range = { from: bogotaDay(new Date(), -30), to: bogotaDay(new Date(), -1) };
+  const lists = [];
+  for (const store of stores) {
+    const list = await storeApiGetWithKey(store.sellerId, store.readKey, "/orders", range);
+    lists.push({ store, pedidos: list.body && Array.isArray(list.body.pedidos) ? list.body.pedidos : [] });
+  }
+  const sample = [];
+  for (let position = 0; sample.length < 20 && lists.some((entry) => position < entry.pedidos.length); position += 1) {
+    for (const entry of lists) if (sample.length < 20 && position < entry.pedidos.length) sample.push({ store: entry.store, item: entry.pedidos[position] });
+  }
+  const ms = [];
+  const mismatches = [];
+  let moved = 0;
+  for (const { store, item } of sample) {
+    const reply = await storeApiGetWithKey(store.sellerId, store.readKey, `/orders/${encodeURIComponent(item.id)}`, {});
+    ms.push(reply.ms);
+    const pedido = reply.body && reply.body.pedido ? reply.body.pedido : null;
+    if (reply.status === 200 && pedido && pedido.updatedAt !== item.updatedAt) {
+      moved += 1;
+      continue;
+    }
+    if (reply.status !== 200 || canonicalJson(pedido) !== canonicalJson(item)) mismatches.push(`${store.sellerName}:${item.id}:${reply.status}`);
+  }
+  return { compared: sample.length, moved, mismatches, ms, stores: stores.map((store) => store.sellerName) };
+}
+
+function p95Of(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)];
+}
+
+/** Sustituye cualquier secreto recordado antes de que el texto salga de memoria. */
+function redactSecrets(text) {
+  return rememberedValues.reduce((result, value) => result.split(value).join("[secreto]"), text);
+}
+
+/** Escribe t27-smoke.txt solo si no lleva nada con forma de key (kw_ o 48 hex). */
+function writeSmoke(lines) {
+  const SMOKE_FILE = path.join(EVIDENCE_DIR, "t27-smoke.txt");
+  const text = redactSecrets(`${lines.join("\n")}\n`);
+  if (/kw_/.test(text) || /[0-9a-f]{48}/i.test(text)) throw new Error("run-all: la evidencia contiene algo con forma de key (kw_ o 48 hex); no se guarda");
+  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+  fs.writeFileSync(SMOKE_FILE, text);
+  console.log(text);
+  return SMOKE_FILE;
+}
+
+function newRunContext() {
+  return {
+    tag: crypto.randomBytes(3).toString("hex"),
+    inventorySku: `${TEST_ORDER_NUMBER_PREFIX}SKU-INV`,
+    inventoryId: `${TEST_SELLER_DOC_PREFIX}inventario`,
+    smoke: [],
+    failures: [],
+    writeMs: [],
+    readByIdMs: [],
+    sessions: {}
+  };
+}
+
+/** Solo lectura: nada de una corrida anterior, historySince puesto, captura de T24 y ciudad activa. */
+async function preflightRunAll() {
+  if (readRegistro().entries.length > 0) {
+    throw new Error("run-all: t27-registro.json ya tiene entradas; limpia con el modo de limpieza --from-registro y aparta el registro antes de repetir");
+  }
+  for (const [collection, id] of [["sellers", TEST_SELLER_ID], ["storeApiConfigs", TEST_SELLER_ID], ["storeWebhookConfigs", TEST_SELLER_ID], ["shopifyStores", TEST_SHOP_DOMAIN]]) {
+    if ((await db.collection(collection).doc(id).get()).exists) throw new Error(`run-all: ${collection}/${id} ya existe; no se crea nada`);
+  }
+  if (!(await db.collection("orders").where("sellerId", "==", TEST_SELLER_ID).limit(1).get()).empty) throw new Error("run-all: ya hay pedidos de la tienda de pruebas");
+  const settingsSnap = await db.collection("settings").doc("storeApi").get();
+  if (!settingsSnap.exists || typeof settingsSnap.get("historySince") !== "string") throw new Error("run-all: falta settings/storeApi.historySince (corre antes set-history-since)");
+  const city = await db.collection("cities").doc(TEST_CITY_ID).get();
+  if (!city.exists || city.get("active") !== true) throw new Error("run-all: la ciudad de prueba no esta activa");
+  if (!fs.existsSync(path.join(EVIDENCE_DIR, "t24-reads-antes.json"))) throw new Error("run-all: falta la captura de T24");
+}
+
+/**
+ * run-all (T27): todo en UN proceso, con `cleanup` en el finally. La key de escritura solo vive en `run`.
+ * Orden: setup -> pedidos -> CA_01..CA_11 -> CA_12 (limite al final, y espera la ventana) -> kovia-replay ->
+ * RF_27 -> compare-reads (prueba lectura/escritura y tiendas reales) -> GET /orders/{id} en reales -> p95.
+ */
+async function runAll() {
+  await preflightRunAll();
+  const run = newRunContext();
+  const P95_LIMIT_MS = 2000;
+  let failure = null;
+  try {
+    run.smoke.push("# Spec 029 — T27 recorrido real (run-all) sobre la tienda de pruebas", `Inicio: ${new Date().toISOString()}`, "");
+    await setupTestStore(run);
+    const orders = await createTestOrders(run);
+    await runAcceptanceCriteria(run, orders);
+    await runCaLimit(run, orders.imported.id);
+
+    const replay = await koviaReplay({ writeKey: run.writeKey });
+    const replayOk = Object.values(replay.checks).every(Boolean);
+    run.smoke.push(`kovia-replay ${replay.orderId}: replay 1 (crea) -> PATCH por API (corrige cliente y direccion) -> replay 2 (reimporta) · RF_11 ${replayOk ? "OK" : "FALLA"} · ${Object.entries(replay.checks).map(([name, passed]) => `${name}=${passed ? "si" : "no"}`).join(" · ")}`);
+    if (!replayOk) run.failures.push("RF_11");
+
+    const seeded = await seedHistoricalAuditEvents(run, orders.risk);
+    await checkAuditTrail(run, orders.risk, seeded);
+
+    const keyComparison = await compareReadWriteKeys(run.readKey, run.writeKey);
+    const keysOk = keyComparison.every((item) => item.status === 200 && item.differences === 0);
+    run.smoke.push(`compare-reads tienda de pruebas (key de lectura y de escritura, consecutivas): ${keysOk ? "OK" : "FALLA"} · ${keyComparison.map((item) => `${item.route} ${item.status} dif=${item.differences}`).join(" · ")}`);
+    if (!keysOk) run.failures.push("compare-reads prueba");
+
+    const realReads = await compareRealStoreReads();
+    for (const item of realReads) {
+      run.smoke.push(`compare-reads ${item.sellerName}: diferencias=${item.differences}${item.paths.length ? ` (${item.paths.join("; ")})` : ""} · excluidos por updatedAt: pedidos=${item.excluded.orders}, cortes=${item.excluded.settlements}`);
+    }
+    if (!realReads.every((item) => item.differences === 0)) run.failures.push("compare-reads reales");
+
+    const byId = await compareOrdersById();
+    const byIdOk = byId.compared === 20 && byId.mismatches.length === 0;
+    run.smoke.push(`GET /orders/{id} contra GET /orders: ${byId.compared} pedidos reales (${byId.stores.join(", ")}) · distintos=${byId.mismatches.length}${byId.mismatches.length ? ` (${byId.mismatches.join("; ")})` : ""} · movidos entre medias=${byId.moved} · ${byIdOk ? "OK" : "FALLA"}`);
+    if (!byIdOk) run.failures.push("GET /orders/{id}");
+
+    const writeP95 = p95Of(run.writeMs);
+    const readP95 = p95Of([...run.readByIdMs, ...byId.ms]);
+    const p95Ok = writeP95 !== null && readP95 !== null && writeP95 < P95_LIMIT_MS && readP95 < P95_LIMIT_MS;
+    run.smoke.push(`p95 escrituras=${writeP95} ms (${run.writeMs.length}) · p95 GET /orders/{id}=${readP95} ms · umbral ${P95_LIMIT_MS} ms · ${p95Ok ? "OK" : "FALLA"}`);
+    if (!p95Ok) run.failures.push("p95");
+  } catch (error) {
+    failure = error;
+    run.smoke.push(`ABORTADO: ${error && error.message ? error.message : String(error)}`);
+  } finally {
+    try {
+      const report = await cleanup({ fromRunAll: true });
+      run.smoke.push(...report);
+    } catch (problem) {
+      failure = failure || problem;
+      run.smoke.push(`cleanup FALLA: ${problem && problem.message ? problem.message : String(problem)}`);
+    }
+    const failedLabels = [...run.failures, failure ? "abortado" : ""].filter(Boolean);
+    run.smoke.push("", `RESULTADO: ${failedLabels.length ? `FALLA (${failedLabels.join(", ")})` : "OK"}`);
+    writeSmoke(run.smoke);
+  }
+  if (failure) throw failure;
+  if (run.failures.length > 0) throw new Error(`run-all: fallan ${run.failures.join(", ")}`);
+}
+
+/** Lo que queda de la prueba, por clase de la tabla 5.3 (c). Solo lee. */
+async function collectCleanupTargets(registro) {
+  const docIds = (snap) => snap.docs.map((doc) => doc.id);
+  const unique = (list) => [...new Set(list)];
+  const bySeller = docIds(await db.collection("orders").where("sellerId", "==", TEST_SELLER_ID).get());
+  const orderIds = [];
+  const foreign = [];
+  for (const id of unique([...registroIdsOf(registro, "orders"), ...bySeller])) {
+    const snap = await db.collection("orders").doc(id).get();
+    if (snap.exists && snap.get("sellerId") !== TEST_SELLER_ID) foreign.push(id);
+    else orderIds.push(id);
+  }
+  const byField = async (collection, field, value) => docIds(await db.collection(collection).where(field, "==", value).get());
+  const perOrder = async (collection, field) => {
+    const found = [];
+    for (const id of orderIds) found.push(...(await byField(collection, field, id)));
+    return found;
+  };
+  const byPrefix = async (collection) => {
+    const documentId = admin.firestore.FieldPath.documentId();
+    return docIds(await db.collection(collection).where(documentId, ">=", TEST_SELLER_DOC_PREFIX).where(documentId, "<", `${TEST_SELLER_DOC_PREFIX}`).get());
+  };
+  const existing = async (collection, ids) => {
+    const found = [];
+    for (const id of ids) if ((await db.collection(collection).doc(id).get()).exists) found.push(id);
+    return found;
+  };
+  const authUsers = [];
+  for (const uid of registroIdsOf(registro, "authUsers")) {
+    try {
+      await admin.auth().getUser(uid);
+      authUsers.push(uid);
+    } catch (error) {
+      if (!error || error.code !== "auth/user-not-found") throw error;
+    }
+  }
+  const targets = {
+    "orderHistory": unique([...(await perOrder("orderHistory", "orderId")), ...(await byField("orderHistory", "sellerId", TEST_SELLER_ID))]),
+    "walletEntries": unique(await perOrder("walletEntries", "orderId")),
+    "auditEvents": unique([...(await perOrder("auditEvents", "entityId")), ...(await byField("auditEvents", "entityId", TEST_SELLER_ID)), ...(await existing("auditEvents", registroIdsOf(registro, "auditEvents")))]),
+    "storeWebhookSamples": unique([...(await byField("storeWebhookSamples", "sellerId", TEST_SELLER_ID)), ...(await perOrder("storeWebhookSamples", "orderId"))]),
+    "shopifySyncIssues": unique([...(await byField("shopifySyncIssues", "sellerId", TEST_SELLER_ID)), ...(await perOrder("shopifySyncIssues", "orderId"))]),
+    "storeApiIdempotency": await byPrefix("storeApiIdempotency"),
+    "storeApiRateLimits": await byPrefix("storeApiRateLimits"),
+    "importRuns": await existing("importRuns", registroIdsOf(registro, "importRuns")),
+    "orders": await existing("orders", orderIds),
+    "storeWebhookConfigs": await existing("storeWebhookConfigs", [TEST_SELLER_ID]),
+    "shopifyStores": unique([...(await existing("shopifyStores", [TEST_SHOP_DOMAIN])), ...(await byField("shopifyStores", "shopDomain", TEST_SHOP_DOMAIN))]),
+    "inventory": await byField("inventory", "sellerId", TEST_SELLER_ID),
+    "productCatalog": await byField("productCatalog", "sellerId", TEST_SELLER_ID),
+    "storeApiConfigs": await existing("storeApiConfigs", [TEST_SELLER_ID]),
+    "authUsers": authUsers,
+    "sellers": await existing("sellers", [TEST_SELLER_ID])
+  };
+  return { targets, orderIds, foreign };
+}
+
+/**
+ * cleanup (finally de run-all, o `cleanup --from-registro` si el proceso se cayo): lee el registro, busca lo de
+ * la prueba por orderId/entityId, sellerId y el prefijo de documentos, y borra SOLO con safeDelete (que
+ * comprueba la pertenencia de cada documento). Imprime el recuento por coleccion y lanza si queda algo.
+ */
+async function cleanup(options) {
+  const opts = options || {};
+  if (!opts.fromRunAll && !process.argv.includes("--from-registro")) {
+    throw new Error("cleanup: se lanza como `cleanup --from-registro` (o desde el finally de run-all)");
+  }
+  const registro = readRegistro();
+  const first = await collectCleanupTargets(registro);
+  // Los pedidos hallados por el sellerId de prueba cuentan como de la prueba para sus asientos y eventos.
+  const effective = { ...registro, entries: [...registro.entries, ...first.orderIds.map((id) => ({ kind: "orders", id }))] };
+  const kinds = [
+    "orderHistory", "walletEntries", "auditEvents", "storeWebhookSamples", "shopifySyncIssues", "storeApiIdempotency",
+    "storeApiRateLimits", "importRuns", "orders", "storeWebhookConfigs", "shopifyStores", "inventory", "productCatalog",
+    "storeApiConfigs", "authUsers", "sellers"
+  ];
+  const removed = {};
+  for (const kind of kinds) {
+    removed[kind] = 0;
+    for (const id of first.targets[kind]) {
+      const result = await safeDelete(kind, id, { registro: effective });
+      if (result.deleted) removed[kind] += 1;
+    }
+  }
+  const second = await collectCleanupTargets(effective);
+  const lines = kinds.map((kind) => `cleanup ${kind}: borrados=${removed[kind]} · quedan=${second.targets[kind].length}`);
+  if (first.foreign.length > 0) lines.push(`cleanup: ${first.foreign.length} id(s) del registro son de otra tienda y NO se tocaron`);
+  for (const line of lines) console.log(line);
+  const remaining = kinds.filter((kind) => second.targets[kind].length > 0);
+  if (remaining.length > 0 || first.foreign.length > 0) {
+    throw new Error(`cleanup: queda algo (${remaining.join(", ") || "ids ajenos en el registro"})`);
+  }
+  lines.push("cleanup: cero en todas las colecciones");
+  return lines;
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "capture-reads": captureReads, "kovia-replay": koviaReplay, "set-history-since": setHistorySince, "run-all": runAll, "cleanup": cleanup };
 
 async function main() {
   const command = process.argv[2];
