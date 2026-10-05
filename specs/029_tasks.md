@@ -52,7 +52,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     > 0 → parar T9/T10 y reportar; ChatBy sin transaccion → reportar antes de T6; accion historica con identidad
     en el `summary` dentro de la lista permitida → reportar antes de T14.
 
-- [ ] **T2: Consultas exactas e indices**
+- [x] **T2: Consultas exactas e indices**
   * Requisitos cubiertos: RNF_05, RF_01, RF_02, RF_17
   * Archivos: scripts/verify-029.js, src/lib/spec-029-guards.test.ts, .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t2-query-check.txt, firestore.indexes.json (solo si una consulta pide indice)
   * Accion: `query-check` con `limit(1)`: `orders` `sellerId` + `shopifyOrderId`; `walletEntries` `orderId`;

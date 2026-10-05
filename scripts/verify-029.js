@@ -2,7 +2,8 @@
 /**
  * Spec 029 — medicion en produccion (`specs/029_store_api_confirma_y_corrige_pedidos.md`).
  *
- *   node scripts/verify-029.js baseline   (T1) linea base SOLO LECTURA -> t1-linea-base.txt
+ *   node scripts/verify-029.js baseline      (T1) linea base SOLO LECTURA -> t1-linea-base.txt
+ *   node scripts/verify-029.js query-check   (T2) consultas nuevas con limit(1), SOLO LECTURA -> t2-query-check.txt
  *
  * Los modos que escriben (T25 `kovia-replay`, T27 `set-history-since`/`run-all`/`cleanup`) se declaran en
  * WRITE_MODES cuando existan. Mientras la lista este vacia, la guarda de T1 (src/lib/spec-029-guards.test.ts)
@@ -34,6 +35,7 @@ const WRITE_MODES = [];
 
 const EVIDENCE_DIR = path.join(__dirname, "../.sdd/evidence/029_store_api_confirma_y_corrige_pedidos");
 const BASELINE_FILE = path.join(EVIDENCE_DIR, "t1-linea-base.txt");
+const QUERY_CHECK_FILE = path.join(EVIDENCE_DIR, "t2-query-check.txt");
 
 /** Los tres estados en los que la tienda puede corregir un pedido (spec 029). */
 const EDITABLE_STATUSES = ["imported", "address_risk", "ready_to_assign"];
@@ -328,7 +330,87 @@ async function baseline() {
   console.log(`\nEvidencia: ${path.relative(process.cwd(), BASELINE_FILE)}`);
 }
 
-const COMMANDS = { "baseline": baseline };
+async function queryCheck() {
+  // Firestore pide un indice compuesto: gRPC 9 FAILED_PRECONDITION con "requires an index".
+  const needsIndex = (problem) => {
+    const message = String(problem && problem.message ? problem.message : "");
+    return Boolean(problem) && (problem.code === 9 || /FAILED_PRECONDITION/.test(message) || /requires an index/.test(message));
+  };
+  // Enlace de creacion del indice que propone Firestore, si viene en el mensaje.
+  const indexLink = (problem) => {
+    const match = String(problem && problem.message ? problem.message : "").match(/https:\/\/console\.firebase\.google\.com\S+/);
+    return match ? match[0] : "(sin enlace)";
+  };
+  const now = new Date();
+  const lines = [];
+  const say = (text = "") => lines.push(text);
+
+  // Un pedido real con sellerId y shopifyOrderId para que las consultas apunten a datos existentes.
+  const candidates = await db.collection("orders").where("status", "==", "delivered").limit(50).get();
+  const sample = candidates.docs.find((doc) => hasValue(doc.get("sellerId")) && hasValue(doc.get("shopifyOrderId"))) ?? candidates.docs[0];
+  if (!sample) throw new Error("query-check: no hay pedido de muestra");
+  const orderId = sample.id;
+  const sellerId = sample.get("sellerId");
+  const shopifyOrderId = sample.get("shopifyOrderId");
+
+  const checks = [
+    { collection: "orders", label: "orders/{id} (lectura por id)", run: () => db.collection("orders").doc(orderId).get() },
+    {
+      collection: "orders",
+      label: "orders where sellerId == + shopifyOrderId ==",
+      run: () => db.collection("orders").where("sellerId", "==", sellerId).where("shopifyOrderId", "==", shopifyOrderId).limit(1).get()
+    },
+    { collection: "walletEntries", label: "walletEntries where orderId ==", run: () => db.collection("walletEntries").where("orderId", "==", orderId).limit(1).get() },
+    { collection: "settlements", label: "settlements where orderIds array-contains", run: () => db.collection("settlements").where("orderIds", "array-contains", orderId).limit(1).get() },
+    { collection: "orderHistory", label: "orderHistory where orderId == (sin orden: se ordena en memoria)", run: () => db.collection("orderHistory").where("orderId", "==", orderId).limit(1).get() },
+    { collection: "auditEvents", label: "auditEvents where entityId ==", run: () => db.collection("auditEvents").where("entityId", "==", orderId).limit(1).get() },
+    { collection: "cities", label: "cities where active ==", run: () => db.collection("cities").where("active", "==", true).limit(1).get() }
+  ];
+
+  say("# Spec 029 — T2 query-check (solo lectura, limit(1))");
+  say(`Generado: ${now.toISOString()} · proyecto kentro-last-mile`);
+  say(`Pedido de muestra: ${orderId} · sellerId=${sellerId} · shopifyOrderId=${shopifyOrderId} (${typeof shopifyOrderId})`);
+  say("");
+  say("## Consultas");
+  const pending = [];
+  for (const check of checks) {
+    const started = Date.now();
+    try {
+      const result = await check.run();
+      const docs = typeof result.size === "number" ? result.size : result.exists ? 1 : 0;
+      say(`- ${check.label}: ${check.collection} · docs=${docs} · ${Date.now() - started} ms · indice: no`);
+    } catch (problem) {
+      if (!needsIndex(problem)) throw problem;
+      pending.push(check.label);
+      say(`- ${check.label}: ${check.collection} · indice: si -> anadir a firestore.indexes.json · ${indexLink(problem)}`);
+    }
+  }
+  say("");
+
+  // Plan 2.10: array-contains sobre orderIds solo basta si ningun corte asigna efectivo fuera de su orderIds.
+  say("## cashAllocations fuera de orderIds (plan 2.10, esperado 0)");
+  const settlements = (await db.collection("settlements").select("orderIds", "cashAllocations").get()).docs;
+  const outside = settlements.filter((doc) => {
+    const members = (Array.isArray(doc.get("orderIds")) ? doc.get("orderIds") : []).map(String);
+    const allocations = Array.isArray(doc.get("cashAllocations")) ? doc.get("cashAllocations") : [];
+    return allocations.some((allocation) => allocation && hasValue(allocation.orderId) && !members.includes(String(allocation.orderId)));
+  });
+  say(`Cortes: ${settlements.length}`);
+  say(`cashAllocations fuera de orderIds: ${outside.length}`);
+  for (const doc of outside) say(`  - ${doc.id}`);
+  say("");
+
+  say("## Compuerta de T2");
+  say(`- consultas que piden indice: ${pending.length > 0 ? `${pending.length} (${pending.join("; ")})` : "ninguna"}`);
+  say(`- cashAllocations fuera de orderIds > 0: ${outside.length > 0 ? `SI (${outside.length}) -> parar T9/T10` : "no"}`);
+
+  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+  fs.writeFileSync(QUERY_CHECK_FILE, `${lines.join("\n")}\n`);
+  console.log(lines.join("\n"));
+  console.log(`\nEvidencia: ${path.relative(process.cwd(), QUERY_CHECK_FILE)} (t2-query-check.txt)`);
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck };
 
 async function main() {
   const command = process.argv[2];

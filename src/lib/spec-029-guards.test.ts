@@ -135,3 +135,131 @@ describe("T1 · verify-029 baseline es de solo lectura", () => {
     }
   });
 });
+
+describe("T2 · query-check: consultas exactas e indices", () => {
+  /*
+   * T2 (plan 2.10, 6): `query-check` lanza con `limit(1)` en produccion cada consulta nueva de la carga
+   * dirigida e historial, ANTES de escribir los handlers, para que Firestore diga si pide indice. Junto a
+   * `array-contains` repite el recuento de cortes con `cashAllocations[].orderId` fuera de `orderIds`
+   * (esperado 0): es lo que hace suficiente esa consulta. Solo lee: no entra en WRITE_MODES y su cuerpo
+   * no escribe en Firestore. Si alguna pide indice se ANADE a firestore.indexes.json; nada de HEAD se quita.
+   *
+   * Contrato: `COMMANDS` registra `"query-check": <fn>`; `<fn>` es una funcion de primer nivel
+   * (`async function <fn>(`) y escribe `t2-query-check.txt`, con una linea por consulta que diga
+   * `indice: no` o `indice: si` y la linea `cashAllocations fuera de orderIds: <n>`.
+   */
+  const SCRIPT = "scripts/verify-029.js";
+  const EVIDENCE = ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t2-query-check.txt";
+  const INDEXES = "firestore.indexes.json";
+  const source = () => sourceWithoutComments(SCRIPT);
+  const evidence = () => (existsSync(absolute(EVIDENCE)) ? readFileSync(absolute(EVIDENCE), "utf8") : "");
+
+  function queryCheckName(): string | null {
+    const commands = source().match(/const\s+COMMANDS\s*=\s*\{([^}]*)\}/)?.[1] ?? "";
+    return commands.match(/["']query-check["']\s*:\s*([A-Za-z_$][\w$]*)/)?.[1] ?? null;
+  }
+
+  function queryCheckBody(): string {
+    const name = queryCheckName();
+    return name ? topLevelFunctionBody(source(), name) ?? "" : "";
+  }
+
+  it("COMMANDS registra query-check con una funcion de primer nivel", () => {
+    expect(queryCheckName()).not.toBeNull();
+    expect(queryCheckBody()).not.toBe("");
+  });
+
+  it("query-check no esta en WRITE_MODES", () => {
+    const match = source().match(/const\s+WRITE_MODES\s*=\s*(?:Object\.freeze\()?\[([^\]]*)\]/);
+    expect(match).not.toBeNull();
+    const modes = [...(match?.[1] ?? "").matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+    expect(modes).not.toContain("query-check");
+  });
+
+  it.each(WRITE_CALLS)("el cuerpo de query-check no escribe en Firestore: %s", (writeCall) => {
+    expect(queryCheckBody()).not.toBe("");
+    expect(queryCheckBody()).not.toContain(writeCall);
+  });
+
+  it("lanza las consultas con limit(1)", () => {
+    expect(queryCheckBody()).toMatch(/\.limit\(\s*1\s*\)/);
+  });
+
+  it("lee un pedido por id (orders/{id})", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']orders["']\s*\)\s*\.doc\(|doc\(\s*[`"']orders\//);
+  });
+
+  it("orders por sellerId + shopifyOrderId (dos igualdades, sin `in`: T1 midio solo texto)", () => {
+    expect(queryCheckBody()).toMatch(/where\(\s*["']sellerId["']\s*,\s*["']==["']/);
+    expect(queryCheckBody()).toMatch(/where\(\s*["']shopifyOrderId["']\s*,\s*["']==["']/);
+    expect(queryCheckBody()).not.toMatch(/where\(\s*["']shopifyOrderId["']\s*,\s*["']in["']/);
+  });
+
+  it("walletEntries por orderId", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']walletEntries["']\s*\)/);
+    expect(queryCheckBody()).toMatch(/where\(\s*["']orderId["']\s*,\s*["']==["']/);
+  });
+
+  it("settlements por orderIds array-contains", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']settlements["']\s*\)/);
+    expect(queryCheckBody()).toMatch(/where\(\s*["']orderIds["']\s*,\s*["']array-contains["']/);
+  });
+
+  it("orderHistory por orderId (orden en memoria, sin orderBy: plan 2.5)", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']orderHistory["']\s*\)/);
+    expect(queryCheckBody()).not.toMatch(/\.orderBy\(/);
+  });
+
+  it("auditEvents por entityId (lo que une getOrderAuditTrail)", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']auditEvents["']\s*\)/);
+    expect(queryCheckBody()).toMatch(/where\(\s*["']entityId["']\s*,\s*["']==["']/);
+  });
+
+  it("cities por active", () => {
+    expect(queryCheckBody()).toMatch(/collection\(\s*["']cities["']\s*\)/);
+    expect(queryCheckBody()).toMatch(/where\(\s*["']active["']\s*,\s*["']==["']/);
+  });
+
+  it("registra si Firestore pide indice (FAILED_PRECONDITION / requires an index)", () => {
+    expect(queryCheckBody()).toMatch(/FAILED_PRECONDITION|requires an index|code\s*===?\s*9\b/);
+  });
+
+  it("repite el recuento de cashAllocations fuera de orderIds", () => {
+    expect(queryCheckBody()).toMatch(/cashAllocations/);
+    expect(queryCheckBody()).toContain("cashAllocations fuera de orderIds");
+  });
+
+  it("escribe la evidencia t2-query-check.txt", () => {
+    expect(queryCheckBody()).toContain("t2-query-check.txt");
+  });
+
+  it("la evidencia existe", () => {
+    expect(existsSync(absolute(EVIDENCE))).toBe(true);
+  });
+
+  it("la evidencia nombra cada consulta con su veredicto de indice", () => {
+    for (const collection of ["orders", "walletEntries", "settlements", "orderHistory", "auditEvents", "cities"]) {
+      expect(evidence()).toMatch(new RegExp(`${collection}[^\\n]*indice:\\s*(si|no)`));
+    }
+  });
+
+  it("la evidencia no trae errores y lleva el recuento de cashAllocations", () => {
+    expect(evidence()).not.toBe("");
+    expect(evidence()).not.toMatch(/^\s*error\b|\bError:|FAILED_PRECONDITION|PERMISSION_DENIED/im);
+    expect(evidence()).toMatch(/cashAllocations fuera de orderIds:\s*\d+/);
+  });
+
+  it("firestore.indexes.json conserva todo indice y override de HEAD (solo se anade)", async () => {
+    const { execSync } = await import("node:child_process");
+    const head = JSON.parse(execSync(`git show HEAD:${INDEXES}`, { cwd: absolute(""), encoding: "utf8" }));
+    const now = JSON.parse(readFileSync(absolute(INDEXES), "utf8"));
+    const keys = (list: unknown[] | undefined) => new Set((list ?? []).map((entry) => JSON.stringify(entry)));
+    const nowIndexes = keys(now.indexes);
+    const nowOverrides = keys(now.fieldOverrides);
+    const missing = [
+      ...(head.indexes ?? []).filter((entry: unknown) => !nowIndexes.has(JSON.stringify(entry))),
+      ...(head.fieldOverrides ?? []).filter((entry: unknown) => !nowOverrides.has(JSON.stringify(entry))),
+    ];
+    expect(missing).toEqual([]);
+  });
+});
