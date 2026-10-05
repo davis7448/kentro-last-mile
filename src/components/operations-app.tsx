@@ -2101,7 +2101,7 @@ function OrderAuditTrail({ orderId }: { orderId: string }) {
     setLoading(true);
     setError("");
     try {
-      setEvents(await fetchFirebaseOrderAuditTrail(orderId));
+      setEvents((await fetchFirebaseOrderAuditTrail(orderId)).events);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el historial.");
     } finally {
@@ -2139,7 +2139,7 @@ function OrderAuditTrail({ orderId }: { orderId: string }) {
                     )}
                   </p>
                   <p className="text-xs text-ink-70">
-                    {event.actorLabel}
+                    {event.actorLabel ?? event.actorTag ?? ""}
                     {event.actorEmail && event.actorEmail !== event.actorLabel && ` (${event.actorEmail})`}
                     {event.actorRole && ` · ${event.actorRole}`}
                   </p>

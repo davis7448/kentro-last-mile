@@ -455,7 +455,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
 
 ## Interfaz
 
-- [ ] **T18: Tipos y envoltorios de cliente**
+- [x] **T18: Tipos y envoltorios de cliente**
   * Requisitos cubiertos: RF_25, RF_27
   * Archivos: src/lib/types.ts, src/lib/firebase/auth.ts, src/components/operations-app.tsx, src/lib/spec-029-guards.test.ts
   * Accion: `OrderAuditEntry` ampliado, `StoreApiKeyStatus` (con `write` = `exists`, `last4`, `generatedAt`,

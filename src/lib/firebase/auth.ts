@@ -7,7 +7,7 @@ import type { BulkSignupDisableReport } from "../../../functions/src/community-c
 import type { SellerBalance } from "../../../functions/src/seller-balance";
 import type { CashAlertSettings, CashOutstandingReport } from "../../../functions/src/cash-outstanding";
 import { validateLogo } from "../../../functions/src/community-pricing";
-import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, Settlement, StoreWebhookConfig, WalletEntry } from "@/lib/types";
+import type { AddressRisk, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderAuditEntry, OrderAuditTrail, OrderCorrectionKind, OrderCorrectionPlan, OrderStatus, PaymentMethod, PayoutRequest, PickupBatch, Role, RotateStoreWriteKeyResult, Settlement, StoreApiKeyStatus, StoreWebhookConfig, WalletEntry } from "@/lib/types";
 import { clearFirebaseLocalCache, getFirebaseClient } from "./client";
 
 export type FirebaseSessionClaims = {
@@ -220,13 +220,57 @@ export async function rejectFirebaseSellerPayout(input: { payoutId: string; reas
   return (result.data as { payout: PayoutRequest }).payout;
 }
 
-export async function fetchFirebaseOrderAuditTrail(orderId: string) {
+/**
+ * Normaliza la respuesta de `getOrderAuditTrail`. Desde la spec 029 (T14) es `{ events, historySince }`;
+ * antes era `{ events }` y, durante la transicion functions -> hosting, puede llegar un array suelto.
+ * Cualquier forma vieja sale con `historySince: null`.
+ */
+export function normalizeOrderAuditTrailResponse(data: unknown): OrderAuditTrail {
+  if (Array.isArray(data)) return { events: data as OrderAuditEntry[], historySince: null };
+  if (!data || typeof data !== "object") return { events: [], historySince: null };
+  const { events, historySince } = data as { events?: unknown; historySince?: unknown };
+  return {
+    events: Array.isArray(events) ? (events as OrderAuditEntry[]) : [],
+    historySince: typeof historySince === "string" ? historySince : null
+  };
+}
+
+export async function fetchFirebaseOrderAuditTrail(orderId: string): Promise<OrderAuditTrail> {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
   const functions = getFunctions(client.app, "us-central1");
   const callable = httpsCallable(functions, "getOrderAuditTrail");
   const result = await callable({ orderId });
-  return (result.data as { events: OrderAuditEntry[] }).events;
+  return normalizeOrderAuditTrailResponse(result.data);
+}
+
+/** Genera (`rotate: false`) o rota (`rotate: true`) la key de escritura de una tienda. */
+export async function rotateFirebaseStoreWriteKey(input: { sellerId: string; rotate: boolean }): Promise<RotateStoreWriteKeyResult> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "rotateStoreWriteKey");
+  const result = await callable(input);
+  return result.data as RotateStoreWriteKeyResult;
+}
+
+export async function getFirebaseStoreApiKeyStatus(input: { sellerId: string }): Promise<StoreApiKeyStatus> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "getStoreApiKeyStatus");
+  const result = await callable(input);
+  return result.data as StoreApiKeyStatus;
+}
+
+/** Estado de las keys de todas las tiendas (solo admin). */
+export async function listFirebaseStoreApiKeys(): Promise<StoreApiKeyStatus[]> {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "listStoreApiKeys");
+  const result = await callable({});
+  return (result.data as { stores: StoreApiKeyStatus[] }).stores;
 }
 
 export async function confirmFirebaseImportedOrder(orderId: string) {

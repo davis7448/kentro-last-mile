@@ -5,7 +5,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 function absolute(relativePath: string): string {
   return fileURLToPath(new URL(`../../${relativePath}`, import.meta.url));
@@ -23,6 +23,29 @@ function topLevelFunctionBody(source: string, name: string): string | null {
   const end = source.indexOf("\n}\n", start);
   return source.slice(start, end < 0 ? undefined : end + 2);
 }
+
+/*
+ * T18: los envoltorios de cliente se prueban ejecutandolos, no por texto. `vi.mock` se eleva al inicio del
+ * archivo; los demas bloques solo leen fuentes, asi que no les afecta. `httpsCallable` registra el nombre
+ * pedido y devuelve lo que haya en `t18Callables.responses[nombre]`.
+ */
+const t18Callables = vi.hoisted(() => ({
+  calls: [] as Array<{ name: string; payload: unknown }>,
+  responses: {} as Record<string, unknown>
+}));
+
+vi.mock("firebase/functions", () => ({
+  getFunctions: () => ({}),
+  httpsCallable: (_functions: unknown, name: string) => async (payload: unknown) => {
+    t18Callables.calls.push({ name, payload });
+    return { data: t18Callables.responses[name] };
+  }
+}));
+
+vi.mock("./firebase/client", () => ({
+  getFirebaseClient: () => ({ app: {} }),
+  clearFirebaseLocalCache: async () => undefined
+}));
 
 const WRITE_CALLS = [".set(", ".update(", ".delete(", ".create(", "batch(", "runTransaction("];
 
@@ -1303,5 +1326,155 @@ describe("T17 · callables de la key de escritura (RF_25, RF_26)", () => {
     expect(start).toBeGreaterThanOrEqual(0);
     const end = store.indexOf("\n});\n", start);
     expect(store.slice(start, end < 0 ? undefined : end)).not.toMatch(/writeKey/);
+  });
+});
+
+describe("T18 · tipos y envoltorios de cliente (RF_25, RF_27)", () => {
+  /*
+   * Envoltorios en `src/lib/firebase/auth.ts`:
+   * - `fetchFirebaseOrderAuditTrail(orderId)` → `{ events, historySince }`; acepta tambien un array (forma vieja,
+   *   transicion functions → hosting) y lo devuelve con `historySince: null`. La normalizacion es pura y
+   *   exportada: `normalizeOrderAuditTrailResponse(data)`.
+   * - `rotateFirebaseStoreWriteKey({ sellerId, rotate })` → callable `rotateStoreWriteKey`, devuelve su data.
+   * - `getFirebaseStoreApiKeyStatus({ sellerId })` → callable `getStoreApiKeyStatus`, devuelve su data.
+   * - `listFirebaseStoreApiKeys()` → callable `listStoreApiKeys`, devuelve `.stores` (T17).
+   */
+  const TYPES = "src/lib/types.ts";
+  const APP = "src/components/operations-app.tsx";
+
+  type AuthModule = Record<string, unknown>;
+  const loadAuth = async (): Promise<AuthModule> => (await import("./firebase/auth")) as unknown as AuthModule;
+  const fn = (mod: AuthModule, name: string) => {
+    expect(typeof mod[name], `auth.ts debe exportar ${name}`).toBe("function");
+    return mod[name] as (...args: unknown[]) => unknown;
+  };
+
+  beforeEach(() => {
+    t18Callables.calls.length = 0;
+    for (const key of Object.keys(t18Callables.responses)) delete t18Callables.responses[key];
+  });
+
+  const SINCE = "2026-10-05T00:00:00.000Z";
+  const EVENT = {
+    id: "e1",
+    createdAt: "2026-10-06T10:00:00.000Z",
+    action: "order.confirmed",
+    actorId: "",
+    summary: "Confirmado",
+    actorTag: "api",
+    origin: "api"
+  };
+
+  it("normalizeOrderAuditTrailResponse: la forma nueva pasa tal cual", async () => {
+    const normalize = fn(await loadAuth(), "normalizeOrderAuditTrailResponse");
+    expect(normalize({ events: [EVENT], historySince: SINCE })).toEqual({ events: [EVENT], historySince: SINCE });
+  });
+
+  it("normalizeOrderAuditTrailResponse: un array (forma vieja) da { events, historySince: null }", async () => {
+    const normalize = fn(await loadAuth(), "normalizeOrderAuditTrailResponse");
+    expect(normalize([EVENT])).toEqual({ events: [EVENT], historySince: null });
+  });
+
+  it("normalizeOrderAuditTrailResponse: sin historySince, sin events o null no rompe", async () => {
+    const normalize = fn(await loadAuth(), "normalizeOrderAuditTrailResponse");
+    expect(normalize({ events: [EVENT] })).toEqual({ events: [EVENT], historySince: null });
+    expect(normalize({ historySince: null })).toEqual({ events: [], historySince: null });
+    expect(normalize(null)).toEqual({ events: [], historySince: null });
+  });
+
+  it("fetchFirebaseOrderAuditTrail llama a getOrderAuditTrail y devuelve { events, historySince }", async () => {
+    const fetchTrail = fn(await loadAuth(), "fetchFirebaseOrderAuditTrail");
+    t18Callables.responses.getOrderAuditTrail = { events: [EVENT], historySince: SINCE };
+    await expect(fetchTrail("o1")).resolves.toEqual({ events: [EVENT], historySince: SINCE });
+    expect(t18Callables.calls).toEqual([{ name: "getOrderAuditTrail", payload: { orderId: "o1" } }]);
+  });
+
+  it("fetchFirebaseOrderAuditTrail tolera la respuesta vieja (array)", async () => {
+    const fetchTrail = fn(await loadAuth(), "fetchFirebaseOrderAuditTrail");
+    t18Callables.responses.getOrderAuditTrail = [EVENT];
+    await expect(fetchTrail("o1")).resolves.toEqual({ events: [EVENT], historySince: null });
+  });
+
+  it("rotateFirebaseStoreWriteKey llama a rotateStoreWriteKey con { sellerId, rotate } y devuelve su data", async () => {
+    const rotate = fn(await loadAuth(), "rotateFirebaseStoreWriteKey");
+    const data = { status: { sellerId: "s1" }, writeKey: "kw_x", previousLast4: "abcd" };
+    t18Callables.responses.rotateStoreWriteKey = data;
+    await expect(rotate({ sellerId: "s1", rotate: true })).resolves.toEqual(data);
+    expect(t18Callables.calls).toEqual([{ name: "rotateStoreWriteKey", payload: { sellerId: "s1", rotate: true } }]);
+  });
+
+  it("getFirebaseStoreApiKeyStatus llama a getStoreApiKeyStatus con { sellerId } y devuelve el estado", async () => {
+    const getStatus = fn(await loadAuth(), "getFirebaseStoreApiKeyStatus");
+    const status = {
+      sellerId: "s1",
+      sellerName: "Tienda",
+      read: { exists: false, status: "none" },
+      write: { exists: false },
+      canManageWrite: true
+    };
+    t18Callables.responses.getStoreApiKeyStatus = status;
+    await expect(getStatus({ sellerId: "s1" })).resolves.toEqual(status);
+    expect(t18Callables.calls).toEqual([{ name: "getStoreApiKeyStatus", payload: { sellerId: "s1" } }]);
+  });
+
+  it("listFirebaseStoreApiKeys llama a listStoreApiKeys y devuelve .stores", async () => {
+    const list = fn(await loadAuth(), "listFirebaseStoreApiKeys");
+    const stores = [
+      {
+        sellerId: "s1",
+        sellerName: "Tienda",
+        read: { exists: true, status: "active" },
+        write: { exists: true, last4: "wxyz", generatedAt: SINCE, generatedByLabel: "por la tienda" },
+        canManageWrite: true
+      }
+    ];
+    t18Callables.responses.listStoreApiKeys = { stores };
+    await expect(list()).resolves.toEqual(stores);
+    expect(t18Callables.calls.map((call) => call.name)).toEqual(["listStoreApiKeys"]);
+  });
+
+  it("operations-app.tsx: todo uso de fetchFirebaseOrderAuditTrail( lee .events", () => {
+    const app = sourceWithoutComments(APP);
+    const uses = [...app.matchAll(/fetchFirebaseOrderAuditTrail\(/g)];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const use of uses) {
+      const at = use.index ?? 0;
+      const lineStart = app.lastIndexOf("\n", at) + 1;
+      const statement = app.slice(lineStart, app.indexOf(";", at) + 1);
+      const callEnd = app.indexOf(")", at);
+      const afterCall = app.slice(callEnd, callEnd + 12);
+      // Aceptado: `(await fetch...(id)).events`, `const { events, ... } = await fetch...(id)`, o
+      // `const trail = await fetch...(id)` seguido de `trail.events` poco despues.
+      const variable = statement.match(/(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+fetchFirebaseOrderAuditTrail\(/)?.[1];
+      const readsEvents =
+        /^\)\)?\??\.events\b/.test(afterCall) ||
+        /\{\s*[^}]*\bevents\b[^}]*\}\s*=\s*await\s+fetchFirebaseOrderAuditTrail\(/.test(statement) ||
+        (variable !== undefined && new RegExp(`\\b${variable}\\??\\.events\\b`).test(app.slice(at, at + 600)));
+      expect(readsEvents, `uso sin .events: ${statement.trim()}`).toBe(true);
+    }
+  });
+
+  it("types.ts: StoreApiKeyStatus con write { exists, last4?, generatedAt?, generatedByLabel? } y sin secretos", () => {
+    const types = sourceWithoutComments(TYPES);
+    const start = types.search(/export type StoreApiKeyStatus\b/);
+    expect(start, "falta export type StoreApiKeyStatus en types.ts").toBeGreaterThanOrEqual(0);
+    const body = types.slice(start, types.indexOf("};", start) + 2);
+    const write = body.slice(body.search(/\bwrite\??:/));
+    for (const field of ["exists", "last4", "generatedAt", "generatedByLabel"]) {
+      expect(write, `write.${field}`).toMatch(new RegExp(`\\b${field}\\??:`));
+    }
+    for (const forbidden of ["prefix", "rotatedAt", "createdAt", "writeKeyHash", "apiKey", "writeKey"]) {
+      expect(body, `StoreApiKeyStatus no lleva ${forbidden}`).not.toMatch(new RegExp(`\\b${forbidden}\\??:`));
+    }
+  });
+
+  it("types.ts: OrderAuditEntry con actorTag?, origin?, changes?, apiKeyLast4? y actorLabel opcional", () => {
+    const types = sourceWithoutComments(TYPES);
+    const start = types.search(/export type OrderAuditEntry\b/);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = types.slice(start, types.indexOf("};", start) + 2);
+    for (const field of ["actorTag", "origin", "changes", "apiKeyLast4", "actorLabel"]) {
+      expect(body, `OrderAuditEntry.${field} opcional`).toMatch(new RegExp(`\\b${field}\\?:`));
+    }
   });
 });
