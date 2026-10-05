@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
@@ -17,10 +17,17 @@ import {
   buildErrorBody,
   isValidShopifyOrderId,
   routeStoreApiRequest,
+  type StoreApiNewRoute,
   STORE_API_ERROR_HTTP,
   validateQueryParameters
 } from "./store-api-request";
-import { listStoreOrdersByShopifyOrderId, readStoreOrder, storeOrderItem } from "./store-api-write";
+import {
+  handleStoreApiWrite,
+  listStoreOrdersByShopifyOrderId,
+  readStoreOrder,
+  storeOrderItem,
+  type StoreApiWriteRouteName
+} from "./store-api-write";
 import { buildStoreSummary, STORE_BALANCE_NOTICE } from "./store-summary";
 
 /**
@@ -103,6 +110,8 @@ type StoreApiHttpRequest = {
   path: string;
   query: Record<string, unknown>;
   get(name: string): string | undefined;
+  /** Cuerpo crudo, como lo deja Cloud Functions: las escrituras lo parsean ellas mismas. */
+  rawBody?: Buffer;
 };
 
 type StoreApiHttpResponse = {
@@ -111,7 +120,18 @@ type StoreApiHttpResponse = {
   set(name: string, value: string): unknown;
 };
 
-export type StoreApiDeps = { db: Firestore; now?: () => Date };
+export type StoreApiDeps = {
+  db: Firestore;
+  now?: () => Date;
+  /** Borrado de campos que recibe el ejecutor de escrituras; por defecto el de produccion. */
+  deleteField?: () => unknown;
+};
+
+const productionDeleteField = (): unknown => FieldValue.delete();
+
+function isWriteRoute(route: StoreApiNewRoute): route is StoreApiWriteRouteName {
+  return route === "order_confirm" || route === "order_patch" || route === "order_cancel";
+}
 
 /**
  * Handler de `storeApi` con el `db` inyectable (spec 029 T10). Orden de la precedencia (plan 2.1): ruta y
@@ -129,8 +149,8 @@ export async function handleStoreApiRequest(
     response.status(match.httpStatus).json(match.body);
     return;
   }
-  // Rutas nuevas que llegan en tareas posteriores (historial, escrituras): aun no existen.
-  if (match.kind === "new" && match.route !== "order_read") {
+  // El historial llega en T13: hasta entonces la ruta no existe.
+  if (match.kind === "new" && match.route === "order_history") {
     response.status(STORE_API_ERROR_HTTP.route_not_found).json(buildErrorBody("route_not_found"));
     return;
   }
@@ -159,6 +179,25 @@ export async function handleStoreApiRequest(
   const parameters = validateQueryParameters(match, request.query);
   if (!parameters.ok) {
     response.status(parameters.httpStatus).json(parameters.body);
+    return;
+  }
+
+  if (match.kind === "new" && isWriteRoute(match.route)) {
+    // Escrituras (T11): el resto de la precedencia (cuerpo, ejecutor) vive en store-api-write.ts.
+    const reply = await handleStoreApiWrite(
+      { db, deleteField: deps.deleteField ?? productionDeleteField },
+      {
+        route: match.route,
+        method: request.method,
+        orderId: match.orderId,
+        sellerId,
+        keyLast4: credentials.keyLast4,
+        rawBody: request.rawBody,
+        idempotencyKey: request.get("idempotency-key"),
+        now: (deps.now ? deps.now() : new Date()).toISOString()
+      }
+    );
+    response.status(reply.httpStatus).json(reply.body);
     return;
   }
 

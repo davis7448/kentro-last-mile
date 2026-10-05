@@ -579,3 +579,71 @@ describe("T10 · RNF_05", () => {
     }
   });
 });
+
+describe("T11 · rutas de escritura: delegan en el ejecutor y no escriben pedidos", () => {
+  /*
+   * RF_19, regla de oro 1 (plan 2.2): las rutas `POST /confirm`, `PATCH` y `POST /cancel` de la Store API son
+   * adaptadores. Traducen la peticion al ejecutor (`runConfirm` / `runDeliveryCorrection` / `runCancel` de
+   * `order-seller-actions-run.ts`) y su rechazo a HTTP (`mapRejectionToResponse`). No escriben en `orders`, ni
+   * conservan copia del parche (nota 10 de la pasada final: la anti-copia de T6b tambien cubre este modulo).
+   *
+   * Los handlers viven en `functions/src/store-api-write.ts`; `store-api.ts` solo despacha. `store-api.ts`
+   * cablea el borrado de campos de produccion (`FieldValue.delete()`) que el ejecutor recibe por `deps`.
+   */
+  const WRITE_MODULE = "functions/src/store-api-write.ts";
+  const LEGACY_MODULE = "functions/src/store-api.ts";
+  const RUNNERS = ["runConfirm", "runDeliveryCorrection", "runCancel"] as const;
+  const FORBIDDEN = [/status:\s*"ready_to_assign"/, /status:\s*"cancelled"/, /addressRisk:\s*"accepted"/, /\[MANUAL_EDIT_STAMP\]/];
+  const ORDER_WRITE = /\.(?:set|update|create|delete)\(/;
+
+  const writeSource = () => sourceWithoutComments(WRITE_MODULE);
+
+  it("store-api-write.ts importa los tres ejecutores de order-seller-actions-run", () => {
+    for (const runner of RUNNERS) {
+      expect(writeSource()).toMatch(new RegExp(`import\\s*\\{[^}]*\\b${runner}\\b[^}]*\\}\\s*from\\s*["']\\./order-seller-actions-run["']`));
+    }
+  });
+
+  it.each(RUNNERS)("store-api-write.ts llama a %s(", (runner) => {
+    expect(writeSource()).toContain(`${runner}(`);
+  });
+
+  it("store-api-write.ts llama a los ejecutores con politica api", () => {
+    expect(writeSource()).toMatch(/policy:\s*"api"/);
+  });
+
+  it("store-api-write.ts exporta mapRejectionToResponse", () => {
+    expect(writeSource()).toMatch(/export\s+function\s+mapRejectionToResponse\s*\(/);
+  });
+
+  it.each(FORBIDDEN.map((pattern) => [String(pattern), pattern] as const))(
+    "store-api-write.ts no conserva copia del parche: %s",
+    (_label, pattern) => {
+      expect(writeSource()).not.toMatch(pattern);
+    }
+  );
+
+  it.each([WRITE_MODULE, LEGACY_MODULE])("%s no escribe en orders (ninguna sentencia con collection(\"orders\") y una escritura)", (file) => {
+    const statements = sourceWithoutComments(file).split(";").filter((statement) => /collection\(\s*["'`]orders["'`]\s*\)/.test(statement));
+    for (const statement of statements) expect(statement.trim()).not.toMatch(ORDER_WRITE);
+  });
+
+  it("store-api-write.ts no abre transacciones ni lotes propios sobre pedidos", () => {
+    const source = writeSource();
+    expect(source).not.toMatch(/\.batch\(/);
+    const transactional = source.split(";").filter((statement) => /runTransaction\(/.test(statement));
+    for (const statement of transactional) expect(statement).not.toMatch(/["'`]orders["'`]/);
+  });
+
+  it("store-api-write.ts no importa el sello ni los planificadores puros (decide el nucleo, escribe el ejecutor)", () => {
+    const source = writeSource();
+    expect(source).not.toMatch(/\bMANUAL_EDIT_STAMP\b/);
+    expect(source).not.toMatch(/\bplan(?:Confirm|DeliveryCorrection|Cancel)\(/);
+  });
+
+  it("store-api.ts cablea FieldValue.delete() como deleteField de produccion", () => {
+    const source = sourceWithoutComments(LEGACY_MODULE);
+    expect(source).toMatch(/FieldValue\.delete\(\)/);
+    expect(source).toMatch(/\bdeleteField\b/);
+  });
+});

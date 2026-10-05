@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T11",
+  "activeTask": "T12",
   "activeSpec": {
     "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
     "status": "approved"
@@ -23,7 +23,7 @@
     "T8": { "requirements": ["RF_03", "RF_09", "RF_12", "RF_13", "RNF_02", "RNF_04"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": true, "done": true },
     "T9": { "requirements": ["RF_01", "RF_20"], "files": ["functions/src/store-api-orders.ts", "functions/src/store-api.ts", "src/lib/store-api-orders.test.ts"], "testWritten": true, "done": true },
     "T10": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_20", "RNF_01", "RNF_05"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
-    "T11": { "requirements": ["RF_04", "RF_07", "RF_10", "RF_13", "RF_19", "RNF_01", "RNF_02"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": false, "done": false },
+    "T11": { "requirements": ["RF_04", "RF_07", "RF_10", "RF_13", "RF_19", "RNF_01", "RNF_02"], "files": ["functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
     "T12": { "requirements": ["RNF_03", "RNF_04"], "files": ["functions/src/store-api-request.ts", "functions/src/store-api-write.ts", "functions/src/order-seller-actions-run.ts", "src/lib/store-api-request.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": false, "done": false },
     "T13": { "requirements": ["RF_17", "RF_18", "RF_20", "RF_24"], "files": ["functions/src/store-api-history.ts", "functions/src/store-api-write.ts", "functions/src/store-api.ts", "src/lib/store-api-history.test.ts", "src/lib/store-api-write.test.ts"], "testWritten": false, "done": false },
     "T14": { "requirements": ["RF_27", "RF_18"], "files": ["functions/src/store-api-history.ts", "functions/src/orders.ts", "src/lib/store-api-history.test.ts", "src/lib/spec-029-guards.test.ts"], "testWritten": false, "done": false },

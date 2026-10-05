@@ -304,7 +304,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     con cuerpo identico (comparacion profunda); con un parametro desconocido y un pedido inexistente → 400 (el
     paso 3 va antes que el 404).
 
-- [ ] **T11: Rutas de escritura**
+- [x] **T11: Rutas de escritura**
   * Requisitos cubiertos: RF_04, RF_07, RF_10, RF_13, RF_19, RNF_01, RNF_02
   * Archivos: functions/src/store-api-write.ts, functions/src/store-api.ts, src/lib/spec-029-guards.test.ts, src/lib/store-api-write.test.ts
   * Accion: `POST /confirm`, `PATCH`, `POST /cancel` en el orden de la precedencia (plan 2.1): credenciales →
