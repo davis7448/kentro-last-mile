@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } fr
 import { renderCode128Svg } from "@/lib/barcode";
 import { CashOutstandingOverdueCard, CashOutstandingSupplierPendingLine, CashOutstandingTab, isCashOutstandingTabRequested } from "./cash-outstanding-admin";
 import { CashOutstandingLeaderPanel } from "./cash-outstanding-leader";
+import { StoreApiKeysAdminPanel } from "./store-api-keys-admin";
 import { StoreWriteKeySection } from "./store-api-write-key";
 import { ORDER_RANGE_PRESETS } from "@/lib/date-ranges";
 import type { OrderPeriodStats } from "@/lib/firebase/auth";
@@ -5507,6 +5508,9 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Incidencias de sincronizacion" count={(state.shopifySyncIssues ?? []).length} summary={`${(state.shopifySyncIssues ?? []).length} sin resolver`} tone={(state.shopifySyncIssues ?? []).length > 0 ? "rust" : "default"} defaultOpen={(state.shopifySyncIssues ?? []).length > 0}>
             <ShopifySyncIssuesPanel issues={state.shopifySyncIssues ?? []} sellers={state.sellers} />
+          </CollapsiblePanel>
+          <CollapsiblePanel flush title="Claves de API de tiendas" summary="Lectura y escritura por tienda">
+            <StoreApiKeysAdminPanel actorName={session.name} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Solicitudes de instalacion" count={state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0} summary={`${state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0} pendientes`} tone={(state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0) > 0 ? "acid" : "default"} defaultOpen={(state.shopifyInstallRequests?.filter((request) => request.status === "requested").length ?? 0) > 0}>
             <ShopifyInstallRequestsPanel state={state} setState={setState} />

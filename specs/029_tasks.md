@@ -509,7 +509,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `sessionStorage`; `operations-app.tsx` solo monta; el dialogo no usa `window.confirm`; E2E en `/sdd-verify`
     contra los cinco `HU_04.tienda-*.screen.json`.
 
-- [ ] **T21: Panel "Claves de API de tiendas" del admin**
+- [x] **T21: Panel "Claves de API de tiendas" del admin**
   * Requisitos cubiertos: RF_25, RF_26
   * Archivos: src/components/store-api-keys-admin.tsx, src/components/operations-app.tsx, src/lib/spec-029-guards.test.ts
   * Accion: panel plegable tras "Incidencias de sincronizacion"; tabla (escritorio) y tarjetas (movil);

@@ -1653,3 +1653,144 @@ describe("T20 · seccion \"Clave de escritura\" de la tienda (RF_25, RF_26)", ()
     expect(card, "la key fresca no pasa por StoreApiKeyCard").not.toMatch(/\bwriteKey\b/);
   });
 });
+
+describe("T21 · panel \"Claves de API de tiendas\" del admin (RF_25, RF_26)", () => {
+  /*
+   * Contrato (README del diseno, decision 2; pantallas HU_04.admin-*):
+   * - `src/components/store-api-keys-admin.tsx` exporta un componente PascalCase que carga la lista con
+   *   `listFirebaseStoreApiKeys` y la pinta con `buildAdminKeysListView` (tabla en escritorio, tarjetas en
+   *   movil, buscador "Buscar tienda", paginas de 6/4).
+   * - Generar/rotar no se reimplementa: el panel monta `StoreWriteKeySection` (T20) con `viewer="admin"`.
+   * - La columna/tarjeta "Lectura" es solo estado: el panel nunca lee ni pinta la key de lectura.
+   * - Sin `localStorage`/`sessionStorage`/`window.confirm`.
+   * - `operations-app.tsx` solo MONTA el panel, y solo en `AdminView`, despues de "Incidencias de
+   *   sincronizacion" (y antes de "Solicitudes de instalacion"). Nunca en SellerView ni en las vistas de
+   *   lider o mensajero.
+   */
+  const PANEL = "src/components/store-api-keys-admin.tsx";
+  const APP = "src/components/operations-app.tsx";
+  const NON_ADMIN_VIEWS = ["SellerView", "CommunityLeaderView", "DriverView", "MessengerView", "FleetMessengerPanel"];
+
+  const panelSource = (): string => {
+    expect(existsSync(absolute(PANEL)), `${PANEL} debe existir`).toBe(true);
+    return sourceWithoutComments(PANEL);
+  };
+
+  const exportedComponentNames = (source: string): string[] => {
+    const names = new Set<string>();
+    for (const match of source.matchAll(/export\s+(?:default\s+)?function\s+([A-Z][A-Za-z0-9]*)\s*\(/g)) names.add(match[1]);
+    for (const match of source.matchAll(/export\s+const\s+([A-Z][A-Za-z0-9]*)\s*[:=]/g)) names.add(match[1]);
+    return [...names];
+  };
+
+  /** Nombres exportados por el panel que operations-app.tsx importa de store-api-keys-admin. */
+  const importedPanelNames = (app: string): string[] =>
+    exportedComponentNames(panelSource()).filter((name) =>
+      new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["'](?:@\\/components|\\.)\\/store-api-keys-admin["']`).test(app)
+    );
+
+  const mountRegex = (name: string): RegExp => new RegExp(`<${name}[\\s/>]`, "g");
+
+  it("el archivo existe y exporta un componente", () => {
+    expect(exportedComponentNames(panelSource()).length, "debe exportar un componente PascalCase").toBeGreaterThan(0);
+  });
+
+  it("carga la lista con listFirebaseStoreApiKeys (envoltorio de cliente)", () => {
+    const source = panelSource();
+    expect(source).toMatch(
+      /import\s*\{[^}]*\blistFirebaseStoreApiKeys\b[^}]*\}\s*from\s*["'](?:@\/lib|\.\.\/lib)\/firebase\/auth["']/
+    );
+    expect(source).toMatch(/\blistFirebaseStoreApiKeys\s*\(/);
+  });
+
+  it("pinta el modelo de vista de T19 (buildAdminKeysListView)", () => {
+    const source = panelSource();
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bbuildAdminKeysListView\b[^}]*\}\s*from\s*["'](?:@\/lib|\.\.\/lib)\/store-api-keys-view["']/
+    );
+    expect(source).toMatch(/\bbuildAdminKeysListView\s*\(/);
+    expect(source, "el resumen \"N de M tiendas\" sale del modelo de vista").not.toMatch(/tiendas con clave de escritura/);
+    expect(source, "el rango de paginas sale del modelo de vista").not.toMatch(/`Tiendas \$\{/);
+  });
+
+  it("tabla en escritorio y tarjetas en movil, con buscador \"Buscar tienda\"", () => {
+    const source = panelSource();
+    expect(source).toMatch(/<table[\s>]/);
+    expect(source).toContain("Claves de API por tienda");
+    expect(source).toContain("Buscar tienda");
+    expect(source, "pide la vista de movil al modelo (4 por pagina)").toMatch(/["']mobile["']/);
+  });
+
+  it("los botones por fila llevan el nombre accesible del modelo de vista", () => {
+    expect(panelSource()).toMatch(/aria-label=\{[^}]*\baccessibleName\b/);
+  });
+
+  it("reutiliza StoreWriteKeySection con viewer=\"admin\" (no reimplementa generar/rotar)", () => {
+    const source = panelSource();
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bStoreWriteKeySection\b[^}]*\}\s*from\s*["'](?:@\/components|\.)\/store-api-write-key["']/
+    );
+    expect(source).toMatch(/<StoreWriteKeySection[\s/>]/);
+    const mount = source.slice(source.search(/<StoreWriteKeySection[\s/>]/));
+    expect(mount.slice(0, mount.search(/\/?>/) + 2)).toMatch(/viewer=["{]["']?admin/);
+    for (const name of ["rotateFirebaseStoreWriteKey", "getFirebaseStoreApiKeyStatus", "buildWriteKeySectionView", "splitWriteKey"]) {
+      expect(source.includes(name), `${PANEL} no debe usar ${name}: eso es de StoreWriteKeySection`).toBe(false);
+    }
+  });
+
+  it("la columna Lectura solo muestra estado: el panel no lee ni pinta la key de lectura", () => {
+    const source = panelSource();
+    expect(source).not.toMatch(/\bapiKey\b/);
+    expect(source).not.toMatch(/\bcreateFirebaseStoreApiKey\b/);
+    expect(source, "la celda de Lectura pinta readText del modelo de vista").toMatch(/\breadText\b/);
+    expect(source, "no se lee nada de status.read aparte del modelo de vista").not.toMatch(/\.read\.(?!exists\b|status\b)\w+/);
+  });
+
+  it("sin localStorage, sessionStorage ni window.confirm", () => {
+    const source = panelSource();
+    for (const banned of ["localStorage", "sessionStorage", "indexedDB"]) {
+      expect(source.includes(banned), `${PANEL} no debe usar ${banned}`).toBe(false);
+    }
+    expect(source).not.toMatch(/\bwindow\.confirm\b/);
+    expect(source).not.toMatch(/(^|[^.\w])confirm\s*\(/m);
+  });
+
+  it("operations-app.tsx importa el panel y lo monta en AdminView, tras \"Incidencias de sincronizacion\"", () => {
+    const app = sourceWithoutComments(APP);
+    const names = importedPanelNames(app);
+    expect(names.length, "operations-app.tsx importa el panel de store-api-keys-admin").toBeGreaterThan(0);
+    const adminView = topLevelFunctionBody(app, "AdminView") ?? "";
+    expect(adminView, "AdminView sigue en operations-app.tsx").not.toBe("");
+    const mountAt = Math.min(...names.map((name) => adminView.search(mountRegex(name))).filter((index) => index >= 0));
+    expect(Number.isFinite(mountAt), "AdminView monta el panel").toBe(true);
+    const incidents = adminView.indexOf('title="Incidencias de sincronizacion"');
+    const installs = adminView.indexOf('title="Solicitudes de instalacion"');
+    expect(incidents, "AdminView conserva el panel de Incidencias").toBeGreaterThanOrEqual(0);
+    expect(mountAt, "va despues de \"Incidencias de sincronizacion\"").toBeGreaterThan(incidents);
+    if (installs > incidents) expect(mountAt, "y antes de \"Solicitudes de instalacion\"").toBeLessThan(installs);
+    expect(app + panelSource(), "el panel se titula \"Claves de API de tiendas\"").toContain("Claves de API de tiendas");
+  });
+
+  it("el panel se monta SOLO en AdminView (nunca en tienda, lider ni mensajero)", () => {
+    const app = sourceWithoutComments(APP);
+    const names = importedPanelNames(app);
+    const adminView = topLevelFunctionBody(app, "AdminView") ?? "";
+    for (const name of names) {
+      const total = [...app.matchAll(mountRegex(name))].length;
+      const inAdmin = [...adminView.matchAll(mountRegex(name))].length;
+      expect(inAdmin, `<${name}> se monta en AdminView`).toBeGreaterThan(0);
+      expect(total, `<${name}> no se monta fuera de AdminView`).toBe(inAdmin);
+      for (const view of NON_ADMIN_VIEWS) {
+        const body = topLevelFunctionBody(app, view) ?? "";
+        expect(mountRegex(name).test(body), `${view} no monta <${name}>`).toBe(false);
+      }
+    }
+  });
+
+  it("operations-app.tsx solo monta: no carga la lista ni la pinta", () => {
+    const app = sourceWithoutComments(APP);
+    for (const name of ["listFirebaseStoreApiKeys", "buildAdminKeysListView", "ADMIN_KEYS_PAGE_SIZE"]) {
+      expect(app.includes(name), `operations-app.tsx no debe usar ${name}`).toBe(false);
+    }
+  });
+});
