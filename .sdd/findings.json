@@ -1,20 +1,5 @@
 {
   "spec": "specs/029_store_api_confirma_y_corrige_pedidos.md",
-  "round": 2,
-  "findings": [
-    {
-      "id": "R2-RF_02-1",
-      "requirement": "RF_02",
-      "round": 2,
-      "title": "El tope de 200 caracteres rechaza con 400 numeros que el sistema si guarda",
-      "file": "functions/src/store-api-request.ts",
-      "line": 252,
-      "why": "T28 (R1-RF_02-1) cambio el validador para que acepte \"todo numero que el sistema guarda\", pero ninguna via de escritura pone tope de longitud. El pedido manual usa `optionalText` (orders.ts:47-50, solo trim + min(1)) y el campo del panel (operations-app.tsx:5877) no tiene maxLength. La guardia de T28 confirma que la gente pega direcciones en ese campo, y `store-webhook`/`onstock-webhook` guardan `name` sin limite. En cambio `isValidShopifyOrderId` corta en `SHOPIFY_ORDER_ID_MAX_LENGTH = 200` y rechaza cualquier caracter de control, incluido el tabulador, que un input de texto conserva al pegar. Asi que el filtro sigue negando por \"mal formados\" valores que `GET /orders` devuelve tal cual: es la misma clase de defecto que T28 vino a cerrar.",
-      "failureScenario": "Un logistico crea a mano un pedido con un numero de 230 caracteres (una direccion larga pegada en el campo). `GET /orders` lo lista con ese `shopifyOrderId`. La integracion copia el valor y llama `GET /orders?shopifyOrderId=<ese valor codificado>`: recibe 400 `{ ok:false, error:\"invalid_shopify_order_id\" }` en vez del pedido, y no hay forma de encontrarlo por el filtro. Pasa lo mismo si el valor guardado contiene un tabulador pegado.",
-      "verdict": {
-        "isReal": true,
-        "reason": "I confirmed this by reading the code. Creating a manual order in functions/src/orders.ts accepts `shopifyOrderId` through `optionalText`, which only trims and requires at least 1 character, with no upper limit (lines 47-51 and 72). It is then stored as `#<value>` (lines 295-296 and 350). The panel input in operations-app.tsx around line 5877 has no maxLength, and a text input keeps tabs. In functions/src/store-api-request.ts:256-259, `isValidShopifyOrderId` rejects any value longer than 200 characters after trimming, and any value containing a control character, tab included. functions/src/store-api.ts:244 returns 400 `invalid_shopify_order_id` in those cases. So a stored number such as \"#\" followed by 230 characters, or one with a tab inside, can be returned by GET /orders but cannot be found through the filter. That contradicts RF_02 and the stated goal of T28, which was to accept every number the system stores. The case is rare, since it needs a pasted long text or a tab, but the code allows it."
-      }
-    }
-  ]
+  "round": 3,
+  "findings": []
 }
