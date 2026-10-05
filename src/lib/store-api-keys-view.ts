@@ -117,12 +117,18 @@ function statusPill(write: ActiveWrite | null): WriteKeySectionView["pill"] {
   return write ? { text: "Activa", tone: "acid" } : { text: "Sin clave de escritura", tone: "muted" };
 }
 
+// El servidor ya antepone "por" al texto que da al admin ("por la tienda", "por <nombre>"); el rotulo
+// "Generada por" y la celda del panel lo ponen, asi que se quita aqui para no repetirlo.
+function withoutLeadingPor(label: string): string {
+  return label.startsWith("por ") ? label.slice(4) : label;
+}
+
 function activeRows(write: ActiveWrite | null): WriteKeySectionView["rows"] {
   if (!write) return [];
   return [
     { label: "Termina en", value: write.last4 },
     { label: "Generada", value: formatKeyDateTime(write.generatedAt) },
-    { label: "Generada por", value: write.generatedByLabel }
+    { label: "Generada por", value: withoutLeadingPor(write.generatedByLabel) }
   ];
 }
 
@@ -280,7 +286,7 @@ function adminRow(status: StoreApiKeyStatus): AdminKeyRow {
     writeText: write ? "Activa" : "Sin clave",
     writeDetail: write ? `termina en ${write.last4}` : null,
     generatedText: write ? formatKeyDateTime(write.generatedAt) : null,
-    generatedBy: write ? write.generatedByLabel : null,
+    generatedBy: write ? withoutLeadingPor(write.generatedByLabel) : null,
     action
   };
 }

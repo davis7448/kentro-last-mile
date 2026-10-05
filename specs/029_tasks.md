@@ -727,3 +727,15 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     se aceptan tabuladores y cualquier caracter salvo NUL. Manual alineado.
   * Verificacion: 230 caracteres y un valor con tabulador son validos; vacio, solo espacios, mas de 1500 bytes
     (tambien con multibyte), NUL, array y numero no.
+
+## Correccion de la verificacion E2E (2026-10-05)
+
+- [x] **T33: "Generada por" no repite el "por" para el admin**
+  * Requisitos cubiertos: RF_25
+  * Archivos: src/lib/store-api-keys-view.ts, src/lib/store-api-keys-view.test.ts
+  * Accion: el servidor (T17) da al admin `generatedByLabel` = "por la tienda" / "por <nombre>"; la fila de la
+    seccion ("Generada por") y la celda del panel (que antepone "por ") lo repetian ("por por Prueba 029 admin",
+    visto en el E2E RF_25). El modelo de vista quita un "por " inicial del texto del servidor en `rows` de la
+    seccion y en `generatedBy` de la lista del admin. La tienda ("Tu tienda", "Kentro") no cambia.
+  * Verificacion: admin con "por Laura Gomez" → fila "Generada por" = "Laura Gomez" y `generatedBy` = "Laura
+    Gomez"; "por la tienda" → "la tienda"; tienda con "Tu tienda" sin cambios; E2E RF_25 repetido tras desplegar.

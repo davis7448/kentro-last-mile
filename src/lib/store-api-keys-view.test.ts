@@ -154,7 +154,7 @@ describe("T19 · seccion de escritura · activa (HU_04.tienda-activa, RF_25)", (
     ]);
   });
 
-  it("\"Generada por\" pasa tal cual lo que decide el servidor (\"Kentro\" a la tienda, \"por Laura Gomez\" al admin)", async () => {
+  it("\"Generada por\" usa lo que decide el servidor (\"Kentro\" a la tienda; al admin sin repetir el \"por\", T33)", async () => {
     const { buildWriteKeySectionView } = await loadView();
     const byKentro = buildWriteKeySectionView({
       viewer: "seller",
@@ -165,7 +165,7 @@ describe("T19 · seccion de escritura · activa (HU_04.tienda-activa, RF_25)", (
       status: makeStatus({ write: { exists: true, last4: "0b93", generatedAt: GENERATED_AT, generatedByLabel: "por Laura Gomez" } }),
     });
     expect(byKentro.rows.find((row) => row.label === "Generada por")?.value).toBe("Kentro");
-    expect(forAdmin.rows.find((row) => row.label === "Generada por")?.value).toBe("por Laura Gomez");
+    expect(forAdmin.rows.find((row) => row.label === "Generada por")?.value).toBe("Laura Gomez");
   });
 
   it("no contiene el prefijo kw_ como dato ni una fecha de rotacion", async () => {
@@ -375,7 +375,7 @@ describe("T19 · lista del admin · resumen y filas (HU_04.admin-lista)", () => 
       readText: "Activa",
       writeText: "Activa",
       writeDetail: "termina en c41e",
-      generatedBy: "por la tienda",
+      generatedBy: "la tienda",
       action: { id: "rotate", label: "Rotar", accessibleName: "Rotar clave de escritura de Kovia" },
     });
   });
@@ -464,5 +464,56 @@ describe("T19 · lista del admin · busqueda \"Buscar tienda\"", () => {
     const { buildAdminKeysListView } = await loadView();
     const view = buildAdminKeysListView(adminStatuses(), { query: "   ", page: 1, viewport: "desktop" });
     expect(view.rangeText).toBe("Tiendas 1 a 6 de 14");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// T33: "Generada por" no repite el "por" para el admin (RF_25, visto en el E2E: "por por Prueba 029 admin")
+// ---------------------------------------------------------------------------------------------------
+
+describe("T33 · \"Generada por\" no repite el \"por\" del servidor (RF_25)", () => {
+  const activeWith = (generatedByLabel: string) =>
+    makeStatus({ write: { exists: true, last4: "0b93", generatedAt: GENERATED_AT, generatedByLabel } });
+  const generatedByRow = (view: { rows: { label: string; value: string }[] }) =>
+    view.rows.find((row) => row.label === "Generada por")?.value;
+  const adminRowFor = async (generatedByLabel: string) => {
+    const { buildAdminKeysListView } = await loadView();
+    const status = makeStatus({
+      sellerName: "ONEP",
+      write: { exists: true, last4: "0b93", generatedAt: GENERATED_AT, generatedByLabel },
+    });
+    return buildAdminKeysListView([status], { query: "", page: 1, viewport: "desktop" }).rows[0];
+  };
+
+  it("seccion, admin: \"por Laura Gomez\" se pinta \"Laura Gomez\" en la fila \"Generada por\"", async () => {
+    const { buildWriteKeySectionView } = await loadView();
+    const view = buildWriteKeySectionView({ viewer: "admin", status: activeWith("por Laura Gomez") });
+    expect(generatedByRow(view)).toBe("Laura Gomez");
+  });
+
+  it("seccion, admin: \"por la tienda\" se pinta \"la tienda\"", async () => {
+    const { buildWriteKeySectionView } = await loadView();
+    const view = buildWriteKeySectionView({ viewer: "admin", status: activeWith("por la tienda") });
+    expect(generatedByRow(view)).toBe("la tienda");
+  });
+
+  it("seccion, tienda: \"Tu tienda\" y \"Kentro\" no cambian", async () => {
+    const { buildWriteKeySectionView } = await loadView();
+    expect(generatedByRow(buildWriteKeySectionView({ viewer: "seller", status: activeWith("Tu tienda") }))).toBe("Tu tienda");
+    expect(generatedByRow(buildWriteKeySectionView({ viewer: "seller", status: activeWith("Kentro") }))).toBe("Kentro");
+  });
+
+  it("lista del admin: generatedBy \"Laura Gomez\" (sin \"por \") para \"por Laura Gomez\"", async () => {
+    expect((await adminRowFor("por Laura Gomez"))?.generatedBy).toBe("Laura Gomez");
+  });
+
+  it("lista del admin: generatedBy \"la tienda\" para \"por la tienda\"", async () => {
+    expect((await adminRowFor("por la tienda"))?.generatedBy).toBe("la tienda");
+  });
+
+  it("un texto que no empieza por \"por \" queda igual (seccion y lista)", async () => {
+    const { buildWriteKeySectionView } = await loadView();
+    expect(generatedByRow(buildWriteKeySectionView({ viewer: "admin", status: activeWith("Kentro") }))).toBe("Kentro");
+    expect((await adminRowFor("Portal Kentro"))?.generatedBy).toBe("Portal Kentro");
   });
 });

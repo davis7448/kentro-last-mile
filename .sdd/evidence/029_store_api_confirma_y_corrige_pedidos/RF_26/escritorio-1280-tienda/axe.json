@@ -1,0 +1,37 @@
+[
+ {
+  "label": "sin-clave",
+  "containers029": 4,
+  "violations": []
+ },
+ {
+  "label": "recien-generada",
+  "containers029": 4,
+  "violations": []
+ },
+ {
+  "label": "activa",
+  "containers029": 4,
+  "violations": []
+ },
+ {
+  "label": "rotar",
+  "containers029": 5,
+  "violations": []
+ },
+ {
+  "label": "error",
+  "containers029": 4,
+  "violations": []
+ },
+ {
+  "label": "rotada-recien-generada",
+  "containers029": 4,
+  "violations": []
+ },
+ {
+  "label": "final",
+  "containers029": 4,
+  "violations": []
+ }
+]

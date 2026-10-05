@@ -1,0 +1,5 @@
+# errores de consola: 1 (no contemplados: 0)
+[error] Failed to load resource: the server responded with a status of 403 ()
+
+# consola completa
+[error] Failed to load resource: the server responded with a status of 403 ()

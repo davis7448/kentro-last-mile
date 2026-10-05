@@ -44,7 +44,8 @@
     "T29": { "requirements": ["RF_12", "RNF_03"], "files": ["functions/src/store-api-write.ts", "src/lib/store-api-write.test.ts"], "testWritten": true, "done": true },
     "T30": { "requirements": ["RF_13"], "files": ["functions/src/order-seller-actions.ts", "src/lib/order-seller-actions.test.ts", "src/lib/order-seller-actions-run.test.ts"], "testWritten": true, "done": true },
     "T31": { "requirements": ["RF_27", "RF_18"], "files": ["functions/src/orders.ts", "src/lib/spec-029-guards.test.ts", "src/lib/store-api-history.test.ts"], "testWritten": true, "done": true },
-    "T32": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/store-api-write.test.ts", "src/app/api-tiendas/page.tsx"], "testWritten": true, "done": true }
+    "T32": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/store-api-write.test.ts", "src/app/api-tiendas/page.tsx"], "testWritten": true, "done": true },
+    "T33": { "requirements": ["RF_25"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts"], "testWritten": true, "done": true }
   },
   "plan": "specs/029_plan.md",
   "tasksFile": "specs/029_tasks.md",

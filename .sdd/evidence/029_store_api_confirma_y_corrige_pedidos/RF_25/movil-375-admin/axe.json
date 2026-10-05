@@ -1,0 +1,59 @@
+[
+ {
+  "label": "lista",
+  "containers029": 1,
+  "violations": [
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": [
+     {
+      "target": ".border-t",
+      "impact": "moderate",
+      "scope": "app",
+      "html": "<div class=\"border-t border-white/10 bg-panel\">"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "label": "recien-generada",
+  "containers029": 2,
+  "violations": [
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": [
+     {
+      "target": ".border-t.border-white\\/10.bg-panel",
+      "impact": "moderate",
+      "scope": "app",
+      "html": "<div class=\"border-t border-white/10 bg-panel\">"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "label": "final",
+  "containers029": 1,
+  "violations": [
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": [
+     {
+      "target": ".border-t",
+      "impact": "moderate",
+      "scope": "app",
+      "html": "<div class=\"border-t border-white/10 bg-panel\">"
+     }
+    ]
+   }
+  ]
+ }
+]
