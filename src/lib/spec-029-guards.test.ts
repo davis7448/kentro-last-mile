@@ -2801,3 +2801,90 @@ describe("T25 · salvaguardas de scripts/verify-029.js y modo kovia-replay (plan
     return { auth, deleted };
   }
 });
+
+describe("T26 · manual de la API en /api-tiendas (RF_17, RNF_01, RNF_02, DoD 5)", () => {
+  const PAGE = "src/app/api-tiendas/page.tsx";
+  const REQUEST_MODULE = "../../functions/src/store-api-request";
+
+  function page(): string {
+    return sourceWithoutComments(PAGE);
+  }
+
+  function importsFromRequestModule(source: string, name: string): boolean {
+    return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["'][^"']*store-api-request["']`).test(source);
+  }
+
+  it("menciona cada code del catalogo STORE_API_ERROR_HTTP (o lo importa del catalogo)", async () => {
+    const { STORE_API_ERROR_HTTP } = (await import(REQUEST_MODULE)) as { STORE_API_ERROR_HTTP: Record<string, number> };
+    const source = page();
+    if (importsFromRequestModule(source, "STORE_API_ERROR_HTTP")) return;
+    const missing = Object.keys(STORE_API_ERROR_HTTP).filter((code) => !source.includes(code));
+    expect(missing).toEqual([]);
+  });
+
+  it("documenta la precedencia de errores (cada code de STORE_API_PRECEDENCE, o importa la tabla)", async () => {
+    const { STORE_API_PRECEDENCE } = (await import(REQUEST_MODULE)) as {
+      STORE_API_PRECEDENCE: ReadonlyArray<{ codes: readonly string[] }>;
+    };
+    const source = page();
+    if (importsFromRequestModule(source, "STORE_API_PRECEDENCE")) return;
+    expect(source).toMatch(/precedencia/i);
+    const missing = STORE_API_PRECEDENCE.flatMap((row) => row.codes).filter((code) => !source.includes(code));
+    expect(missing).toEqual([]);
+  });
+
+  it.each([
+    ["POST", "/confirm"],
+    ["PATCH", ""],
+    ["POST", "/cancel"],
+    ["GET", ""],
+    ["GET", "/history"]
+  ])("documenta %s /orders/{id}%s", (method, suffix) => {
+    const tail = suffix || "(?![/\\w])";
+    const route = new RegExp(`\\b${method}\\b[^\\n]{0,120}?/orders/\\{\\w+\\}${tail}`);
+    expect(page()).toMatch(route);
+  });
+
+  it("documenta Authorization: Bearer, historySince e Idempotency-Key", () => {
+    const source = page();
+    expect(source).toContain("Authorization: Bearer");
+    expect(source).toContain("historySince");
+    expect(source).toContain("Idempotency-Key");
+  });
+
+  it("documenta el limite de escrituras por minuto con la cifra del catalogo (o la importa)", async () => {
+    const { STORE_API_WRITES_PER_MINUTE } = (await import(REQUEST_MODULE)) as { STORE_API_WRITES_PER_MINUTE: number };
+    const source = page();
+    if (importsFromRequestModule(source, "STORE_API_WRITES_PER_MINUTE")) {
+      expect(source).toMatch(/\{\s*STORE_API_WRITES_PER_MINUTE\s*\}/);
+      return;
+    }
+    expect(source).toMatch(new RegExp(`\\b${STORE_API_WRITES_PER_MINUTE}\\b[^\\n]{0,80}minuto`));
+  });
+
+  it("dice que el historial no incluye importaciones ni ChatBy", () => {
+    const source = page();
+    const window = /no incluye[\s\S]{0,400}/i.exec(source)?.[0] ?? "";
+    expect(window).toMatch(/importaci/i);
+    expect(window).toMatch(/ChatBy/);
+  });
+
+  it("explica que el # de Shopify va codificado: shopifyOrderId=%23", () => {
+    expect(page()).toContain("shopifyOrderId=%23");
+  });
+
+  it("lista juntos los estados editables imported, address_risk y ready_to_assign", () => {
+    const source = page();
+    const at = source.indexOf("address_risk");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const window = source.slice(Math.max(0, at - 300), at + 300);
+    expect(window).toContain("imported");
+    expect(window).toContain("ready_to_assign");
+  });
+
+  it("ya no dice \"Ver mi API key\": el boton es \"Ver clave de lectura\" (nota de T20)", () => {
+    const source = page();
+    expect(source).not.toContain("Ver mi API key");
+    expect(source).toContain("Ver clave de lectura");
+  });
+});

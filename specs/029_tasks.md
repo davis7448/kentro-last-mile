@@ -608,7 +608,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     (rechaza valores con forma de key `kw_`, 48 hex, contrasena o secreto) y el secreto de Shopify no aparece en
     ningun `fs.write*`, `console.*` ni en el registro.
 
-- [ ] **T26: Manual de la API**
+- [x] **T26: Manual de la API**
   * Requisitos cubiertos: RF_17, RNF_01, RNF_02 (DoD 5)
   * Archivos: src/app/api-tiendas/page.tsx, src/lib/spec-029-guards.test.ts
   * Accion: rutas nuevas, codigos y su **precedencia** (decision 12), estados editables, `historySince`, que el
