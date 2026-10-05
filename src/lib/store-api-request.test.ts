@@ -637,3 +637,195 @@ describe("T8 · limite de tasa (RNF_04)", () => {
     }
   });
 });
+
+// =========================================================================================================
+// T12 · idempotencia y limite de tasa (RNF_03, RNF_04; plan 2.8, 2.9)
+// =========================================================================================================
+/*
+ * Contrato que fijan estas pruebas (todo puro, en store-api-request.ts):
+ *
+ *   validateIdempotencyKey(raw: unknown): { ok: true; key: string | undefined } | StoreApiFailure
+ *     ausente → { ok: true, key: undefined }; 1-255 caracteres imprimibles → { ok: true, key };
+ *     vacia, > 255 o con caracteres de control → 400 invalid_idempotency_key.
+ *   idempotencyDocId(sellerId, key) = `${sellerId}__${sha256hex(key)}` (la key en claro nunca va en el id).
+ *   rateLimitDocId(sellerId, now: Date) = `${sellerId}__${rateWindow(now).bucketId}`.
+ *   IDEMPOTENCY_TTL_MS = 24 h.
+ *   decideIdempotency(stored, { bodyHash, now: Date })
+ *     stored: undefined | null | { bodyHash, method, path, status, body, createdAt, expiresAt }
+ *       (expiresAt: Date, Timestamp de Firestore con toDate(), o texto ISO)
+ *     → { kind: "fresh" }                                   sin registro, o expiresAt < now
+ *     | { kind: "replay"; httpStatus: stored.status; body: stored.body }   mismo bodyHash
+ *     | { kind: "conflict"; httpStatus: 422; code: "idempotency_key_reused"; body }   otro bodyHash
+ *   shouldStoreIdempotentReply({ httpStatus, body }): boolean
+ *     true: 200, 409 (pasos 5 y 8) y 422 del paso 6 (field_not_allowed, validation_failed, no_fields,
+ *     out_of_coverage). false: 400, 401, 403, 404, 405, 429, 500 y el 422 idempotency_key_reused.
+ *   checkRateLimit(count: number, now: Date)   // count = escrituras del minuto INCLUYENDO esta
+ *     → { ok: true } | (StoreApiFailure & { code: "rate_limited"; httpStatus: 429; retryAfterSeconds: number })
+ */
+describe("T12 · idempotencia: decideIdempotency (RNF_03, plan 2.8)", () => {
+  const NOW_DATE = new Date("2026-10-05T15:00:00.000Z");
+  const stored = (overrides: Record<string, unknown> = {}) => ({
+    bodyHash: "hash-a",
+    method: "PATCH",
+    path: "/orders/o1",
+    status: 200,
+    body: { ok: true, changed: true, pedido: { id: "o1" } },
+    createdAt: "2026-10-05T14:00:00.000Z",
+    expiresAt: new Date("2026-10-06T14:00:00.000Z"),
+    ...overrides
+  });
+
+  it("sin registro → fresh", async () => {
+    const { decideIdempotency } = await load();
+    expect(decideIdempotency(undefined, { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "fresh" });
+    expect(decideIdempotency(null, { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "fresh" });
+  });
+
+  it("misma key y mismo cuerpo → replay con el status y el cuerpo guardados", async () => {
+    const { decideIdempotency } = await load();
+    const record = stored();
+    expect(decideIdempotency(record, { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "replay", httpStatus: 200, body: record.body });
+  });
+
+  it("replay tambien de un 422 guardado (se repite el mismo error durante 24 h)", async () => {
+    const { decideIdempotency } = await load();
+    const body = { ok: false, code: "out_of_coverage", message: "x" };
+    expect(decideIdempotency(stored({ status: 422, body }), { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "replay", httpStatus: 422, body });
+  });
+
+  it("misma key con otro cuerpo → conflict 422 idempotency_key_reused", async () => {
+    const { decideIdempotency, buildErrorBody } = await load();
+    const decision = decideIdempotency(stored(), { bodyHash: "hash-b", now: NOW_DATE });
+    expect(decision).toMatchObject({ kind: "conflict", httpStatus: 422, code: "idempotency_key_reused" });
+    expect(decision.body).toEqual(buildErrorBody("idempotency_key_reused"));
+  });
+
+  it("expirado (expiresAt < now) → fresh, aunque el cuerpo sea otro", async () => {
+    const { decideIdempotency } = await load();
+    const expired = stored({ expiresAt: new Date("2026-10-05T14:59:59.999Z") });
+    expect(decideIdempotency(expired, { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "fresh" });
+    expect(decideIdempotency(expired, { bodyHash: "hash-b", now: NOW_DATE })).toEqual({ kind: "fresh" });
+  });
+
+  it("expiresAt como Timestamp de Firestore (toDate) o texto ISO se interpreta igual", async () => {
+    const { decideIdempotency } = await load();
+    const asTimestamp = (iso: string) => ({ toDate: () => new Date(iso), toMillis: () => Date.parse(iso) });
+    expect(decideIdempotency(stored({ expiresAt: asTimestamp("2026-10-05T14:00:00.000Z") }), { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "fresh" });
+    expect(decideIdempotency(stored({ expiresAt: asTimestamp("2026-10-06T14:00:00.000Z") }), { bodyHash: "hash-a", now: NOW_DATE }).kind).toBe("replay");
+    expect(decideIdempotency(stored({ expiresAt: "2026-10-05T14:00:00.000Z" }), { bodyHash: "hash-a", now: NOW_DATE })).toEqual({ kind: "fresh" });
+  });
+
+  it("la ventana es de 24 horas", async () => {
+    const { IDEMPOTENCY_TTL_MS } = await load();
+    expect(IDEMPOTENCY_TTL_MS).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+describe("T12 · Idempotency-Key: formato (paso 3)", () => {
+  it("ausente → sin key, sin error", async () => {
+    const { validateIdempotencyKey } = await load();
+    expect(validateIdempotencyKey(undefined)).toEqual({ ok: true, key: undefined });
+  });
+
+  it.each([["a"], ["pedido-2849-confirmar"], ["x".repeat(255)], ["Clave con espacios ~!@#$%^&*()"]])("valida: %s", async (key) => {
+    const { validateIdempotencyKey } = await load();
+    expect(validateIdempotencyKey(key)).toEqual({ ok: true, key });
+  });
+
+  it.each([
+    ["vacia", ""],
+    ["256 caracteres", "x".repeat(256)],
+    ["con salto de linea", "abc\ndef"],
+    ["con tabulador", "abc\tdef"],
+    ["con caracter nulo", "abc\u0000"]
+  ])("%s → 400 invalid_idempotency_key", async (_name, key) => {
+    const { validateIdempotencyKey } = await load();
+    const result = validateIdempotencyKey(key);
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ httpStatus: 400, code: "invalid_idempotency_key", body: { ok: false, code: "invalid_idempotency_key" } });
+  });
+});
+
+describe("T12 · que respuestas se guardan (decision 13)", () => {
+  const reply = (httpStatus: number, code?: string) => ({ httpStatus, body: code ? { ok: false, code } : { ok: true, changed: true } });
+
+  it.each([
+    [200, undefined],
+    [409, "status_changed"],
+    [409, "order_cancelled"],
+    [409, "address_review_pending"],
+    [409, "order_not_editable"],
+    [422, "field_not_allowed"],
+    [422, "validation_failed"],
+    [422, "no_fields"],
+    [422, "out_of_coverage"]
+  ])("se guarda %i %s", async (status, code) => {
+    const { shouldStoreIdempotentReply } = await load();
+    expect(shouldStoreIdempotentReply(reply(status, code))).toBe(true);
+  });
+
+  it("se guarda tambien el 200 sin cambios", async () => {
+    const { shouldStoreIdempotentReply } = await load();
+    expect(shouldStoreIdempotentReply({ httpStatus: 200, body: { ok: true, changed: false } })).toBe(true);
+  });
+
+  it.each([
+    [400, "invalid_body"],
+    [400, "unknown_parameter"],
+    [400, "invalid_idempotency_key"],
+    [401, "invalid_key"],
+    [403, "read_only_key"],
+    [404, "order_not_found"],
+    [405, "method_not_allowed"],
+    [422, "idempotency_key_reused"],
+    [429, "rate_limited"],
+    [500, "internal_error"]
+  ])("NO se guarda %i %s", async (status, code) => {
+    const { shouldStoreIdempotentReply } = await load();
+    expect(shouldStoreIdempotentReply(reply(status, code))).toBe(false);
+  });
+});
+
+describe("T12 · ids con prefijo de tienda (plan 2.8, 2.9)", () => {
+  it("idempotencia: `{sellerId}__{sha256(key)}`, sin la key en claro", async () => {
+    const { idempotencyDocId } = await load();
+    const key = "mi-clave-secreta-123";
+    const id = idempotencyDocId("seller-test-029", key);
+    expect(id).toBe(`seller-test-029__${sha256(key)}`);
+    expect(id.startsWith("seller-test-029__")).toBe(true);
+    expect(id).not.toContain(key);
+  });
+
+  it("la misma key en dos tiendas da ids distintos", async () => {
+    const { idempotencyDocId } = await load();
+    expect(idempotencyDocId("tienda-a", "k")).not.toBe(idempotencyDocId("tienda-b", "k"));
+  });
+
+  it("tasa: `{sellerId}__{YYYYMMDDHHmm}` en UTC", async () => {
+    const { rateLimitDocId } = await load();
+    expect(rateLimitDocId("seller-test-029", new Date("2026-10-05T15:07:42.000Z"))).toBe("seller-test-029__202610051507");
+  });
+});
+
+describe("T12 · limite de tasa: 429 con Retry-After, nunca 403 (RNF_04)", () => {
+  it("la escritura 120 del minuto pasa", async () => {
+    const { checkRateLimit, STORE_API_WRITES_PER_MINUTE } = await load();
+    expect(checkRateLimit(STORE_API_WRITES_PER_MINUTE, new Date("2026-10-05T15:00:30.000Z"))).toEqual({ ok: true });
+    expect(checkRateLimit(1, new Date("2026-10-05T15:00:30.000Z"))).toEqual({ ok: true });
+  });
+
+  it("la 121 → 429 rate_limited con Retry-After >= 1 hasta el minuto siguiente", async () => {
+    const { checkRateLimit, buildErrorBody } = await load();
+    const result = checkRateLimit(121, new Date("2026-10-05T15:00:30.000Z"));
+    expect(result).toMatchObject({ ok: false, httpStatus: 429, code: "rate_limited", retryAfterSeconds: 30 });
+    expect(result.httpStatus).not.toBe(403);
+    expect(result.body).toMatchObject(buildErrorBody("rate_limited"));
+  });
+
+  it("Retry-After >= 1 en el ultimo milisegundo del minuto", async () => {
+    const { checkRateLimit } = await load();
+    const result = checkRateLimit(500, new Date("2026-10-05T15:00:59.999Z"));
+    expect(result.httpStatus).toBe(429);
+    expect(result.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+  });
+});

@@ -183,7 +183,8 @@ export async function handleStoreApiRequest(
   }
 
   if (match.kind === "new" && isWriteRoute(match.route)) {
-    // Escrituras (T11): el resto de la precedencia (cuerpo, ejecutor) vive en store-api-write.ts.
+    // Escrituras (T11, T12): el resto de la precedencia (cabecera Idempotency-Key y cuerpo, tasa, atajo de
+    // idempotencia, ejecutor) vive en store-api-write.ts.
     const reply = await handleStoreApiWrite(
       { db, deleteField: deps.deleteField ?? productionDeleteField },
       {
@@ -197,6 +198,8 @@ export async function handleStoreApiRequest(
         now: (deps.now ? deps.now() : new Date()).toISOString()
       }
     );
+    // `Retry-After` del 429 (paso 3a).
+    for (const [name, value] of Object.entries(reply.headers ?? {})) response.set(name, value);
     response.status(reply.httpStatus).json(reply.body);
     return;
   }

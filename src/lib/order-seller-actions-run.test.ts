@@ -699,3 +699,229 @@ describe("T6 · una reimportacion conserva el cityId corregido (RF_11, spec 017)
     expect("cityId" in merged.doc).toBe(false);
   });
 });
+
+// =========================================================================================================
+// T12 · el registro idempotente se decide y se escribe DENTRO de la transaccion (RNF_03, plan 2.2 y 2.8)
+// =========================================================================================================
+/*
+ * Contrato que fijan estas pruebas. El enganche de T11 pasa a ser:
+ *
+ *   type StoredReply = { status: number; body: Record<string, unknown> };
+ *   RunRequest<T> & {
+ *     idempotency?: {
+ *       docId: string;        // idempotencyDocId(sellerId, key), lo calcula el handler; sin key no hay enganche
+ *       bodyHash: string;
+ *       method: string;
+ *       path: string;
+ *       // Construye la respuesta HTTP del resultado (incluido el `pedido` de 200). La llama el ejecutor DENTRO de
+ *       // la transaccion, en cada intento, y lo que devuelve es exactamente lo que guarda: asi el cuerpo 200
+ *       // guardado y el respondido no pueden divergir. Puede leer fuera de la transaccion (db.get), nunca escribir.
+ *       respond: (result: SellerActionRunResult) => StoredReply | Promise<StoredReply>;
+ *     };
+ *   }
+ *
+ *   Resultado con enganche:
+ *     | { kind: "replay"; reply: StoredReply }    // registro vigente con el mismo bodyHash: no se planifica
+ *     | { kind: "conflict" }                      // registro vigente con otro bodyHash: no se planifica
+ *     | { kind: "applied" | "unchanged" | "rejected", ..., reply: StoredReply }   // fresh: lo que dio respond
+ *
+ *   Registro: storeApiIdempotency/{docId} = { bodyHash, method, path, status, body, createdAt: now (ISO),
+ *   expiresAt: Date(now + 24 h) }, escrito con set (un registro expirado se sobrescribe) en la MISMA transaccion
+ *   que el pedido. Se guarda 200 (applied y unchanged), 409 y 422 del plan; NO order_not_found (404).
+ *   En un rechazo guardado, el registro es la UNICA escritura (nada en orders, auditEvents ni orderHistory).
+ */
+describe("T12 · idempotencia dentro de la transaccion del ejecutor (RNF_03)", () => {
+  const DOC_ID = `${SELLER}__${"a".repeat(64)}`;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /** respond de prueba: espejo minimo del handler (codigo del rechazo o 200 con el pedido). */
+  function hook(overrides: Record<string, unknown> = {}) {
+    const calls: unknown[] = [];
+    const respond = (result: { kind: string; rejection?: { code: string }; order?: Data }) => {
+      calls.push(result);
+      if (result.kind === "rejected") {
+        const code = result.rejection?.code ?? "";
+        const status = code === "order_not_found" ? 404 : ["field_not_allowed", "validation_failed", "no_fields", "out_of_coverage"].includes(code) ? 422 : 409;
+        return { status, body: { ok: false, code } };
+      }
+      return { status: 200, body: { ok: true, changed: result.kind === "applied", pedido: { id: result.order?.id, status: result.order?.status } } };
+    };
+    return { calls, idempotency: { docId: DOC_ID, bodyHash: "hash-1", method: "PATCH", path: "/orders/order-1", respond, ...overrides } };
+  }
+
+  function withHook(policyInput: Data, idempotency: unknown) {
+    return { ...request("api", policyInput), idempotency };
+  }
+
+  function idempotencyWrites(db: FakeDb, committedOnly = true) {
+    return db.calls.filter((call) => call.collection === "storeApiIdempotency" && (!committedOnly || call.committed));
+  }
+
+  it("409 order_not_editable: escribe el registro con status 409 y su cuerpo, y nada en orders/auditEvents/orderHistory", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb({ status: "in_route", driverId: "leader-1" });
+    const before = db.read("orders", "order-1");
+    const { idempotency } = hook();
+    const result = await runDeliveryCorrection(makeDeps(db), withHook({ customerName: "Otra" }, idempotency));
+    expect(result.kind).toBe("rejected");
+    expect(result.rejection.code).toBe("order_not_editable");
+    expect(result.reply).toEqual({ status: 409, body: { ok: false, code: "order_not_editable" } });
+    expect(guardedCalls(db)).toEqual([]);
+    expect(db.read("orders", "order-1")).toEqual(before);
+    const writes = idempotencyWrites(db);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].id).toBe(DOC_ID);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toEqual({
+      bodyHash: "hash-1",
+      method: "PATCH",
+      path: "/orders/order-1",
+      status: 409,
+      body: { ok: false, code: "order_not_editable" },
+      createdAt: NOW,
+      expiresAt: new Date(Date.parse(NOW) + DAY_MS)
+    });
+  });
+
+  it("422 out_of_coverage: registro con 422, y la segunda peticion igual devuelve el mismo 422 sin reevaluar el pedido", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb();
+    const first = hook();
+    const r1 = await runDeliveryCorrection(makeDeps(db), withHook({ cityId: "palmira" }, first.idempotency));
+    expect(r1.kind).toBe("rejected");
+    expect(r1.rejection.code).toBe("out_of_coverage");
+    expect(guardedCalls(db)).toEqual([]);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toMatchObject({ status: 422, body: { ok: false, code: "out_of_coverage" }, bodyHash: "hash-1" });
+
+    // Entre medias la ciudad se activa: reevaluar daria 200. La repeticion NO reevalua.
+    db.externalWrite("cities", "palmira", { active: true });
+    const second = hook();
+    const r2 = await runDeliveryCorrection(makeDeps(db), withHook({ cityId: "palmira" }, second.idempotency));
+    expect(r2).toEqual({ kind: "replay", reply: { status: 422, body: { ok: false, code: "out_of_coverage" } } });
+    expect(second.calls, "respond no se llama en un replay").toEqual([]);
+    expect(guardedCalls(db)).toEqual([]);
+    expect(db.read("orders", "order-1")).toMatchObject({ cityId: "cali" });
+  });
+
+  it("422 validation_failed (anular sin motivo): registro con 422 y ninguna escritura del pedido", async () => {
+    const { runCancel } = await loadRun();
+    const db = seededDb({ status: "ready_to_assign" });
+    const { idempotency } = hook({ method: "POST", path: "/orders/order-1/cancel" });
+    const result = await runCancel(makeDeps(db), withHook({}, idempotency));
+    expect(result.kind).toBe("rejected");
+    expect(result.rejection.code).toBe("validation_failed");
+    expect(guardedCalls(db)).toEqual([]);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toMatchObject({ status: 422, body: { ok: false, code: "validation_failed" }, method: "POST", path: "/orders/order-1/cancel" });
+  });
+
+  it("aplicada: el registro 200 se escribe en la MISMA transaccion (mismo intento confirmado) que el pedido", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    const { idempotency, calls } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result.kind).toBe("applied");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ kind: "applied", order: { id: "order-1", status: "ready_to_assign" } });
+    const reply = { status: 200, body: { ok: true, changed: true, pedido: { id: "order-1", status: "ready_to_assign" } } };
+    expect(result.reply).toEqual(reply);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toMatchObject({ ...reply, bodyHash: "hash-1" });
+    const orderWrite = committed(db, "orders");
+    const recordWrite = idempotencyWrites(db);
+    expect(orderWrite).toHaveLength(1);
+    expect(recordWrite).toHaveLength(1);
+    expect(recordWrite[0].attempt).toBe(orderWrite[0].attempt);
+  });
+
+  it("sin cambios (200 changed:false) tambien se guarda, y es la unica escritura", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb({ status: "ready_to_assign" });
+    const { idempotency } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result.kind).toBe("unchanged");
+    expect(guardedCalls(db)).toEqual([]);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toMatchObject({ status: 200, body: { ok: true, changed: false } });
+  });
+
+  it("404 order_not_found NO se guarda", async () => {
+    const { runDeliveryCorrection } = await loadRun();
+    const db = seededDb({ sellerId: OTHER_SELLER });
+    const { idempotency } = hook();
+    const result = await runDeliveryCorrection(makeDeps(db), withHook({ customerName: "Otra" }, idempotency));
+    expect(result.kind).toBe("rejected");
+    expect(result.rejection.code).toBe("order_not_found");
+    expect(idempotencyWrites(db, false)).toEqual([]);
+    expect(db.read("storeApiIdempotency", DOC_ID)).toBeUndefined();
+  });
+
+  it("el atajo no decide: el handler vio fresh, pero dentro de la transaccion ya hay registro (otra peticion gano) → replay sin aplicar", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    const winnerBody = { ok: true, changed: true, pedido: { id: "order-1", status: "ready_to_assign" }, ganador: true };
+    db.seed("storeApiIdempotency", DOC_ID, {
+      bodyHash: "hash-1", method: "POST", path: "/orders/order-1/confirm", status: 200, body: winnerBody,
+      createdAt: NOW, expiresAt: new Date(Date.parse(NOW) + DAY_MS)
+    });
+    const { idempotency, calls } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result).toEqual({ kind: "replay", reply: { status: 200, body: winnerBody } });
+    expect(calls).toEqual([]);
+    expect(guardedCalls(db)).toEqual([]);
+    expect(idempotencyWrites(db, false)).toEqual([]);
+    expect(db.read("orders", "order-1")).toMatchObject({ status: "imported" });
+  });
+
+  it("carrera: el registro aparece entre la lectura y el commit → Firestore reintenta y el reintento responde replay", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    const winnerBody = { ok: true, changed: true, ganador: true };
+    db.beforeCommit.push(() => {
+      db.externalWrite("orders", "order-1", { status: "ready_to_assign", confirmedVia: "api" });
+      db.externalWrite("storeApiIdempotency", DOC_ID, {
+        bodyHash: "hash-1", method: "POST", path: "/orders/order-1/confirm", status: 200, body: winnerBody,
+        createdAt: NOW, expiresAt: new Date(Date.parse(NOW) + DAY_MS)
+      });
+    });
+    const { idempotency } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result).toEqual({ kind: "replay", reply: { status: 200, body: winnerBody } });
+    expect(guardedCalls(db, true)).toEqual([]);
+    expect(committed(db, "storeApiIdempotency")).toEqual([]);
+  });
+
+  it("misma key con otro cuerpo dentro de la transaccion → conflict, sin planificar ni escribir", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    db.seed("storeApiIdempotency", DOC_ID, {
+      bodyHash: "otro-hash", method: "PATCH", path: "/orders/order-1", status: 200, body: { ok: true },
+      createdAt: NOW, expiresAt: new Date(Date.parse(NOW) + DAY_MS)
+    });
+    const { idempotency, calls } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result).toEqual({ kind: "conflict" });
+    expect(calls).toEqual([]);
+    expect(guardedCalls(db)).toEqual([]);
+    expect(idempotencyWrites(db, false)).toEqual([]);
+  });
+
+  it("registro expirado → fresh: aplica y sobrescribe el registro con la respuesta nueva", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    db.seed("storeApiIdempotency", DOC_ID, {
+      bodyHash: "hash-viejo", method: "POST", path: "/orders/order-1/confirm", status: 409, body: { ok: false, code: "viejo" },
+      createdAt: "2026-10-03T10:00:00.000Z", expiresAt: new Date("2026-10-04T10:00:00.000Z")
+    });
+    const { idempotency } = hook({ method: "POST", path: "/orders/order-1/confirm" });
+    const result = await runConfirm(makeDeps(db), withHook({}, idempotency));
+    expect(result.kind).toBe("applied");
+    expect(db.read("orders", "order-1")).toMatchObject({ status: "ready_to_assign" });
+    expect(db.read("storeApiIdempotency", DOC_ID)).toMatchObject({ bodyHash: "hash-1", status: 200, createdAt: NOW });
+  });
+
+  it("sin enganche (panel, o API sin Idempotency-Key) no lee ni escribe registros: T6 intacto", async () => {
+    const { runConfirm } = await loadRun();
+    const db = seededDb();
+    const result = await runConfirm(makeDeps(db), request("api", {}));
+    expect(result.kind).toBe("applied");
+    expect(result.reply).toBeUndefined();
+    expect(idempotencyWrites(db, false)).toEqual([]);
+  });
+});

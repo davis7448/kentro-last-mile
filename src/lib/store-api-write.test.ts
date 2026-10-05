@@ -24,6 +24,7 @@
  * `db.getAll(...refs)`. Cualquier otro operador o una escritura lanzan: T10 solo lee. Registra cada lectura para
  * comprobar la carga dirigida (RNF_05) y que un 400 no consulta pedidos.
  */
+import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { generateWriteKey, last4, writeKeyFingerprint } from "../../functions/src/store-api-auth";
 
@@ -1230,6 +1231,177 @@ describe("T11 · rutas de escritura", () => {
       expect(response.body).toMatchObject({ ok: true, changed: false });
       expect((response.body as { pedido: { id: string } }).pedido.id).toBe("w-ready");
       expect(guardedWrites(db)).toEqual([]);
+    });
+  });
+});
+
+// =========================================================================================================
+// T12 · idempotencia y limite de tasa en el handler (RNF_03, RNF_04; pares de la nota 8 de T11)
+// =========================================================================================================
+/*
+ * Contrato (ademas de los de store-api-request.test.ts y order-seller-actions-run.test.ts):
+ *  - Cabecera `Idempotency-Key` (request.get("idempotency-key")); se valida en el paso 3 con validateIdempotencyKey.
+ *  - Paso 3a, solo escrituras: transaccion corta sobre storeApiRateLimits/{sellerId}__{YYYYMMDDHHmm} con `count`
+ *    (+1 por escritura); count > STORE_API_WRITES_PER_MINUTE → 429 rate_limited con cabecera Retry-After (segundos
+ *    hasta el minuto siguiente, >= 1). Las lecturas no cuentan.
+ *  - Paso 3b: atajo fuera de la transaccion sobre storeApiIdempotency/{sellerId}__{sha256(key)} (replay/conflict).
+ *  - El ejecutor guarda { status, body } construido con la MISMA funcion que da la respuesta, incluido `pedido`.
+ *  - Un replay devuelve el status y el cuerpo guardados, tal cual, sin tocar orders/auditEvents/orderHistory.
+ */
+describe("T12 · idempotencia y limite de tasa en el handler (RNF_03, RNF_04)", () => {
+  const sha = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
+  const BUCKET = "202610051500"; // NOW = 2026-10-05T15:00:00.000Z
+  const RATE_ID = `${SELLER}__${BUCKET}`;
+
+  async function writeWithKey(db: TxFakeDb, options: WriteOptions & { idempotencyKey?: string }): Promise<FakeResponse> {
+    const handler = (await loadHandler()) as unknown as (
+      request: FakeRequest,
+      response: FakeResponse,
+      deps: { db: TxFakeDb; now?: () => Date; deleteField?: () => unknown }
+    ) => Promise<void>;
+    const request = makeWriteRequest(options);
+    if (options.idempotencyKey !== undefined) request.headers["idempotency-key"] = options.idempotencyKey;
+    const response = makeResponse();
+    await handler(request, response, { db, now: () => new Date(NOW), deleteField: () => DELETE_SENTINEL });
+    return response;
+  }
+
+  function idempotencyRecords(db: TxFakeDb) {
+    return db.all("storeApiIdempotency");
+  }
+
+  describe("pares de precedencia de la nota 8 de T11", () => {
+    it("parametro desconocido + limite superado → 400 unknown_parameter (no 429)", async () => {
+      const db = writeDb();
+      db.seed("storeApiRateLimits", RATE_ID, { count: 500 });
+      const response = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: { ...OWN, foo: "1" }, bearer: WRITE_KEY });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toMatchObject({ ok: false, code: "unknown_parameter" });
+    });
+
+    it("limite superado + Idempotency-Key ya usada → 429 (no el replay)", async () => {
+      const db = writeDb();
+      const options = { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY, idempotencyKey: "k-usada" };
+      const first = await writeWithKey(db, options);
+      expect(first.statusCode).toBe(200);
+      db.seed("storeApiRateLimits", RATE_ID, { count: 500 });
+      const second = await writeWithKey(db, options);
+      expect(second.statusCode).toBe(429);
+      expect(second.body).toMatchObject({ ok: false, code: "rate_limited" });
+    });
+
+    it("Idempotency-Key reutilizada con otro cuerpo + pedido inexistente → 422 idempotency_key_reused (no 404)", async () => {
+      const db = writeDb();
+      const first = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY, idempotencyKey: "k-reuso" });
+      expect(first.statusCode).toBe(200);
+      const second = await writeWithKey(db, { method: "PATCH", path: "/orders/no-existe", query: OWN, bearer: WRITE_KEY, body: { customerName: "X" }, idempotencyKey: "k-reuso" });
+      expect(second.statusCode).toBe(422);
+      expect(second.body).toMatchObject({ ok: false, code: "idempotency_key_reused" });
+    });
+  });
+
+  describe("replay de punta a punta", () => {
+    it("PATCH aplicado y repetido con la misma key y cuerpo → la misma respuesta, una sola escritura", async () => {
+      const db = writeDb();
+      const options = { method: "PATCH", path: "/orders/w-imported", query: OWN, bearer: WRITE_KEY, body: { customerName: "Carla Corregida" }, idempotencyKey: "k-replay" };
+      const first = await writeWithKey(db, options);
+      expect(first.statusCode).toBe(200);
+      expect(first.body).toMatchObject({ ok: true, changed: true });
+      const ordersAfterFirst = db.read("orders", "w-imported");
+      const second = await writeWithKey(db, options);
+      expect(second.statusCode).toBe(200);
+      expect(second.body).toEqual(first.body);
+      expect(db.read("orders", "w-imported")).toEqual(ordersAfterFirst);
+      expect(guardedWrites(db).filter((w) => w.collection === "orders")).toHaveLength(1);
+      expect(db.all("auditEvents")).toHaveLength(1);
+      expect(db.all("orderHistory")).toHaveLength(1);
+    });
+
+    it("el registro: id `{sellerId}__{sha256(key)}`, sin la key en claro, con el cuerpo 200 completo (incluido pedido)", async () => {
+      const db = writeDb();
+      const key = "k-forma-registro";
+      const response = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY, idempotencyKey: key });
+      expect(response.statusCode).toBe(200);
+      const records = idempotencyRecords(db);
+      expect(records).toHaveLength(1);
+      expect(records[0].__id).toBe(`${SELLER}__${sha(key)}`);
+      expect(records[0]).toMatchObject({ status: 200, body: response.body, method: "POST", path: "/orders/w-imported/confirm", createdAt: NOW });
+      expect(JSON.stringify(records[0])).not.toContain(key);
+      expect(JSON.stringify(records[0])).not.toContain(WRITE_KEY);
+    });
+
+    it("un 409 se repite igual aunque el pedido ya no lo provocaria (RNF_03: mismo 409 durante 24 h)", async () => {
+      const db = writeDb();
+      const options = { method: "PATCH", path: "/orders/w-in-route", query: OWN, bearer: WRITE_KEY, body: { customerName: "Otra" }, idempotencyKey: "k-409" };
+      const first = await writeWithKey(db, options);
+      expect(first.statusCode).toBe(409);
+      db.seed("orders", "w-in-route", { ...(db.read("orders", "w-in-route") as Data), status: "imported", driverId: null });
+      const second = await writeWithKey(db, options);
+      expect(second.statusCode).toBe(409);
+      expect(second.body).toEqual(first.body);
+      expect(guardedWrites(db)).toEqual([]);
+    });
+  });
+
+  describe("que no se guarda", () => {
+    it("404 de un pedido ajeno con key → sin registro; 400 de cuerpo con key → sin registro", async () => {
+      const db = writeDb();
+      const notFound = await writeWithKey(db, { method: "PATCH", path: "/orders/w-foreign-imported", query: OWN, bearer: WRITE_KEY, body: { customerName: "X" }, idempotencyKey: "k-404" });
+      expect(notFound.statusCode).toBe(404);
+      const badBody = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY, body: { otra: 1 }, idempotencyKey: "k-400" });
+      expect(badBody.statusCode).toBe(400);
+      expect(idempotencyRecords(db)).toEqual([]);
+    });
+  });
+
+  describe("formato de la cabecera (paso 3)", () => {
+    it.each([["vacia", ""], ["256 caracteres", "k".repeat(256)]])("Idempotency-Key %s → 400 invalid_idempotency_key, sin escribir", async (_name, key) => {
+      const db = writeDb();
+      const response = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY, idempotencyKey: key });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toMatchObject({ ok: false, code: "invalid_idempotency_key" });
+      expect(guardedWrites(db)).toEqual([]);
+      expect(db.read("orders", "w-imported")).toMatchObject({ status: "imported" });
+    });
+  });
+
+  describe("limite de tasa (RNF_04)", () => {
+    it("cada escritura cuenta en storeApiRateLimits/{sellerId}__{YYYYMMDDHHmm}", async () => {
+      const db = writeDb();
+      await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY });
+      await writeWithKey(db, { method: "POST", path: "/orders/w-ready/confirm", query: OWN, bearer: WRITE_KEY });
+      const rate = db.all("storeApiRateLimits");
+      expect(rate).toHaveLength(1);
+      expect(rate[0].__id).toBe(RATE_ID);
+      expect(rate[0].count).toBe(2);
+    });
+
+    it("la escritura 121 del minuto → 429 rate_limited con Retry-After >= 1, nunca 403, sin tocar el pedido", async () => {
+      const db = writeDb();
+      db.seed("storeApiRateLimits", RATE_ID, { count: 120 });
+      const response = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY });
+      expect(response.statusCode).toBe(429);
+      expect(response.statusCode).not.toBe(403);
+      expect(response.body).toMatchObject({ ok: false, code: "rate_limited" });
+      expect(Number(response.headers["retry-after"])).toBeGreaterThanOrEqual(1);
+      expect(response.headers["retry-after"]).toBe("60");
+      expect(guardedWrites(db)).toEqual([]);
+      expect(db.read("orders", "w-imported")).toMatchObject({ status: "imported" });
+    });
+
+    it("la escritura 120 todavia pasa", async () => {
+      const db = writeDb();
+      db.seed("storeApiRateLimits", RATE_ID, { count: 119 });
+      const response = await writeWithKey(db, { method: "POST", path: "/orders/w-imported/confirm", query: OWN, bearer: WRITE_KEY });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it("las lecturas no cuentan ni se limitan", async () => {
+      const db = writeDb();
+      db.seed("storeApiRateLimits", RATE_ID, { count: 500 });
+      const response = await readBack(db, "w-imported");
+      expect(response.statusCode).toBe(200);
+      expect(db.read("storeApiRateLimits", RATE_ID)).toEqual({ count: 500 });
     });
   });
 });

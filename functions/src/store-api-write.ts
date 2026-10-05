@@ -4,9 +4,12 @@ import {
   runCancel,
   runConfirm,
   runDeliveryCorrection,
+  type IdempotentRunResult,
+  type RunIdempotency,
   type RunRequest,
   type SellerActionRunDeps,
-  type SellerActionRunResult
+  type SellerActionRunResult,
+  type StoredReply
 } from "./order-seller-actions-run";
 import type { OrderDoc, SettlementDoc, WalletEntryDoc } from "./seller-ledger";
 import { buildPaymentInfo, classifyOrder, loadTargetedPaymentInputs, orderPayload } from "./store-api-orders";
@@ -14,9 +17,15 @@ import {
   bodyHash,
   buildErrorBody,
   buildFieldError,
+  checkRateLimit,
+  decideIdempotency,
+  idempotencyDocId,
   parseConfirmBody,
   parseWriteBody,
+  rateLimitDocId,
   STORE_API_ERROR_HTTP,
+  STORE_API_WRITES_PER_MINUTE,
+  validateIdempotencyKey,
   type StoreApiFailure
 } from "./store-api-request";
 
@@ -30,7 +39,12 @@ import {
  * arma la respuesta. Devuelve `{ httpStatus, body }` y el handler la escribe.
  */
 
-export type StoreApiReply = { httpStatus: number; body: Record<string, unknown> };
+export type StoreApiReply = {
+  httpStatus: number;
+  body: Record<string, unknown>;
+  /** Cabeceras extra que el handler escribe tal cual (p. ej. `Retry-After` del 429). */
+  headers?: Record<string, string>;
+};
 
 /** Un elemento de `GET /orders`: la forma es una sola para la lista, el pedido suelto y las escrituras. */
 export function storeOrderItem(
@@ -205,7 +219,7 @@ export type StoreApiWriteInput = {
   sellerId: string;
   keyLast4: string;
   rawBody: string | Buffer | null | undefined;
-  /** Cabecera `Idempotency-Key` tal como vino (T12 la valida y la conecta). */
+  /** Cabecera `Idempotency-Key` tal como vino: se valida aqui, en el paso 3. */
   idempotencyKey: string | undefined;
   now: string;
 };
@@ -213,10 +227,40 @@ export type StoreApiWriteInput = {
 export type StoreApiWriteDeps = { db: Firestore; deleteField: () => unknown };
 
 /**
- * Enganche de idempotencia (nota 11 de T11): el handler calcula la key y el hash del cuerpo y se los pasa al
- * ejecutor, que en T11 los ignora. T12 los conecta a `decideIdempotency` dentro de la transaccion.
+ * Paso 3a (RNF_04, plan 2.9): cuenta la escritura en `storeApiRateLimits/{sellerId}__{YYYYMMDDHHmm}` en una
+ * transaccion corta, ANTES de la de escritura. Una peticion ya por encima del limite no incrementa el contador
+ * (no hace falta seguir contando para responder 429, y asi no se paga una escritura por cada rechazo).
  */
-type IdempotencyHook = { idempotency: { key: string | undefined; bodyHash: string } };
+async function countWrite(db: Firestore, sellerId: string, now: Date): Promise<StoreApiReply | null> {
+  const ref = db.collection("storeApiRateLimits").doc(rateLimitDocId(sellerId, now));
+  // Fin del minuto mas 2 minutos: la politica TTL de Firestore borra el contador (plan 2.9).
+  const expiresAt = new Date(Math.floor(now.getTime() / 60_000) * 60_000 + 3 * 60_000);
+  const count = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const next = Number(snap.data()?.count ?? 0) + 1;
+    if (next <= STORE_API_WRITES_PER_MINUTE) transaction.set(ref, { count: next, expiresAt });
+    return next;
+  });
+  const verdict = checkRateLimit(count, now);
+  if (verdict.ok) return null;
+  return { httpStatus: verdict.httpStatus, body: verdict.body, headers: { "Retry-After": String(verdict.retryAfterSeconds) } };
+}
+
+function idempotencyConflict(): StoreApiReply {
+  return { httpStatus: STORE_API_ERROR_HTTP.idempotency_key_reused, body: buildErrorBody("idempotency_key_reused") };
+}
+
+/**
+ * Paso 3b: ATAJO fuera de la transaccion, solo para responder pronto un `replay` o un `conflict`. Si dice
+ * `fresh`, no decide nada: la transaccion del ejecutor vuelve a leer el registro y manda (plan 2.8).
+ */
+async function idempotencyShortcut(db: Firestore, docId: string, hash: string, now: Date): Promise<StoreApiReply | null> {
+  const snap = await db.collection("storeApiIdempotency").doc(docId).get();
+  const decision = decideIdempotency(snap.exists ? snap.data() : undefined, { bodyHash: hash, now });
+  if (decision.kind === "replay") return { httpStatus: decision.httpStatus, body: decision.body };
+  if (decision.kind === "conflict") return idempotencyConflict();
+  return null;
+}
 
 /** Ciudades activas para el 422 `out_of_coverage` (P4). Fuera de la transaccion; si falla, sin la lista. */
 async function readActiveCities(db: Firestore): Promise<ActiveCity[] | undefined> {
@@ -239,74 +283,130 @@ type DeliveryRunInput = Parameters<typeof runDeliveryCorrection>[1]["input"];
 type CancelRunInput = Parameters<typeof runCancel>[1]["input"];
 type ConfirmRunInput = Parameters<typeof runConfirm>[1]["input"];
 
-/**
- * Paso 3 (forma del cuerpo: solo los 400 se responden aqui) y despues el ejecutor, que aplica los pasos 4-9 en
- * su orden. Exito o no-op: 200 `{ ok, changed, pedido }` con la misma forma que `GET /orders/{id}`.
- */
-export async function handleStoreApiWrite(deps: StoreApiWriteDeps, input: StoreApiWriteInput): Promise<StoreApiReply> {
-  const { db } = deps;
-  const runDeps: SellerActionRunDeps = { db, deleteField: deps.deleteField };
-  const base = {
-    orderId: input.orderId,
-    policy: "api" as const,
-    actor: { kind: "api" as const, sellerId: input.sellerId, keyLast4: input.keyLast4 },
-    now: input.now
-  };
-  const hook = (body: unknown): IdempotencyHook => ({
-    idempotency: { key: input.idempotencyKey, bodyHash: bodyHash(input.method, writePath(input.route, input.orderId), body) }
-  });
+/** Cuerpo parseado (paso 3) listo para el ejecutor, con lo que entra en el hash de idempotencia. */
+type PreparedWrite = {
+  ok: true;
+  /** Cuerpo normalizado que se hashea: el mismo cuerpo logico da el mismo hash. */
+  hashedBody: unknown;
+  run: (runDeps: SellerActionRunDeps, base: RunBase, idempotency: RunIdempotency | undefined) => Promise<IdempotentRunResult>;
+};
 
-  let run: () => Promise<SellerActionRunResult>;
+type RunBase = Omit<RunRequest<unknown>, "input" | "idempotency">;
+
+/** Paso 3, forma del cuerpo por ruta: solo los 400 se responden aqui; los errores de campo van al nucleo. */
+function prepareWrite(input: StoreApiWriteInput): PreparedWrite | StoreApiFailure {
   if (input.route === "order_confirm") {
     const parsed = parseConfirmBody(input.rawBody);
-    if (!parsed.ok) return failureReply(parsed);
+    if (!parsed.ok) return parsed;
     const confirmInput: ConfirmRunInput = parsed.expectedStatus === undefined ? {} : { expectedStatus: parsed.expectedStatus };
-    const request: RunRequest<ConfirmRunInput> & IdempotencyHook = { ...base, input: confirmInput, ...hook(confirmInput) };
-    run = () => runConfirm(runDeps, request);
-  } else if (input.route === "order_patch") {
+    return {
+      ok: true,
+      hashedBody: confirmInput,
+      run: (runDeps, base, idempotency) => runConfirm(runDeps, { ...base, input: confirmInput, idempotency })
+    };
+  }
+  if (input.route === "order_patch") {
     const parsed = parseWriteBody("order_patch", input.rawBody);
-    if (!parsed.ok) return failureReply(parsed);
+    if (!parsed.ok) return parsed;
     // En PATCH el cuerpo solo admite datos de entrega: `reason` nunca llega al input.
     const delivery: DeliveryRunInput = parsed.input;
     const patchInput: DeliveryRunInput = { ...delivery, expectedStatus: parsed.expectedStatus, fieldProblems: parsed.fieldProblems };
-    const request: RunRequest<DeliveryRunInput> & IdempotencyHook = {
-      ...base,
-      input: patchInput,
-      ...hook({ ...parsed.input, expectedStatus: parsed.expectedStatus })
+    return {
+      ok: true,
+      hashedBody: { ...parsed.input, expectedStatus: parsed.expectedStatus },
+      run: (runDeps, base, idempotency) => runDeliveryCorrection(runDeps, { ...base, input: patchInput, idempotency })
     };
-    run = () => runDeliveryCorrection(runDeps, request);
+  }
+  const parsed = parseWriteBody("order_cancel", input.rawBody);
+  if (!parsed.ok) return parsed;
+  const cancelInput: CancelRunInput = { reason: parsed.input.reason, expectedStatus: parsed.expectedStatus, fieldProblems: parsed.fieldProblems };
+  return {
+    ok: true,
+    hashedBody: { ...parsed.input, expectedStatus: parsed.expectedStatus },
+    run: (runDeps, base, idempotency) => runCancel(runDeps, { ...base, input: cancelInput, idempotency })
+  };
+}
+
+/**
+ * La UNICA funcion que convierte el resultado del ejecutor en respuesta HTTP. Con `Idempotency-Key` la llama el
+ * ejecutor dentro de la transaccion y lo que devuelve es lo que se guarda; sin ella la llama el handler. Asi el
+ * cuerpo guardado y el respondido son el mismo. Pasa por JSON para que lo guardado sea exactamente lo que viaja
+ * (sin `undefined`, que ademas Firestore rechaza).
+ */
+async function replyForResult(db: Firestore, sellerId: string, orderId: string, result: SellerActionRunResult): Promise<StoreApiReply> {
+  let reply: StoreApiReply;
+  if (result.kind === "rejected") {
+    const activeCities = result.rejection.code === "out_of_coverage" ? await readActiveCities(db) : undefined;
+    reply = mapRejectionToResponse(result.rejection, activeCities ? { activeCities } : {});
   } else {
-    const parsed = parseWriteBody("order_cancel", input.rawBody);
-    if (!parsed.ok) return failureReply(parsed);
-    const cancelInput: CancelRunInput = { reason: parsed.input.reason, expectedStatus: parsed.expectedStatus, fieldProblems: parsed.fieldProblems };
-    const request: RunRequest<CancelRunInput> & IdempotencyHook = {
-      ...base,
-      input: cancelInput,
-      ...hook({ ...parsed.input, expectedStatus: parsed.expectedStatus })
+    // El pedido que dejo (o leyo) la transaccion, con la forma de `GET /orders/{id}`.
+    const order = { ...result.order, id: orderId } as OrderDoc;
+    reply = {
+      httpStatus: 200,
+      body: { ok: true, changed: result.kind === "applied", pedido: await loadOrderItem(db, sellerId, order) }
     };
-    run = () => runCancel(runDeps, request);
+  }
+  return { httpStatus: reply.httpStatus, body: JSON.parse(JSON.stringify(reply.body)) as Record<string, unknown> };
+}
+
+/**
+ * Escrituras en el orden de la precedencia (plan 2.1): paso 3 (cabecera `Idempotency-Key` y forma del cuerpo;
+ * solo los 400), 3a (tasa), 3b (atajo de idempotencia) y el ejecutor, que decide la idempotencia de verdad y
+ * aplica los pasos 4-9. Exito o no-op: 200 `{ ok, changed, pedido }` con la misma forma que `GET /orders/{id}`.
+ */
+export async function handleStoreApiWrite(deps: StoreApiWriteDeps, input: StoreApiWriteInput): Promise<StoreApiReply> {
+  const { db } = deps;
+  const now = new Date(input.now);
+
+  // Paso 3.
+  const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
+  if (!idempotencyKey.ok) return failureReply(idempotencyKey);
+  const prepared = prepareWrite(input);
+  if (!prepared.ok) return failureReply(prepared);
+
+  // Paso 3a: tasa (cuenta tambien las que despues sean replay o error del pedido).
+  const limited = await countWrite(db, input.sellerId, now);
+  if (limited) return limited;
+
+  // Paso 3b: atajo de idempotencia. Va antes del 404: una key reutilizada se responde como tal (precedencia).
+  const path = writePath(input.route, input.orderId);
+  const hash = bodyHash(input.method, path, prepared.hashedBody);
+  const docId = idempotencyKey.key === undefined ? undefined : idempotencyDocId(input.sellerId, idempotencyKey.key);
+  if (docId) {
+    const shortcut = await idempotencyShortcut(db, docId, hash, now);
+    if (shortcut) return shortcut;
   }
 
   // Un id que Firestore no acepta como documento es un pedido inexistente: mismo 404, sin que la libreria lance.
   if (!isUsableDocumentId(input.orderId)) return orderNotFound();
 
-  let result: SellerActionRunResult;
+  const respond = async (result: SellerActionRunResult): Promise<StoredReply> => {
+    const reply = await replyForResult(db, input.sellerId, input.orderId, result);
+    return { status: reply.httpStatus, body: reply.body };
+  };
+  const idempotency: RunIdempotency | undefined = docId
+    ? { docId, bodyHash: hash, method: String(input.method).toUpperCase(), path, respond }
+    : undefined;
+  const base: RunBase = {
+    orderId: input.orderId,
+    policy: "api",
+    actor: { kind: "api", sellerId: input.sellerId, keyLast4: input.keyLast4 },
+    now: input.now
+  };
+
+  let result: IdempotentRunResult;
   try {
-    result = await run();
+    result = await prepared.run({ db, deleteField: deps.deleteField }, base, idempotency);
   } catch (error) {
     console.error("[storeApi] fallo el ejecutor de escritura", { route: input.route, orderId: input.orderId, error });
     return internalError();
   }
 
-  if (result.kind === "rejected") {
-    const activeCities = result.rejection.code === "out_of_coverage" ? await readActiveCities(db) : undefined;
-    return mapRejectionToResponse(result.rejection, activeCities ? { activeCities } : {});
+  // Con enganche, la respuesta es la que el ejecutor guardo (o la guardada que repite).
+  if (result.kind === "conflict") return idempotencyConflict();
+  if (result.kind === "replay" || result.reply) {
+    const reply = result.reply as StoredReply;
+    return { httpStatus: reply.status, body: reply.body };
   }
-
-  // El pedido que dejo (o leyo) la transaccion, con la forma de `GET /orders/{id}`.
-  const order = { ...result.order, id: input.orderId } as OrderDoc;
-  return {
-    httpStatus: 200,
-    body: { ok: true, changed: result.kind === "applied", pedido: await loadOrderItem(db, input.sellerId, order) }
-  };
+  return replyForResult(db, input.sellerId, input.orderId, result);
 }

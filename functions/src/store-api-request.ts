@@ -441,3 +441,107 @@ export function rateWindow(now: Date): { bucketId: string; retryAfterSeconds: nu
   const retryAfterSeconds = Math.max(1, Math.ceil((MS_PER_MINUTE - msIntoMinute) / 1000));
   return { bucketId, retryAfterSeconds };
 }
+
+/**
+ * Lo que cuenta una escritura del minuto, INCLUYENDO la actual (`count` ya incrementado). Por encima del limite →
+ * 429 `rate_limited` con los segundos hasta el minuto siguiente para `Retry-After`. Nunca 403: superar la tasa no
+ * es falta de permiso.
+ */
+export function checkRateLimit(
+  count: number,
+  now: Date
+): { ok: true } | (StoreApiFailure & { code: "rate_limited"; httpStatus: 429; retryAfterSeconds: number }) {
+  if (count <= STORE_API_WRITES_PER_MINUTE) return { ok: true };
+  const { retryAfterSeconds } = rateWindow(now);
+  return { ...failure("rate_limited"), code: "rate_limited", httpStatus: 429, retryAfterSeconds };
+}
+
+/** Id del contador del minuto: `{sellerId}__{YYYYMMDDHHmm}` (prefijo de tienda, plan 2.9). */
+export function rateLimitDocId(sellerId: string, now: Date): string {
+  return `${sellerId}__${rateWindow(now).bucketId}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Idempotencia: cabecera, registro y decision (plan 2.8, RNF_03)
+// ---------------------------------------------------------------------------------------------------------
+
+/** Cuanto vive un registro idempotente. La limpieza la hace la politica TTL de Firestore sobre `expiresAt`. */
+export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
+// Caracteres de control C0, DEL y C1: no son imprimibles.
+const NON_PRINTABLE = /[\u0000-\u001F\u007F-\u009F]/;
+
+/** Paso 3: ausente → sin key; 1-255 caracteres imprimibles → la key; otra cosa → 400 `invalid_idempotency_key`. */
+export function validateIdempotencyKey(raw: unknown): { ok: true; key: string | undefined } | StoreApiFailure {
+  if (raw === undefined || raw === null) return { ok: true, key: undefined };
+  if (typeof raw !== "string") return failure("invalid_idempotency_key");
+  if (raw.length < 1 || raw.length > IDEMPOTENCY_KEY_MAX_LENGTH || NON_PRINTABLE.test(raw)) {
+    return failure("invalid_idempotency_key");
+  }
+  return { ok: true, key: raw };
+}
+
+/** `{sellerId}__{sha256hex(key)}`: la key en claro nunca va en el id ni en el registro. */
+export function idempotencyDocId(sellerId: string, key: string): string {
+  return `${sellerId}__${crypto.createHash("sha256").update(key, "utf8").digest("hex")}`;
+}
+
+export type StoredIdempotencyRecord = {
+  bodyHash?: unknown;
+  method?: unknown;
+  path?: unknown;
+  status?: unknown;
+  body?: unknown;
+  createdAt?: unknown;
+  /** `Date` al escribirlo; Firestore lo devuelve como `Timestamp`. Se acepta tambien texto ISO. */
+  expiresAt?: unknown;
+};
+
+export type IdempotencyDecision =
+  | { kind: "fresh" }
+  | { kind: "replay"; httpStatus: number; body: Record<string, unknown> }
+  | { kind: "conflict"; httpStatus: number; code: "idempotency_key_reused"; body: Record<string, unknown> };
+
+/** Milisegundos de un `Date`, un `Timestamp` de Firestore (`toMillis`/`toDate`) o un texto ISO; si no, `NaN`. */
+function toMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") return Date.parse(value);
+  if (value !== null && typeof value === "object") {
+    const candidate = value as { toMillis?: () => number; toDate?: () => Date };
+    if (typeof candidate.toMillis === "function") return candidate.toMillis();
+    if (typeof candidate.toDate === "function") return candidate.toDate().getTime();
+  }
+  return Number.NaN;
+}
+
+/**
+ * Sin registro, o vencido → `fresh`. Vigente con el mismo hash → `replay` de lo guardado; con otro → `conflict`
+ * (422 `idempotency_key_reused`). Un registro sin `expiresAt` legible se trata como vencido: se sobrescribe.
+ */
+export function decideIdempotency(
+  stored: StoredIdempotencyRecord | null | undefined,
+  input: { bodyHash: string; now: Date }
+): IdempotencyDecision {
+  if (!stored) return { kind: "fresh" };
+  const expiresAt = toMillis(stored.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt < input.now.getTime()) return { kind: "fresh" };
+  if (stored.bodyHash === input.bodyHash) {
+    return { kind: "replay", httpStatus: Number(stored.status), body: (stored.body ?? {}) as Record<string, unknown> };
+  }
+  const conflict = failure("idempotency_key_reused");
+  return { kind: "conflict", httpStatus: conflict.httpStatus, code: "idempotency_key_reused", body: conflict.body };
+}
+
+/** Los 422 del paso 6: dependen del pedido, asi que se guardan (decision 13). */
+const STORED_422_CODES: readonly string[] = ["field_not_allowed", "validation_failed", "no_fields", "out_of_coverage"];
+
+/**
+ * Se guardan las respuestas que dependen del pedido: 200 (aplicada o sin cambios), los 409 (pasos 5 y 8) y los
+ * 422 del paso 6. No: 400, 401, 403, 404, 405, 429, 500 ni el 422 `idempotency_key_reused`.
+ */
+export function shouldStoreIdempotentReply(reply: { httpStatus: number; body: Record<string, unknown> }): boolean {
+  if (reply.httpStatus === 200 || reply.httpStatus === 409) return true;
+  if (reply.httpStatus === 422) return STORED_422_CODES.includes(String(reply.body?.code ?? ""));
+  return false;
+}

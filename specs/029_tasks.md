@@ -327,9 +327,17 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `Idempotency-Key` y `bodyHash` al ejecutor, que en T11 los ignora); **T12** conecta `decideIdempotency` y el
     registro. La prueba de T11 no depende de la idempotencia.
 
-- [ ] **T12: Idempotencia y limite de tasa**
+- [x] **T12: Idempotencia y limite de tasa**
+  * **Al cerrar (2026-10-05), para el despliegue:** las politicas TTL de `storeApiIdempotency.expiresAt` y
+    `storeApiRateLimits.expiresAt` (plan 2.8, 2.9, 6) se crean con `gcloud firestore fields ttls update expiresAt
+    --collection-group=<coleccion> --enable-ttl --project=kentro-last-mile`; no estan comprobadas en prod. El
+    codigo no depende de ellas (un registro vencido cuenta como `fresh`). El contador deja de escribir pasado el
+    limite (el 429 no cuesta una escritura).
   * Requisitos cubiertos: RNF_03, RNF_04
-  * Archivos: functions/src/store-api-request.ts, functions/src/store-api-write.ts, functions/src/order-seller-actions-run.ts, src/lib/store-api-request.test.ts, src/lib/order-seller-actions-run.test.ts
+  * Archivos: functions/src/store-api-request.ts, functions/src/store-api-write.ts, functions/src/order-seller-actions-run.ts, src/lib/store-api-request.test.ts, src/lib/order-seller-actions-run.test.ts,
+    src/lib/store-api-write.test.ts, functions/src/store-api.ts (ampliado al cerrar T11: los pares de precedencia de
+    la nota 8 de T11 que dependen de tasa o idempotencia viven en `store-api-write.test.ts`, y el handler lee la
+    cabecera en `store-api.ts`)
   * Accion: `decideIdempotency(stored, { bodyHash, now })` → `replay | conflict | fresh`; ids
     `{sellerId}__{...}` en `storeApiIdempotency` y `storeApiRateLimits` (plan 2.8, 2.9); **la decision que vale se
     toma dentro de la transaccion del ejecutor** (`order-seller-actions-run.ts` recibe la key del enganche que dejo
