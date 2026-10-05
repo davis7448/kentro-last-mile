@@ -87,7 +87,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     400); la key mide 48 y empieza por `kw_`; `planWriteKeyChange` no toca `apiKey` ni `status`, el evento no
     contiene la key y lleva `entityId` igual al `sellerId`.
 
-- [ ] **T4: Confirmar y cancelar (planificador puro)**
+- [x] **T4: Confirmar y cancelar (planificador puro)**
   * Requisitos cubiertos: RF_04, RF_05, RF_06, RF_13, RF_14, RF_15, RF_19, RF_21, RNF_02
   * Archivos: functions/src/order-seller-actions.ts, src/lib/order-seller-actions.test.ts
   * Accion: tipos del plan 4.1, `isApiEditable`, `planConfirm`, `planCancel` con la tabla de politica
@@ -338,7 +338,9 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `excludes` y `aviso`; `GET /orders/{id}/history` (comprueba antes que el pedido es de la tienda; 503
     `history_not_ready` sin `settings/storeApi`); indice (plan 2.1): la documentacion nueva (rutas nuevas,
     codigos y su precedencia, estados editables, `historySince`, `HISTORY_EXCLUDES` y su aviso, key solo por
-    cabecera) va **solo en claves nuevas de primer nivel**; los valores de las claves actuales (rutas,
+    cabecera, y que el filtro `shopifyOrderId` lleva el numeral codificado: `?shopifyOrderId=%232849`, porque
+    un `#` literal lo corta el cliente HTTP como fragmento — nota de la respuesta de CENTRAL del 2026-10-05)
+    va **solo en claves nuevas de primer nivel**; los valores de las claves actuales (rutas,
     autenticacion y el resto) no se tocan.
   * Verificacion: bloque `describe("T13 · ...")` en `store-api-history.test.ts`: ningun registro de salida
     trae `actor`, `uid` ni `auditEventId`; orden del mas viejo al mas nuevo; vacio → `registros: []` con

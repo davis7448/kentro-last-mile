@@ -1040,13 +1040,13 @@ la pasada final estan en cada tarea como "Nota para la prueba".
 | Doble aplicacion por reintento de CENTRAL | `Idempotency-Key` decidida dentro de la transaccion; el atajo previo nunca decide `fresh` |
 | ChatBy reescribe una direccion corregida por API | aceptado por la spec (caso limite); advertido en `aviso` y en el manual; spec 031 |
 | `address_risk` desbloqueado por API sin cambiar nada | decidido (P1): queda en `imported` + `review`, con historial `order.address_reviewed`; la confirmacion sigue siendo aparte y explicita |
-| **Limite de 120 escrituras/minuto por tienda: a confirmar con CENTRAL** | una sola constante (`STORE_API_WRITES_PER_MINUTE`); cambiarla es una linea y su prueba |
+| Limite de 120 escrituras/minuto por tienda: **confirmado por CENTRAL el 2026-10-05** (pico ~70 pedidos/dia de Cali, promedio ~30) | una sola constante (`STORE_API_WRITES_PER_MINUTE`); cambiarla es una linea y su prueba |
 | Coste del limite de tasa (1 escritura por peticion) | ~120/min por tienda en el peor caso; TTL limpia |
 
 ## 12. Preguntas abiertas
 
-Todas resueltas el 2026-10-04 (tabla de la cabecera). Pendiente operativo, no bloqueante: confirmar con
-CENTRAL el limite de 120 escrituras/minuto (seccion 11).
+Todas resueltas el 2026-10-04 (tabla de la cabecera). El limite de 120 escrituras/minuto lo
+confirmo CENTRAL el 2026-10-05 (seccion 11).
 
 **Compuerta de diseno para T19 y T22** (la lanza la sesion principal): `sdd-uxui` ratifica en el README, antes
 de empezar T19 (modelo de vista) y T22 (pantalla):
