@@ -963,3 +963,250 @@ describe("T15 · buildOrderHistoryRecord en las callables del panel (regresion p
     expect(JSON.stringify(r)).not.toContain("driver-x");
   });
 });
+
+describe("T25 · forma de Kovia: fixture sintetico, correccion por API y reimportacion (RF_11)", () => {
+  /*
+   * Contrato del fixture `src/lib/fixtures/029-kovia-order.json` (T25, plan 5.3 "RF_11 con la forma de Kovia"):
+   * copiado EN SOLO LECTURA de un pedido real de Kovia y de su payload del webhook de Shopify, con nombre,
+   * telefono, direccion, correos e ids de Shopify sustituidos por valores sinteticos de la misma forma.
+   *
+   *   {
+   *     "_procedencia": string  — de donde sale (menciona Kovia) y que campos se sustituyeron,
+   *     "shopDomain": "kentro-test-029.myshopify.com",
+   *     "shopifyPayload": { id: number del rango reservado, name: "TEST-029-…", created_at, financial_status,
+   *                         total_price, cancelled_at: null, shipping_address: { name, phone, address1,
+   *                         address2?, city, country }, line_items: [...], … el resto tal cual venia },
+   *     "order": el documento `orders/shopify-<id>` tal como lo deja el replay 1: id "shopify-<payload.id>",
+   *              sellerId "seller-test-029", status "imported", driverId null, shopifyOrderId == payload.name,
+   *              shopifyNumericId == payload.id, shopDomain, customerName, customerPhone, addressRaw, cityId,
+   *              lineItems, totalCop, source "shopify_webhook", …
+   *   }
+   *
+   * Reglas de lo sintetico (las mismas constantes que declara scripts/verify-029.js):
+   *   - todo id de Shopify (numero >= 1e9, texto solo de digitos bajo una clave `id`/`*_id`/`*Id`, o `gid://shopify/X/N`)
+   *     cae en 9029000000000..9029000000999;
+   *   - todo dominio `*.myshopify.com` es `kentro-test-029.myshopify.com`;
+   *   - todo telefono (clave que contiene "phone", sin distinguir mayusculas) es, en digitos, (57)?300029NNNN, y
+   *     en el texto no hay ningun otro movil colombiano de 10 digitos;
+   *   - todo correo es de un dominio de prueba: contiene "test-029" o termina en .invalid / .example / example.com.
+   */
+  const FIXTURE = "fixtures/029-kovia-order.json";
+  const TEST_SELLER = "seller-test-029";
+  const TEST_DOMAIN = "kentro-test-029.myshopify.com";
+  const ID_MIN = 9029000000000;
+  const ID_MAX = 9029000000999;
+  const KOVIA_API_ACTOR = { kind: "api", sellerId: TEST_SELLER, keyLast4: "0290" } as const;
+
+  type Fixture = {
+    _procedencia: string;
+    shopDomain: string;
+    shopifyPayload: Record<string, unknown> & {
+      id: number;
+      name: string;
+      shipping_address?: Record<string, string | null | undefined>;
+      line_items?: unknown[];
+    };
+    order: Record<string, unknown>;
+  };
+
+  async function fixtureText(): Promise<string> {
+    const { readFileSync, existsSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const file = fileURLToPath(new URL(FIXTURE, import.meta.url));
+    expect(existsSync(file), `falta ${FIXTURE}`).toBe(true);
+    return readFileSync(file, "utf8");
+  }
+
+  async function fixture(): Promise<Fixture> {
+    return JSON.parse(await fixtureText()) as Fixture;
+  }
+
+  /** Recorre el JSON: [ruta, clave, valor] de cada hoja. */
+  function leaves(value: unknown, path = "$", key = ""): Array<[string, string, unknown]> {
+    if (Array.isArray(value)) return value.flatMap((item, index) => leaves(item, `${path}[${index}]`, key));
+    if (value && typeof value === "object") {
+      return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => leaves(v, `${path}.${k}`, k));
+    }
+    return [[path, key, value]];
+  }
+
+  /**
+   * El candidato que construye `shopifyWebhook` (functions/src/index.ts) a partir del payload, reducido a lo que
+   * decide RF_11. `status` es el que la via mande: hoy siempre "imported"; la prueba del payload cancelado
+   * manda "cancelled" para comprobar que ni asi el estado se pisa.
+   */
+  function incomingFromShopify(f: Fixture, status = "imported"): Record<string, unknown> {
+    const p = f.shopifyPayload;
+    const address = p.shipping_address ?? {};
+    return {
+      id: `shopify-${p.id}`,
+      shopifyOrderId: p.name,
+      shopifyNumericId: p.id,
+      shopDomain: f.shopDomain,
+      sellerId: f.order.sellerId,
+      driverId: null,
+      cityId: f.order.cityId,
+      customerName: address.name ?? "Cliente Shopify",
+      customerPhone: address.phone ?? "",
+      addressRaw: [address.address1, address.address2, address.city, address.country].filter(Boolean).join(", "),
+      totalCop: Math.round(Number(p.total_price) || 0),
+      addressRisk: "review",
+      status,
+      evidence: [],
+      source: "shopify_webhook"
+    };
+  }
+
+  const CORRECTION = {
+    customerName: "Cliente Sintetico Corregido",
+    customerPhone: "3000290099",
+    addressRaw: "Carrera 80 # 2-10, Barrio Sintetico, Cali"
+  };
+
+  async function correctedFixtureOrder(f: Fixture) {
+    const { planDeliveryCorrection } = await load();
+    const r = planDeliveryCorrection({ policy: "api", actor: KOVIA_API_ACTOR, order: f.order, input: { city: null, ...CORRECTION }, now: NOW }) as AnyResult;
+    expectApplied(r);
+    const after: Record<string, unknown> = { ...f.order, ...(r.patch as AnyResult) };
+    for (const key of r.clear as string[]) delete after[key];
+    return after;
+  }
+
+  describe("el fixture es sintetico", () => {
+    it("existe, es JSON y trae _procedencia (Kovia), shopDomain, shopifyPayload y order", async () => {
+      const f = await fixture();
+      expect(f._procedencia).toMatch(/kovia/i);
+      expect(f.shopDomain).toBe(TEST_DOMAIN);
+      expect(typeof f.shopifyPayload).toBe("object");
+      expect(typeof f.order).toBe("object");
+    });
+
+    it("el pedido es el que deja el replay 1: shopify-<id>, seller-test-029, imported, sin lider", async () => {
+      const f = await fixture();
+      expect(f.order.id).toBe(`shopify-${f.shopifyPayload.id}`);
+      expect(f.order.sellerId).toBe(TEST_SELLER);
+      expect(f.order.status).toBe("imported");
+      expect(f.order.driverId).toBeNull();
+      expect(f.order.shopifyOrderId).toBe(f.shopifyPayload.name);
+      expect(f.order.shopifyNumericId).toBe(f.shopifyPayload.id);
+      expect(f.order.shopDomain).toBe(TEST_DOMAIN);
+      expect(f.order.source).toBe("shopify_webhook");
+      const { isApiEditable } = await load();
+      expect(isApiEditable(f.order)).toBe(true);
+    });
+
+    it("conserva la forma de Kovia: direccion de envio completa y al menos un line_item con sku", async () => {
+      const f = await fixture();
+      const address = f.shopifyPayload.shipping_address ?? {};
+      for (const key of ["name", "phone", "address1", "city", "country"]) expect(address[key], `shipping_address.${key}`).toBeTruthy();
+      expect(Array.isArray(f.shopifyPayload.line_items) && f.shopifyPayload.line_items.length > 0).toBe(true);
+      expect((f.shopifyPayload.line_items as Array<Record<string, unknown>>).some((item) => typeof item.sku === "string" && item.sku)).toBe(true);
+      expect(Array.isArray(f.order.lineItems)).toBe(true);
+    });
+
+    it("el numero de pedido lleva el prefijo TEST-029-", async () => {
+      const f = await fixture();
+      expect(f.shopifyPayload.name).toMatch(/^TEST-029-/);
+      expect(String(f.order.shopifyOrderId)).toMatch(/^TEST-029-/);
+    });
+
+    it("todo id de Shopify cae en el rango reservado 9029000000000..9029000000999", async () => {
+      const text = await fixtureText();
+      const f = JSON.parse(text) as Fixture;
+      const outside: string[] = [];
+      const inRange = (n: number) => Number.isSafeInteger(n) && n >= ID_MIN && n <= ID_MAX;
+      expect(inRange(f.shopifyPayload.id), `shopifyPayload.id ${f.shopifyPayload.id}`).toBe(true);
+      for (const [path, key, value] of leaves(f)) {
+        if (typeof value === "number" && Math.abs(value) >= 1e9 && !inRange(value)) outside.push(`${path}=${value}`);
+        if (typeof value === "string" && /^\d{6,}$/.test(value) && /(^id$|_id$|Id$)/.test(key) && !inRange(Number(value))) outside.push(`${path}=${value}`);
+      }
+      for (const match of text.matchAll(/gid:\/\/shopify\/\w+\/(\d+)/g)) {
+        if (!inRange(Number(match[1]))) outside.push(match[0]);
+      }
+      for (const match of text.matchAll(/(?<![\d.])\d{10,}(?![\d.])/g)) {
+        if (!inRange(Number(match[0])) && !/^(57)?300029\d{4}$/.test(match[0])) outside.push(`literal ${match[0]}`);
+      }
+      expect(outside).toEqual([]);
+    });
+
+    it("el unico dominio de Shopify es kentro-test-029.myshopify.com", async () => {
+      const text = await fixtureText();
+      const domains = [...new Set([...text.matchAll(/[a-z0-9-]+\.myshopify\.com/gi)].map((m) => m[0].toLowerCase()))];
+      expect(domains).toEqual([TEST_DOMAIN]);
+    });
+
+    it("sin telefonos reales: todo telefono es (57)?300029NNNN y no hay otro movil de 10 digitos", async () => {
+      const text = await fixtureText();
+      const f = JSON.parse(text) as Fixture;
+      const phones = leaves(f).filter(([, key, value]) => /phone/i.test(key) && typeof value === "string" && value.trim());
+      expect(phones.length, "el fixture debe conservar los telefonos (sinteticos)").toBeGreaterThan(0);
+      for (const [path, , value] of phones) {
+        expect(String(value).replace(/\D/g, ""), path).toMatch(/^(57)?300029\d{4}$/);
+      }
+      const mobiles = [...text.replace(/[\s()-]/g, "").matchAll(/(?<!\d)(?:\+?57)?3\d{9}(?!\d)/g)].map((m) => m[0].replace(/\D/g, ""));
+      for (const mobile of mobiles) expect(mobile, "movil fuera del patron sintetico").toMatch(/^(57)?300029\d{4}$/);
+    });
+
+    it("sin correos reales: todo correo es de un dominio de prueba", async () => {
+      const text = await fixtureText();
+      const emails = [...text.matchAll(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g)];
+      for (const [email, domain] of emails) {
+        expect(/test-029/i.test(domain) || /\.(invalid|example)$/i.test(domain) || /(^|\.)example\.com$/i.test(domain), email).toBe(true);
+      }
+    });
+  });
+
+  describe("RF_11: corregir por API y reimportar el mismo payload", () => {
+    it("sin correccion, la reimportacion SI refresca el cliente (fase unconfirmed): la prueba no es vacia", async () => {
+      const f = await fixture();
+      const { mergeImportedOrder } = await import(MERGE_MODULE);
+      const incoming = { ...incomingFromShopify(f), customerName: "Otro Nombre Sintetico" };
+      const merged = mergeImportedOrder({ incoming, existing: f.order, now: NOW });
+      expect(merged.phase).toBe("unconfirmed");
+      expect(merged.doc.customerName).toBe("Otro Nombre Sintetico");
+    });
+
+    it("la correccion por API sella la edicion y cambia cliente y direccion", async () => {
+      const f = await fixture();
+      const after = await correctedFixtureOrder(f);
+      expect(typeof after[STAMP]).toBe("string");
+      expect(after.customerName).toBe(CORRECTION.customerName);
+      expect(after.addressRaw).toBe(CORRECTION.addressRaw);
+      expect(after.customerPhone).not.toBe(f.order.customerPhone);
+    });
+
+    it("reimportar el payload despues de corregir: fase edited, conserva cliente y direccion", async () => {
+      const f = await fixture();
+      const after = await correctedFixtureOrder(f);
+      const { mergeImportedOrder, viewAfterMerge } = await import(MERGE_MODULE);
+      const merged = mergeImportedOrder({ incoming: incomingFromShopify(f), existing: after, now: NOW });
+      expect(merged.phase).toBe("edited");
+      for (const key of ["customerName", "customerPhone", "addressRaw", "status", "driverId"]) {
+        expect(merged.doc, key).not.toHaveProperty(key);
+      }
+      const view = viewAfterMerge(after, merged);
+      expect(view.customerName).toBe(after.customerName);
+      expect(view.customerPhone).toBe(after.customerPhone);
+      expect(view.addressRaw).toBe(after.addressRaw);
+      expect(view.status).toBe("imported");
+    });
+
+    it("aunque el payload venga cancelado, el estado no cambia y se conservan cliente y direccion", async () => {
+      const f = await fixture();
+      const after = await correctedFixtureOrder(f);
+      const cancelled: Fixture = {
+        ...f,
+        shopifyPayload: { ...f.shopifyPayload, cancelled_at: "2026-10-05T14:00:00-05:00", cancel_reason: "customer", financial_status: "voided" }
+      };
+      const { mergeImportedOrder, viewAfterMerge } = await import(MERGE_MODULE);
+      const merged = mergeImportedOrder({ incoming: incomingFromShopify(cancelled, "cancelled"), existing: after, now: NOW });
+      expect(merged.phase).toBe("edited");
+      expect(merged.doc).not.toHaveProperty("status");
+      const view = viewAfterMerge(after, merged);
+      expect(view.status).toBe(f.order.status);
+      expect(view.customerName).toBe(CORRECTION.customerName);
+      expect(view.addressRaw).toBe(CORRECTION.addressRaw);
+      expect(view.driverId).toBeNull();
+    });
+  });
+});

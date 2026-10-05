@@ -575,7 +575,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     captureAt`, compara `/resumen` solo por claves y tipos y declara la lista explicita de campos ignorados; la
     evidencia no contiene ninguna key (busqueda de 48 hex y de `kw_`); captura sin error.
 
-- [ ] **T25: Forma de Kovia: fixture sintetico, salvaguardas del guion y sus guardas (sin ejecutar en produccion)**
+- [x] **T25: Forma de Kovia: fixture sintetico, salvaguardas del guion y sus guardas (sin ejecutar en produccion)**
   * Requisitos cubiertos: RF_11, RF_16 (excepcion del `cleanup`)
   * Archivos: src/lib/fixtures/029-kovia-order.json, src/lib/order-seller-actions.test.ts, scripts/verify-029.js, src/lib/spec-029-guards.test.ts
   * Accion: (a) copiar en solo lectura un pedido real de Kovia y su payload de Shopify como fixture,

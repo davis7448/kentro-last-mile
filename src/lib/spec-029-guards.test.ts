@@ -2275,3 +2275,529 @@ describe("T24 · capture-reads: lecturas reales congeladas antes de desplegar (R
     });
   });
 });
+
+describe("T25 · salvaguardas de scripts/verify-029.js y modo kovia-replay (plan 5.3 (a)-(d), RF_11, RF_16)", () => {
+  /*
+   * Contrato (T25; el guion NO se ejecuta contra produccion en esta tarea, lo hace `run-all` en T27):
+   *
+   * Constantes de primer nivel, cada literal UNA sola vez en el fuente sin comentarios (el resto las usa por
+   * nombre; `CAPTURE_TEST_SELLER` pasa a ser `= TEST_SELLER_ID`, y el prefijo de idempotencia/limite se arma
+   * como `${TEST_SELLER_ID}__`):
+   *   TEST_SELLER_ID = "seller-test-029"            TEST_SHOP_DOMAIN = "kentro-test-029.myshopify.com"
+   *   TEST_DRIVER_ID = "driver-test-029"            TEST_ORDER_NUMBER_PREFIX = "TEST-029-"
+   *   TEST_EXTERNAL_ID_PREFIX = "test-029-"         SHOPIFY_TEST_ID_MIN = 9029000000000
+   *   SHOPIFY_TEST_ID_MAX = 9029000000999
+   *   SHOPIFY_WEBHOOK_URL (contiene "/shopifyWebhook") y STORE_ORDER_WEBHOOK_URL (contiene "/storeOrderWebhook"):
+   *   unicos sitios con esos nombres de funcion; todo envio usa la constante.
+   *
+   * Funciones de primer nivel (`function`/`async function`), exportadas en `module.exports` junto a lo de T24:
+   *   assertNotExists(path, deps?)       path "coleccion/id"; deps.db (por defecto el `db` del guion); lee con
+   *                                      `db.doc(path).get()` y LANZA si existe. No escribe.
+   *   recordCreated(kind, id, options?)  sincrona; anade { kind, id, at } a `entries` de options.file (por defecto
+   *                                      EV/t27-registro.json; el archivo es `{ "entries": [...] }`). `kind` es una
+   *                                      clave de SAFE_DELETE_RULES; `id` un texto de id. LANZA (sin tocar el archivo)
+   *                                      si kind no tiene regla, si id no es texto, tiene espacios, empieza por
+   *                                      `kw_`, contiene 48 hex seguidos o contiene un valor pasado a rememberSecret.
+   *   rememberSecret(value)              registra en memoria un secreto (contrasena, key, secreto de Shopify o de
+   *                                      webhook) para que recordCreated lo rechace. No lo escribe en ninguna parte.
+   *   safeDelete(collection, id, deps?)  deps = { db, auth, registro } (registro = { entries: [{ kind, id }] });
+   *                                      unico sitio con `.delete(`/`deleteUser(`; lee el documento (o el usuario) y
+   *                                      comprueba su pertenencia con SAFE_DELETE_RULES[collection]; si no
+   *                                      pertenece LANZA sin borrar; coleccion sin regla LANZA sin leer ni borrar.
+   *   SAFE_DELETE_RULES                  objeto con una regla por cada fila de la tabla 5.3 (c): orders,
+   *                                      orderHistory, walletEntries, auditEvents, inventory, productCatalog,
+   *                                      sellers, storeApiConfigs, storeApiIdempotency, storeApiRateLimits,
+   *                                      shopifyStores, importRuns, storeWebhookSamples, shopifySyncIssues,
+   *                                      authUsers (usuarios de Auth) y storeWebhookConfigs (config de webhook).
+   *
+   * Modo `kovia-replay`: en WRITE_MODES y en COMMANDS -> funcion de primer nivel. Lee el fixture
+   * `029-kovia-order.json`; crea el `shopifyStores` de prueba (shopDomain TEST_SHOP_DOMAIN, sellerId
+   * TEST_SELLER_ID); `assertNotExists(` antes del replay 1; `assertIsTestOrder(` (el pedido existente es el del
+   * replay 1: sellerId == TEST_SELLER_ID) antes del replay 2; firma con `createHmac(` y la cabecera
+   * `x-shopify-hmac-sha256`; anota con `recordCreated(` antes de crear nada. El secreto de Shopify vive solo en
+   * memoria: ninguna variable cuyo nombre contenga "secret" llega a console.*, fs.write* o fs.append*,
+   * process.stdout.write ni recordCreated.
+   *
+   * Con WRITE_MODES ya no vacia, la guarda de T1 "sin modos de escritura no hay llamadas de escritura" deja de
+   * morder; la sustituye aqui: toda llamada de escritura de Firestore vive en el cierre de un modo de
+   * WRITE_MODES o en safeDelete, y ningun modo de solo lectura alcanza una funcion que escriba.
+   */
+  const SCRIPT = "scripts/verify-029.js";
+  const FIXTURE = "src/lib/fixtures/029-kovia-order.json";
+  const source = () => sourceWithoutComments(SCRIPT);
+  const READ_ONLY_MODES = ["baseline", "query-check", "capture-reads"];
+  const TABLE_COLLECTIONS = [
+    "orders", "orderHistory", "walletEntries", "auditEvents", "inventory", "productCatalog", "sellers",
+    "storeApiConfigs", "storeApiIdempotency", "storeApiRateLimits", "shopifyStores", "importRuns",
+    "storeWebhookSamples", "shopifySyncIssues", "authUsers", "storeWebhookConfigs"
+  ];
+  const ID_MIN = 9029000000000;
+  const ID_MAX = 9029000000999;
+  const TEST_SELLER = "seller-test-029";
+  const TEST_DOMAIN = "kentro-test-029.myshopify.com";
+
+  const writeModes = (): string[] => {
+    const match = source().match(/const\s+WRITE_MODES\s*=\s*(?:Object\.freeze\()?\[([^\]]*)\]/);
+    return [...(match?.[1] ?? "").matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+  };
+  const commandFn = (mode: string): string | null => {
+    const commands = source().match(/const\s+COMMANDS\s*=\s*\{([^}]*)\}/)?.[1] ?? "";
+    const escaped = mode.replace(/[-]/g, "\\-");
+    return commands.match(new RegExp(`["']${escaped}["']\\s*:\\s*([A-Za-z_$][\\w$]*)`))?.[1] ?? null;
+  };
+  const topLevelNames = (src: string) => [...src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map((m) => m[1]);
+  /** Rango [inicio, fin) de cada funcion de primer nivel. */
+  const topLevelRanges = (src: string) =>
+    topLevelNames(src).map((name) => {
+      const body = topLevelFunctionBody(src, name) ?? "";
+      const start = src.indexOf(body);
+      return { name, start, end: start + body.length, body };
+    });
+  const enclosing = (src: string, index: number) => topLevelRanges(src).find((r) => index >= r.start && index < r.end) ?? null;
+  /** Nombres de las funciones de primer nivel alcanzables por nombre desde `root`. */
+  const closureNames = (root: string): string[] => {
+    const src = source();
+    const names = topLevelNames(src);
+    const seen = new Set<string>([root]);
+    const queue = [root];
+    while (queue.length) {
+      const body = topLevelFunctionBody(src, queue.shift() as string) ?? "";
+      for (const name of names) {
+        if (!seen.has(name) && new RegExp(`\\b${name}\\b`).test(body)) {
+          seen.add(name);
+          queue.push(name);
+        }
+      }
+    }
+    return [...seen];
+  };
+  const closureBody = (root: string) => closureNames(root).map((name) => topLevelFunctionBody(source(), name) ?? "").join("\n");
+  const indexesOf = (text: string, needle: string) => {
+    const found: number[] = [];
+    for (let i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + 1)) found.push(i);
+    return found;
+  };
+  /** Texto de los argumentos de la llamada cuyo `(` esta en `open`, con parentesis equilibrados. */
+  const callArgs = (text: string, open: number) => {
+    let depth = 0;
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === "(") depth += 1;
+      if (text[i] === ")") {
+        depth -= 1;
+        if (depth === 0) return text.slice(open + 1, i);
+      }
+    }
+    return text.slice(open + 1);
+  };
+  /** Quita el texto de los literales y deja las expresiones `${...}` de las plantillas. */
+  const withoutStringText = (text: string) =>
+    text
+      .replace(/`(?:[^`\\]|\\.)*`/g, (tpl) => [...tpl.matchAll(/\$\{([^}]*)\}/g)].map((m) => ` ${m[1]} `).join(" "))
+      .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, '""');
+
+  const koviaFn = () => commandFn("kovia-replay");
+
+  async function loadScript(): Promise<Record<string, any>> {
+    const { createRequire } = await import("node:module");
+    return createRequire(import.meta.url)(absolute(SCRIPT));
+  }
+
+  describe("modo kovia-replay y WRITE_MODES", () => {
+    it("kovia-replay esta en WRITE_MODES y COMMANDS lo registra con una funcion de primer nivel", () => {
+      expect(writeModes()).toContain("kovia-replay");
+      expect(koviaFn()).not.toBeNull();
+      expect(topLevelFunctionBody(source(), koviaFn() ?? "") ?? "").not.toBe("");
+    });
+
+    it("los modos de solo lectura siguen fuera de WRITE_MODES", () => {
+      for (const mode of READ_ONLY_MODES) expect(writeModes()).not.toContain(mode);
+    });
+
+    it.each(WRITE_CALLS)("ningun modo de solo lectura alcanza una funcion que escriba: %s", (writeCall) => {
+      for (const mode of READ_ONLY_MODES) {
+        const fn = commandFn(mode);
+        expect(fn, `COMMANDS no registra ${mode}`).not.toBeNull();
+        expect(closureBody(fn as string), `${mode} alcanza ${writeCall}`).not.toContain(writeCall);
+      }
+    });
+
+    it("toda llamada de escritura de Firestore esta en el cierre de un modo de WRITE_MODES o en safeDelete (sustituye a la guarda de T1)", () => {
+      const src = source();
+      const allowed = new Set<string>(["safeDelete"]);
+      for (const mode of writeModes()) {
+        const fn = commandFn(mode);
+        if (fn) for (const name of closureNames(fn)) allowed.add(name);
+      }
+      const offenders: string[] = [];
+      for (const call of [...WRITE_CALLS, ".add("]) {
+        for (const index of indexesOf(src, call)) {
+          const owner = enclosing(src, index);
+          if (!owner || !allowed.has(owner.name)) offenders.push(`${call} en ${owner?.name ?? "nivel superior"}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("lee el fixture 029-kovia-order.json", () => {
+      expect(closureBody(koviaFn() ?? "__none__")).toContain("029-kovia-order.json");
+    });
+
+    it("kovia-replay solo escribe con sellerId TEST_SELLER_ID y con el dominio TEST_SHOP_DOMAIN", () => {
+      const body = closureBody(koviaFn() ?? "__none__");
+      const sellerIds = [...body.matchAll(/\bsellerId\s*:\s*([^,}\n]+)/g)].map((m) => m[1].trim());
+      expect(sellerIds.length, "kovia-replay no declara sellerId de lo que crea").toBeGreaterThan(0);
+      for (const value of sellerIds) expect(value).toBe("TEST_SELLER_ID");
+      const domains = [...body.matchAll(/\bshopDomain\s*:\s*([^,}\n]+)/g)].map((m) => m[1].trim());
+      expect(domains.length, "kovia-replay no crea el shopifyStores de prueba").toBeGreaterThan(0);
+      for (const value of domains) expect(value).toBe("TEST_SHOP_DOMAIN");
+      expect(body).toMatch(/collection\(\s*["']shopifyStores["']\s*\)/);
+    });
+
+    it("firma con createHmac y la cabecera x-shopify-hmac-sha256, y manda el dominio sintetico", () => {
+      const body = closureBody(koviaFn() ?? "__none__");
+      expect(body).toMatch(/createHmac\(\s*["']sha256["']/);
+      expect(body).toMatch(/x-shopify-hmac-sha256/i);
+      expect(body).toMatch(/["']x-shopify-shop-domain["']\s*:\s*TEST_SHOP_DOMAIN/i);
+    });
+
+    it("anota con recordCreated( antes de la primera escritura y del primer envio", () => {
+      const body = topLevelFunctionBody(source(), koviaFn() ?? "__none__") ?? "";
+      const firstRecord = body.indexOf("recordCreated(");
+      expect(firstRecord, "kovia-replay no llama a recordCreated(").toBeGreaterThanOrEqual(0);
+      for (const marker of [".set(", ".create(", "SHOPIFY_WEBHOOK_URL"]) {
+        const at = body.indexOf(marker);
+        if (at >= 0) expect(firstRecord, `recordCreated despues de ${marker}`).toBeLessThan(at);
+      }
+    });
+  });
+
+  describe("(a) comprobacion previa antes de cada envio", () => {
+    it("declara SHOPIFY_WEBHOOK_URL y STORE_ORDER_WEBHOOK_URL, unicos sitios con esos nombres de funcion", () => {
+      const src = source();
+      expect(src).toMatch(/const\s+SHOPIFY_WEBHOOK_URL\s*=\s*[^;]*shopifyWebhook/);
+      expect(src).toMatch(/const\s+STORE_ORDER_WEBHOOK_URL\s*=\s*[^;]*storeOrderWebhook/);
+      expect(indexesOf(src, "shopifyWebhook").length).toBe(1);
+      expect(indexesOf(src, "storeOrderWebhook").length).toBe(1);
+    });
+
+    it("kovia-replay envia al shopifyWebhook dos veces (replay 1 y replay 2)", () => {
+      const body = topLevelFunctionBody(source(), koviaFn() ?? "__none__") ?? "";
+      expect(indexesOf(body, "SHOPIFY_WEBHOOK_URL").length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("cada envio va precedido, en la misma funcion, de assertNotExists( (el primero) o assertIsTestOrder( (los siguientes)", () => {
+      const src = source();
+      const offenders: string[] = [];
+      for (const constant of ["SHOPIFY_WEBHOOK_URL", "STORE_ORDER_WEBHOOK_URL"]) {
+        const declaration = src.search(new RegExp(`const\\s+${constant}\\s*=`));
+        for (const index of indexesOf(src, constant)) {
+          if (index >= declaration && index < declaration + 40) continue;
+          const owner = enclosing(src, index);
+          if (!owner) {
+            offenders.push(`${constant} fuera de una funcion de primer nivel`);
+            continue;
+          }
+          const sendsBefore = indexesOf(owner.body, constant).filter((i) => owner.start + i < index);
+          const since = sendsBefore.length ? sendsBefore[sendsBefore.length - 1] : 0;
+          const window = owner.body.slice(since, index - owner.start);
+          const ok = sendsBefore.length === 0 ? window.includes("assertNotExists(") : /assertNotExists\(|assertIsTestOrder\(/.test(window);
+          if (!ok) offenders.push(`${constant} en ${owner.name} sin comprobacion previa`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("kovia-replay comprueba que el pedido no existe sobre orders/shopify-<id sintetico>", () => {
+      const body = topLevelFunctionBody(source(), koviaFn() ?? "__none__") ?? "";
+      expect(body).toMatch(/assertNotExists\(\s*`orders\/shopify-\$\{/);
+    });
+
+    it("assertNotExists lanza si el documento existe y no escribe (db falso)", async () => {
+      const mod = await loadScript();
+      expect(typeof mod.assertNotExists).toBe("function");
+      const fake = fakeDb({ "orders/shopify-9029000000001": { sellerId: TEST_SELLER } });
+      await expect((async () => mod.assertNotExists("orders/shopify-9029000000001", { db: fake.db }))()).rejects.toThrow();
+      await expect((async () => mod.assertNotExists("orders/shopify-9029000000002", { db: fake.db }))()).resolves.not.toThrow();
+      expect(fake.deleted).toEqual([]);
+    });
+  });
+
+  describe("(b) solo ids sinteticos", () => {
+    const CONSTANTS: Array<[string, string]> = [
+      ["TEST_SELLER_ID", `"seller-test-029"`],
+      ["TEST_SHOP_DOMAIN", `"kentro-test-029.myshopify.com"`],
+      ["TEST_DRIVER_ID", `"driver-test-029"`],
+      ["TEST_ORDER_NUMBER_PREFIX", `"TEST-029-"`],
+      ["TEST_EXTERNAL_ID_PREFIX", `"test-029-"`],
+      ["SHOPIFY_TEST_ID_MIN", "9029000000000"],
+      ["SHOPIFY_TEST_ID_MAX", "9029000000999"]
+    ];
+
+    it.each(CONSTANTS)("declara %s = %s", (name, value) => {
+      const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/^"|"$/g, "[\"']");
+      expect(source()).toMatch(new RegExp(`^const\\s+${name}\\s*=\\s*${escaped}\\s*;`, "m"));
+    });
+
+    it.each(["seller-test-029", "driver-test-029", "kentro-test-029.myshopify.com", "TEST-029-", "test-029-"])(
+      "el literal %s aparece una sola vez (en su constante)",
+      (literal) => {
+        expect(indexesOf(source(), literal).length).toBe(1);
+      }
+    );
+
+    it("ningun otro dominio myshopify.com en el guion", () => {
+      expect(indexesOf(source(), "myshopify.com").length).toBe(1);
+    });
+
+    it("todo literal numerico de 10+ digitos esta en el rango reservado", () => {
+      const outside = [...source().matchAll(/(?<![\w.])\d{10,}(?![\w.])/g)].map((m) => Number(m[0])).filter((n) => n < ID_MIN || n > ID_MAX);
+      expect(outside).toEqual([]);
+    });
+
+    it("ningun id de pedido de Shopify escrito a mano (shopify-<digitos>)", () => {
+      expect(source()).not.toMatch(/["'`]shopify-\d/);
+    });
+
+    it("el fixture usa las mismas constantes: dominio sintetico, TEST-029- y rango reservado", () => {
+      expect(existsSync(absolute(FIXTURE)), `falta ${FIXTURE}`).toBe(true);
+      const text = readFileSync(absolute(FIXTURE), "utf8");
+      const f = JSON.parse(text) as { shopDomain: string; shopifyPayload: { id: number; name: string }; order: { sellerId: string } };
+      expect(f.shopDomain).toBe(TEST_DOMAIN);
+      expect(f.shopifyPayload.name.startsWith("TEST-029-")).toBe(true);
+      expect(f.shopifyPayload.id >= ID_MIN && f.shopifyPayload.id <= ID_MAX).toBe(true);
+      expect(f.order.sellerId).toBe(TEST_SELLER);
+    });
+  });
+
+  describe("(c) limpieza solo con safeDelete y prueba de pertenencia", () => {
+    it("ningun .delete(, deleteUser(, deleteUsers( ni recursiveDelete( fuera de safeDelete", () => {
+      const src = source();
+      expect(topLevelFunctionBody(src, "safeDelete"), "falta function safeDelete").not.toBeNull();
+      const offenders: string[] = [];
+      for (const call of [".delete(", "deleteUser(", "deleteUsers(", "recursiveDelete("]) {
+        for (const index of indexesOf(src, call)) {
+          const owner = enclosing(src, index);
+          if (owner?.name !== "safeDelete") offenders.push(`${call} en ${owner?.name ?? "nivel superior"}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("SAFE_DELETE_RULES tiene una regla por cada coleccion de la tabla 5.3 (c) y ninguna mas", async () => {
+      const mod = await loadScript();
+      expect(mod.SAFE_DELETE_RULES).toBeTruthy();
+      expect(Object.keys(mod.SAFE_DELETE_RULES).sort()).toEqual([...TABLE_COLLECTIONS].sort());
+      for (const name of TABLE_COLLECTIONS) expect(typeof mod.SAFE_DELETE_RULES[name], name).toBe("function");
+    });
+
+    const registro = {
+      entries: [
+        { kind: "orders", id: "shopify-9029000000001" },
+        { kind: "importRuns", id: "run-test-1" },
+        { kind: "authUsers", id: "uidTest029Seller000000000001" }
+      ]
+    };
+    const seed = () => ({
+      "orders/shopify-9029000000001": { sellerId: TEST_SELLER },
+      "orders/shopify-real-1": { sellerId: "kovia" },
+      "orderHistory/h-test": { sellerId: TEST_SELLER, orderId: "shopify-9029000000001" },
+      "orderHistory/h-real": { sellerId: "kovia", orderId: "shopify-real-1" },
+      "walletEntries/w-test": { orderId: "shopify-9029000000001" },
+      "walletEntries/w-real": { orderId: "shopify-real-1" },
+      "auditEvents/a-order": { entityId: "shopify-9029000000001" },
+      "auditEvents/a-seller": { entityId: TEST_SELLER },
+      "auditEvents/a-real": { entityId: "shopify-real-1" },
+      "inventory/i-test": { sellerId: TEST_SELLER },
+      "inventory/i-real": { sellerId: "kovia" },
+      "productCatalog/p-test": { sellerId: TEST_SELLER },
+      "productCatalog/p-real": { sellerId: "kovia" },
+      [`sellers/${TEST_SELLER}`]: { name: "Tienda de pruebas 029" },
+      "sellers/kovia": { name: "Kovia" },
+      [`storeApiConfigs/${TEST_SELLER}`]: { sellerId: TEST_SELLER },
+      "storeApiConfigs/kovia": { sellerId: "kovia" },
+      [`storeApiIdempotency/${TEST_SELLER}__k1`]: {},
+      "storeApiIdempotency/kovia__k1": {},
+      [`storeApiRateLimits/${TEST_SELLER}__202610051500`]: {},
+      "storeApiRateLimits/seller-test-0299__202610051500": {},
+      "shopifyStores/st-test": { shopDomain: TEST_DOMAIN, sellerId: TEST_SELLER },
+      "shopifyStores/st-real": { shopDomain: "kovia-real.myshopify.com", sellerId: "kovia" },
+      "importRuns/run-test-1": { sellerId: TEST_SELLER },
+      "importRuns/run-real": { sellerId: TEST_SELLER },
+      "storeWebhookSamples/s-test": { sellerId: TEST_SELLER },
+      "storeWebhookSamples/s-real": { sellerId: "kovia" },
+      "shopifySyncIssues/x-test": { sellerId: TEST_SELLER },
+      "shopifySyncIssues/x-real": { sellerId: "kovia" },
+      [`storeWebhookConfigs/${TEST_SELLER}`]: { sellerId: TEST_SELLER },
+      "storeWebhookConfigs/kovia": { sellerId: "kovia" },
+      "settlements/c-test": { sellerId: TEST_SELLER }
+    });
+
+    const CASES: Array<[string, string, string]> = [
+      ["orders", "shopify-9029000000001", "shopify-real-1"],
+      ["orderHistory", "h-test", "h-real"],
+      ["walletEntries", "w-test", "w-real"],
+      ["auditEvents", "a-order", "a-real"],
+      ["auditEvents", "a-seller", "a-real"],
+      ["inventory", "i-test", "i-real"],
+      ["productCatalog", "p-test", "p-real"],
+      ["sellers", TEST_SELLER, "kovia"],
+      ["storeApiConfigs", TEST_SELLER, "kovia"],
+      ["storeApiIdempotency", `${TEST_SELLER}__k1`, "kovia__k1"],
+      ["storeApiRateLimits", `${TEST_SELLER}__202610051500`, "seller-test-0299__202610051500"],
+      ["shopifyStores", "st-test", "st-real"],
+      ["importRuns", "run-test-1", "run-real"],
+      ["storeWebhookSamples", "s-test", "s-real"],
+      ["shopifySyncIssues", "x-test", "x-real"],
+      ["storeWebhookConfigs", TEST_SELLER, "kovia"]
+    ];
+
+    it.each(CASES)("%s: borra lo de prueba (%s) y se niega con lo ajeno (%s) sin borrarlo", async (collection, ownId, foreignId) => {
+      const mod = await loadScript();
+      expect(typeof mod.safeDelete).toBe("function");
+      const fake = fakeDb(seed());
+      const deps = { db: fake.db, auth: fakeAuth().auth, registro };
+      await expect((async () => mod.safeDelete(collection, foreignId, deps))()).rejects.toThrow();
+      expect(fake.deleted).toEqual([]);
+      await mod.safeDelete(collection, ownId, deps);
+      expect(fake.deleted).toEqual([`${collection}/${ownId}`]);
+    });
+
+    it("usuarios de Auth: solo borra un uid del registro", async () => {
+      const mod = await loadScript();
+      const auth = fakeAuth();
+      const deps = { db: fakeDb(seed()).db, auth: auth.auth, registro };
+      await expect((async () => mod.safeDelete("authUsers", "uidRealDeUnaTiendaDeVerdad01", deps))()).rejects.toThrow();
+      expect(auth.deleted).toEqual([]);
+      await mod.safeDelete("authUsers", "uidTest029Seller000000000001", deps);
+      expect(auth.deleted).toEqual(["uidTest029Seller000000000001"]);
+    });
+
+    it.each(["settlements", "users", "drivers", "pickupBatches", "cities", "settings"])(
+      "una coleccion sin regla (%s) lanza sin leer ni borrar",
+      async (collection) => {
+        expect(typeof (await loadScript()).safeDelete).toBe("function");
+        const mod = await loadScript();
+        const fake = fakeDb(seed());
+        await expect((async () => mod.safeDelete(collection, "c-test", { db: fake.db, auth: fakeAuth().auth, registro }))()).rejects.toThrow();
+        expect(fake.deleted).toEqual([]);
+        expect(fake.reads.filter((path) => path.startsWith(`${collection}/`))).toEqual([]);
+      }
+    );
+  });
+
+  describe("(d) el registro no lleva secretos y el secreto de Shopify no sale del proceso", () => {
+    async function tempFile(): Promise<string> {
+      const { mkdtempSync } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      return join(mkdtempSync(join(tmpdir(), "t25-registro-")), "t27-registro.json");
+    }
+
+    it("recordCreated anade { kind, id, at } a entries del archivo indicado", async () => {
+      const mod = await loadScript();
+      expect(typeof mod.recordCreated).toBe("function");
+      const file = await tempFile();
+      mod.recordCreated("orders", "shopify-9029000000001", { file });
+      mod.recordCreated("shopifyStores", TEST_DOMAIN, { file });
+      mod.recordCreated("authUsers", "uidTest029Seller000000000001", { file });
+      const saved = JSON.parse(readFileSync(file, "utf8")) as { entries: Array<{ kind: string; id: string; at: string }> };
+      expect(saved.entries.map(({ kind, id }) => ({ kind, id }))).toEqual([
+        { kind: "orders", id: "shopify-9029000000001" },
+        { kind: "shopifyStores", id: TEST_DOMAIN },
+        { kind: "authUsers", id: "uidTest029Seller000000000001" }
+      ]);
+      for (const entry of saved.entries) expect(typeof entry.at).toBe("string");
+    });
+
+    const SECRET_SHAPED: Array<[string, unknown]> = [
+      ["key de escritura kw_", "kw_0123456789abcdef0123456789abcdef0123456789abcdef"],
+      ["key de lectura (48 hex)", "0123456789abcdef0123456789abcdef0123456789abcdef"],
+      ["48 hex dentro de un id", "seller-test-029__0123456789abcdef0123456789abcdef0123456789abcdef"],
+      ["texto con espacios (contrasena)", "una contrasena con espacios"],
+      ["no es texto", { password: "x" }],
+      ["vacio", ""]
+    ];
+
+    it.each(SECRET_SHAPED)("recordCreated rechaza %s y no toca el archivo", async (_label, value) => {
+      expect(typeof (await loadScript()).recordCreated).toBe("function");
+      const mod = await loadScript();
+      const file = await tempFile();
+      expect(() => mod.recordCreated("orders", value, { file })).toThrow();
+      expect(existsSync(file)).toBe(false);
+    });
+
+    it("recordCreated rechaza un kind sin regla de limpieza", async () => {
+      expect(typeof (await loadScript()).recordCreated).toBe("function");
+      const mod = await loadScript();
+      const file = await tempFile();
+      expect(() => mod.recordCreated("settlements", "c-test", { file })).toThrow();
+      expect(existsSync(file)).toBe(false);
+    });
+
+    it("recordCreated rechaza un valor registrado con rememberSecret (o que lo contiene)", async () => {
+      const mod = await loadScript();
+      expect(typeof mod.rememberSecret).toBe("function");
+      const password = "Zq8vN2pLr5Tx9WbK3mYc";
+      mod.rememberSecret(password);
+      const file = await tempFile();
+      expect(() => mod.recordCreated("authUsers", password, { file })).toThrow();
+      expect(() => mod.recordCreated("importRuns", `run-${password}`, { file })).toThrow();
+      expect(existsSync(file)).toBe(false);
+    });
+
+    it("ninguna variable de secreto llega a console.*, fs.write*/append*, process.stdout.write ni recordCreated", () => {
+      const src = source();
+      const offenders: string[] = [];
+      for (const match of src.matchAll(/(?:console\.\w+|fs\.(?:write\w*|append\w*)|process\.stdout\.write|recordCreated)\s*\(/g)) {
+        const open = (match.index ?? 0) + match[0].length - 1;
+        const args = withoutStringText(callArgs(src, open));
+        if (/[A-Za-z_$]*secret[\w$]*/i.test(args)) offenders.push(`${match[0]}${callArgs(src, open).slice(0, 80)}`);
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it("el secreto de Shopify solo se usa para firmar: createHmac( dentro de kovia-replay", () => {
+      const body = closureBody(koviaFn() ?? "__none__");
+      expect(body).toMatch(/createHmac\(\s*["']sha256["']\s*,\s*[A-Za-z_$][\w$.]*[Ss]ecret[\w$]*\s*\)/);
+    });
+  });
+
+  function fakeDb(docs: Record<string, Record<string, unknown>>) {
+    const deleted: string[] = [];
+    const reads: string[] = [];
+    const ref = (path: string) => {
+      const [collection, ...rest] = path.split("/");
+      const id = rest.join("/");
+      return {
+        id,
+        path,
+        parent: { id: collection },
+        get: async () => {
+          reads.push(path);
+          const data = docs[path];
+          return { exists: data !== undefined, id, ref: ref(path), data: () => (data === undefined ? undefined : { ...data }) };
+        },
+        delete: async () => {
+          deleted.push(path);
+          delete docs[path];
+        }
+      };
+    };
+    const db = {
+      doc: (path: string) => ref(path),
+      collection: (collection: string) => ({ doc: (id: string) => ref(`${collection}/${id}`) })
+    };
+    return { db, deleted, reads };
+  }
+
+  function fakeAuth() {
+    const deleted: string[] = [];
+    const auth = {
+      getUser: async (uid: string) => ({ uid }),
+      deleteUser: async (uid: string) => {
+        deleted.push(uid);
+      }
+    };
+    return { auth, deleted };
+  }
+});

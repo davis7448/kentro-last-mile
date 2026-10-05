@@ -7,10 +7,20 @@
  *   node scripts/verify-029.js capture-reads (T24) GET de la Store API de las tiendas reales con su key de
  *                                            LECTURA, rango cerrado del pasado -> t24-reads-antes.json (huellas)
  *
+ *   kovia-replay                             (T25) ESCRIBE en produccion, solo sobre la tienda de pruebas. Lo
+ *                                            ejecuta `run-all` (T27) pasandole la key de escritura en memoria;
+ *                                            lanzado a mano desde la linea de comandos aborta antes de escribir.
+ *
  * Los modos que escriben (T25 `kovia-replay`, T27 `set-history-since`/`run-all`/`cleanup`) se declaran en
- * WRITE_MODES cuando existan. Mientras la lista este vacia, la guarda de T1 (src/lib/spec-029-guards.test.ts)
- * prohibe en el fuente sin comentarios cualquier literal de llamada de escritura de Firestore, incluidos
+ * WRITE_MODES. La guarda de T25 (src/lib/spec-029-guards.test.ts) exige que toda llamada de escritura de
+ * Firestore viva en el cierre de uno de esos modos o en `safeDelete`, y que ningun modo de solo lectura
+ * alcance una funcion que escriba. Fuera de esos cierres no hay literales de llamada de escritura, incluidos
  * Map/Set con esos mismos nombres: por eso se agrupa con objetos planos y `reduce`.
+ *
+ * Salvaguardas de todo lo que escribe (plan 5.3 (a)-(d)): ids sinteticos declarados UNA vez (abajo);
+ * `assertNotExists` justo antes de cada envio por webhook; `recordCreated` anota en el registro (solo ids)
+ * ANTES de crear nada; `safeDelete` es el unico sitio que borra y comprueba la pertenencia con
+ * SAFE_DELETE_RULES. Los secretos (keys, contrasenas, secreto de Shopify) viven solo en memoria.
  *
  * Escribe una evidencia local (archivo del repo, no Firestore):
  *   .sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt
@@ -33,8 +43,25 @@ const admin = require(path.join(__dirname, "../functions/node_modules/firebase-a
 if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile" });
 const db = admin.firestore();
 
-/** Modos que escriben en Firestore. `baseline` nunca. */
-const WRITE_MODES = [];
+/** Modos que escriben en Firestore. `baseline`, `query-check` y `capture-reads` nunca. */
+const WRITE_MODES = ["kovia-replay"];
+
+// Ids sinteticos de la verificacion (plan 5.3 (b)). Cada literal aparece UNA sola vez en el guion: el resto
+// los usa por nombre, y la guarda de T25 lo comprueba.
+const TEST_SELLER_ID = "seller-test-029";
+const TEST_SHOP_DOMAIN = "kentro-test-029.myshopify.com";
+const TEST_DRIVER_ID = "driver-test-029";
+const TEST_ORDER_NUMBER_PREFIX = "TEST-029-";
+const TEST_EXTERNAL_ID_PREFIX = "test-029-";
+// Rango reservado de ids numericos de Shopify, muy por encima de los ids reales de las tiendas.
+const SHOPIFY_TEST_ID_MIN = 9029000000000;
+const SHOPIFY_TEST_ID_MAX = 9029000000999;
+/** Prefijo de los documentos de idempotencia y de limite de tasa de la tienda de pruebas (plan 2.8, 2.9). */
+const TEST_SELLER_DOC_PREFIX = `${TEST_SELLER_ID}__`;
+
+const FUNCTIONS_BASE_URL = "https://us-central1-kentro-last-mile.cloudfunctions.net";
+const SHOPIFY_WEBHOOK_URL = `${FUNCTIONS_BASE_URL}/shopifyWebhook`;
+const STORE_ORDER_WEBHOOK_URL = `${FUNCTIONS_BASE_URL}/storeOrderWebhook`;
 
 const EVIDENCE_DIR = path.join(__dirname, "../.sdd/evidence/029_store_api_confirma_y_corrige_pedidos");
 const BASELINE_FILE = path.join(EVIDENCE_DIR, "t1-linea-base.txt");
@@ -427,12 +454,12 @@ const IGNORED_RESPONSE_FIELDS = Object.freeze([]);
 
 /** Tiendas que se prefieren para la captura (por nombre, sin distinguir mayusculas). */
 const CAPTURE_PREFERRED_STORES = ["kovia", "onep", "danda"];
-const CAPTURE_TEST_SELLER = "seller-test-029";
+const CAPTURE_TEST_SELLER = TEST_SELLER_ID;
 // Se capturan TODAS las tiendas reales con key de lectura activa: son las unicas que usan la API hoy (el
 // 2026-10-05, Kovia y DANDA; ONEP no tiene key). Con menos de dos la comparacion no prueba nada.
 const CAPTURE_MIN_STORES = 2;
 const CAPTURE_RANGE_DAYS = 30;
-const STORE_API_BASE_URL = "https://us-central1-kentro-last-mile.cloudfunctions.net/storeApi";
+const STORE_API_BASE_URL = `${FUNCTIONS_BASE_URL}/storeApi`;
 
 /** JSON con las claves de todo objeto ordenadas: la misma entrada da siempre el mismo texto. */
 function canonicalJson(value) {
@@ -669,7 +696,288 @@ async function captureReads() {
   console.log(`Evidencia: ${path.relative(process.cwd(), evidenceFile)}`);
 }
 
-const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "capture-reads": captureReads };
+// ---------------------------------------------------------------------------------------------------------
+// T25 · salvaguardas de todo lo que escribe (plan 5.3 (a)-(d)) y modo kovia-replay (RF_11 con la forma de Kovia)
+// ---------------------------------------------------------------------------------------------------------
+
+/** Registro sin secretos de lo creado por la verificacion: lo lee `cleanup --from-registro` (T27). */
+const REGISTRO_FILE = path.join(EVIDENCE_DIR, "t27-registro.json");
+const KOVIA_PATCH = Object.freeze({
+  customerName: "Cliente Sintetico Corregido",
+  // Con separadores (los admite la validacion): un literal de 10 digitos seguidos no cabe en el guion.
+  customerPhone: "300 029 0099",
+  addressRaw: "Carrera 80 # 2-10, Barrio Sintetico, Cali"
+});
+/** Nombre en Secret Manager del secreto con el que `shopifyWebhook` valida la firma. Es un nombre, no el valor. */
+const SHOPIFY_SECRET_NAME = "SHOPIFY_APP_API_SECRET";
+/** Campo que deja una edicion manual (MANUAL_EDIT_STAMP de functions/src/order-import-merge.ts). */
+const MANUAL_EDIT_FIELD = "manuallyEditedAt";
+
+/** Valores que nunca pueden llegar al registro (ver rememberSecret). Solo en memoria. */
+const rememberedValues = [];
+
+const registroIdsOf = (registro, kind) =>
+  (registro && Array.isArray(registro.entries) ? registro.entries : [])
+    .filter((entry) => entry && entry.kind === kind && typeof entry.id === "string")
+    .map((entry) => entry.id);
+/** Un pedido es de prueba si el guion lo anoto en el registro antes de crearlo. */
+const isRegisteredTestOrder = (orderId, context) => typeof orderId === "string" && registroIdsOf(context.registro, "orders").includes(orderId);
+const hasTestSeller = (doc) => Boolean(doc.data) && doc.data.sellerId === TEST_SELLER_ID;
+
+/**
+ * Tabla 5.3 (c): cuando un documento (o usuario) pertenece a la prueba. Una por coleccion; una coleccion sin
+ * regla no se puede borrar. `doc` es `{ id, data }`; `context.registro` es el registro de lo creado. Claves sin
+ * comillas a proposito: la guarda de T7 busca el nombre de la coleccion del historial entre comillas.
+ */
+const SAFE_DELETE_RULES = Object.freeze({
+  orders: (doc) => hasTestSeller(doc),
+  orderHistory: (doc) => hasTestSeller(doc),
+  walletEntries: (doc, context) => Boolean(doc.data) && isRegisteredTestOrder(doc.data.orderId, context),
+  auditEvents: (doc, context) => Boolean(doc.data) && (doc.data.entityId === TEST_SELLER_ID || isRegisteredTestOrder(doc.data.entityId, context)),
+  inventory: (doc) => hasTestSeller(doc),
+  productCatalog: (doc) => hasTestSeller(doc),
+  sellers: (doc) => doc.id === TEST_SELLER_ID,
+  storeApiConfigs: (doc) => doc.id === TEST_SELLER_ID,
+  storeApiIdempotency: (doc) => doc.id.startsWith(TEST_SELLER_DOC_PREFIX),
+  storeApiRateLimits: (doc) => doc.id.startsWith(TEST_SELLER_DOC_PREFIX),
+  shopifyStores: (doc) => Boolean(doc.data) && doc.data.shopDomain === TEST_SHOP_DOMAIN && doc.data.sellerId === TEST_SELLER_ID,
+  importRuns: (doc, context) => registroIdsOf(context.registro, "importRuns").includes(doc.id),
+  storeWebhookSamples: (doc, context) => hasTestSeller(doc) || isRegisteredTestOrder(doc.data && doc.data.orderId, context),
+  shopifySyncIssues: (doc, context) => hasTestSeller(doc) || isRegisteredTestOrder(doc.data && doc.data.orderId, context),
+  authUsers: (doc, context) => registroIdsOf(context.registro, "authUsers").includes(doc.id),
+  storeWebhookConfigs: (doc) => doc.id === TEST_SELLER_ID
+});
+
+/** Lee el registro de lo creado (`{ entries: [...] }`); vacio si aun no existe. */
+function readRegistro(file) {
+  const target = file || REGISTRO_FILE;
+  if (!fs.existsSync(target)) return { entries: [] };
+  const parsed = JSON.parse(fs.readFileSync(target, "utf8"));
+  return { ...parsed, entries: Array.isArray(parsed.entries) ? parsed.entries : [] };
+}
+
+/**
+ * Registra en memoria un valor secreto (contrasena, key, secreto de Shopify o de webhook) para que
+ * recordCreated lo rechace si alguien intenta anotarlo. No lo escribe en ninguna parte.
+ */
+function rememberSecret(value) {
+  if (typeof value === "string" && value.length > 0) rememberedValues.push(value);
+}
+
+/**
+ * Anota `{ kind, id, at }` en el registro ANTES de crear algo, para que un fallo no deje nada sin anotar.
+ * Solo acepta ids: rechaza (sin tocar el archivo) un kind sin regla de limpieza, lo que no sea texto, texto con
+ * espacios, la forma de una key (`kw_`, 48 hex) y cualquier valor pasado a rememberSecret. El mensaje de error
+ * no repite el valor, porque podria ser justo lo que no debe salir.
+ */
+function recordCreated(kind, id, options) {
+  if (typeof kind !== "string" || !Object.prototype.hasOwnProperty.call(SAFE_DELETE_RULES, kind)) {
+    throw new Error(`recordCreated: "${String(kind)}" no tiene regla de limpieza en SAFE_DELETE_RULES`);
+  }
+  const rejected =
+    typeof id !== "string" ||
+    id.length === 0 ||
+    /\s/.test(id) ||
+    id.startsWith("kw_") ||
+    /[0-9a-f]{48}/i.test(id) ||
+    rememberedValues.some((value) => id.includes(value));
+  if (rejected) throw new Error(`recordCreated: valor rechazado para ${kind} (solo se anotan ids)`);
+  const file = (options && options.file) || REGISTRO_FILE;
+  const registro = readRegistro(file);
+  registro.entries.push({ kind, id, at: new Date().toISOString() });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(registro, null, 2)}\n`);
+}
+
+/** Salvaguarda (a): lee el documento que un envio crearia y aborta si ya existe. No escribe. */
+async function assertNotExists(docPath, deps) {
+  const database = (deps && deps.db) || db;
+  if (typeof docPath !== "string" || docPath.split("/").length !== 2) throw new Error(`assertNotExists: ruta invalida ${docPath}`);
+  const snap = await database.doc(docPath).get();
+  if (snap.exists) throw new Error(`assertNotExists: ${docPath} ya existe; no se envia nada`);
+}
+
+/** Antes de un reenvio: el pedido que existe es el de la prueba (tienda de pruebas). Si no, aborta. No escribe. */
+async function assertIsTestOrder(docPath, deps) {
+  const database = (deps && deps.db) || db;
+  const snap = await database.doc(docPath).get();
+  const data = snap.exists ? snap.data() || {} : null;
+  if (!data || data.sellerId !== TEST_SELLER_ID) throw new Error(`assertIsTestOrder: ${docPath} no es un pedido de la tienda de pruebas; no se envia nada`);
+  return data;
+}
+
+/**
+ * Salvaguarda (c): UNICO sitio del guion que borra. Lee el documento (o el usuario de Auth) y comprueba su
+ * pertenencia con SAFE_DELETE_RULES[collection]; si no pertenece, LANZA sin borrar. Una coleccion sin regla
+ * lanza sin leer. Lo que ya no existe no se borra ni falla (la limpieza se puede repetir).
+ */
+async function safeDelete(collection, id, deps) {
+  const rule = typeof collection === "string" && Object.prototype.hasOwnProperty.call(SAFE_DELETE_RULES, collection) ? SAFE_DELETE_RULES[collection] : null;
+  if (!rule) throw new Error(`safeDelete: la coleccion ${String(collection)} no tiene regla de pertenencia; no se borra`);
+  if (typeof id !== "string" || id.length === 0 || id.includes("/")) throw new Error(`safeDelete: id invalido en ${collection}`);
+  const options = deps || {};
+  const context = { registro: options.registro || readRegistro() };
+
+  if (collection === "authUsers") {
+    if (!rule({ id, data: null }, context)) throw new Error(`safeDelete: el usuario ${id} no esta en el registro; no se borra`);
+    const auth = options.auth || admin.auth();
+    let user;
+    try {
+      user = await auth.getUser(id);
+    } catch (error) {
+      if (error && error.code === "auth/user-not-found") return { collection, id, deleted: false, missing: true };
+      throw error;
+    }
+    if (!user || !rule({ id: user.uid, data: null }, context)) throw new Error(`safeDelete: el usuario ${id} no pertenece a la prueba; no se borra`);
+    await auth.deleteUser(user.uid);
+    return { collection, id, deleted: true };
+  }
+
+  const database = options.db || db;
+  const ref = database.collection(collection).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return { collection, id, deleted: false, missing: true };
+  if (!rule({ id, data: snap.data() || {} }, context)) throw new Error(`safeDelete: ${collection}/${id} no pertenece a la prueba; no se borra`);
+  await ref.delete();
+  return { collection, id, deleted: true };
+}
+
+/** Fixture con la forma de un pedido real de Kovia y datos sinteticos; aborta si algo se sale de lo sintetico. */
+function loadKoviaFixture() {
+  const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "../src/lib/fixtures/029-kovia-order.json"), "utf8"));
+  const payload = fixture.shopifyPayload || {};
+  const inRange = Number.isSafeInteger(payload.id) && payload.id >= SHOPIFY_TEST_ID_MIN && payload.id <= SHOPIFY_TEST_ID_MAX;
+  if (!inRange) throw new Error("kovia-replay: el id de Shopify del fixture esta fuera del rango reservado");
+  if (typeof payload.name !== "string" || !payload.name.startsWith(TEST_ORDER_NUMBER_PREFIX)) throw new Error("kovia-replay: el numero de pedido del fixture no es sintetico");
+  if (fixture.shopDomain !== TEST_SHOP_DOMAIN) throw new Error("kovia-replay: el dominio del fixture no es el sintetico");
+  return fixture;
+}
+
+/** El secreto con el que `shopifyWebhook` valida la firma, leido de Secret Manager SOLO a memoria. */
+function readShopifySecret() {
+  const { execFileSync } = require("child_process");
+  const shopifySecret = execFileSync("gcloud", ["secrets", "versions", "access", "latest", `--secret=${SHOPIFY_SECRET_NAME}`, "--project=kentro-last-mile"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  }).trim();
+  if (!shopifySecret) throw new Error("kovia-replay: Secret Manager no devolvio la firma de Shopify");
+  return shopifySecret;
+}
+
+/** Firma HMAC-SHA256 en base64 del cuerpo exacto, como la valida `shopifyWebhook`. */
+function signShopifyBody(rawBody, shopifySecret) {
+  return crypto.createHmac("sha256", shopifySecret).update(rawBody, "utf8").digest("base64");
+}
+
+/** POST firmado al webhook de Shopify con el dominio sintetico. La URL la pone quien comprueba antes. */
+async function postShopifyWebhook(url, rawBody, signature) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-shopify-hmac-sha256": signature,
+      "x-shopify-shop-domain": TEST_SHOP_DOMAIN,
+      "x-shopify-topic": "orders/create"
+    },
+    body: rawBody
+  });
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body };
+}
+
+/** PATCH /orders/{id} de la Store API con la key de escritura de la tienda de pruebas (solo cabecera). */
+async function patchTestOrder(orderId, writeKey, input) {
+  const params = new URLSearchParams({ sellerId: TEST_SELLER_ID });
+  const response = await fetch(`${STORE_API_BASE_URL}/orders/${encodeURIComponent(orderId)}?${params.toString()}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + writeKey,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `${TEST_EXTERNAL_ID_PREFIX}kovia-patch-${Date.now()}`
+    },
+    body: JSON.stringify(input)
+  });
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body };
+}
+
+/**
+ * RF_11 con la forma de Kovia, en produccion y SOLO sobre la tienda de pruebas (plan 5.3 "RF_11 con la forma
+ * de Kovia" (b)). Lo llama `run-all` (T27) con `{ writeKey }` en memoria; sin ella aborta antes de escribir.
+ * Secuencia: crea el `shopifyStores` de prueba -> replay 1 (crea el pedido) -> PATCH por API (corrige cliente y
+ * direccion) -> replay 2 (mismo payload) -> comprueba que cliente y direccion corregidos se conservan, que el
+ * estado no cambia y que el pedido lleva la marca de edicion (fase `edited`). Todo lo que crea queda en el
+ * registro y lo borra el `cleanup` general. El secreto de Shopify solo se usa para firmar.
+ */
+async function koviaReplay(context) {
+  const run = context || {};
+  if (typeof run.writeKey !== "string" || run.writeKey.length === 0) {
+    throw new Error("kovia-replay corre dentro de run-all (T27): necesita la key de escritura de la tienda de pruebas en memoria");
+  }
+  rememberSecret(run.writeKey);
+  const fixture = loadKoviaFixture();
+  const payload = fixture.shopifyPayload;
+  const orderId = `shopify-${payload.id}`;
+  const sellerSnap = await db.collection("sellers").doc(TEST_SELLER_ID).get();
+  if (!sellerSnap.exists) throw new Error("kovia-replay: falta la tienda de pruebas (la crea el setup de run-all)");
+  await assertNotExists(`shopifyStores/${TEST_SHOP_DOMAIN}`);
+  const sameDomain = await db.collection("shopifyStores").where("shopDomain", "==", TEST_SHOP_DOMAIN).limit(1).get();
+  if (!sameDomain.empty) throw new Error("kovia-replay: ya hay una tienda de Shopify con el dominio de prueba");
+  await assertNotExists(`orders/shopify-${payload.id}`);
+
+  recordCreated("shopifyStores", TEST_SHOP_DOMAIN);
+  recordCreated("orders", orderId);
+  const now = new Date().toISOString();
+  await db.collection("shopifyStores").doc(TEST_SHOP_DOMAIN).set({
+    id: TEST_SHOP_DOMAIN,
+    shopDomain: TEST_SHOP_DOMAIN,
+    sellerId: TEST_SELLER_ID,
+    status: "connected",
+    connectedAt: now,
+    updatedAt: now
+  });
+
+  const rawBody = JSON.stringify(payload);
+  const shopifySecret = readShopifySecret();
+  rememberSecret(shopifySecret);
+  const signature = signShopifyBody(rawBody, shopifySecret);
+
+  // Replay 1: el pedido no debe existir justo antes de enviar.
+  await assertNotExists(`orders/shopify-${payload.id}`);
+  const first = await postShopifyWebhook(SHOPIFY_WEBHOOK_URL, rawBody, signature);
+  if (first.status !== 200 || !first.body || first.body.ok !== true || first.body.orderId !== orderId) {
+    throw new Error(`kovia-replay: el replay 1 respondio ${first.status} (${first.body && first.body.reason ? first.body.reason : "sin orderId"})`);
+  }
+  const created = await assertIsTestOrder(`orders/${orderId}`);
+  const statusBefore = created.status;
+
+  const patched = await patchTestOrder(orderId, run.writeKey, { expectedStatus: statusBefore, ...KOVIA_PATCH });
+  if (patched.status !== 200 || !patched.body || patched.body.ok !== true) {
+    throw new Error(`kovia-replay: el PATCH respondio ${patched.status} (${patched.body && patched.body.code ? patched.body.code : "sin codigo"})`);
+  }
+
+  // Replay 2: el pedido que existe tiene que ser el que creo el replay 1.
+  await assertIsTestOrder(`orders/${orderId}`);
+  const second = await postShopifyWebhook(SHOPIFY_WEBHOOK_URL, rawBody, signature);
+  if (second.status !== 200 || !second.body || second.body.ok !== true) {
+    throw new Error(`kovia-replay: el replay 2 respondio ${second.status}`);
+  }
+
+  const after = await assertIsTestOrder(`orders/${orderId}`);
+  const checks = {
+    customerName: after.customerName === KOVIA_PATCH.customerName,
+    customerPhone: String(after.customerPhone ?? "").replace(/\D/g, "") === KOVIA_PATCH.customerPhone.replace(/\D/g, ""),
+    addressRaw: after.addressRaw === KOVIA_PATCH.addressRaw,
+    status: after.status === statusBefore,
+    edited: typeof after[MANUAL_EDIT_FIELD] === "string" && after[MANUAL_EDIT_FIELD].length > 0
+  };
+  const ok = Object.values(checks).every(Boolean);
+  console.log(`kovia-replay ${orderId}: ${ok ? "OK" : "FALLA"} · ${Object.entries(checks).map(([name, passed]) => `${name}=${passed ? "si" : "no"}`).join(" · ")}`);
+  if (!ok) throw new Error("kovia-replay: RF_11 no se cumple tras el replay 2");
+  return { orderId, statusBefore, checks };
+}
+
+const COMMANDS = { "baseline": baseline, "query-check": queryCheck, "capture-reads": captureReads, "kovia-replay": koviaReplay };
 
 async function main() {
   const command = process.argv[2];
@@ -689,4 +997,24 @@ if (require.main === module) {
   });
 }
 
-module.exports = { compareReads, IGNORED_RESPONSE_FIELDS, fingerprintItem, fingerprintCapture, canonicalJson };
+module.exports = {
+  compareReads,
+  IGNORED_RESPONSE_FIELDS,
+  fingerprintItem,
+  fingerprintCapture,
+  canonicalJson,
+  TEST_SELLER_ID,
+  TEST_SHOP_DOMAIN,
+  TEST_DRIVER_ID,
+  TEST_ORDER_NUMBER_PREFIX,
+  TEST_EXTERNAL_ID_PREFIX,
+  SHOPIFY_TEST_ID_MIN,
+  SHOPIFY_TEST_ID_MAX,
+  SAFE_DELETE_RULES,
+  assertNotExists,
+  assertIsTestOrder,
+  recordCreated,
+  rememberSecret,
+  safeDelete,
+  koviaReplay
+};
