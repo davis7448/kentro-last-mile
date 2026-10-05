@@ -144,7 +144,8 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if signedIn();
-      allow write: if isAdmin();
+      // settings/storeApi lo escribe solo el Admin SDK (spec 029), ni siquiera el admin desde el cliente.
+      allow write: if isAdmin() && settingId != "storeApi";
     }
 
     match /cities/{cityId} {
@@ -322,6 +323,20 @@ service cloud.firestore {
     // API keys de la API de solo lectura para tiendas (storeApi): nunca accesibles
     // por cliente; se generan/consultan via callable createStoreApiKey.
     match /storeApiConfigs/{sellerId} {
+      allow read, write: if false;
+    }
+
+    // API de escritura de tiendas (spec 029): historial de pedidos, idempotencia y limite
+    // de ritmo. Solo los escribe el Admin SDK desde Cloud Functions; ningun cliente los toca.
+    match /orderHistory/{id} {
+      allow read, write: if false;
+    }
+
+    match /storeApiIdempotency/{id} {
+      allow read, write: if false;
+    }
+
+    match /storeApiRateLimits/{id} {
       allow read, write: if false;
     }
 

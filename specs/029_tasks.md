@@ -197,7 +197,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     mutacion a mano (pegar el parche de confirmar en una callable) pone la guarda en rojo, registrada en
     `EV/mutacion-rf19.txt`.
 
-- [ ] **T7: Reglas y `settings/storeApi`**
+- [x] **T7: Reglas y `settings/storeApi`**
   * Requisitos cubiertos: RF_16, RF_17, RF_24
   * Archivos: firestore.rules, src/lib/spec-029-guards.test.ts
   * Accion: bloques `orderHistory`, `storeApiIdempotency`, `storeApiRateLimits` con `allow read, write: if

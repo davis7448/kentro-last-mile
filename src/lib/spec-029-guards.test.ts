@@ -3,7 +3,7 @@
  *
  * Un bloque `describe("T<n> · ...")` por tarea (plan 5.2). No editar los bloques de otra tarea.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -329,5 +329,101 @@ describe("T6b · RF_19 anti-copia", () => {
     const end = source.indexOf("\n}\n", start);
     const body = source.slice(start, end < 0 ? undefined : end + 2);
     expect(body).toMatch(/driverId:\s*(?:current|order)\.driverId\s*\?\?\s*null/);
+  });
+});
+
+describe("T7 · reglas: historial e idempotencia cerrados, settings/storeApi fuera del cliente", () => {
+  /**
+   * Se lee `firestore.rules` como texto sin comentarios. Un bloque `match /<coleccion>/{...} {` se extrae
+   * contando llaves desde su apertura. Las fuentes se barren recursivamente (sin `node_modules` ni archivos
+   * de prueba `*.test.*` / `*.spec.*`).
+   */
+  const RULES = "firestore.rules";
+  const VERIFY = "scripts/verify-029.js";
+  const SOURCE_EXT = /\.(?:ts|tsx|js|mjs|cjs)$/;
+  const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
+  function rulesSource(): string {
+    return readFileSync(absolute(RULES), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ""))
+      .replace(/\/\/.*$/gm, "");
+  }
+
+  function matchBlock(rules: string, collection: string): string | null {
+    const start = rules.search(new RegExp(`match\\s+/${collection}/\\{[^}]+\\}\\s*\\{`));
+    if (start < 0) return null;
+    let depth = 0;
+    for (let i = rules.indexOf("{", rules.indexOf("}", start)); i < rules.length; i++) {
+      if (rules[i] === "{") depth++;
+      else if (rules[i] === "}" && --depth === 0) return rules.slice(start, i + 1);
+    }
+    return rules.slice(start);
+  }
+
+  function sourceFiles(dir: string): string[] {
+    if (!existsSync(absolute(dir))) return [];
+    const out: string[] = [];
+    for (const entry of readdirSync(absolute(dir))) {
+      if (entry === "node_modules") continue;
+      const rel = `${dir}/${entry}`;
+      if (statSync(absolute(rel)).isDirectory()) out.push(...sourceFiles(rel));
+      else if (SOURCE_EXT.test(entry) && !TEST_FILE.test(entry)) out.push(rel);
+    }
+    return out;
+  }
+
+  for (const collection of ["orderHistory", "storeApiIdempotency", "storeApiRateLimits"]) {
+    it(`match /${collection}/{...} existe con allow read, write: if false y nada mas`, () => {
+      const block = matchBlock(rulesSource(), collection);
+      expect(block, `no hay bloque match /${collection}/{...} en firestore.rules`).not.toBeNull();
+      expect(block).toMatch(/allow\s+read\s*,\s*write\s*:\s*if\s+false\s*;/);
+      const allows = block!.match(/allow\s+[^;]*;/g) ?? [];
+      expect(allows, `allow en ${collection}`).toHaveLength(1);
+    });
+  }
+
+  it('settings: un unico allow write con isAdmin() && settingId != "storeApi"; lectura sin cambios', () => {
+    const block = matchBlock(rulesSource(), "settings");
+    expect(block, "no hay bloque match /settings/{settingId}").not.toBeNull();
+    expect(block).toMatch(/allow\s+read\s*:\s*if\s+signedIn\(\)\s*;/);
+    const writes = block!.match(/allow\s+[^;:]*\b(?:write|create|update|delete)\b[^;]*;/g) ?? [];
+    expect(writes, "reglas de escritura en settings").toHaveLength(1);
+    expect(writes[0]).toMatch(/^allow\s+write\s*:/);
+    expect(writes[0]).toContain("isAdmin()");
+    expect(writes[0]).toMatch(/settingId\s*!=\s*["']storeApi["']/);
+    expect(writes[0]).not.toMatch(/\|\|/);
+  });
+
+  it("ninguna fuente de src/ ni functions/src/ asocia un literal de fecha a historySince", () => {
+    const DATE_LITERAL = /["'`]\d{4}-\d{2}-\d{2}|new Date\(\s*\d|Date\.UTC\(\s*\d/;
+    const offenders: string[] = [];
+    for (const file of [...sourceFiles("src"), ...sourceFiles("functions/src")]) {
+      const lines = sourceWithoutComments(file).split("\n");
+      lines.forEach((line, index) => {
+        if (!line.includes("historySince")) return;
+        const around = lines.slice(Math.max(0, index - 2), index + 3).join("\n");
+        if (DATE_LITERAL.test(around)) offenders.push(`${file}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("nadie hace delete/update sobre orderHistory salvo el cleanup de scripts/verify-029.js", () => {
+    const offenders: string[] = [];
+    for (const file of [...sourceFiles("src"), ...sourceFiles("functions/src"), ...sourceFiles("scripts")]) {
+      let source = sourceWithoutComments(file);
+      if (file === VERIFY) {
+        const cleanup = topLevelFunctionBody(source, "cleanup");
+        if (cleanup) source = source.replace(cleanup, "");
+      }
+      if (!source.includes("orderHistory")) continue;
+      if (/["'`]orderHistory["'`][^;]{0,300}?\.(?:delete|update)\(/.test(source)) offenders.push(`${file}: cadena directa`);
+      const refs = [...source.matchAll(/(?:const|let|var)\s+(\w+)[^=;]*=\s*[^;]*["'`]orderHistory["'`]/g)].map((m) => m[1]);
+      for (const ref of refs) {
+        const use = new RegExp(`\\b${ref}\\s*\\.\\s*(?:delete|update)\\(|\\.(?:delete|update)\\(\\s*${ref}\\b`);
+        if (use.test(source)) offenders.push(`${file}: via ${ref}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
