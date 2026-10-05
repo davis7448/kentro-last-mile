@@ -114,7 +114,7 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
     `assigned` → parche con el `driverId` actual, como hoy; `assigned`, `imported` con lider y `address_risk` con
     lider → `order_not_editable` al cancelar en API.
 
-- [ ] **T5: Corregir datos de entrega, validacion e historial (puro)**
+- [x] **T5: Corregir datos de entrega, validacion e historial (puro)**
   * Requisitos cubiertos: RF_07, RF_08, RF_09, RF_10, RF_11, RF_12, RF_16, RF_22, RF_23, RNF_02
   * Archivos: functions/src/order-seller-actions.ts, src/lib/order-seller-actions.test.ts
   * Accion: `validateDeliveryInput` (reglas de contenido de la tabla 4.4, todos los errores a la vez, con la
@@ -150,8 +150,13 @@ solo escribe ids de prueba y todo borrado pasa por `safeDelete`.
   * Accion: `runConfirm`, `runDeliveryCorrection`, `runCancel` (plan 2.2) con transaccion, `clear` por
     `FieldValue.delete()`, inventario, evento e historial; si el plan rechaza, ninguna escritura. Quinta
     exencion en `IMPORT_WRITE_EXEMPTIONS` con su razon y guarda 3 de la 017 de cuatro a cinco (el ejecutor es
-    quien escribe `orders` fuera de `orders.ts`).
-  * Verificacion: `spec-017-guards.test.ts` guarda 3 verde con cinco exenciones; bloque `describe("T6 · ...")`
+    quien escribe `orders` fuera de `orders.ts`). **`cityId` entra en el grupo `customer` de `FIELD_GROUPS`
+    de `order-import-merge.ts`** (`pass` sin confirmar, `keep` editado/abierto/cerrado): las cinco vias de
+    entrada escriben `cityId` (`"city-cali"` o el de la tienda) y, sin esto, una reimportacion revertiria la
+    ciudad corregida por API (RF_11; hallazgo del RED de T5, 2026-10-05). `deliveryNotes` no la escribe ninguna
+    via de entrada: no hace falta grupo.
+  * Verificacion: `spec-017-guards.test.ts` guarda 3 verde con cinco exenciones; `mergeImportedOrder` sobre un
+    pedido sellado conserva el `cityId` corregido; bloque `describe("T6 · ...")`
     en `order-seller-actions-run.test.ts` con una transaccion falsa: aplica `patch`, `clear`, evento e
     historial en ese orden; **si el plan rechaza, no escribe nada en `orders`, `auditEvents` ni
     `orderHistory`** (cero llamadas a `set`/`update`/`delete` sobre esas colecciones); politica `panel`:

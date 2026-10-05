@@ -527,26 +527,27 @@ empieza"), y tres decisiones mas del responsable el mismo dia tras el contraste 
 | 2026-10-05 | Precisiones del quinto `/sdd-analyze` (decision 11), sin cambiar la intencion: RF_10 se valida antes del no-op (glosario y caso limite nuevo); RF_25 enumera los metadatos visibles despues de generar; RF_20 y DoD: comparacion sobre datos congelados al capturar, `/resumen` por forma | Quinto `/sdd-analyze`: criterios de verificacion que el texto dejaba abiertos |
 | 2026-10-05 | Sexto `/sdd-analyze` (decision 12): precedencia de codigos de las rutas nuevas (401 key en query → credenciales → 400 parametros y forma → 404 → 409 por estado → 422 validacion y cobertura → sin cambios → 409 `status_changed` → aplicar), referida desde la seccion 4, RF_19, RF_21, RNF_01, RNF_02, glosario, casos limite y DoD; RF_25 ajustado a lo que muestra el diseno (existe, termina en, generada, generada por; sin prefijo ni fecha de rotacion); DoD 3: admin desechable aceptado explicitamente, sin lider ni mensajero desechables (`driverId` puesto con el Admin SDK, fuera del canal del cliente) | Sexto `/sdd-analyze`: orden de errores sin definir, RF_25 mas amplio que el diseno y sesiones de verificacion sin declarar |
 | 2026-10-05 | Pasada final, septimo `/sdd-analyze` (decision 13): RF_04 y decision 12 (paso 3: en confirmar, clave no permitida o tipo invalido → 400; paso 0 de ruta y metodo explicito); RNF_03 (la idempotencia repite tambien los 409 y 422 que dependen del pedido); DoD 1 y 3 (recorrido en un solo proceso con limpieza final y registro sin secretos; compuerta del anexo A); anexo A nuevo con CA_01-CA_12 pendientes de transcribir | Decision del responsable: una pasada final, con los menores como notas en las tareas |
+| 2026-10-05 | Anexo A transcrito con la version de CENTRAL del 2026-10-05 (CA_01-CA_12); sin cambiar requisitos. Unica discrepancia: CA_01 pide 404 para un numero inexistente y RF_02 da lista vacia (se mantiene RF_02, a confirmar con CENTRAL). CENTRAL confirma tambien 120 escrituras/minuto, `%23` en el filtro y que cambiar producto es cancelar y reimportar | Respuesta de CENTRAL |
 
 ## Anexo A. Criterios de aceptacion de CENTRAL
 
-Los criterios CA_01 a CA_12 vienen del documento de CENTRAL "Spec · Confirmar y corregir pedidos por API en
-Kentro" (2-oct-2026), que **no esta en el repositorio**. Se transcriben aqui, uno por fila, con el texto de
+Los criterios CA_01 a CA_12 vienen de la version de CENTRAL del 2026-10-05 (correo de Paul, que reemplaza el
+documento "Spec · Confirmar y corregir pedidos por API en Kentro" del 2-oct-2026 e incluye lo acordado). Se transcriben aqui, uno por fila, con el texto de
 CENTRAL y, si hace falta, la correccion de esta spec (por ejemplo, CA_03 se corrige para confirmar un pedido
 `imported`, no uno en `call_pending`). **Compuerta:** el recorrido real contra produccion (DoD 3, tarea T27) no
 empieza mientras quede alguna fila "pendiente de transcribir".
 
 | Id | Criterio de CENTRAL (texto) | Correccion de la spec 029 | Requisitos | Estado |
 |---|---|---|---|---|
-| CA_01 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_02 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_03 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | confirmar un pedido `imported` (no `call_pending`) | RF_04 | pendiente |
-| CA_04 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_05 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_06 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_07 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_08 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_09 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_10 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_11 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
-| CA_12 | pendiente de transcribir del documento de CENTRAL (2-oct-2026) | — | — | pendiente |
+| CA_01 | Buscar. `GET ?shopifyOrderId=%232849` devuelve el pedido. Un numero que no existe da 404. | **Un numero que no existe da 200 con lista vacia, no 404**: `GET /orders` es una ruta existente y su forma no cambia (RF_02, RF_20). El 404 `order_not_found` es de `GET /orders/{id}`. Pendiente de que CENTRAL lo acepte. | RF_02, RF_20, RF_01 | transcrito |
+| CA_02 | Confirmar. Un pedido en `imported` sin lider pasa a `ready_to_assign`, y la respuesta trae el estado nuevo. | — | RF_04 | transcrito |
+| CA_03 | Direccion dudosa. Confirmar un pedido en `address_risk` se rechaza con un error que lo nombra, y el pedido no cambia. | El error es 409 `address_review_pending`, tenga o no lider. Ya incluye la correccion del 2-oct (confirmar parte de `imported`, no de `call_pending`). | RF_21, RF_04 | transcrito |
+| CA_04 | Corregir la direccion dudosa. Al corregir la direccion de un pedido en `address_risk`, vuelve a `imported`. Despues, confirmarlo funciona (CA_02). | Solo sin lider; con lider, 409 `order_not_editable`. | RF_22, RF_23, RF_04 | transcrito |
+| CA_05 | Corregir datos. Nombre, telefono, direccion, indicaciones y ciudad se guardan en `imported`, `address_risk` o `ready_to_assign` sin lider, y el cambio aparece en `/history`. | — | RF_07, RF_11, RF_16, RF_17 | transcrito |
+| CA_06 | Campos que no se tocan. Mandar producto, cantidad, valor, pago o franja se rechaza, y nada del pedido cambia. | Se rechaza con 422 `field_not_allowed` nombrando cada campo; cualquier clave que no sea dato de entrega cuenta como no permitida. | RF_09, RF_12 | transcrito |
+| CA_07 | Pedido en curso. Cualquier escritura sobre un pedido con lider o en curso da `409 order_not_editable`, y nada cambia. | Excepciones por precedencia (decision 12): confirmar un `address_risk` da `address_review_pending`, confirmar un `cancelled` da `order_cancelled`, y repetir algo ya hecho (confirmar un `ready_to_assign` o posterior, cancelar un `cancelled`) responde exito sin cambios. | RF_04, RF_05, RF_08, RF_14, RF_15 | transcrito |
+| CA_08 | Cancelar. Sin lider y con un motivo de 1 a 500 caracteres, el pedido queda cancelado. Sin motivo o con mas de 500, se rechaza. | El rechazo por motivo es 422 `validation_failed` sobre `reason`. | RF_13, RF_14, RF_15 | transcrito |
+| CA_09 | Ciudad. Una ciudad fuera de cobertura da 422 con la lista de ciudades activas. | Tambien si es la misma ciudad que ya tiene el pedido y esta desactivada. | RF_10 | transcrito |
+| CA_10 | Reintentos. La misma `Idempotency-Key` con el mismo cuerpo dentro de 24 h devuelve la misma respuesta y escribe una sola vez. La misma clave con otro cuerpo se rechaza sin escribir. | El rechazo es 422 `idempotency_key_reused`. | RNF_03 | transcrito |
+| CA_11 | Clave. Una escritura sin clave, o con la de lectura, se rechaza (401/403). Una clave enviada en la URL no se acepta. La clave de una tienda no puede tocar pedidos de otra. | Sin clave → 401 `missing_credentials`; de lectura → 403 `read_only_key`; en la URL → 401 `key_in_query`; pedido de otra tienda → 404 `order_not_found`. | RNF_01, RF_25, RF_18 | transcrito |
+| CA_12 | Limite e historial. Pasadas las 120 escrituras por minuto en una tienda, la respuesta es 429 con `Retry-After`. Cada cambio hecho por la API queda en `/history` con su fecha y su origen. | — | RNF_04, RF_16, RF_17 | transcrito |

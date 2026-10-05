@@ -26,7 +26,7 @@
  * cambia equivale al `{ ...current, ... }` de las callables de hoy.
  */
 import { orderOwnsInventoryReservation } from "./inventory-movements";
-import { CLOSED_STATUSES } from "./order-import-merge";
+import { CLOSED_STATUSES, MANUAL_EDIT_STAMP } from "./order-import-merge";
 import { stripUndefined } from "./wallet-entries";
 
 // ---------------------------------------------------------------------------------------------------
@@ -245,25 +245,23 @@ function auditEvent(
 }
 
 /**
- * Registro de historial de una escritura. Devuelve `null` si no hay cambios (un registro vacio no se
- * escribe: RF_05, RF_15). T5 pondra encima `buildOrderHistoryRecord`, el diff de los campos registrados.
+ * Registro de historial de una escritura de este modulo: el diff de los campos registrados entre el pedido
+ * leido y como queda tras el parche. `null` si no hay cambios (un registro vacio no se escribe: RF_05, RF_15).
  */
 function historyDraft(
   meta: { policy: SellerActionPolicy; actor: SellerActor; order: Record<string, unknown> & { id: string }; now: string },
   action: string,
-  changes: OrderHistoryChange[]
+  after: Record<string, unknown>
 ): OrderHistoryDraft | null {
-  if (changes.length === 0) return null;
   const { actor, order, now, policy } = meta;
-  return {
+  return buildOrderHistoryRecord(order, after, {
     orderId: order.id,
     sellerId: String(order.sellerId ?? ""),
-    createdAt: now,
     origin: originOf(policy),
     action,
-    changes,
-    actor: actor.kind === "api" ? { kind: "api", keyLast4: actor.keyLast4 } : { kind: "user", uid: actor.uid, role: actor.role }
-  };
+    actor,
+    now
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -312,7 +310,7 @@ export function planConfirm(i: PlanInput<ConfirmInput>): SellerActionRejection |
       toStatus: "ready_to_assign",
       summary: `Pedido ${orderLabel(order)} confirmado por ${actorLabel(actor)}`
     }),
-    history: historyDraft(meta, "order.seller_confirmed", [{ field: "status", from: "imported", to: "ready_to_assign" }]),
+    history: historyDraft(meta, "order.seller_confirmed", { ...order, status: "ready_to_assign" }),
     inventory: "none"
   };
 }
@@ -321,8 +319,221 @@ export function planConfirm(i: PlanInput<ConfirmInput>): SellerActionRejection |
 // Corregir datos de entrega (T5)
 // ---------------------------------------------------------------------------------------------------
 
-// T5: validateDeliveryInput, planDeliveryCorrection y buildOrderHistoryRecord van aqui, con las mismas
-// piezas comunes de arriba (tienda, 409 por estado, fieldRejection, unchangedPlan, statusChanged).
+export type DeliveryCorrectionInput = DeliveryInput & {
+  expectedStatus?: string;
+  /** La ciudad de `cityId`, leida en la transaccion; `null` si no existe o no se envio `cityId`. */
+  city: CityFact | null;
+  panelExtras?: PanelEditExtras;
+  fieldProblems?: FieldProblem[];
+};
+
+/** Orden fijo: el de los problemas devueltos y el de los cambios del historial. */
+const DELIVERY_FIELDS: readonly DeliveryField[] = ["customerName", "customerPhone", "addressRaw", "deliveryNotes", "cityId"];
+const HISTORY_FIELDS: readonly OrderHistoryField[] = ["status", ...DELIVERY_FIELDS, "totalCop", "productName", "sku", "quantity"];
+
+const TEXT_MAX_LENGTH: Partial<Record<DeliveryField, number>> = { customerName: 120, addressRaw: 300, deliveryNotes: 500 };
+const CITY_ID_PATTERN = /^[a-z0-9-]{1,64}$/;
+const CITY_ID_MAX_LENGTH = 64;
+const PHONE_SEPARATORS = /[\s\-.()]/g;
+const PHONE_PATTERNS = [/^\d{10}$/, /^\+57\d{10}$/, /^\+[1-9]\d{7,14}$/];
+
+/** Clave presente en el cuerpo: `undefined` es "no enviado"; `null` si cuenta (borrar o `empty`). */
+function isSent(input: Record<string, unknown>, field: DeliveryField): boolean {
+  return input[field] !== undefined;
+}
+
+function isValidPhone(phone: string): boolean {
+  const compact = phone.replace(PHONE_SEPARATORS, "");
+  return PHONE_PATTERNS.some((pattern) => pattern.test(compact));
+}
+
+function deliveryFieldProblem(field: DeliveryField, value: unknown): FieldProblem | null {
+  if (field === "deliveryNotes") {
+    // Unica excepcion de RF_09: null, "" o en blanco borran las indicaciones.
+    if (value === null) return null;
+    if (typeof value !== "string") return { field, code: "invalid_type" };
+    return value.trim().length > (TEXT_MAX_LENGTH.deliveryNotes ?? 0) ? { field, code: "too_long" } : null;
+  }
+  if (value === null) return { field, code: "empty" };
+  if (typeof value !== "string") return { field, code: "invalid_type" };
+  const trimmed = value.trim();
+  if (trimmed === "") return { field, code: "empty" };
+  if (field === "customerPhone") return isValidPhone(trimmed) ? null : { field, code: "invalid_phone" };
+  if (field === "cityId") {
+    if (CITY_ID_PATTERN.test(trimmed)) return null;
+    return { field, code: trimmed.length > CITY_ID_MAX_LENGTH ? "too_long" : "invalid_type" };
+  }
+  const max = TEXT_MAX_LENGTH[field];
+  return max !== undefined && trimmed.length > max ? { field, code: "too_long" } : null;
+}
+
+/**
+ * Reglas de contenido de la tabla 4.4 para los datos de entrega. Solo mira las claves enviadas y devuelve
+ * TODOS los problemas a la vez. `no_fields` no es asunto suyo: lo decide el planificador.
+ */
+export function validateDeliveryInput(input: DeliveryInput): FieldProblem[] {
+  const body = input as Record<string, unknown>;
+  const problems: FieldProblem[] = [];
+  for (const field of DELIVERY_FIELDS) {
+    if (!isSent(body, field)) continue;
+    const problem = deliveryFieldProblem(field, body[field]);
+    if (problem) problems.push(problem);
+  }
+  return problems;
+}
+
+/**
+ * Valor que quedaria guardado para un campo enviado, o `undefined` si el envio no toca el campo. En la API
+ * unas indicaciones vacias borran (`null`); en el panel se conservan, como hoy hace `updateImportedOrder`.
+ */
+function sentDeliveryValue(policy: SellerActionPolicy, field: DeliveryField, value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (field === "deliveryNotes" && trimmed === "") return policy === "api" ? null : undefined;
+  return trimmed;
+}
+
+/** Ausente y `null` son lo mismo para comparar y registrar. */
+function historyValue(value: unknown): string | number | null {
+  if (value === undefined || value === null) return null;
+  return typeof value === "number" || typeof value === "string" ? value : String(value);
+}
+
+/**
+ * El registro de `orderHistory` de una escritura: el diff de los campos registrados (plan 2.5) entre el pedido
+ * leido y como queda. Nunca `driverId`, `messengerId` ni `pickupBatchId`: no estan en la lista. `null` si no
+ * cambio ninguno. Lo usan el ejecutor (via los planificadores) y, en T15/T16, las callables que ya tienen el id
+ * de su evento (`auditEventId`).
+ */
+export function buildOrderHistoryRecord(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  meta: {
+    orderId: string;
+    sellerId: string;
+    origin: OrderHistoryOrigin;
+    action: string;
+    actor: SellerActor;
+    now: string;
+    auditEventId?: string;
+  }
+): (OrderHistoryDraft & { auditEventId?: string }) | null {
+  const changes: OrderHistoryChange[] = [];
+  for (const field of HISTORY_FIELDS) {
+    const from = historyValue(before[field]);
+    const to = historyValue(after[field]);
+    if (from !== to) changes.push({ field, from, to });
+  }
+  if (changes.length === 0) return null;
+  const { actor } = meta;
+  return stripUndefined({
+    orderId: meta.orderId,
+    sellerId: meta.sellerId,
+    createdAt: meta.now,
+    origin: meta.origin,
+    action: meta.action,
+    changes,
+    auditEventId: meta.auditEventId,
+    actor: actor.kind === "api" ? { kind: "api" as const, keyLast4: actor.keyLast4 } : { kind: "user" as const, uid: actor.uid, role: actor.role }
+  });
+}
+
+/** Paso 6 de la API: errores de campo, `no_fields` y cobertura de la ciudad (aunque sea la misma, RF_10). */
+function apiDeliveryRejection(input: DeliveryCorrectionInput): SellerActionRejection | null {
+  const body = input as Record<string, unknown>;
+  const problems = input.fieldProblems && input.fieldProblems.length > 0 ? input.fieldProblems : validateDeliveryInput(input);
+  if (problems.length > 0) return fieldRejection(problems);
+  if (!DELIVERY_FIELDS.some((field) => isSent(body, field))) return { code: "no_fields" };
+  if (isSent(body, "cityId")) {
+    const cityId = String(body.cityId).trim();
+    if (!input.city || input.city.id !== cityId || input.city.active !== true) return { code: "out_of_coverage", field: "cityId" };
+  }
+  return null;
+}
+
+/**
+ * Corregir datos de entrega (plan 4.1): `PATCH` de la API y `updateImportedOrder` del panel.
+ *
+ * API: solo un editable; valida por su cuenta si no llegan `fieldProblems`; un `address_risk` sin lider vuelve a
+ * `imported` con `addressRisk: "review"` aunque no cambie nada (RF_22, la unica forma de desbloquearlo); si
+ * cambia la direccion se borran los derivados (RF_23). Panel: solo `imported`, sus mensajes de hoy, y cada
+ * guardado es un cambio (escribe `panelExtras`, sello y evento siempre, como hoy).
+ */
+export function planDeliveryCorrection(i: PlanInput<DeliveryCorrectionInput>): SellerActionRejection | SellerActionPlan {
+  const { policy, actor, order, input, now } = i;
+  if (policy === "api" && input.panelExtras !== undefined) {
+    throw new Error("panelExtras solo existe con politica panel: la validacion de la API nunca lo produce.");
+  }
+  const status = String(order.status ?? "");
+
+  if (!belongsToActor(actor, order)) return storeRejection(policy, "Sellers can only edit their own orders.");
+
+  if (policy === "panel") {
+    if (status !== "imported") return panelPrecondition("Only imported orders pending confirmation can be edited.");
+    if (input.fieldProblems && input.fieldProblems.length > 0) return fieldRejection(input.fieldProblems);
+  } else {
+    if (!isApiEditable(order as { status?: string; driverId?: string | null })) {
+      return { code: "order_not_editable", status, hasLeader: hasLeader(order) };
+    }
+    const rejection = apiDeliveryRejection(input);
+    if (rejection) return rejection;
+  }
+
+  const body = input as Record<string, unknown>;
+  const changedFields: Partial<Record<DeliveryField, string | null>> = {};
+  for (const field of DELIVERY_FIELDS) {
+    const next = sentDeliveryValue(policy, field, body[field]);
+    if (next !== undefined && historyValue(order[field]) !== next) changedFields[field] = next;
+  }
+  const hasFieldChanges = Object.keys(changedFields).length > 0;
+  const reviewsAddress = policy === "api" && status === "address_risk";
+
+  if (policy === "api" && !hasFieldChanges && !reviewsAddress) return unchangedPlan();
+
+  const conflict = statusChanged(input, status);
+  if (conflict) return conflict;
+
+  const clear =
+    policy === "api" && changedFields.addressRaw !== undefined
+      ? ADDRESS_DERIVED_FIELDS.filter((key) => order[key] !== undefined)
+      : [];
+  const patch = stripUndefined({
+    ...changedFields,
+    ...(policy === "panel" ? (input.panelExtras ?? {}) : {}),
+    ...(reviewsAddress ? { status: "imported", addressRisk: "review" } : {}),
+    // RF_11: la marca de edicion manual, tambien en `order.address_reviewed`: la tienda ya decidio sobre la
+    // direccion y una reimportacion no debe deshacerlo.
+    [MANUAL_EDIT_STAMP]: now,
+    updatedAt: now
+  });
+
+  const action =
+    policy === "panel" ? "order.imported_updated" : hasFieldChanges ? "order.delivery_corrected" : "order.address_reviewed";
+  const label = orderLabel(order);
+  const summary =
+    policy === "panel"
+      ? `Pedido ${label} editado antes de confirmar`
+      : hasFieldChanges
+        ? `Pedido ${label}: datos de entrega corregidos por ${actorLabel(actor)}`
+        : `Pedido ${label}: direccion revisada por ${actorLabel(actor)}`;
+  const meta = { policy, actor, order, now };
+  const after: Record<string, unknown> = { ...order, ...patch };
+  for (const key of clear) delete after[key];
+
+  return {
+    outcome: "applied",
+    patch,
+    clear,
+    audit: auditEvent(meta, {
+      action,
+      fromStatus: reviewsAddress ? status : undefined,
+      toStatus: reviewsAddress ? "imported" : undefined,
+      summary
+    }),
+    history: historyDraft(meta, action, after),
+    inventory: "none"
+  };
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Anular
@@ -395,7 +606,7 @@ export function planCancel(i: PlanInput<CancelInput>): SellerActionRejection | S
       toStatus: "cancelled",
       summary: `Pedido ${orderLabel(order)} anulado por ${actorLabel(actor)}`
     }),
-    history: historyDraft(meta, "order.cancelled", [{ field: "status", from: status, to: "cancelled" }]),
+    history: historyDraft(meta, "order.cancelled", { ...order, status: "cancelled" }),
     inventory: releasesInventory ? "release" : "none"
   };
 }
