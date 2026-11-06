@@ -468,7 +468,9 @@ export async function closeFirebaseOrder(input: {
   return result.data as { order: Order; walletEntries: WalletEntry[] };
 }
 
-export async function createFirebaseStoreWebhookConfig(input: { sellerId: string; shopDomain?: string; skuContains?: string; tagContains?: string }) {
+// Spec 037: sin filterMode ni filtro, el servidor da "todos los productos" a una conexion nueva y
+// conserva el filtro de una existente. El cliente nunca rellena un filtro por su cuenta.
+export async function createFirebaseStoreWebhookConfig(input: { sellerId: string; shopDomain?: string; filterMode?: "all" | "sku"; skuContains?: string; tagContains?: string }) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
   const functions = getFunctions(client.app, "us-central1");

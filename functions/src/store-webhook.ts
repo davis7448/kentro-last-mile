@@ -1,20 +1,28 @@
 import crypto from "crypto";
 import { existingFactsFrom, mergeImportedOrder } from "./order-import-merge";
 import { createCommunityPricingResolver } from "./community-order-pricing";
-import { getFirestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { z } from "zod";
 import { markChatraceContactForSeller } from "./uchat-pull";
+import {
+  ALL_PRODUCTS,
+  discardDayKey,
+  effectiveFilter,
+  resolveFilterOnSave,
+  staleDiscardDays,
+  type FilterDiscards
+} from "./store-webhook-filter";
 
 const nullableString = z.string().nullish();
-const defaultSkuContains = "ADMA";
-const defaultTagContains = "ADMA";
 const defaultCityAllowlist = ["Cali", "Santiago de Cali"];
 const maxPayloadBytes = 250_000;
 
 const createStoreWebhookConfigSchema = z.object({
   sellerId: z.string().min(1),
   shopDomain: z.string().optional(),
+  // Spec 037: sin filterMode ni filtro, una conexion nueva acepta todo y una existente conserva el suyo.
+  filterMode: z.enum(["all", "sku"]).optional(),
   skuContains: z.string().optional(),
   tagContains: z.string().optional()
 });
@@ -64,10 +72,6 @@ function normalizeText(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
 
-function normalizeFilter(value: unknown, fallback: string) {
-  return typeof value === "string" && value.trim() ? value.trim().toUpperCase() : fallback;
-}
-
 function tagsList(tags: string | string[] | null | undefined) {
   if (Array.isArray(tags)) return tags.map((tag) => tag.trim()).filter(Boolean);
   return String(tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
@@ -76,7 +80,7 @@ function tagsList(tags: string | string[] | null | undefined) {
 function matchesOrderFilters(order: z.infer<typeof orderSchema>, skuContains: string, tagContains: string) {
   // "*" = aceptar todos los productos de la tienda; el filtro de ciudad sigue
   // decidiendo la cobertura (tiendas cuyos SKUs no llevan marca ADMA).
-  if (skuContains === "*" || tagContains === "*") return true;
+  if (skuContains === ALL_PRODUCTS || tagContains === ALL_PRODUCTS) return true;
   const skuMatch = (order.line_items ?? []).some((item) => (item.sku ?? "").toUpperCase().includes(skuContains));
   const tagMatch = tagsList(order.tags).some((tag) => tag.toUpperCase() === tagContains || tag.toUpperCase().includes(tagContains));
   return skuMatch || tagMatch;
@@ -170,21 +174,29 @@ export const createStoreWebhookConfig = onCall(async (request) => {
   const ref = db.collection("storeWebhookConfigs").doc(input.sellerId);
   const existing = await ref.get();
   const webhookKey = typeof existing.data()?.webhookKey === "string" ? String(existing.data()?.webhookKey) : crypto.randomBytes(24).toString("hex");
+  // Spec 037: el filtro solo se escribe si es una conexion nueva o si la tienda lo pidio. Regenerar
+  // la conexion ya no repone el filtro antiguo (asi se le habria vuelto a cortar la entrada a Infinito).
+  const filter = resolveFilterOnSave({
+    existing: existing.exists ? (existing.data() ?? {}) : null,
+    input: { filterMode: input.filterMode, skuContains: input.skuContains, tagContains: input.tagContains }
+  });
   const config = {
     id: ref.id,
     sellerId: input.sellerId,
     sellerName: String(seller.name ?? input.sellerId),
     shopDomain: input.shopDomain?.trim() || String(seller.shopDomain ?? ""),
     webhookKey,
-    skuContains: normalizeFilter(input.skuContains, defaultSkuContains),
-    tagContains: normalizeFilter(input.tagContains, defaultTagContains),
+    ...filter,
     cityAllowlist: defaultCityAllowlist,
     status: "active",
     createdAt: typeof existing.data()?.createdAt === "string" ? String(existing.data()?.createdAt) : now,
     updatedAt: now
   };
   await ref.set(config, { merge: true });
-  return { config, webhookUrl: webhookUrl(input.sellerId, webhookKey) };
+  // Se devuelve el documento guardado, no lo enviado: con el filtro conservado, `config` no lo trae
+  // y la pantalla mostraria un filtro supuesto (RF_04).
+  const saved = (await ref.get()).data() ?? config;
+  return { config: { ...saved, id: ref.id }, webhookUrl: webhookUrl(input.sellerId, webhookKey) };
 });
 
 export const storeOrderWebhook = onRequest(async (request, response) => {
@@ -244,10 +256,22 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
   const order = parsed.data;
   const address = order.shipping_address ?? order.billing_address;
   const city = address?.city?.trim() ?? "";
-  const skuContains = normalizeFilter(config.skuContains, defaultSkuContains);
-  const tagContains = normalizeFilter(config.tagContains, defaultTagContains);
+  const { skuContains, tagContains } = effectiveFilter(config);
   const cityAllowlist = Array.isArray(config.cityAllowlist) && config.cityAllowlist.length > 0 ? config.cityAllowlist.map(String) : defaultCityAllowlist;
   if (!matchesOrderFilters(order, skuContains, tagContains)) {
+    // Spec 037 (RF_07): se apunta en la conexion solo el pedido que la ciudad SI habria dejado entrar;
+    // los de fuera de cobertura se descartarian igual y contarlos inflaria el aviso (Infinito: 3.608
+    // avisos, 153 pedidos de Cali). Un mapa por dia con el id del pedido cuenta cada pedido una vez.
+    if (isAllowedCity(city, cityAllowlist)) {
+      const discardedAt = new Date();
+      const prune = Object.fromEntries(
+        staleDiscardDays(config.filterDiscards as FilterDiscards | undefined, discardedAt).map((day) => [day, FieldValue.delete()])
+      );
+      await configRef.set({
+        filterDiscards: { ...prune, [discardDayKey(discardedAt)]: { [cleanId(order.id)]: true } },
+        lastFilterDiscardAt: discardedAt.toISOString()
+      }, { merge: true });
+    }
     await sampleRef.set({ status: "ignored", reason: "sku_or_tag_filter", skuContains, tagContains, updatedAt: new Date().toISOString() }, { merge: true });
     response.status(202).json({ ok: true, created: false, reason: "sku_or_tag_filter", sampleId: sampleRef.id });
     return;

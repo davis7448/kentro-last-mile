@@ -1,0 +1,17 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Conexion Shopify" },
+    { "role": "heading", "name": "Webhook de sincronizacion" },
+    { "role": "status", "name": "Solo entran pedidos con un producto cuyo SKU contenga ADMA o con la etiqueta ADMA. Los demas se descartan." },
+    { "role": "status", "name": "12 pedidos descartados por el filtro esta semana" },
+    { "role": "button", "name": "Cambiar filtro" },
+    { "role": "textbox", "name": "URL del webhook" },
+    { "role": "button", "name": "Copiar URL" },
+    { "role": "button", "name": "Actualizar webhook" },
+    { "role": "heading", "name": "Instrucciones Shopify" }
+  ],
+  "threshold": { "missing": 0 }
+}

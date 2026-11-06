@@ -3,7 +3,7 @@
   "phase": "audit",
   "activeTask": null,
   "activeSpec": {
-    "file": "specs/036_la_api_dice_que_se_paga_hoy.md",
+    "file": "specs/037_el_webhook_de_tienda_acepta_todo_por_defecto.md",
     "status": "approved"
   },
   "ui": {
@@ -12,6 +12,14 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
+    "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_09", "RNF_01"], "files": ["functions/src/store-webhook-filter.ts", "src/lib/store-webhook-filter.test.ts"], "testWritten": true, "done": true },
+    "T2": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_07", "RF_09", "RNF_01", "RNF_02", "RNF_03"], "files": ["functions/src/store-webhook.ts", "src/lib/types.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
+    "T3": { "requirements": ["RF_04", "RF_05", "RF_07", "RF_08", "RF_09", "RNF_01"], "files": ["src/components/store-webhook-filter-card.tsx", "src/components/operations-app.tsx", "src/lib/firebase/auth.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
+    "T4": { "requirements": ["RF_06", "RF_07"], "files": ["src/components/operations-app.tsx", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true }
+  },
+  "plan": "specs/037_plan.md",
+  "tasksFile": "specs/037_tasks.md",
+  "archivedTasks036": {
     "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RNF_01", "RNF_02"], "files": ["functions/src/store-summary.ts", "functions/src/store-api.ts", "src/lib/store-summary.test.ts", "src/lib/spec-018-guards.test.ts", "src/lib/spec-036-guards.test.ts"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RF_01", "RF_03", "RNF_01"], "files": [".sdd/evidence/036_la_api_dice_que_se_paga_hoy/verify.txt", "scripts/verify-036.js"], "testWritten": true, "done": true },
     "T3": { "requirements": ["RNF_03"], "files": ["functions/src/store-api.ts", "src/lib/spec-036-guards.test.ts"], "testWritten": true, "done": true }
@@ -586,6 +594,22 @@
       "file": "specs/031_historial_de_importaciones_y_chatby.md",
       "status": "borrador",
       "origen": "fuera de alcance de RF_16 de la 029 (decision del responsable 2026-10-04)"
+    },
+    "036": {
+      "file": "specs/036_la_api_dice_que_se_paga_hoy.md",
+      "status": "aprobada",
+      "pendiente": "auditoria (/sdd-audit) interrumpida el 2026-11-06 para atender la 037; sus tareas estan en archivedTasks036, todas hechas"
+    },
+    "037": {
+      "file": "specs/037_el_webhook_de_tienda_acepta_todo_por_defecto.md",
+      "status": "aprobada",
+      "approved": "2026-11-06 (\"Aprobar y seguir\" del responsable; sin /sdd-grill)",
+      "origen": "Infinito: 3.608 avisos de Shopify descartados en un mes por el filtro ADMA por defecto; reparado a mano el 2026-11-06 (filtro * y KNT-008290/008291)",
+      "implemented": "2026-11-06: T1-T4; suite 3549/67, tsc raiz y functions limpios, lint 0 errores (3 avisos previos)",
+      "functionsDeployed": "2026-11-06 (createStoreWebhookConfig, storeOrderWebhook)",
+      "hostingDeployed": "2026-11-06 (0 static{ en chunks; textos nuevos presentes)",
+      "smoke": "2026-11-06 produccion: regenerar como Infinito (sesion de tienda desechable, borrada) conserva */* con la misma clave; Prueba (ADMA) cuenta 1 pedido de Cali descartado dos veces y 0 el de Bogota, sin crear pedidos; contador y muestras de prueba borrados",
+      "pendiente": "auditoria (/sdd-audit), pantallas de diseno no observadas con el navegador del arnes, captura de la UI desplegada, commit y PR; el contador arranca en 0 (sin relleno historico)"
     }
   },
   "archivedTasks": {

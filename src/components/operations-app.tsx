@@ -85,6 +85,8 @@ import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWal
 import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
+import { StoreWebhookFilterCard } from "@/components/store-webhook-filter-card";
+import { describeFilter, effectiveFilter, recentFilterDiscards } from "../../functions/src/store-webhook-filter";
 import { emptyState } from "@/lib/seed";
 import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
@@ -10879,33 +10881,96 @@ function UchatConfigsAdminPanel({ configs, sellers }: { configs: StoreWebhookCon
 }
 
 function StoreWebhookConfigsPanel({ configs, sellers }: { configs: StoreWebhookConfig[]; sellers: Seller[] }) {
-  const activeConfigs = [...configs].filter((config) => config.status === "active").sort((left, right) => left.sellerName.localeCompare(right.sellerName));
+  // Spec 037 (HU_03): por tienda, la frase del filtro que aplica el servidor y los pedidos de su ciudad
+  // que el filtro tiro esta semana. Asi se ve una tienda mal conectada antes de que se queje (Infinito
+  // estuvo un mes asi). Tabla en escritorio, tarjetas en movil.
+  const now = new Date();
+  const rows = [...configs]
+    .filter((config) => config.status === "active")
+    .sort((left, right) => left.sellerName.localeCompare(right.sellerName))
+    .map((config) => {
+      const filter = effectiveFilter(config);
+      const hasSavedFilter = typeof config.skuContains === "string" && config.skuContains.trim() !== "";
+      return {
+        config,
+        name: sellers.find((item) => item.id === config.sellerId)?.name ?? config.sellerName,
+        url: `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(config.sellerId)}&key=${encodeURIComponent(config.webhookKey)}`,
+        phrase: describeFilter(filter, config.cityAllowlist ?? []),
+        legacyNote: hasSavedFilter ? "" : `Sin filtro guardado: aplica ${filter.skuContains}, el valor antiguo.`,
+        discarded: recentFilterDiscards(config.filterDiscards, now),
+        lastSeen: `${config.shopDomain || "Sin dominio"} · ${config.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(config.lastWebhookAt)}` : "Sin webhooks recibidos"}`
+      };
+    });
+  const withDiscards = rows.filter((row) => row.discarded > 0).length;
+  const { page, setPage, totalPages, visibleItems } = usePaginatedItems(rows, 8);
+  const discardedLabel = (count: number) => `${count} descartados esta semana`;
+  const copyButton = (row: (typeof rows)[number]) => (
+    <button aria-label={`Copiar URL de ${row.name}`} className="focus-ring min-h-11 justify-self-start rounded-full bg-field px-4 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(row.url)}>
+      Copiar URL
+    </button>
+  );
   return (
     <Card>
-      <h2 className="mb-3 font-bold">Webhooks Shopify por tienda</h2>
-      <PaginatedList items={activeConfigs} pageSize={8} empty={<p className="text-sm text-ink-60">No hay webhooks generados.</p>}>
-        {(config) => {
-          const seller = sellers.find((item) => item.id === config.sellerId);
-          const url = `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(config.sellerId)}&key=${encodeURIComponent(config.webhookKey)}`;
-          return (
-            <div key={config.id} className="grid gap-2 rounded-2xl border border-white/10 p-3 text-sm">
-              <div>
-                <p className="font-semibold">{seller?.name ?? config.sellerName}</p>
-                <p className="text-xs text-ink-60">{config.shopDomain || "Sin dominio"} · {config.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(config.lastWebhookAt)}` : "Sin webhooks recibidos"}</p>
-              </div>
-              <input className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={url} />
-              <div className="flex flex-wrap gap-2">
-                <button className="focus-ring rounded-full bg-field px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(url)}>
-                  Copiar URL
-                </button>
-                <span className="rounded-2xl bg-field px-3 py-2 text-xs font-semibold">SKU {config.skuContains || "ADMA"}</span>
-                <span className="rounded-2xl bg-field px-3 py-2 text-xs font-semibold">Etiqueta {config.tagContains || "ADMA"}</span>
-              </div>
-              <p className="text-xs text-ink-60">Configurar esta URL en Order creation y Order update. Para pedidos viejos, agregar etiqueta {config.tagContains || "ADMA"} en Shopify.</p>
-            </div>
-          );
-        }}
-      </PaginatedList>
+      <h2 id="store-webhooks-heading" className="mb-1 font-bold">Webhooks Shopify por tienda</h2>
+      <p className="mb-3 text-xs text-ink-60">
+        {withDiscards > 0 ? `${withDiscards} con pedidos descartados esta semana` : "Ninguna tienda con pedidos descartados esta semana"}
+      </p>
+      {rows.length === 0 ? <p className="text-sm text-ink-60">No hay webhooks generados.</p> : (
+        <>
+          <table aria-labelledby="store-webhooks-heading" className="hidden w-full text-left text-sm md:table">
+            <thead className="text-xs text-ink-60">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">Tienda</th>
+                <th className="py-2 pr-3 font-semibold">Filtro de productos</th>
+                <th className="py-2 pr-3 font-semibold">Descartados 7 dias</th>
+                <th className="py-2 font-semibold">URL del webhook</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((row) => (
+                <tr key={row.config.id} className={`border-t border-white/10 align-top ${row.discarded > 0 ? "bg-rust/5" : ""}`}>
+                  <td className="py-3 pr-3">
+                    <h3 className="font-semibold">{row.name}</h3>
+                    <p className="text-xs text-ink-60">{row.lastSeen}</p>
+                  </td>
+                  <td className="py-3 pr-3">
+                    <p>{row.phrase}</p>
+                    {row.legacyNote && <p className="text-xs text-ink-60">{row.legacyNote}</p>}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {row.discarded > 0 ? <span role="status" className="font-semibold text-rust">{discardedLabel(row.discarded)}</span> : <span className="text-ink-60">Ninguno</span>}
+                  </td>
+                  <td className="py-3">
+                    <div className="grid gap-2">
+                      <input aria-label={`URL del webhook de ${row.name}`} className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={row.url} />
+                      {copyButton(row)}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul aria-labelledby="store-webhooks-heading" className="grid gap-2 md:hidden">
+            {visibleItems.map((row) => (
+              <li key={row.config.id} className="grid gap-2 rounded-2xl border border-white/10 p-3 text-sm">
+                <div>
+                  <h3 className="font-semibold">{row.name}</h3>
+                  <p className="text-xs text-ink-60">{row.lastSeen}</p>
+                </div>
+                <p>{row.phrase}</p>
+                {row.legacyNote && <p className="text-xs text-ink-60">{row.legacyNote}</p>}
+                {row.discarded > 0
+                  ? <p role="status" className="justify-self-start rounded-full bg-rust/10 px-3 py-1 text-xs font-semibold text-rust">{discardedLabel(row.discarded)}</p>
+                  : <p className="text-xs text-ink-60">Sin descartados esta semana</p>}
+                <input aria-label={`URL del webhook de ${row.name}`} className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={row.url} />
+                {copyButton(row)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-60">Configurar la URL en Order creation y Order update de Shopify.</p>
+        </>
+      )}
+      <PaginationControls page={page} totalPages={totalPages} totalItems={rows.length} onPageChange={setPage} />
     </Card>
   );
 }
@@ -11180,22 +11245,25 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
     setMessage("Solicitud enviada. Kentro generara el enlace privado de instalacion y aparecera aqui.");
   }
 
-  async function createWebhookConfig() {
+  // Spec 037: sin `filter`, el servidor decide (conexion nueva = todos los productos; existente =
+  // conserva el suyo). Antes aqui se mandaba un filtro de relleno que pisaba el guardado.
+  async function createWebhookConfig(filter?: { filterMode: "all" | "sku"; skuContains?: string }) {
     setWebhookBusy(true);
     setMessage("");
     try {
       const result = await createFirebaseStoreWebhookConfig({
         sellerId: seller.id,
         shopDomain: normalizedShop || seller.shopDomain || undefined,
-        skuContains: orderSkuContains.trim() || "ADMA",
-        tagContains: "ADMA"
+        ...filter
       });
       setState({
         ...state,
         storeWebhookConfigs: [result.config, ...(state.storeWebhookConfigs ?? []).filter((item) => item.id !== result.config.id)]
       });
-      setMessage("Webhook generado. Configura Order creation y Order update con la misma URL.");
+      setMessage(filter ? "Filtro guardado. La URL del webhook no cambia." : "Webhook generado. Configura Order creation y Order update con la misma URL.");
     } catch (error) {
+      // Al guardar el filtro, el error lo muestra el propio bloque junto al formulario.
+      if (filter) throw error;
       setMessage(error instanceof Error ? error.message : "No se pudo generar el webhook.");
     } finally {
       setWebhookBusy(false);
@@ -11209,35 +11277,28 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
         <div className="grid gap-2 rounded-2xl bg-field p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="font-semibold">Webhook de sincronizacion</p>
+              <h3 className="font-semibold">Webhook de sincronizacion</h3>
               <p className="text-xs text-ink-60">Configura la misma URL en Shopify para Order creation y Order update.</p>
             </div>
-            <button
-              className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
-              type="button"
-              disabled={webhookBusy}
-              onClick={() => void createWebhookConfig()}
-            >
-              {webhookConfig ? "Actualizar webhook" : webhookBusy ? "Generando..." : "Generar webhook"}
-            </button>
+            {!webhookConfig && (
+              <button
+                className="focus-ring min-h-11 rounded-full bg-acid px-4 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
+                type="button"
+                disabled={webhookBusy}
+                onClick={() => void createWebhookConfig()}
+              >
+                {webhookBusy ? "Generando..." : "Generar webhook"}
+              </button>
+            )}
           </div>
           {webhookConfig && (
-            <div className="grid gap-2">
-              <input className="rounded-2xl border border-white/10 bg-panel px-3 py-2 text-xs text-fg" readOnly value={webhookUrl} />
-              <div className="flex flex-wrap gap-2">
-                <button className="focus-ring rounded-full bg-panel px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(webhookUrl)}>
-                  Copiar URL
-                </button>
-                <span className="rounded-2xl bg-panel px-3 py-2 text-xs font-semibold text-ink-60">SKU contiene {webhookConfig.skuContains || "ADMA"}</span>
-                <span className="rounded-2xl bg-panel px-3 py-2 text-xs font-semibold text-ink-60">Etiqueta {webhookConfig.tagContains || "ADMA"}</span>
-              </div>
-              <div className="rounded-2xl bg-panel px-3 py-2 text-xs text-ink-60">
-                <p className="font-semibold text-fg">Instrucciones Shopify</p>
-                <p>1. Crear webhook Order creation con esta URL.</p>
-                <p>2. Crear webhook Order update con esta misma URL.</p>
-                <p>3. Para sincronizar un pedido viejo, agrega la etiqueta ADMA al pedido en Shopify y guarda.</p>
-              </div>
-            </div>
+            <StoreWebhookFilterCard
+              config={webhookConfig}
+              webhookUrl={webhookUrl}
+              busy={webhookBusy}
+              onRegenerate={() => void createWebhookConfig()}
+              onSaveFilter={(filter) => createWebhookConfig(filter)}
+            />
           )}
           <UchatConfigForm sellerId={seller.id} config={webhookConfig} />
         </div>

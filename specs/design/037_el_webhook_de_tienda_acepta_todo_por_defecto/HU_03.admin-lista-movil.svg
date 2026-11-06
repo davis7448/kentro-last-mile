@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_03 - Webhooks Shopify por tienda en tarjetas (admin, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.08"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="160" r="200" fill="url(#ga)"/>
+  <circle cx="320" cy="460" r="200" fill="url(#gc)"/>
+
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">AD</text>
+
+  <text x="16" y="92" font-size="26" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Integraciones</text>
+
+  <rect x="16" y="108" width="343" height="696" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="138" font-size="16" font-weight="700" fill="#f4f6f8">Webhooks Shopify por tienda</text>
+  <text x="32" y="156" font-size="12" fill="#9aa5b3">3 tiendas <tspan fill="#ff8b7c" font-weight="600">· 1 con descartados esta semana</tspan></text>
+  <!-- listitem Infinito -->
+  <rect x="28" y="166" width="319" height="182" rx="16" fill="#212832"/>
+  <text x="44" y="192" font-size="15" font-weight="700" fill="#f4f6f8">Infinito</text>
+  <text x="44" y="210" class="n" font-size="12" fill="#9aa5b3">tienda-infinito.myshopify.com · 6 nov, 09:12</text>
+  <circle cx="51" cy="231" r="6" fill="none" stroke="#c6f24e" stroke-width="1.5"/><path d="M48 231 l2 2 l3.5 -4" fill="none" stroke="#c6f24e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="64" y="236" font-size="13" fill="#f4f6f8">Entran todos tus productos. Solo se</text>
+  <text x="64" y="254" font-size="13" fill="#cbd3dc">descartan pedidos fuera de Cali.</text>
+  <text x="44" y="276" font-size="12" fill="#9aa5b3">Sin descartados esta semana</text>
+  <rect x="44" y="292" width="175" height="44" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="56" y="319" font-size="12" fill="#cbd3dc">https://us-central1-k...</text>
+  <rect x="227" y="292" width="104" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="279" y="319" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Copiar URL</text>
+  <!-- listitem Nambu -->
+  <rect x="28" y="356" width="319" height="222" rx="16" fill="#212832"/>
+  <rect x="28" y="356" width="319" height="222" rx="16" fill="#ff8b7c" fill-opacity="0.05" stroke="#ff8b7c" stroke-opacity="0.35"/>
+  <text x="44" y="382" font-size="15" font-weight="700" fill="#f4f6f8">Nambu</text>
+  <text x="44" y="400" class="n" font-size="12" fill="#9aa5b3">nambu-co.myshopify.com · 6 nov, 08:47</text>
+  <path d="M45 415 h12 l-4.5 5 v5 l-3 1.5 v-6.5 z" fill="none" stroke="#7cc4ff" stroke-width="1.4" stroke-linejoin="round"/>
+  <text x="64" y="426" font-size="13" fill="#f4f6f8">Solo entran pedidos con un producto</text>
+  <text x="64" y="444" font-size="13" fill="#f4f6f8">cuyo SKU contenga ADMA o con la</text>
+  <text x="64" y="462" font-size="13" fill="#f4f6f8">etiqueta ADMA. Los demas se descartan.</text>
+  <rect x="44" y="478" width="208" height="30" rx="15" fill="#ff8b7c" fill-opacity="0.10" stroke="#ff8b7c" stroke-opacity="0.5"/>
+  <text x="58" y="498" class="n" font-size="13" font-weight="700" fill="#ff8b7c">153 descartados esta semana</text>
+  <rect x="44" y="522" width="175" height="44" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="56" y="549" font-size="12" fill="#cbd3dc">https://us-central1-k...</text>
+  <rect x="227" y="522" width="104" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="279" y="549" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Copiar URL</text>
+  <!-- listitem Kovia -->
+  <rect x="28" y="586" width="319" height="210" rx="16" fill="#212832"/>
+  <text x="44" y="612" font-size="15" font-weight="700" fill="#f4f6f8">Kovia</text>
+  <text x="44" y="630" class="n" font-size="12" fill="#9aa5b3">kovia-col.myshopify.com · 5 nov, 18:03</text>
+  <path d="M45 645 h12 l-4.5 5 v5 l-3 1.5 v-6.5 z" fill="none" stroke="#7cc4ff" stroke-width="1.4" stroke-linejoin="round"/>
+  <text x="64" y="656" font-size="13" fill="#f4f6f8">Solo entran pedidos con un producto</text>
+  <text x="64" y="674" font-size="13" fill="#f4f6f8">cuyo SKU contenga ADMA o con la</text>
+  <text x="64" y="692" font-size="13" fill="#f4f6f8">etiqueta ADMA. Los demas se descartan.</text>
+  <text x="44" y="714" font-size="12" fill="#9aa5b3">Sin filtro guardado: aplica ADMA, el antiguo.</text>
+  <rect x="44" y="740" width="175" height="44" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="56" y="767" font-size="12" fill="#cbd3dc">https://us-central1-k...</text>
+  <rect x="227" y="740" width="104" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="279" y="767" text-anchor="middle" font-size="13" font-weight="600" fill="#f4f6f8">Copiar URL</text>
+</svg>
