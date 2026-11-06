@@ -31,6 +31,33 @@ export const STORE_BALANCE_NOTICE = {
   campos: ["disponibleCop", "retenidoCop", "retenidoPedidos", "bloqueadoCodCop", "totalCop"]
 } as const;
 
+/**
+ * Spec 036: la regla de pago, dicha dentro de la respuesta. El agente de una tienda reconstruia el
+ * saldo sumando pedidos entregados de `/orders` y reclamaba como deuda el efectivo del mismo dia,
+ * que el domiciliario todavia no habia entregado a Kentro.
+ */
+export const STORE_PAYOUT_NOTICE = {
+  fecha: "2026-11-06",
+  cambio:
+    "La cifra que Kentro te paga hoy es disponibleCop. bloqueadoCodCop es el efectivo de entregas contraentrega que el domiciliario todavia no ha entregado a Kentro (normalmente lo entrega al dia siguiente de la entrega); no es un pago atrasado y pasa a disponibleCop cuando Kentro registra que lo recibio. Usa GET /resumen para saber tu saldo: no lo reconstruyas sumando pedidos entregados, porque un pedido entregado hoy todavia no esta pagado a Kentro.",
+  campos: ["disponibleCop", "bloqueadoCodCop"]
+} as const;
+
+/** Spec 036 RF_05 / RNF_02: los avisos vigentes, el mas reciente primero. Una sola lista para todas las respuestas. */
+export const STORE_API_NOTICES = [STORE_PAYOUT_NOTICE, STORE_BALANCE_NOTICE] as const;
+
+const COD_WITH_DRIVER =
+  "Efectivo de pedidos contraentrega que lo tiene todavia el domiciliario: no se paga hasta que Kentro lo recibe (normalmente al dia siguiente de la entrega); entonces pasa a disponible.";
+
+/** Spec 036 RF_03: que significa cada `pago.estado` de `GET /orders`. */
+export const STORE_ORDER_PAYMENT_MEANING = {
+  sin_movimientos: "El pedido aun no genera dinero (no se ha entregado ni cerrado).",
+  pendiente_bloqueado_cod: COD_WITH_DRIVER,
+  pendiente_habilitado: "Kentro ya recibio el dinero: cuenta en disponibleCop y se paga en el siguiente giro.",
+  en_liquidacion: "Ya esta dentro de un corte creado que aun no se ha pagado.",
+  pagado: "Ya se pago en un corte."
+} as const;
+
 export function buildStoreSummary(
   sellerEntries: WalletEntryDoc[],
   settlementsById: Map<string, SettlementDoc>,
@@ -96,13 +123,13 @@ export function buildStoreSummary(
     pagos,
     abonos,
     ajustes,
-    avisos: [STORE_BALANCE_NOTICE],
+    avisos: [...STORE_API_NOTICES],
     significado: {
-      disponibleCop: "Saldo que la plataforma ya te puede pagar hoy, en pedidos completos (COD recibido del domiciliario o prepago), neto de abonos y sin la retencion.",
+      disponibleCop: "Es la cifra que se paga: saldo que la plataforma ya te puede pagar hoy, en pedidos completos (COD recibido del domiciliario o prepago), neto de abonos y sin la retencion.",
       retenidoPedidos: "Cuantos pedidos (o ajustes a tu favor) quedan enteros para el siguiente corte por la retencion.",
       retenidoCop: "Saldo pagable que queda para el siguiente corte mientras tengas pedidos en la calle que podrian volver como fallidos (se retiene el flete de devolucion). Los pedidos retenidos van enteros.",
       enLiquidacionCop: "Ya incluido en un corte creado pero aun no pagado.",
-      bloqueadoCodCop: "Pedidos COD cuyo efectivo todavia no se recibe del domiciliario; se habilita al recibirse.",
+      bloqueadoCodCop: COD_WITH_DRIVER,
       liquidadoCop: "Total neto ya liquidado en cortes pagados/conciliados.",
       abonadoCop: "Total de abonos (pagos parciales) que ya te hemos entregado.",
       ajustes: "Correcciones que reabren saldo a tu favor (por ejemplo, un corte cerrado por menos de lo transferido). No son pagos recibidos."
