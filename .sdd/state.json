@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "phase": "released",
-  "activeTask": "T27",
+  "phase": "audit",
+  "activeTask": null,
   "activeSpec": {
-    "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
+    "file": "specs/027_la_compensacion_cubre_los_pedidos.md",
     "status": "approved"
   },
   "ui": {
@@ -12,6 +12,11 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
+    "T1": { "requirements": ["RF_01", "RF_01b", "RF_02", "RF_03", "RF_05", "RNF_02"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": true, "done": true },
+    "T2": { "requirements": ["RF_04", "RNF_01"], "files": ["scripts/verify-027.js", ".sdd/evidence/027_la_compensacion_cubre_los_pedidos/verify.txt"], "testWritten": true, "done": true },
+    "T3": { "requirements": [], "files": ["firebase.json", "functions/package.json"], "testWritten": true, "done": true }
+  },
+  "archivedTasks029": {
     "T1": { "requirements": ["RF_01", "RF_02", "RF_08", "RF_10", "RF_22", "RF_27", "RNF_05"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t1-linea-base.txt"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RNF_05", "RF_01", "RF_02", "RF_17"], "files": ["scripts/verify-029.js", "src/lib/spec-029-guards.test.ts", ".sdd/evidence/029_store_api_confirma_y_corrige_pedidos/t2-query-check.txt", "firestore.indexes.json"], "testWritten": true, "done": true },
     "T3": { "requirements": ["RNF_01", "RNF_02", "RF_25", "RF_26", "RF_20"], "files": ["functions/src/store-api-auth.ts", "src/lib/store-api-auth.test.ts"], "testWritten": true, "done": true },
