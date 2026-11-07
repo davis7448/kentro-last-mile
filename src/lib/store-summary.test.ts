@@ -65,8 +65,9 @@ describe("spec 018 · RF_26 · la API avisa del cambio a quien la consulta", () 
   const summary = buildStoreSummary(wallet, new Map(settlements.map((s) => [s.id, s])), balance, settlements);
 
   it("el resumen trae un aviso fechado que nombra disponibleCop y retenidoCop", () => {
-    expect(summary.avisos).toHaveLength(1);
-    const [aviso] = summary.avisos;
+    // Spec 036 RF_05: el aviso de la 018 se conserva, detras del mas reciente.
+    expect(summary.avisos).toHaveLength(2);
+    const aviso = summary.avisos[1];
     expect(aviso.fecha).toBe("2026-09-17");
     expect(aviso.cambio).toMatch(/disponibleCop/);
     expect(aviso.cambio).toMatch(/retenidoCop/);

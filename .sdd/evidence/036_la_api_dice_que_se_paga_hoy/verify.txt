@@ -1,0 +1,6 @@
+Tienda: DANDA (seller-1779315416119) · 2026-11-06T19:41:15.982Z
+/resumen  HTTP 200 · avisos: 2026-11-06, 2026-09-17
+  disponibleCop 6108000 · retenidoCop 0 · enLiquidacionCop 0 · bloqueadoCodCop 8583600 · totalCop 14691600
+  significado.bloqueadoCodCop: Efectivo de pedidos contraentrega que lo tiene todavia el domiciliario: no se paga hasta que Kentro lo recibe (normalmente al dia siguiente de la entrega); entonces pasa a disponible.
+/orders   HTTP 200 · avisos: 2026-11-06, 2026-09-17 · significado.pago: sin_movimientos, pendiente_bloqueado_cod, pendiente_habilitado, en_liquidacion, pagado
+/docs     HTTP 200 · avisos: 2026-09-17 · avisoDePago: 2026-11-06

@@ -1,0 +1,22 @@
+Pedidos que pasan a recibidos: 55. Pedidos que dejan de estarlo: 0 (debe ser 0)
+
+Liberado por tienda (saldo sin cortar que deja de estar bloqueado):
+  DANDA: 16 pedidos, $1.443.900
+  Bella Mujer: 21 pedidos, $970.770
+  Nambu: 3 pedidos, $196.200
+  Kovia: 3 pedidos, $170.050
+  Senziacol: 2 pedidos, $140.700
+  vive zen: 8 pedidos, $119.100
+  OnStok: 1 pedidos, $98.800
+  ADMA COMERCIAL: 1 pedidos, $55.500
+
+Producto pendiente de pagar al proveedor que deja de estar retenido:
+  sup-1781914882801: $408.000
+  ADMA LABORATORIO: $116.000
+  sup-1781914554522: $72.000
+  ADMA COMPANY: $30.000
+  sup-1781914504627: $0
+
+DANDA con la regla nueva: disponible $6.108.000, retenido $0, bloqueado COD $6.178.000 (70 pedidos)
+
+RNF_01: platform-position.ts usa la regla de recibido: no (la posicion no cambia)

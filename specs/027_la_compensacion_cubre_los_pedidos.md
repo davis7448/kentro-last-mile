@@ -1,6 +1,6 @@
 # Spec 027: Que un corte saldado en total cubra todos sus pedidos
 
-- **Estado:** borrador (sin aprobar)
+- **Estado:** aprobada (2026-11-05, por el responsable de la plataforma)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-10-02
 - **Origen:** cuarta pasada de `/sdd-analyze` de la spec 026. Los 24 pedidos de mas de 30 dias que la 026
@@ -46,8 +46,12 @@ con una sola regla que sigan usando la liquidacion de tienda, la de proveedor y 
 ## 3. Requisitos funcionales (EARS + RFC 2119)
 
 - **RF_01 (estado):** **Mientras** un corte de domiciliario este pagado o conciliado con su efectivo total
-  saldado (pendiente 0 y recibido igual o mayor que lo esperado), el sistema MUST dar por recibidos todos
-  los pedidos que contiene, tengan o no una asignacion cubierta.
+  saldado (pendiente 0 y recibido igual o mayor que lo esperado, la regla de `isDriverSettlementCashSettled`),
+  el sistema MUST dar por recibidos todos los pedidos que tienen una asignacion de efectivo en ese corte
+  (`cashAllocations`), cubierta o no.
+- **RF_01b (ubicua):** Un pedido que esta en `orderIds` de un corte saldado pero SIN asignacion de efectivo en
+  ese corte (por ejemplo, porque entonces era una visita fallida y despues se corrigio a entregado en otro
+  corte) MUST NOT darse por recibido por ese corte. Su recaudo lo decide el corte donde si debe efectivo.
 - **RF_02 (ubicua):** La regla MUST seguir siendo una sola funcion, usada por la liquidacion de tienda, la
   de proveedor, el saldo de tienda (spec 018) y la alerta de efectivo (spec 026).
 - **RF_03 (ubicua):** Un corte pagado o conciliado **con** faltante real MUST seguir dejando sin cubrir
@@ -67,8 +71,11 @@ con una sola regla que sigan usando la liquidacion de tienda, la de proveedor y 
 ## 5. Casos limite
 
 - **Corte con excedente** (recibido mayor que lo esperado): tambien saldado.
-- **Corte creado sin `cashPendingCop`:** decidir si cuenta como saldado (la posicion lo trata como 0).
-- **Pedido en dos cortes**, uno saldado y otro no: decidir cual manda.
+- **Corte creado sin `cashPendingCop`:** cuenta como saldado si lo recibido es igual o mayor que lo
+  esperado (decidido el 2026-11-05; es lo que ya hace `isDriverSettlementCashSettled`).
+- **Pedido en dos cortes**, uno saldado y otro no: manda el corte donde el pedido tiene asignacion de
+  efectivo (RF_01b). Caso real: KNT-006650 y KNT-006722, fallidos en el corte del 2026-10-20 y entregados
+  en el del 2026-11-04.
 - **Corte pendiente con pendiente 0** (variante que la spec 018 elimino a proposito): MUST NOT volver a
   aceptarse; solo cortes pagados o conciliados.
 
@@ -88,13 +95,15 @@ con una sola regla que sigan usando la liquidacion de tienda, la de proveedor y 
 5. `npm test`, `npx tsc --noEmit` (raiz y `functions/`) y `npm run lint` en verde.
 6. El responsable de la plataforma firma la entrega.
 
-## 8. Preguntas abiertas
+## 8. Preguntas resueltas (2026-11-05)
 
-- ¿Un corte sin `cashPendingCop` y con recibido igual a lo esperado cuenta como saldado?
-- ¿Se libera lo retenido en el siguiente corte de tienda/proveedor sin mas, o con un aviso al admin?
+- ¿Un corte sin `cashPendingCop` y con recibido igual a lo esperado cuenta como saldado? **Si.**
+- ¿Se libera lo retenido sin mas? **Si:** pasa a "Disponible" y se paga en el siguiente giro normal; nada
+  se paga automaticamente.
 
 ## 9. Historial de cambios
 
 | Fecha | Cambio | Motivo |
 |---|---|---|
+| 2026-11-05 | Aprobada; RF_01 acotado a pedidos con asignacion, RF_01b nuevo, preguntas resueltas | DANDA cobra $1.443.900 de 16 pedidos en 15 cortes conciliados al peso que su API muestra bloqueados. El hueco por pedido sale del pago al domiciliario por visitas fallidas de OTRAS tiendas (a DANDA no se le cobra ni se le paga la fallida). Aprobada por el responsable sin pasada de escrutinio, por urgencia |
 | 2026-10-02 | Borrador inicial | Cuarta pasada de `/sdd-analyze` de la 026: 29 cortes saldados dejan 36 pedidos / $1.151.997 sin cubrir; parte de los $1.551.550 de producto de LAB no pagable y de saldos de tienda retenidos |

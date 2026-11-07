@@ -51,6 +51,69 @@ describe("buildCodReceivedSet", () => {
     }
   });
 
+  describe("spec 027: un corte saldado en total cubre todos sus pedidos con efectivo", () => {
+    // Forma real del 2026-11-05: corte conciliado al peso, el ultimo pedido quedo sin cubrir porque lo
+    // esperado descuenta el pago del domiciliario por visitas fallidas de otras tiendas.
+    const saldado = {
+      kind: "driver",
+      status: "reconciled",
+      cashExpectedCop: 4_391_140,
+      cashReceivedCop: 4_391_140,
+      cashPendingCop: 0,
+      orderIds: ["o-cubierto", "o-sin-cubrir", "o-fallido-luego-entregado"],
+      cashAllocations: [
+        { orderId: "o-cubierto", expectedCop: 78_900, receivedCop: 78_900, covered: true },
+        { orderId: "o-sin-cubrir", expectedCop: 78_900, receivedCop: 62_900, covered: false }
+      ]
+    };
+
+    it("RF_01: en un corte conciliado y saldado, una asignacion sin cubrir cuenta como recibida", () => {
+      const set = buildCodReceivedSet([saldado]);
+      expect(set.has("o-cubierto")).toBe(true);
+      expect(set.has("o-sin-cubrir")).toBe(true);
+    });
+
+    it("RF_01: tambien en un corte pagado (no solo conciliado)", () => {
+      expect(buildCodReceivedSet([{ ...saldado, status: "paid" }]).has("o-sin-cubrir")).toBe(true);
+    });
+
+    it("RF_01b: un pedido en orderIds sin asignacion en el corte saldado NO entra por ese corte", () => {
+      expect(buildCodReceivedSet([saldado]).has("o-fallido-luego-entregado")).toBe(false);
+    });
+
+    it("RF_03: un corte pagado con faltante real deja sin cubrir lo que la asignacion no cubre", () => {
+      const conFaltante = { ...saldado, status: "paid", cashReceivedCop: 4_000_000, cashPendingCop: 391_140 };
+      const set = buildCodReceivedSet([conFaltante]);
+      expect(set.has("o-cubierto")).toBe(true);
+      expect(set.has("o-sin-cubrir")).toBe(false);
+    });
+
+    it("RF_03: recibido menor que lo esperado tampoco esta saldado aunque el pendiente diga 0", () => {
+      const raro = { ...saldado, cashReceivedCop: 4_000_000, cashPendingCop: 0 };
+      expect(buildCodReceivedSet([raro]).has("o-sin-cubrir")).toBe(false);
+    });
+
+    it("un corte pendiente con pendiente 0 sigue sin contar (spec 018 RF_04)", () => {
+      expect(buildCodReceivedSet([{ ...saldado, status: "pending" }]).has("o-sin-cubrir")).toBe(false);
+    });
+
+    it("excedente: recibido mayor que lo esperado tambien esta saldado", () => {
+      const excedente = { ...saldado, cashReceivedCop: 4_500_000 };
+      expect(buildCodReceivedSet([excedente]).has("o-sin-cubrir")).toBe(true);
+    });
+
+    it("corte sin cashPendingCop y recibido igual a lo esperado cuenta como saldado", () => {
+      const { cashPendingCop: _omit, ...sinPendiente } = saldado;
+      expect(buildCodReceivedSet([sinPendiente]).has("o-sin-cubrir")).toBe(true);
+    });
+
+    it("lo recibido se toma de cashReceipts cuando falta cashReceivedCop", () => {
+      const { cashReceivedCop: _omit, ...sinRecibido } = saldado;
+      const conRecibos = { ...sinRecibido, cashReceipts: [{ amountCop: 4_391_140, receivedAt: "2026-10-08" }] };
+      expect(buildCodReceivedSet([conRecibos]).has("o-sin-cubrir")).toBe(true);
+    });
+  });
+
   it("ignora los cortes que no son de domiciliario", () => {
     const set = buildCodReceivedSet([{ kind: "seller", status: "paid", orderIds: ["o-4"] }]);
     expect(set.size).toBe(0);

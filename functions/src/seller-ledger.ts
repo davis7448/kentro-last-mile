@@ -7,6 +7,8 @@
  * paga a una tienda, y ya estaba duplicada entre la UI, store-api.ts y createSettlement.
  */
 
+import { isDriverSettlementCashSettled, type SettlementDoc as MathSettlementDoc } from "./settlement-math";
+
 export type OrderDoc = Record<string, any>;
 export type WalletEntryDoc = Record<string, any>;
 export type SettlementDoc = Record<string, any>;
@@ -16,14 +18,22 @@ export type SettlementDoc = Record<string, any>;
  * cashAllocations cubiertas cuando existen; si no, el corte del domiciliario pagado o conciliado.
  * Antes el cliente y esta funcion aceptaban ademas `cashPendingCop === 0` en un corte pendiente, y
  * el corte no: la pantalla podia prometer un pago que el corte no cerraba.
+ *
+ * Spec 027: en un corte saldado en total (`isDriverSettlementCashSettled`) cuentan TODAS sus
+ * asignaciones, cubiertas o no. Lo esperado del corte descuenta el pago del domiciliario por visitas
+ * fallidas (a menudo de otras tiendas), y el reparto pedido a pedido no: cuando el lider entrega
+ * exactamente lo esperado, los ultimos pedidos quedaban "sin cubrir" aunque el efectivo entro entero.
+ * Solo se recorren las asignaciones (RF_01b): un pedido que estaba en el corte sin deber efectivo no
+ * entra por el. Con faltante real (RF_03) siguen contando solo las cubiertas.
  */
 export function buildCodReceivedSet(settlements: SettlementDoc[]) {
   const codReceived = new Set<string>();
   for (const settlement of settlements) {
     if (settlement.kind !== "driver") continue;
     if (Array.isArray(settlement.cashAllocations) && settlement.cashAllocations.length > 0) {
+      const settled = isDriverSettlementCashSettled(settlement as MathSettlementDoc);
       for (const allocation of settlement.cashAllocations) {
-        if (allocation.covered && allocation.orderId) codReceived.add(String(allocation.orderId));
+        if ((allocation.covered || settled) && allocation.orderId) codReceived.add(String(allocation.orderId));
       }
       continue;
     }

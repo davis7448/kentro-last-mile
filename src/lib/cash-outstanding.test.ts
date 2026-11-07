@@ -186,8 +186,9 @@ function mixedUniverse() {
       cashReceivedCop: 90_000,
       cashPendingCop: 0,
       cashAllocations: [
-        { orderId: "o-alloc-covered", expectedCop: 45_000, receivedCop: 45_000, covered: true },
-        { orderId: "o-netted", expectedCop: 45_000, receivedCop: 0, covered: false }
+        // Spec 027: "o-netted" esta en el corte saldado SIN asignacion (RF_01b). Con una asignacion sin
+        // cubrir ya contaria como recibido y saldria de la lista.
+        { orderId: "o-alloc-covered", expectedCop: 45_000, receivedCop: 45_000, covered: true }
       ]
     })
   ];
@@ -488,7 +489,11 @@ function aged(id: string, days: number, overrides: Partial<OrderFixture> = {}) {
 /** Asignacion sin cubrir: el pedido NO cuenta como recibido segun la regla de RF_01. */
 const uncovered = (orderId: string, receivedCop = 0) => ({ orderId, expectedCop: 45_000, receivedCop, covered: false });
 
-/** Corte cerrado y saldado en total (plan 2.9) que deja al pedido sin asignacion cubierta. */
+/**
+ * Corte cerrado y saldado en total (plan 2.9) que contiene al pedido SIN asignacion de efectivo. Desde la
+ * spec 027 una asignacion sin cubrir en un corte saldado cuenta como recibida; el unico pedido que un
+ * corte saldado deja fuera es el que no tiene asignacion en el (RF_01b).
+ */
 function settledNetting(id: string, orderId: string, overrides: Partial<SettlementFixture> = {}) {
   return settlement(id, {
     status: "paid",
@@ -496,7 +501,7 @@ function settledNetting(id: string, orderId: string, overrides: Partial<Settleme
     cashExpectedCop: 90_000,
     cashReceivedCop: 90_000,
     cashPendingCop: 0,
-    cashAllocations: [{ orderId: `${orderId}-otro`, expectedCop: 45_000, receivedCop: 90_000, covered: true }, uncovered(orderId)],
+    cashAllocations: [{ orderId: `${orderId}-otro`, expectedCop: 45_000, receivedCop: 90_000, covered: true }],
     ...overrides
   });
 }
@@ -816,7 +821,32 @@ describe("T7 · fecha, antiguedad y ubicacion (incluida la compensacion)", () =>
       ]);
     });
 
-    it("universo mixto: o-netted (corte saldado con su asignacion sin cubrir) va a nettedRows; el resto a rows", async () => {
+    it("spec 027 RF_05: un pedido con asignacion SIN cubrir en un corte saldado ya no aparece (cuenta como recibido)", async () => {
+      const { buildCashOutstandingReport } = await loadCore();
+      const report = buildCashOutstandingReport(
+        input({
+          orders: [order("o-a"), order("o-b")],
+          receivableEntries: [codEntry("o-a", 50_000), codEntry("o-b", 50_000)],
+          settlements: [
+            settlement("s-saldado", {
+              status: "reconciled",
+              orderIds: ["o-a", "o-b"],
+              cashExpectedCop: 82_000,
+              cashReceivedCop: 82_000,
+              cashPendingCop: 0,
+              cashAllocations: [
+                { orderId: "o-a", expectedCop: 45_000, receivedCop: 45_000, covered: true },
+                { orderId: "o-b", expectedCop: 45_000, receivedCop: 37_000, covered: false }
+              ]
+            })
+          ]
+        })
+      );
+      expect(report.rows).toEqual([]);
+      expect(report.nettedRows).toEqual([]);
+    });
+
+    it("universo mixto: o-netted (en un corte saldado sin asignacion) va a nettedRows; el resto a rows", async () => {
       const { buildCashOutstandingReport } = await loadCore();
       const report = buildCashOutstandingReport(input(mixedUniverse()));
       expect(rowIds(report.nettedRows)).toEqual(["o-netted"]);
@@ -1046,9 +1076,8 @@ describe("T8 · agrupaciones, proveedor, alcance y totales", () => {
         cashReceivedCop: 135_000,
         cashPendingCop: 0,
         cashAllocations: [
-          { orderId: "t-shared-otro", expectedCop: 45_000, receivedCop: 135_000, covered: true },
-          uncovered("t-n1"),
-          uncovered("t-n2")
+          // Spec 027: t-n1 y t-n2 en el corte saldado sin asignacion (RF_01b).
+          { orderId: "t-shared-otro", expectedCop: 45_000, receivedCop: 135_000, covered: true }
         ]
       });
       return {
@@ -1657,8 +1686,8 @@ const T9_SCENARIOS: T9Scenario[] = [
       const entries = [...t9Entries(`${p}x`, 50_000, 5_000), ...t9Entries(`${p}n`, 50_000, 5_000)];
       const netted = t9Settlement(math, `${p}s`, entries, { status: "reconciled", orderIds: [`${p}x`, `${p}n`], received: "expected" });
       netted.cashAllocations = [
-        { orderId: `${p}x`, expectedCop: 45_000, receivedCop: 45_000, covered: true },
-        { orderId: `${p}n`, expectedCop: 45_000, receivedCop: 0, covered: false }
+        // Spec 027: `n` en el corte sin asignacion (RF_01b); con asignacion sin cubrir ya seria recibido.
+        { orderId: `${p}x`, expectedCop: 45_000, receivedCop: 45_000, covered: true }
       ];
       return { orders: [order(`${p}x`), order(`${p}n`)], entries, settlements: [netted], unreadable: [] };
     }
@@ -2075,8 +2104,8 @@ describe("T9 · conciliacion por causas sin residuo (RNF_02, RF_09)", () => {
       });
       first.cashExpectedCop = 90_000;
       first.cashAllocations = [
-        { orderId: "lb-a", expectedCop: 45_000, receivedCop: 45_000, covered: true },
-        { orderId: "lb-b", expectedCop: 45_000, receivedCop: 45_000, covered: false }
+        // Spec 027: `lb-b` sin asignacion (RF_01b) para seguir ejercitando la compensacion.
+        { orderId: "lb-a", expectedCop: 45_000, receivedCop: 45_000, covered: true }
       ];
       const secondEntries = [...t9Entries("lb-c", 50_000, 5_000), ...t9Entries("lb-d", 133_899, 0), ...t9Entries("lb-one", 1, 7_000)];
       const second = t9Settlement(math, "stl-1787066544779-driver", secondEntries, {
@@ -2087,8 +2116,8 @@ describe("T9 · conciliacion por causas sin residuo (RNF_02, RF_09)", () => {
       });
       second.cashExpectedCop = 90_000;
       second.cashAllocations = [
-        { orderId: "lb-c", expectedCop: 45_000, receivedCop: 45_000, covered: true },
-        { orderId: "lb-d", expectedCop: 45_000, receivedCop: 45_000, covered: false }
+        // Spec 027: `lb-d` sin asignacion (RF_01b) para seguir ejercitando la compensacion.
+        { orderId: "lb-c", expectedCop: 45_000, receivedCop: 45_000, covered: true }
       ];
       const outsideEntries = [...t9Entries("lb-out1", 120_000, 7_000), ...t9Entries("lb-out2", 50_000, 5_000)];
       return {

@@ -29,7 +29,13 @@ import {
   storeOrderItem,
   type StoreApiWriteRouteName
 } from "./store-api-write";
-import { buildStoreSummary, STORE_BALANCE_NOTICE } from "./store-summary";
+import {
+  buildStoreSummary,
+  STORE_API_NOTICES,
+  STORE_BALANCE_NOTICE,
+  STORE_ORDER_PAYMENT_MEANING,
+  STORE_PAYOUT_NOTICE
+} from "./store-summary";
 
 /**
  * API de solo lectura para tiendas (sellers).
@@ -232,6 +238,8 @@ export async function handleStoreApiRequest(
       },
       autenticacion: "sellerId y key por query string, o header Authorization: Bearer <key>.",
       avisos: [STORE_BALANCE_NOTICE],
+      // Spec 036 RF_04: clave nueva; `avisos` de arriba no cambia de valor (spec 029 RF_20).
+      avisoDePago: STORE_PAYOUT_NOTICE,
       // RF_20: las claves de arriba conservan su valor de siempre; lo de la spec 029 va solo en claves nuevas.
       ...buildStoreApiIndexAdditions(await readHistorySince(db))
     });
@@ -323,6 +331,9 @@ export async function handleStoreApiRequest(
         tienda: sellerName,
         rango: { desde: from || null, hasta: to || null },
         total: filtered.length,
+        // Spec 036 RF_03: un agente que suma pedidos de aqui tiene que ver la regla de pago.
+        avisos: STORE_API_NOTICES,
+        significado: { pago: STORE_ORDER_PAYMENT_MEANING },
         pedidos: filtered.map((order) => storeOrderItem(order, sellerEntries, settlementsById, codReceived))
       });
       return;
@@ -373,4 +384,8 @@ export async function handleStoreApiRequest(
   response.status(404).json({ ok: false, error: "unknown_resource", recursos: ["/resumen", "/kpis", "/orders", "/settlements"] });
 }
 
-export const storeApi = onRequest((request, response) => handleStoreApiRequest(request, response, { db: getFirestore() }));
+// Spec 036 RNF_03: con los 256 MiB por defecto, GET /orders de una tienda grande (DANDA, miles de pedidos)
+// se pasaba del limite desde la subida a Node 22 y respondia 500.
+export const storeApi = onRequest({ memory: "512MiB" }, (request, response) =>
+  handleStoreApiRequest(request, response, { db: getFirestore() })
+);
