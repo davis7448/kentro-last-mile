@@ -22,6 +22,33 @@ export type FilterDiscards = Record<string, Record<string, true>>;
 
 type StoredFilter = { skuContains?: unknown; tagContains?: unknown };
 
+/** Ciudades que aplica el servidor cuando la conexion no guarda las suyas. */
+export const DEFAULT_CITY_ALLOWLIST: readonly string[] = ["Cali", "Santiago de Cali"];
+
+/**
+ * Las ciudades que el webhook aplica de verdad: las guardadas si son una lista no vacia, si no Cali.
+ * La usan el servidor y la frase de la pantalla, para que no puedan decir cosas distintas.
+ */
+export function effectiveCityAllowlist(value: unknown): string[] {
+  return Array.isArray(value) && value.length > 0 ? value.map(String) : [...DEFAULT_CITY_ALLOWLIST];
+}
+
+/**
+ * Si el documento de `storeWebhookConfigs` es una conexion de webhook ya hecha. Lo decide la clave, no
+ * que exista el documento: `setStoreUchatConfig` crea ese mismo documento sin `webhookKey` al guardar el
+ * token de ChatBy, y tratarlo como existente hacia nacer la conexion con el filtro antiguo (revision
+ * adversarial ronda 1, R1-RF_01-1).
+ */
+export function hasWebhookConnection(doc: object | null | undefined): boolean {
+  const key = (doc as { webhookKey?: unknown } | null | undefined)?.webhookKey;
+  return typeof key === "string" && key.trim() !== "";
+}
+
+/** El `existing` que espera `resolveFilterOnSave`: el documento si ya era conexion, si no `null`. */
+export function existingConnection(doc: object | null | undefined): StoredFilter | null {
+  return doc && hasWebhookConnection(doc) ? (doc as StoredFilter) : null;
+}
+
 function normalizeInput(value: string): string {
   const trimmed = value.trim().toUpperCase();
   return trimmed || ALL_PRODUCTS;
@@ -42,9 +69,11 @@ export function resolveFilterOnSave(args: {
   const { existing, input } = args;
   if (input.filterMode === "all") return { skuContains: ALL_PRODUCTS, tagContains: ALL_PRODUCTS };
 
-  const hasSku = typeof input.skuContains === "string";
+  // Solo `filterMode` es un pedido de filtro. Los campos sueltos sin modo son el relleno ADMA que mandaba
+  // la pantalla anterior al regenerar; una pestana vieja no puede volver a cerrar una conexion abierta
+  // (revision adversarial ronda 2, R2-RF_02-1).
   const hasTag = typeof input.tagContains === "string";
-  if (input.filterMode === "sku" || hasSku || hasTag) {
+  if (input.filterMode === "sku") {
     const sku = normalizeInput(input.skuContains ?? input.tagContains ?? "");
     const tag = hasTag ? normalizeInput(input.tagContains ?? "") : sku;
     // RF_09: si cualquiera de los dos queda vacio, la conexion acepta todo; se guarda sin ambiguedad.
@@ -84,9 +113,9 @@ function joinList(items: string[]): string {
 }
 
 /** La frase que la pantalla muestra (RF_04, RF_06). */
-export function describeFilter(filter: ProductFilter, cities: string[]): string {
+export function describeFilter(filter: ProductFilter, cities: unknown): string {
   if (acceptsAllProducts(filter)) {
-    return `Entran todos tus productos. Solo se descartan pedidos fuera de ${joinList(uniqueCities(cities))}.`;
+    return `Entran todos tus productos. Solo se descartan pedidos fuera de ${joinList(uniqueCities(effectiveCityAllowlist(cities)))}.`;
   }
   return `Solo entran pedidos con un producto cuyo SKU contenga ${filter.skuContains} o con la etiqueta ${filter.tagContains}. Los demas se descartan.`;
 }

@@ -27,6 +27,9 @@ describe("spec 037 — tarjeta de la tienda (T3)", () => {
     expect(panel).not.toMatch(/(skuContains|tagContains): "ADMA"/);
     expect(panel).not.toMatch(/webhookConfig\.(skuContains|tagContains)/);
     expect(panel).toMatch(/<StoreWebhookFilterCard/);
+    // R1-RF_03-1: un documento solo de ChatBy (sin clave) no es conexion: la tienda ve "Generar webhook".
+    expect(panel).toMatch(/const webhookConfig = hasWebhookConnection\(storeConfig\)/);
+    expect(panel).toMatch(/<UchatConfigForm sellerId=\{seller\.id\} config=\{storeConfig\}/);
     expect(card).not.toMatch(/"ADMA"/);
   });
 
@@ -60,6 +63,11 @@ describe("spec 037 — lista del admin (T4)", () => {
     expect(admin).not.toMatch(/config\.(skuContains|tagContains) \|\|/);
   });
 
+  it("R3-RF_03-1: el admin solo lista conexiones con clave, y el contador cuenta las mismas", () => {
+    expect(admin).toMatch(/\.filter\(\(config\) => config\.status === "active" && hasWebhookConnection\(config\)\)/);
+    expect(app).toMatch(/summary=\{`\$\{\(state\.storeWebhookConfigs \?\? \[\]\)\.filter\(\(config\) => config\.status === "active" && hasWebhookConnection\(config\)\)\.length\} configurados`\}/);
+  });
+
   it("RF_07: el admin ve los descartados de la semana por tienda", () => {
     expect(admin).toContain("recentFilterDiscards(");
     expect(admin).toContain("descartados esta semana");
@@ -86,6 +94,16 @@ describe("spec 037 — servidor (T2)", () => {
 
   it("RF_03: el webhook aplica effectiveFilter", () => {
     expect(server).toMatch(/effectiveFilter\(config\)/);
+  });
+
+  it("R1-RF_01-1: la callable decide 'existente' por la clave, no porque exista el documento", () => {
+    expect(server).toMatch(/resolveFilterOnSave\(\{\s*existing: existingConnection\(existing\.data\(\)\)/);
+    expect(server).not.toMatch(/existing: existing\.exists \?/);
+  });
+
+  it("R1-RF_04-1: el servidor toma las ciudades del modulo, sin su propia lista por defecto", () => {
+    expect(server).toMatch(/effectiveCityAllowlist\(config\.cityAllowlist\)/);
+    expect(server).not.toMatch(/const defaultCityAllowlist/);
   });
 
   it("RF_07/RNF_03: apunta descartes por pedido y por dia, con poda, solo si la ciudad estaba cubierta", () => {

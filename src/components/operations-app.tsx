@@ -86,7 +86,7 @@ import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
 import { StoreWebhookFilterCard } from "@/components/store-webhook-filter-card";
-import { describeFilter, effectiveFilter, recentFilterDiscards } from "../../functions/src/store-webhook-filter";
+import { describeFilter, effectiveFilter, hasWebhookConnection, recentFilterDiscards } from "../../functions/src/store-webhook-filter";
 import { emptyState } from "@/lib/seed";
 import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
@@ -5420,7 +5420,7 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
               onImported={(order) => setState({ ...state, orders: [order, ...state.orders.filter((item) => item.id !== order.id)] })}
             />
           </CollapsiblePanel>
-          <CollapsiblePanel flush title="Webhooks de tienda" summary={`${(state.storeWebhookConfigs ?? []).length} configurados`}>
+          <CollapsiblePanel flush title="Webhooks de tienda" summary={`${(state.storeWebhookConfigs ?? []).filter((config) => config.status === "active" && hasWebhookConnection(config)).length} configurados`}>
             <StoreWebhookConfigsPanel configs={state.storeWebhookConfigs ?? []} sellers={state.sellers} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Confirmacion por UChat" summary="Confirmacion automatica por WhatsApp">
@@ -10886,7 +10886,8 @@ function StoreWebhookConfigsPanel({ configs, sellers }: { configs: StoreWebhookC
   // estuvo un mes asi). Tabla en escritorio, tarjetas en movil.
   const now = new Date();
   const rows = [...configs]
-    .filter((config) => config.status === "active")
+    // Sin clave no hay conexion: es el documento que deja la config de ChatBy (revision 037, R3-RF_03-1).
+    .filter((config) => config.status === "active" && hasWebhookConnection(config))
     .sort((left, right) => left.sellerName.localeCompare(right.sellerName))
     .map((config) => {
       const filter = effectiveFilter(config);
@@ -11213,7 +11214,10 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
   const [message, setMessage] = useState("");
   const [webhookBusy, setWebhookBusy] = useState(false);
   const primaryStore = stores[0];
-  const webhookConfig = (state.storeWebhookConfigs ?? []).find((config) => config.sellerId === seller.id && config.status === "active");
+  // El mismo documento guarda la config de ChatBy, que puede existir sin webhook: sin clave no hay conexion
+  // y la tienda debe ver "Generar webhook", no una URL con key=undefined (revision 037, R1-RF_03-1).
+  const storeConfig = (state.storeWebhookConfigs ?? []).find((config) => config.sellerId === seller.id && config.status === "active");
+  const webhookConfig = hasWebhookConnection(storeConfig) ? storeConfig : undefined;
   const webhookUrl = webhookConfig ? `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(webhookConfig.sellerId)}&key=${encodeURIComponent(webhookConfig.webhookKey)}` : "";
   const shopify = getSellerShopifyConnection(seller.id, seller.shopDomain, primaryStore);
   const normalizedShop = shop.trim() ? normalizeShopifyDomain(shop) : "";
@@ -11300,7 +11304,7 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
               onSaveFilter={(filter) => createWebhookConfig(filter)}
             />
           )}
-          <UchatConfigForm sellerId={seller.id} config={webhookConfig} />
+          <UchatConfigForm sellerId={seller.id} config={storeConfig} />
         </div>
         <div>
           <p className="font-semibold">{stores.length > 0 ? `${stores.length} tienda${stores.length === 1 ? "" : "s"} conectada${stores.length === 1 ? "" : "s"}` : "Tiendas Shopify pendientes"}</p>

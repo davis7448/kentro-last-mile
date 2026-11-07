@@ -15,7 +15,8 @@
     "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_09", "RNF_01"], "files": ["functions/src/store-webhook-filter.ts", "src/lib/store-webhook-filter.test.ts"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_07", "RF_09", "RNF_01", "RNF_02", "RNF_03"], "files": ["functions/src/store-webhook.ts", "src/lib/types.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
     "T3": { "requirements": ["RF_04", "RF_05", "RF_07", "RF_08", "RF_09", "RNF_01"], "files": ["src/components/store-webhook-filter-card.tsx", "src/components/operations-app.tsx", "src/lib/firebase/auth.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
-    "T4": { "requirements": ["RF_06", "RF_07"], "files": ["src/components/operations-app.tsx", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true }
+    "T4": { "requirements": ["RF_06", "RF_07"], "files": ["src/components/operations-app.tsx", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
+    "T5": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_06"], "files": ["functions/src/store-webhook-filter.ts", "functions/src/store-webhook.ts", "src/components/operations-app.tsx", "src/lib/store-webhook-filter.test.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true, "origen": "revision adversarial ronda 1: R1-RF_01-1, R1-RF_02-1, R1-RF_03-1, R1-RF_04-1" }
   },
   "plan": "specs/037_plan.md",
   "tasksFile": "specs/037_tasks.md",
@@ -65,8 +66,6 @@
     "T32": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/store-api-write.test.ts", "src/app/api-tiendas/page.tsx"], "testWritten": true, "done": true },
     "T33": { "requirements": ["RF_25"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts"], "testWritten": true, "done": true }
   },
-  "plan": "specs/036_tasks.md",
-  "tasksFile": "specs/036_tasks.md",
   "archivedTasks026": {
     "T1": {
       "requirements": [
@@ -609,7 +608,8 @@
       "functionsDeployed": "2026-11-06 (createStoreWebhookConfig, storeOrderWebhook)",
       "hostingDeployed": "2026-11-06 (0 static{ en chunks; textos nuevos presentes)",
       "smoke": "2026-11-06 produccion: regenerar como Infinito (sesion de tienda desechable, borrada) conserva */* con la misma clave; Prueba (ADMA) cuenta 1 pedido de Cali descartado dos veces y 0 el de Bogota, sin crear pedidos; contador y muestras de prueba borrados",
-      "pendiente": "auditoria (/sdd-audit), pantallas de diseno no observadas con el navegador del arnes, captura de la UI desplegada, commit y PR; el contador arranca en 0 (sin relleno historico)"
+      "audit": "2026-11-07: revision adversarial en 4 rondas (R1: 4 hallazgos, 2 defectos; R2: 1; R3: 1; R4: limpia); T5 corrige los tres (clave = conexion, ciudades del modulo, filterMode obligatorio, lista del admin por clave); functions y hosting desplegados y smoke en produccion con tienda Prueba desechable; check = clean. Trazabilidad: RNF_02 y el aviso de pedido viejo sin prueba",
+      "pendiente": "DoD 3 (capturas 375/1280 de la app) y 5 (validacion del responsable), pantallas de diseno no observadas con el navegador del arnes, captura de la UI desplegada, commit y PR; el contador arranca en 0 (sin relleno historico)"
     }
   },
   "archivedTasks": {

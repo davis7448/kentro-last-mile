@@ -7,15 +7,17 @@ import { z } from "zod";
 import { markChatraceContactForSeller } from "./uchat-pull";
 import {
   ALL_PRODUCTS,
+  DEFAULT_CITY_ALLOWLIST,
   discardDayKey,
+  effectiveCityAllowlist,
   effectiveFilter,
+  existingConnection,
   resolveFilterOnSave,
   staleDiscardDays,
   type FilterDiscards
 } from "./store-webhook-filter";
 
 const nullableString = z.string().nullish();
-const defaultCityAllowlist = ["Cali", "Santiago de Cali"];
 const maxPayloadBytes = 250_000;
 
 const createStoreWebhookConfigSchema = z.object({
@@ -176,8 +178,9 @@ export const createStoreWebhookConfig = onCall(async (request) => {
   const webhookKey = typeof existing.data()?.webhookKey === "string" ? String(existing.data()?.webhookKey) : crypto.randomBytes(24).toString("hex");
   // Spec 037: el filtro solo se escribe si es una conexion nueva o si la tienda lo pidio. Regenerar
   // la conexion ya no repone el filtro antiguo (asi se le habria vuelto a cortar la entrada a Infinito).
+  // "Existente" = ya tenia clave: el documento que deja la config de ChatBy, sin clave, es una conexion nueva.
   const filter = resolveFilterOnSave({
-    existing: existing.exists ? (existing.data() ?? {}) : null,
+    existing: existingConnection(existing.data()),
     input: { filterMode: input.filterMode, skuContains: input.skuContains, tagContains: input.tagContains }
   });
   const config = {
@@ -187,7 +190,7 @@ export const createStoreWebhookConfig = onCall(async (request) => {
     shopDomain: input.shopDomain?.trim() || String(seller.shopDomain ?? ""),
     webhookKey,
     ...filter,
-    cityAllowlist: defaultCityAllowlist,
+    cityAllowlist: [...DEFAULT_CITY_ALLOWLIST],
     status: "active",
     createdAt: typeof existing.data()?.createdAt === "string" ? String(existing.data()?.createdAt) : now,
     updatedAt: now
@@ -257,7 +260,7 @@ export const storeOrderWebhook = onRequest(async (request, response) => {
   const address = order.shipping_address ?? order.billing_address;
   const city = address?.city?.trim() ?? "";
   const { skuContains, tagContains } = effectiveFilter(config);
-  const cityAllowlist = Array.isArray(config.cityAllowlist) && config.cityAllowlist.length > 0 ? config.cityAllowlist.map(String) : defaultCityAllowlist;
+  const cityAllowlist = effectiveCityAllowlist(config.cityAllowlist);
   if (!matchesOrderFilters(order, skuContains, tagContains)) {
     // Spec 037 (RF_07): se apunta en la conexion solo el pedido que la ciudad SI habria dejado entrar;
     // los de fuera de cobertura se descartarian igual y contarlos inflaria el aviso (Infinito: 3.608
