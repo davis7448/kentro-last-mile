@@ -190,6 +190,10 @@ export type StoreWebhookConfig = {
   createdAt: string;
   updatedAt: string;
   lastWebhookAt?: string;
+  /** Spec 037: pedidos de ciudad cubierta descartados por el filtro de productos, por dia de Bogota
+   *  (YYYY-MM-DD) y por id de pedido. Lo escribe solo el servidor; la pantalla suma los ultimos 7 dias. */
+  filterDiscards?: Record<string, Record<string, true>>;
+  lastFilterDiscardAt?: string;
   lastUchatConfirmAt?: string;
   uchatConfirmEnabled?: boolean;
   uchatConfigured?: boolean;

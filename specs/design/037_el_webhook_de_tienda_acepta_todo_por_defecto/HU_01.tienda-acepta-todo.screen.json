@@ -1,0 +1,17 @@
+{
+  "story": "HU_01",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "heading", "name": "Conexion Shopify" },
+    { "role": "heading", "name": "Webhook de sincronizacion" },
+    { "role": "status", "name": "Entran todos tus productos. Solo se descartan pedidos fuera de Cali." },
+    { "role": "button", "name": "Cambiar filtro" },
+    { "role": "textbox", "name": "URL del webhook" },
+    { "role": "button", "name": "Copiar URL" },
+    { "role": "button", "name": "Actualizar webhook" },
+    { "role": "heading", "name": "Instrucciones Shopify" }
+  ],
+  "threshold": { "missing": 0 }
+}

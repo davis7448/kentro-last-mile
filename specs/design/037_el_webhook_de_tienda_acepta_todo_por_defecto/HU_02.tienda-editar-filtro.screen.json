@@ -1,0 +1,17 @@
+{
+  "story": "HU_02",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Conexion Shopify" },
+    { "role": "heading", "name": "Webhook de sincronizacion" },
+    { "role": "radiogroup", "name": "Filtro de productos" },
+    { "role": "radio", "name": "Todos mis productos" },
+    { "role": "radio", "name": "Solo productos cuyo SKU contenga..." },
+    { "role": "textbox", "name": "SKU contiene" },
+    { "role": "status", "name": "Solo entran pedidos con un producto cuyo SKU contenga ADMA o con la etiqueta ADMA. Los demas se descartan." },
+    { "role": "button", "name": "Guardar filtro" },
+    { "role": "button", "name": "Cancelar" }
+  ],
+  "threshold": { "missing": 0 }
+}
