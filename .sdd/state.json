@@ -1,17 +1,18 @@
 {
   "version": 2,
-  "phase": "audit",
+  "phase": "clarify",
   "activeTask": null,
   "activeSpec": {
-    "file": "specs/036_la_api_dice_que_se_paga_hoy.md",
-    "status": "approved"
+    "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
+    "status": "draft"
   },
   "ui": {
     "exposesUi": true,
     "by": "codex@local@srv995537",
     "at": "2026-10-02T15:12:13Z"
   },
-  "tasks": {
+  "tasks": {},
+  "archivedTasks036": {
     "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RNF_01", "RNF_02"], "files": ["functions/src/store-summary.ts", "functions/src/store-api.ts", "src/lib/store-summary.test.ts", "src/lib/spec-018-guards.test.ts", "src/lib/spec-036-guards.test.ts"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RF_01", "RF_03", "RNF_01"], "files": [".sdd/evidence/036_la_api_dice_que_se_paga_hoy/verify.txt", "scripts/verify-036.js"], "testWritten": true, "done": true },
     "T3": { "requirements": ["RNF_03"], "files": ["functions/src/store-api.ts", "src/lib/spec-036-guards.test.ts"], "testWritten": true, "done": true }
