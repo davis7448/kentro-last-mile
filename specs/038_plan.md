@@ -33,10 +33,15 @@ lean de ella o del documento que ella escribio.
     aunque no tengan asientos nuevos (RF_07, §3.5).
   - `planDriverCompensation(input)` → previsualizacion de la compensacion historica (RF_13, RF_16, §3.6).
   - `isOrderCodSettled(...)` → la parte nueva de "recibido" (RF_11, §3.7).
-- `functions/src/settlement-math.ts` — `computeDriverCashSummary` y la rama `driver` de `settlementTotals`
-  pasan a **delegar** en `computeDriverCorte`. Se conservan sus firmas publicas (las usan 7 archivos y las
-  guardas de la 026) con un parametro de contexto nuevo (`DriverLedgerContext`, §2). Sin contexto lanzan
-  error en vez de calcular a la antigua: es la forma de que ningun llamador se quede con la regla vieja.
+  - `buildDriverSettlementFields(input)` → el bloque de campos que se guarda en un corte de domiciliario
+    (cifras, `cashCharges`, creditos, asignaciones). `orders.ts` solo lo escribe; asi crear, abonar y cambiar
+    de estado se prueban sin Firestore (analyze M5).
+- `functions/src/settlement-math.ts` — exporta `computeDriverCorteSummary(inputs, orderIds, receivedCop,
+  context)` con el **contexto obligatorio** (`DriverLedgerContext`, §2), que delega en `computeDriverCorte`.
+  **Transicion** (analyze B1): la funcion vieja `computeDriverCashSummary` convive mientras los llamadores se
+  migran uno a uno (crear, abonos/estado, correcciones, 026), para que la suite y `tsc` sigan en verde en cada
+  tarea; una tarea final la borra junto con la rama `driver` vieja de `settlementTotals`, y desde ahi solo
+  existe la regla nueva. Ningun llamador puede quedarse con la vieja: la guarda de fuente lo comprueba.
 
 ### Entrada/salida (servidor)
 
@@ -46,11 +51,19 @@ lean de ella o del documento que ella escribio.
   - `createSettlement` (kind `driver`): suma a los pedidos de sus asientos sin cortar los de
     `pendingDeltaOrders` (RF_07); guarda **desde la creacion** `cashExpectedCop`, `cashCharges`,
     `creditInCop`/`creditOutCop` y las cifras de `computeDriverCorte` (RF_09). Lee los otros cortes del
-    domiciliario **dentro** de la transaccion (RF_04b).
+    domiciliario **dentro** de la transaccion (RF_04b). Un corte de domiciliario formado **solo** por pedidos
+    de `pendingDeltaOrders` (sin asientos sin cortar) es valido: hoy `createSettlement` lo rechaza ("There are
+    no unsettled wallet movements…") y es justo el caso de §5 "el domiciliario ya no trabaja" (analyze M6).
   - `recordDriverCashReceipt` y `updateSettlementStatus`: calculan **dentro** de la transaccion con el
     contexto leido en ella; si el `updateTime` de algun otro corte pendiente del domiciliario cambio respecto
     al usado, `failed-precondition` con `recalculo_cruzado` (RF_04b). Hoy el resumen se calcula fuera de la
     transaccion (`cashSummaryBeforeReceipt`): ese es el hueco.
+  - **Que es "antes" en RF_04b** (analyze M13): la lectura del contexto que hace la callable al empezar,
+    **fuera** de la transaccion (la que fija los `updateTime` de los otros cortes). Dentro de la transaccion
+    se vuelve a leer y se compara contra esa; si difiere se lanza `recalculo_cruzado` sin escribir. Un
+    reintento automatico de Firestore no lo enmascara, porque la comparacion es contra la lectura de fuera,
+    que no se repite. En las correcciones, "antes" es la previsualizacion y la proteccion es la precondicion
+    `lastUpdateTime` del batch (patron existente).
   - `loadDriverCashInputs`: se queda (lo usa la correccion), pero el que llama a la regla le anade el contexto.
   - `buildCodReceivedSet` en la liquidacion de tienda y de proveedor: recibe el recaudo por pedido (§3.7). El
     camino de proveedor no lo tiene hoy: lee los asientos de recaudo de los pedidos que va a pagar.
@@ -61,19 +74,25 @@ lean de ella o del documento que ella escribio.
 - `functions/src/order-corrections.ts` — carga `loadDriverLedgerContext` del domiciliario del pedido y pone
   precondicion `lastUpdateTime` sobre sus otros cortes pendientes (RF_04b, ya es el patron de este archivo).
 - `functions/src/cash-outstanding.ts` — quita el parche `belongsHere` (T25) y usa `computeDriverCorte`
-  (RF_09). La identidad de reconciliacion de la 026 se mantiene: se reescribe su prueba de identidad, no se
-  relaja.
+  (RF_09) con el contexto que carga `cash-outstanding-api.ts`. La identidad de reconciliacion de la 026 se
+  mantiene: se reescribe su prueba de identidad, no se relaja. Tambien llama a `buildCodReceivedSet` (lineas
+  544 y 715): entra en la lista de llamadores de abajo.
+- `scripts/verify-026.js` y `scripts/verify-027.js` — usan `computeDriverCashSummary` y `buildCodReceivedSet`
+  de `functions/lib`; se pasan a la regla nueva en la tarea que borra la vieja (analyze M2).
 - `functions/src/seller-ledger.ts` — `buildCodReceivedSet(settlements, codByOrder?)`: la regla de hoy mas
   `isOrderCodSettled` (RF_11, RF_12). Sigue siendo la unica.
 - Llamadores de `buildCodReceivedSet` que pasan `codByOrder`: `seller-balance.ts`, `store-api.ts`,
-  `store-api-orders.ts`, `cash-outstanding.ts`, `cash-outstanding-api.ts`, `orders.ts`, `operations-app.tsx`.
+  `store-api-orders.ts`, `cash-outstanding.ts`, `cash-outstanding-api.ts`, `orders.ts`, `operations-app.tsx`,
+  y los scripts `verify-026.js`/`verify-027.js`.
 
 ### Cliente
 
 - `src/lib/finance.ts` — `calculateDriverSettlementFinancials`: si el corte trae `cashCharges` (todos los
   creados tras el despliegue) devuelve las cifras **guardadas**; si no (cortes viejos), la copia de hoy, sin
   tocarla, para que el historico se siga viendo igual. Es la unica linea de interfaz que cambia, y no cambia
-  nada visible.
+  nada visible. Las filas por pedido de un corte nuevo leen `cashCharges` (que trae los cargos negativos), no
+  `cashAllocations` (que solo trae los positivos): si no, una devolucion se pintaria como 0 y el pedido
+  tendria dos montos (RF_09b, analyze M16).
 - `src/components/operations-app.tsx` — pasa `codByOrder` a `buildCodReceivedSet` (2 sitios). La cuenta
   congelada de apariciones en la guarda de la 026 no cambia.
 
@@ -98,8 +117,11 @@ lean de ella o del documento que ella escribio.
   `src/lib/order-corrections-plan.test.ts` (o el que exista), `src/lib/finance.test.ts` — se ajustan a la regla
   nueva caso por caso; ningun caso existente se borra sin escribir por que.
 - `src/lib/spec-038-guards.test.ts` — guardas de fuente: ningun archivo fuera de `driver-cash-ledger.ts`
-  suma `cod_revenue`/`cod_remittance` contra `driver_earning` para decidir efectivo de un corte; `settlement-math`
-  delega; el script de medicion importa el modulo.
+  suma `cod_revenue`/`cod_remittance` contra `driver_earning` para decidir efectivo de un corte, salvo una
+  **lista blanca con motivo** (`finance.ts`, copia para cortes viejos; `order-export.ts` y
+  `driver-receivable.ts`, que no deciden efectivo de un corte) (analyze M8); `settlement-math` delega y ya no
+  exporta la funcion vieja; todo llamador de `buildCodReceivedSet` pasa `codByOrder`; el script de medicion
+  importa el modulo.
 
 ## 2. Modelo de datos
 
@@ -138,7 +160,7 @@ type DriverLedgerBaseline = {
 type DriverCashHolds = {
   driverId: string;
   createdAt: string;
-  holds: Array<{ orderId: string; holdCop: number; releasedBy?: string; releasedAt?: string; compensationId?: string }>;
+  holds: Array<{ orderId: string; holdCop: number; releasedCop?: number; releasedBy?: string; releasedAt?: string; compensationId?: string }>;
 };
 ```
 
@@ -185,6 +207,25 @@ de la plataforma (`buildPlatformWalletEntry`), que ya es por asiento y no tiene 
 `cashAllocations` reparte lo recibido entre los pedidos con `cargo_X > 0`, en el mismo orden de hoy
 (creacion, tracking).
 
+**Las demas cifras del corte** (RF_09b, analyze B4). Hoy `settlementTotals` saca fletes, margen, neto y 4x1000
+de **todos** los asientos de tienda de los pedidos del corte, asi que un pedido que vuelve por §3.5 contaria
+sus fletes dos veces. Con la regla nueva:
+
+| Cifra | Regla |
+|---|---|
+| `codCop` | `Σ recaudo_X(o)` |
+| `driverPayCop` | `Σ pago_X(o)` (asientos propios del corte) |
+| `feesCop` | fletes de tienda (`delivery_fee`, `failed_fee`, `fulfillment_fee`) solo de los pedidos que entran a X por un asiento propio del domiciliario; un pedido que entra solo por §3.5 aporta 0 |
+| `platformMarginCop` | `feesCop − driverPayCop`, como hoy |
+| `cashExpectedCop` | `max(0, bruto)` |
+| `creditOutCop` | `max(0, −bruto)` |
+| `grossNetCop` / `netCop` | `−cashExpectedCop`: lo que el domiciliario entrega. Un corte a favor del domiciliario **no se transfiere**: se arrastra como `creditOutCop` (RF_08) |
+| `gmfCop` | 0: un corte de domiciliario ya no gira dinero |
+
+Hoy un corte con `netCop > 0` se le transferiria al domiciliario. Medido el 2026-11-08 (solo lectura): **0 de
+60** cortes de domiciliario han tenido `netCop > 0`, asi que pasar ese caso a arrastre (lo que dice RF_08) no
+cambia nada de lo ocurrido. El asiento de margen de la plataforma (`buildPlatformWalletEntry`) no cambia.
+
 Propiedad (RNF_02): tras calcular X, `Σ_Y cargo_Y(o) = debido(o) + retencion(o)` para todo pedido de X.
 
 ### 3.4 Reconstruccion historica (RF_05, foto de RF_05b)
@@ -219,13 +260,23 @@ corte del domiciliario los recoge por §3.5 con `cargo = −diferencia`. Liberar
 estaba en 0) y un pedido que vuelve a entrar no se devuelve dos veces porque su cargo ya quedo registrado
 (RF_15).
 
+**"Aplicar exactamente lo previsualizado"** (RF_14, analyze M11): cada fila liberada guarda `releasedCop`, la
+diferencia previsualizada. Aplicar va en una transaccion que recalcula el plan y aborta si su huella difiere de
+la previsualizada (los datos cambiaron: se vuelve a previsualizar). Lo que cambie **despues** de liberar es un
+cambio posterior al despliegue y se corrige solo en el siguiente corte (RF_17). La aplicacion escribe un
+registro de auditoria con autor, motivo, huella, filas liberadas y excluidas.
+
 ### 3.7 Recibido (RF_11, RF_12)
 
 `buildCodReceivedSet` = la regla de hoy, y ademas, para un pedido con al menos un corte **nuevo** (con
 `cashCharges`):
 1. todo corte nuevo con `chargedCop > 0` para el pedido esta saldado con la regla de la 027 (asignacion
    cubierta, o corte saldado en total);
-2. el recaudo vigente del pedido no supera el `codSeenCop` del ultimo corte saldado que lo cobro.
+2. ningun asiento de recaudo del pedido (de cualquier signo) es **posterior** al ultimo recalculo del ultimo
+   corte saldado que tiene al pedido en `cashCharges` (cualquier signo de cargo). Se compara por **tiempo**,
+   como dice RF_11 ("recaudo nuevo posterior"), no por monto: comparar `vigente ≤ codSeenCop` daba por recibido
+   el caso A cobra 78.900 → correccion → B devuelve y se salda → re-entrega de 78.900, porque 78.900 ≤ 78.900
+   (analyze B5). `codSeenCop` se queda en `DriverCashCharge` para auditar, no para decidir.
 
 Un pedido solo con cortes viejos sigue con la regla de hoy, sin cambios (RF_12). Necesita solo los cortes y
 los asientos de recaudo, que tienen todos los llamadores; el neto literal exigia el pago del domiciliario, que
@@ -253,6 +304,12 @@ direccion; los ids y tracking se dejan porque son la evidencia): KNT-003259 (rev
 KNT-004540 (recaudo borrado, +78.900), KNT-002682 (dos cortes, +93.900), KNT-002965 (pago dos veces, −8.000).
 Para cada uno: la regla vieja reproduce el cobro de produccion y la nueva el debido.
 
+Ademas, un fixture `src/lib/fixtures/038-driver-16.json` con los cortes y asientos (anonimizados) de los
+**16 pedidos de §1** y del corte del 2026-05-29 (KNT-000056): la prueba comprueba las 16 filas
+(cobrado/debido/diferencia, total +694.200) y que cada pedido con asignacion reconstruye su `expectedCop`
+(RF_05b exige "contra los 16 pedidos de §1", analyze B3). La previsualizacion de la compensacion se prueba
+sobre ese mismo fixture: opcion A = $640.200 (analyze B2).
+
 ### 4.3 Reconstruccion por pedido (RF_05b)
 
 La prueba no compara totales: para cada corte de los fixtures, cada pedido con asignacion debe reconstruir
@@ -267,7 +324,8 @@ y el conjunto de "recibidos" viejo vs. nuevo (RF_12). Ambas diferencias deben se
 
 ### 4.5 Guardas y suite
 
-Las guardas `spec-018`, `spec-026`, `spec-027` en verde; `spec-038-guards` nueva. `npx tsc --noEmit` raiz y
+Las guardas `spec-018` y `spec-026` en verde, y las pruebas de la 027 (no hay `spec-027-guards`: viven en
+`seller-ledger.test.ts` y `cash-outstanding.test.ts`, analyze M3); `spec-038-guards` nueva. `npx tsc --noEmit` raiz y
 `functions/`, `npx vitest run`, `npm run lint`.
 
 ## 5. Dependencias nuevas
@@ -278,8 +336,8 @@ Ninguna. El generador de la prueba de propiedad es un LCG de diez lineas con sem
 
 1. **RF_11** (§3.7) usa cortes y recaudo, no el pago del domiciliario: un pedido re-entregado espera a que su
    corte se salde aunque el neto ya cuadrara. Es mas estricto, nunca mas laxo. Aceptado el 2026-11-08.
-2. **Cuatro copias convergen en una**: el riesgo es un llamador olvidado. Mitigacion: `computeDriverCashSummary`
-   sin contexto lanza error, y la guarda de fuente.
+2. **Cuatro copias convergen en una**: el riesgo es un llamador olvidado. Mitigacion: la funcion nueva exige el
+   contexto (obligatorio en el tipo), la vieja se borra en la penultima tarea, y la guarda de fuente.
 3. **La identidad de la 026** (`cash-outstanding.ts`) depende de la regla vieja y del parche T25. Se reescribe
    con la nueva; si la identidad no cierra, la tarea no se da por hecha.
 4. **Foto de ~300 KB** en un documento: holgado frente a 1 MiB, y no crece (los cortes nuevos guardan su
