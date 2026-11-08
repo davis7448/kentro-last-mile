@@ -227,9 +227,9 @@ estaba en 0) y un pedido que vuelve a entrar no se devuelve dos veces porque su 
    cubierta, o corte saldado en total);
 2. el recaudo vigente del pedido no supera el `codSeenCop` del ultimo corte saldado que lo cobro.
 
-Un pedido solo con cortes viejos sigue con la regla de hoy, sin cambios (RF_12). **Esto no es literalmente
-"neto contra neto"** (ver §6, riesgo 1): necesita solo los cortes y los asientos de recaudo, que tienen todos los
-llamadores, mientras que el neto exige el pago del domiciliario, que la tienda y la API de tiendas no leen.
+Un pedido solo con cortes viejos sigue con la regla de hoy, sin cambios (RF_12). Necesita solo los cortes y
+los asientos de recaudo, que tienen todos los llamadores; el neto literal exigia el pago del domiciliario, que
+la tienda y la API de tiendas no leen. RF_11 se reescribio asi el 2026-11-08, decidido por el responsable.
 
 ## 4. Estrategia de testing
 
@@ -276,9 +276,8 @@ Ninguna. El generador de la prueba de propiedad es un LCG de diez lineas con sem
 
 ## 6. Riesgos
 
-1. **RF_11 no queda "neto contra neto" al pie de la letra** (§3.7). Se compara con lo que todos los
-   llamadores tienen. Requiere que el responsable lo acepte y que la spec se ajuste (constitucion 1) antes de
-   implementar esa tarea.
+1. **RF_11** (§3.7) usa cortes y recaudo, no el pago del domiciliario: un pedido re-entregado espera a que su
+   corte se salde aunque el neto ya cuadrara. Es mas estricto, nunca mas laxo. Aceptado el 2026-11-08.
 2. **Cuatro copias convergen en una**: el riesgo es un llamador olvidado. Mitigacion: `computeDriverCashSummary`
    sin contexto lanza error, y la guarda de fuente.
 3. **La identidad de la 026** (`cash-outstanding.ts`) depende de la regla vieja y del parche T25. Se reescribe

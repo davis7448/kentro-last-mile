@@ -164,12 +164,15 @@ reescribir ningun corte cerrado.
 
 ### Recaudo recibido (hallazgo de la revision del PR #7)
 
-- **RF_11 (estado):** **Mientras** lo que un pedido debe hoy (recaudo − pago del domiciliario, la cifra de
-  RF_02) supere lo que registraron para el los cortes de domiciliario saldados, el sistema MUST NOT dar ese
-  pedido por "efectivo recibido" para pagarle a la tienda o al proveedor. La comparacion es **neto contra
-  neto**: nunca el recaudo bruto contra lo cobrado. En un corte saldado en total (spec 027 RF_01), cada
-  asignacion cuenta como cobrada entera, cubierta o no. *(Grill 2, decidido por el responsable el
-  2026-11-07.)* Hoy basta con que el pedido tenga una asignacion en un corte saldado: si se corrige
+- **RF_11 (estado):** **Mientras** un pedido que ya entro en un corte calculado con esta spec tenga efectivo
+  cobrado en un corte de domiciliario que **no** esta saldado, o tenga recaudo nuevo posterior al ultimo corte
+  saldado que lo cobro, el sistema MUST NOT dar ese pedido por "efectivo recibido" para pagarle a la tienda o
+  al proveedor. Nunca se compara el recaudo bruto contra lo cobrado neto. En un corte saldado en total (spec
+  027 RF_01), cada asignacion cuenta como cobrada entera, cubierta o no. Un pedido que solo esta en cortes
+  anteriores a esta spec sigue con la regla de hoy. *(Grill 2, el 2026-11-07, eligio neto contra neto; el
+  plan, el 2026-11-08, mostro que eso obliga a que el saldo de tienda, la API de tiendas y la liquidacion de
+  proveedor lean los pagos del domiciliario, y el responsable eligio esta forma, que usa solo lo que esos
+  sitios ya leen.)* Hoy basta con que el pedido tenga una asignacion en un corte saldado: si se corrige
   y se vuelve a entregar, su recaudo nuevo contaria como recibido antes de que el domiciliario lo entregue.
   Medido el 2026-11-07: 0 casos.
 - **RF_12 (ubicua):** RF_11 MUST seguir siendo la regla unica de "recibido" (spec 018 RF_04, spec 027
@@ -272,6 +275,7 @@ reescribir ningun corte cerrado.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-11-07 | Borrador con medicion pedido a pedido y propuesta de compensacion | Pregunta del responsable sobre la diferencia en cortes viejos |
+| 2026-11-08 | RF_11 reescrito: "recibido" = todo cobro en cortes saldados y sin recaudo nuevo desde el ultimo | El plan mostro el costo de leer pagos del domiciliario en tienda/API/proveedor; decidido por el responsable |
 | 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)
