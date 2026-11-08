@@ -1,6 +1,6 @@
 # Spec 038: Que cada recaudo se le cobre al domiciliario una sola vez
 
-- **Estado:** borrador (grill hecho el 2026-11-08, pendiente de aprobacion)
+- **Estado:** aprobada (2026-11-08, por el responsable de la plataforma, tras el grill)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-11-07
 - **Origen:** el responsable pregunto por que la auditoria de efectivo del domiciliario mostraba cerca de

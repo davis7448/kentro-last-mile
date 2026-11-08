@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "phase": "clarify",
+  "phase": "plan",
   "activeTask": null,
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
-    "status": "draft"
+    "status": "approved"
   },
   "ui": {
     "exposesUi": true,
