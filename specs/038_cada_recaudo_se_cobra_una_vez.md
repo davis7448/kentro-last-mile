@@ -1,6 +1,6 @@
 # Spec 038: Que cada recaudo se le cobre al domiciliario una sola vez
 
-- **Estado:** borrador
+- **Estado:** borrador (grill hecho el 2026-11-08, pendiente de aprobacion)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-11-07
 - **Origen:** el responsable pregunto por que la auditoria de efectivo del domiciliario mostraba cerca de
@@ -112,11 +112,22 @@ reescribir ningun corte cerrado.
 - **RF_04 (estado):** **Mientras** un corte este pagado o conciliado, el sistema MUST NOT cambiar su
   registro de RF_03 ni sus cifras. Lo que haya que corregir se cobra o se devuelve en un corte abierto
   (constitucion, principio 10).
+- **RF_04b (error):** **Si** los registros de RF_03 de los otros cortes del domiciliario cambiaron entre que
+  se leyeron y que se guarda el recalculo de un corte, el sistema MUST rechazar ese recalculo sin escribir
+  nada y decirle al administrador que lo reintente. Una prueba MUST simular dos recalculos cruzados.
+  *(Grill 4, decidido por el responsable el 2026-11-07.)*
 - **RF_05 (ubicua):** Para cortes creados antes de esta spec, "lo ya registrado" MUST salir de la asignacion
   guardada en el corte cuando existe, y si no, de reconstruir el pedido con los movimientos que existian en
-  el ultimo recalculo del corte, con la misma regla que `specs/038_measure.js` valido contra los 60 cortes de
+  el ultimo recalculo del corte, con la regla que `specs/038_measure.js` valido contra los 60 cortes de
   produccion. Si un corte con asignaciones no lista un pedido, ese pedido MUST contar como que no aporto
   recaudo (solo, a lo sumo, el descuento del pago).
+- **RF_05b (ubicua):** Esa reconstruccion MUST vivir en **un modulo puro** (constitucion §3 y §9) que usen la
+  app y el script de medicion; el script MUST NOT llevar su propia copia. Su resultado pedido a pedido para
+  todos los cortes cerrados MUST guardarse **una sola vez**, antes de desplegar, como foto auditada (fecha,
+  autor, cifras), y a partir de ahi "lo ya registrado" de un corte viejo sale de la foto, no de volver a
+  reconstruir. Guardar la foto es una escritura en produccion: la aprueba el responsable. Las pruebas MUST
+  verificar la reconstruccion **por pedido**, no solo por total de corte: contra las asignaciones guardadas
+  de cada corte y contra los 16 pedidos de §1. *(Grill 6, decidido por el responsable el 2026-11-08.)*
 
 ### Devolver lo ya cobrado
 
@@ -129,8 +140,12 @@ reescribir ningun corte cerrado.
   domiciliario si este tiene un movimiento propio sin cortar; KNT-005724 y KNT-006347 nunca volvieron a
   entrar.
 - **RF_08 (error):** **Si** el total que un corte debe devolver supera el efectivo que el domiciliario debe
-  entregar en ese corte, el sistema MUST conservar el resto como saldo a favor del domiciliario y
-  descontarlo del siguiente corte. MUST NOT perderse al redondear el esperado a 0.
+  entregar en ese corte, el sistema MUST conservar el resto como **una linea de saldo a favor** del
+  domiciliario que el siguiente corte descuenta **una sola vez**. MUST NOT perderse al redondear el esperado
+  a 0. El registro de RF_03 de cada pedido MUST guardar su cifra **sin recortar** (puede ser negativa); el
+  recorte a 0 solo afecta al total del corte, y lo que ese recorte deja sin pagar es exactamente el saldo a
+  favor. Asi la suma de los registros pedido a pedido sigue siendo lo debido (RNF_02) y el saldo a favor no
+  vuelve a nacer de los pedidos. *(Grill 1, decidido por el responsable el 2026-11-07.)*
 
 ### Una sola regla
 
@@ -138,15 +153,23 @@ reescribir ningun corte cerrado.
   marcarlo pagado o conciliado, en la previsualizacion de una correccion y en el informe de efectivo de la
   spec 026. Hoy la creacion del corte descuenta solo los pagos propios del corte y los abonos descuentan
   todos los pagos del pedido: son dos reglas.
+- **RF_09b (ubicua):** La regla de RF_02 MUST aplicarse a **todas** las cifras del corte de domiciliario
+  (recaudo, pago al domiciliario, margen, neto girado, 4x1000 y reparto de abonos pedido a pedido), no solo al
+  efectivo esperado. En un mismo corte un pedido MUST NOT mostrar dos montos distintos, y el efectivo esperado
+  MUST ser recaudo − pago de ese mismo corte (mas o menos el saldo a favor de RF_08). *(Grill 3, decidido por
+  el responsable el 2026-11-07.)*
 - **RF_10 (evento):** **Cuando** el administrador previsualice una correccion de un pedido cuyo efectivo ya
   cobro un corte cerrado, la previsualizacion MUST mostrar cuanto se le devolvera (o cobrara) al
   domiciliario en su siguiente corte, con la misma cifra que luego se aplique.
 
 ### Recaudo recibido (hallazgo de la revision del PR #7)
 
-- **RF_11 (estado):** **Mientras** el recaudo vigente de un pedido supere lo que cobraron por el los cortes
-  de domiciliario saldados, el sistema MUST NOT dar ese pedido por "efectivo recibido" para pagarle a la
-  tienda o al proveedor. Hoy basta con que el pedido tenga una asignacion en un corte saldado: si se corrige
+- **RF_11 (estado):** **Mientras** lo que un pedido debe hoy (recaudo − pago del domiciliario, la cifra de
+  RF_02) supere lo que registraron para el los cortes de domiciliario saldados, el sistema MUST NOT dar ese
+  pedido por "efectivo recibido" para pagarle a la tienda o al proveedor. La comparacion es **neto contra
+  neto**: nunca el recaudo bruto contra lo cobrado. En un corte saldado en total (spec 027 RF_01), cada
+  asignacion cuenta como cobrada entera, cubierta o no. *(Grill 2, decidido por el responsable el
+  2026-11-07.)* Hoy basta con que el pedido tenga una asignacion en un corte saldado: si se corrige
   y se vuelve a entregar, su recaudo nuevo contaria como recibido antes de que el domiciliario lo entregue.
   Medido el 2026-11-07: 0 casos.
 - **RF_12 (ubicua):** RF_11 MUST seguir siendo la regla unica de "recibido" (spec 018 RF_04, spec 027
@@ -164,6 +187,12 @@ reescribir ningun corte cerrado.
   motivo. MUST NOT tocar ningun corte pagado o conciliado.
 - **RF_15 (ubicua):** Aplicar la compensacion dos veces, o que despues el pedido vuelva a entrar en un corte,
   MUST NOT devolverle el mismo dinero dos veces. (Con RF_02 la segunda vez la diferencia ya es 0.)
+- **RF_17 (estado):** **Mientras** no se haya aprobado su compensacion (RF_14), la diferencia que un pedido
+  arrastra de antes del despliegue (la que mide `specs/038_measure.js` en ese momento) MUST quedar congelada:
+  la regla de RF_02 MUST NOT devolverla ni cobrarla sola aunque el pedido entre a un corte. Lo que cambie
+  despues del despliegue si se corrige solo en el siguiente corte. KNT-007828 es historico (corregido antes
+  del despliegue) y espera la aprobacion como los demas. *(Grill 5, decidido por el responsable el
+  2026-11-07.)*
 - **RF_16 (opcion):** **Donde** el responsable excluya pedidos de la compensacion (por ejemplo, los dos de
   §5 hasta aclararlos), el sistema MUST dejarlos fuera y listarlos como pendientes en la previsualizacion.
 
@@ -171,8 +200,8 @@ reescribir ningun corte cerrado.
 
 - **RNF_01:** Antes de desplegar, `specs/038_measure.js` (o su sucesor en `scripts/`) MUST informar, para cada
   corte **pendiente** y para el siguiente corte de cada domiciliario, cuanto cambia su efectivo esperado con
-  la regla nueva. El arreglo mueve dinero por si solo (KNT-007828 se devolveria en el siguiente corte sin
-  compensacion manual): esa cifra la aprueba el responsable antes del despliegue.
+  la regla nueva. Con RF_17 ese cambio deberia ser 0; si no lo es, la cifra la aprueba el responsable antes
+  del despliegue.
 - **RNF_02:** Una prueba de propiedad MUST comprobar que, despues de calcular cualquier corte, la suma de lo
   registrado por todos los cortes de un domiciliario para un pedido es igual a lo que el pedido debe hoy, en
   secuencias de entrega, visita fallida, correccion, re-entrega, recaudo borrado y abonos parciales.
@@ -186,6 +215,11 @@ reescribir ningun corte cerrado.
 
 - **Dos cortes pendientes con el mismo pedido.** Cada uno resta lo registrado por el otro en su ultimo
   calculo; el que se recalcule despues absorbe el cambio. La suma sigue siendo lo debido (RNF_02).
+- **Dos recalculos casi simultaneos** (dos abonos, o un abono y una correccion). Lo cubre RF_04b: el segundo
+  se rechaza y se reintenta.
+- **Un recalculo sube el esperado de un corte pendiente ya abonado en parte.** Es lo que pasa hoy con
+  cualquier corte pendiente: sube su pendiente y el faltante se cobra en ese corte. Un corte cerrado nunca
+  sube (RF_04).
 - **Corte pendiente que se recalcula despues de que el pedido entro a otro corte** (causa 3). El corte que
   ya lo cobro conserva su registro; el otro cobra solo la diferencia.
 - **Recaudo borrado por una correccion** (causa 2). Lo ya cobrado sale del registro del corte, no de los
@@ -198,6 +232,9 @@ reescribir ningun corte cerrado.
   vieja y movio el flete, **pero no creo el recaudo en ADMA**. Hoy ese recaudo no esta en el libro de nadie.
   Si el cliente si pago en efectivo, lo que falta es el recaudo de ADMA y al domiciliario no se le debe nada;
   si el pedido paso a prepago, se le deben $27.000 a cada uno. No se compensan hasta aclararlo (RF_16).
+- **El domiciliario ya no tiene siguiente corte** (dejo la flota). RF_07 no puede meter el pedido en ningun
+  corte: la diferencia MUST quedar visible en la previsualizacion de RF_13 como saldo pendiente de ese
+  domiciliario, y se paga creando un corte para el.
 - **Redondeo.** La diferencia total ($694.202) y la suma por pedido ($694.200) difieren en $2 del 4x1000 de
   cortes viejos; la compensacion usa la suma por pedido.
 - **Cortes viejos recalculados a mano.** Los cortes del 2026-05-29 y 2026-06-12 fueron recalculados ya
@@ -235,15 +272,15 @@ reescribir ningun corte cerrado.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-11-07 | Borrador con medicion pedido a pedido y propuesta de compensacion | Pregunta del responsable sobre la diferencia en cortes viejos |
+| 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)
 
 Lo que propongo, una vez desplegado el arreglo:
 
-1. **KNT-007828 ($89.900)** se devuelve solo en el siguiente corte del domiciliario: ya tiene movimientos
-   nuevos sin cortar (la reversa de su pago y el pago de la visita fallida, del 2026-11-07), asi que entra al
-   corte y RF_02 calcula la devolucion. Aparece en la medicion de RNF_01 antes del despliegue.
-2. **Los otros 13 pedidos** entran, con la previsualizacion de RF_13, al corte abierto del domiciliario:
+1. **KNT-007828 ($89.900)**: entrara a su siguiente corte por sus movimientos nuevos del 2026-11-07, pero por
+   RF_17 su devolucion queda congelada hasta que la apruebes, igual que los demas.
+2. **Este y los otros 13 pedidos** entran, con la previsualizacion de RF_13, al corte abierto del domiciliario:
    - siete a su favor por $598.300 (KNT-000262, 002682, 003259, 003837, 003827, 004540, 006258);
    - seis en su contra por $48.000 (los $8.000 de visita fallida descontados dos veces).
 3. **KNT-005724 y KNT-006347 ($54.000)** quedan fuera hasta que el responsable aclare la pregunta de §5.
