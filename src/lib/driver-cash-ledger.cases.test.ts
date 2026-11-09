@@ -175,3 +175,28 @@ describe("los 16 pedidos de §1 (RF_05b)", () => {
     expect(refund).toMatchObject({ cashExpectedCop: 0, creditOutCop: 686200 });
   });
 });
+
+/**
+ * Spec 038 · T19: `buildDriverLedgerSnapshot` es lo que escribe `scripts/snapshot-038-baseline.js` (RF_05b,
+ * RF_17). Con los datos reales del domiciliario de la spec da las 16 retenciones y los 686.200 de la medicion.
+ */
+describe("spec 038 · T19 · la foto historica de un domiciliario real", () => {
+  const { fixture, baseline, tracking } = load(driver16);
+
+  it("las retenciones son los 16 pedidos de la medicion y suman 686.200", async () => {
+    const { buildDriverLedgerSnapshot } = await import("../../functions/src/driver-cash-ledger");
+    const snapshot = buildDriverLedgerSnapshot({
+      driverId: fixture.driverId,
+      settlements: fixture.settlements,
+      entries: fixture.entries,
+      now: "2026-11-09T12:00:00.000Z",
+      createdBy: "prueba"
+    });
+    expect(new Map(snapshot.holds.holds.map((h) => [tracking.get(h.orderId), h.holdCop]))).toEqual(
+      new Map(fixture.expected.map((r) => [r.trackingCode, r.excessCop]))
+    );
+    expect(snapshot.totalHoldCop).toBe(686200);
+    expect(snapshot.baseline).toEqual({ ...baseline, createdAt: "2026-11-09T12:00:00.000Z", createdBy: "prueba", measuredDiffCop: 686200 });
+    expect(snapshot.holds).toMatchObject({ driverId: fixture.driverId, createdAt: "2026-11-09T12:00:00.000Z" });
+  });
+});

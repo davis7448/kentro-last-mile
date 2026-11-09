@@ -220,13 +220,18 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: prueba de fuente sobre `firestore.rules`: ambos `match` existen, `allow write: if false`,
     `allow read` solo con la funcion de admin que ya usan las reglas
 
-- [ ] **T19: Script de la foto historica (en seco por defecto)**
+- [x] **T19: Script de la foto historica (en seco por defecto)**
   * Requisitos cubiertos: RF_05b, RF_17
-  * Archivos: scripts/snapshot-038-baseline.js
+  * Archivos: scripts/snapshot-038-baseline.js, src/lib/snapshot-038-baseline.test.ts,
+    functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts, src/lib/driver-cash-ledger.cases.test.ts,
+    functions/src/cash-outstanding.ts (anadidos al ejecutar: la derivacion de la foto y las retenciones pasa a una
+    funcion pura del nucleo, `buildDriverLedgerSnapshot`, que usan el script y el informe de la 026 en vez de
+    tener cada uno su copia)
   * Accion: usa `rebuildHistoricalCharges` y `computeHolds` de `functions/lib` (tras `cd functions && npm
     run build`); sin flags imprime lo que escribiria (cortes, pedidos, retenciones, total); con `--write
     --approved-by "<nombre>"` escribe un documento por domiciliario y aborta si las retenciones no coinciden
-    con la medicion del momento
+    con la medicion del momento (`--expect-total <cop> --expect-orders <n>`, las cifras que la medicion de ese
+    dia imprime); escribe con `create`, asi que nunca pisa una foto existente
   * Verificacion: corrida en seco contra produccion (solo lectura): 16 retenciones y la cifra de la medicion de ese dia ($686.200 el 2026-11-09) para
     `driver-1778271901513`, 0 para el resto; la salida se guarda como evidencia. **No** se corre con `--write`
 

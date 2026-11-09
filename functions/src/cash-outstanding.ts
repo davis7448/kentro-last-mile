@@ -21,15 +21,12 @@ import type { CashAlertSettings } from "./cash-outstanding-schemas";
 import { buildCodReceivedSet, codEntriesByOrder, codPartialReceivedCop, isOrderCashSettledInCorte } from "./seller-ledger";
 import { isDriverSettlementCashSettled, settlementCashReceivedCop } from "./settlement-math";
 import {
+  buildDriverLedgerSnapshot,
   computeDriverCorte,
-  computeHolds,
-  type DriverBaselineCharge,
   type DriverCashHolds,
   type DriverLedgerBaseline,
   type DriverLedgerContext,
-  type DriverLedgerSettlement,
-  lastRecalculatedAt,
-  rebuildHistoricalCharges
+  type DriverLedgerSettlement
 } from "./driver-cash-ledger";
 import { groupWithheldBySupplier } from "./supplier-withheld";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
@@ -754,12 +751,6 @@ function driverLedgerResolver(
     const cached = cache.get(driverId);
     if (cached) return cached;
     const own = driverSettlements.filter((settlement) => settlement.ownerId === driverId);
-    const codByOrder = new Map<string, WalletEntryDoc[]>();
-    const payByOrder = new Map<string, WalletEntryDoc[]>();
-    for (const [orderId, entries] of entriesByOrder) {
-      codByOrder.set(orderId, entries.filter(isReceivableCodEntry));
-      payByOrder.set(orderId, entries.filter((entry) => isReceivableDriverPay(entry) && entry.ownerId === driverId));
-    }
     const settlements: DriverLedgerSettlement[] = own.map((settlement) => {
       const record = settlement as SettlementDoc & Partial<Pick<DriverLedgerSettlement, "cashCharges" | "creditInCop" | "creditOutCop">>;
       return {
@@ -783,25 +774,9 @@ function driverLedgerResolver(
       cache.set(driverId, fromDocs);
       return fromDocs;
     }
-    const baselineSettlements: Record<string, DriverBaselineCharge[]> = {};
-    for (const settlement of own) {
-      if (!(settlement as { cashCharges?: unknown }).cashCharges) {
-        baselineSettlements[settlement.id] = rebuildHistoricalCharges(settlement, codByOrder, payByOrder);
-      }
-    }
-    const withoutHolds: DriverLedgerContext = {
-      driverId,
-      settlements,
-      baseline: { driverId, createdAt: input.now, createdBy: "derived", measuredDiffCop: 0, settlements: baselineSettlements },
-      holds: null
-    };
+    // La misma foto y las mismas retenciones que escribiria el script en este momento (una sola copia).
     const driverEntries = Array.from(entriesByOrder.values()).flat().filter((entry) => isReceivableCodEntry(entry) || (isReceivableDriverPay(entry) && entry.ownerId === driverId));
-    const holds = computeHolds({
-      entries: driverEntries,
-      context: withoutHolds,
-      recalculatedAt: new Map(own.map((settlement) => [settlement.id, lastRecalculatedAt(settlement)]))
-    });
-    const context: DriverLedgerContext = { ...withoutHolds, holds: { driverId, createdAt: input.now, holds } };
+    const { context } = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: driverEntries, now: input.now, createdBy: "derived" });
     cache.set(driverId, context);
     return context;
   };

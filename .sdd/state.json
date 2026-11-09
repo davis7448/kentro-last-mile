@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T19",
+  "activeTask": "T20",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -30,7 +30,7 @@
     "T16": { "requirements": ["RF_11", "RF_12"], "files": ["functions/src/seller-balance.ts", "functions/src/store-api.ts", "functions/src/store-api-orders.ts", "functions/src/cash-outstanding.ts", "functions/src/cash-outstanding-api.ts", "functions/src/orders.ts", "src/lib/store-api-orders.test.ts", "src/lib/seller-balance.test.ts", "src/lib/cash-outstanding-loads.test.ts", "functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": true, "done": true },
     "T17": { "requirements": ["RF_09b", "RF_11"], "files": ["src/lib/finance.ts", "src/lib/finance.test.ts", "src/components/operations-app.tsx", "src/lib/types.ts", "src/lib/driver-settlement-export.ts"], "testWritten": true, "done": true },
     "T18": { "requirements": ["RF_05b", "RF_17"], "files": ["firestore.rules", "src/lib/spec-038-rules.test.ts"], "testWritten": true, "done": true },
-    "T19": { "requirements": ["RF_05b", "RF_17"], "files": ["scripts/snapshot-038-baseline.js"], "testWritten": false, "done": false },
+    "T19": { "requirements": ["RF_05b", "RF_17"], "files": ["scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.cases.test.ts", "functions/src/cash-outstanding.ts"], "testWritten": true, "done": true },
     "T20": { "requirements": ["RF_13", "RF_14", "RF_15", "RF_16"], "files": ["scripts/compensate-038.js", "src/lib/driver-cash-ledger.cases.test.ts"], "testWritten": false, "done": false },
     "T21": { "requirements": ["RF_05b", "RNF_01"], "files": ["specs/038_measure.js"], "testWritten": false, "done": false },
     "T22": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts", "scripts/verify-026.js", "scripts/verify-027.js"], "testWritten": false, "done": false },

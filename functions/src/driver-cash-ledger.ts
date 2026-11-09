@@ -496,6 +496,75 @@ export function computeHolds(input: {
   return holds;
 }
 
+/** Lo que `buildDriverLedgerSnapshot` necesita de un corte: el historico y, si es nuevo, sus cargos. */
+export type SnapshotSettlement = HistoricalSettlement & Pick<DriverLedgerSettlement, "status"> &
+  Partial<Pick<DriverLedgerSettlement, "cashCharges" | "creditInCop" | "creditOutCop">>;
+
+export type DriverLedgerSnapshot = {
+  baseline: DriverLedgerBaseline;
+  holds: DriverCashHolds;
+  /** El contexto que resulta de leer esos dos documentos con estos cortes. */
+  context: DriverLedgerContext;
+  /** Suma de las retenciones: la diferencia historica que se congela (va tambien en `measuredDiffCop`). */
+  totalHoldCop: number;
+};
+
+/**
+ * La foto historica (RF_05b) y las retenciones (RF_17) de un domiciliario, tal como las escribe
+ * `scripts/snapshot-038-baseline.js`. Es tambien lo que deriva el informe de la 026 cuando un domiciliario aun no
+ * tiene foto: una sola copia de como se hace. `settlements` son SOLO los cortes de este domiciliario; los que ya
+ * traen `cashCharges` (calculados con la regla nueva) no se fotografian, se leen. `entries` puede traer asientos
+ * de otros duenos: cada pieza filtra los suyos.
+ */
+export function buildDriverLedgerSnapshot(input: {
+  driverId: string;
+  settlements: readonly SnapshotSettlement[];
+  entries: readonly WalletEntryDoc[];
+  now: string;
+  createdBy: string;
+}): DriverLedgerSnapshot {
+  const { driverId } = input;
+  const codByOrder = new Map<string, WalletEntryDoc[]>();
+  const payByOrder = new Map<string, WalletEntryDoc[]>();
+  for (const entry of input.entries) {
+    const orderId = String(entry.orderId ?? "");
+    if (!orderId) continue;
+    const isCod = entry.ownerType === "seller" && COD_ENTRY_TYPES.has(entry.type);
+    const isOwnPay = entry.ownerType === "driver" && entry.ownerId === driverId && entry.type === "driver_earning";
+    const target = isCod ? codByOrder : isOwnPay ? payByOrder : null;
+    if (target) target.set(orderId, [...(target.get(orderId) ?? []), entry]);
+  }
+  const baselineSettlements: Record<string, DriverBaselineCharge[]> = {};
+  for (const settlement of input.settlements) {
+    if (!Array.isArray(settlement.cashCharges)) {
+      baselineSettlements[settlement.id] = rebuildHistoricalCharges(settlement, codByOrder, payByOrder);
+    }
+  }
+  const settlements: DriverLedgerSettlement[] = input.settlements.map((settlement) => ({
+    id: settlement.id,
+    status: settlement.status,
+    orderIds: (settlement.orderIds ?? []).map(String),
+    ...(Array.isArray(settlement.cashCharges) ? { cashCharges: settlement.cashCharges } : {}),
+    ...(typeof settlement.creditInCop === "number" ? { creditInCop: settlement.creditInCop } : {}),
+    ...(typeof settlement.creditOutCop === "number" ? { creditOutCop: settlement.creditOutCop } : {})
+  }));
+  const withoutHolds: DriverLedgerContext = {
+    driverId,
+    settlements,
+    baseline: { driverId, createdAt: input.now, createdBy: input.createdBy, measuredDiffCop: 0, settlements: baselineSettlements },
+    holds: null
+  };
+  const holdRows = computeHolds({
+    entries: input.entries,
+    context: withoutHolds,
+    recalculatedAt: new Map(input.settlements.map((settlement) => [settlement.id, lastRecalculatedAt(settlement)]))
+  });
+  const totalHoldCop = holdRows.reduce((total, hold) => total + hold.holdCop, 0);
+  const baseline: DriverLedgerBaseline = { ...withoutHolds.baseline!, measuredDiffCop: totalHoldCop };
+  const holds: DriverCashHolds = { driverId, createdAt: input.now, holds: holdRows };
+  return { baseline, holds, context: { ...withoutHolds, baseline, holds }, totalHoldCop };
+}
+
 /** Una fila de la previsualizacion de compensacion (RF_13). */
 export type CompensationRow = {
   orderId: string;

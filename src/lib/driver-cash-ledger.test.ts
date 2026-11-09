@@ -634,3 +634,29 @@ describe("refreshFrozenReceipts", () => {
     });
   });
 });
+
+describe("spec 038 · T19 · buildDriverLedgerSnapshot", () => {
+  const cod = (id: string, orderId: string, amountCop: number, createdAt: string, ownerId = "s1") =>
+    ({ id, ownerType: "seller", ownerId, orderId, type: "cod_revenue", amountCop, description: "", createdAt }) as WalletEntryDoc;
+  const pay = (id: string, orderId: string, amountCop: number, createdAt: string, ownerId = "d1", settlementId?: string) =>
+    ({ id, ownerType: "driver", ownerId, orderId, type: "driver_earning", amountCop, description: "", createdAt, ...(settlementId ? { settlementId } : {}) }) as WalletEntryDoc;
+
+  it("solo fotografia los cortes viejos; el pago de otro domiciliario no cuenta; sin diferencia no hay retencion", async () => {
+    const { buildDriverLedgerSnapshot } = await import("../../functions/src/driver-cash-ledger");
+    const viejo = { id: "V", kind: "driver", ownerId: "d1", status: "reconciled", orderIds: ["o1"], createdAt: "2026-10-01T00:00:00.000Z",
+      cashExpectedCop: 41000, cashAllocations: [{ orderId: "o1", expectedCop: 41000, receivedCop: 41000, covered: true }] } as unknown as SettlementDoc;
+    const nuevo = { id: "N", kind: "driver", ownerId: "d1", status: "pending", orderIds: ["o2"], createdAt: "2026-12-01T00:00:00.000Z",
+      cashCharges: [{ orderId: "o2", codCop: 10000, driverPayCop: 0, chargedCop: 10000, codSeenCop: 10000 }] } as unknown as SettlementDoc;
+    const snapshot = buildDriverLedgerSnapshot({
+      driverId: "d1",
+      settlements: [viejo, nuevo],
+      entries: [cod("c1", "o1", 50000, "2026-09-30T00:00:00.000Z"), cod("c2", "o2", 10000, "2026-11-30T00:00:00.000Z"), pay("p1", "o1", 9000, "2026-09-30T00:00:00.000Z", "d1", "V"), pay("p2", "o1", 7000, "2026-09-30T00:00:00.000Z", "otro")],
+      now: "2026-11-09T00:00:00.000Z",
+      createdBy: "prueba"
+    });
+    expect(Object.keys(snapshot.baseline.settlements)).toEqual(["V"]);
+    expect(snapshot.baseline.settlements.V).toEqual([{ orderId: "o1", chargedCop: 41000, driverPayCop: 9000, source: "allocation" }]);
+    expect(snapshot.holds.holds).toEqual([]);
+    expect(snapshot.totalHoldCop).toBe(0);
+  });
+});

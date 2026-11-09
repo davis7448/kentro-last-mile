@@ -1,0 +1,6 @@
+# Spec 038 T19 — medicion independiente del mismo dia (node specs/038_measure.js, solo lectura), 2026-11-09
+domiciliario | cortes | pedidos | cobrado | debido | diferencia | suma por pedido | cortes sin cuadrar
+driver-1778271901513 | 59 | 4821 | 411.313.573 | 410.627.371 | 686.202 | 686.200 | 0
+driver-1784251215977 | 2 | 19 | 3.608.100 | 3.608.100 | 0 | 0 | 0
+
+Riesgo buildCodReceivedSet (COD nuevo tras corte saldado): 0 pedido(s)
