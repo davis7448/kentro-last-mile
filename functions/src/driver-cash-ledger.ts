@@ -434,3 +434,186 @@ export function pendingDeltaOrders(input: { entries: readonly WalletEntryDoc[]; 
     }))
     .filter((row) => row.deltaCop !== 0);
 }
+
+/** Lo ya registrado por TODOS los cortes del domiciliario, por pedido. */
+function registeredByAllCortes(context: DriverLedgerContext): Map<string, number> {
+  const orderIds = new Set(context.settlements.flatMap((settlement) => (settlement.orderIds ?? []).map(String)));
+  return registeredByOtherCortes(context, "", orderIds);
+}
+
+/**
+ * Retenciones de RF_17, calculadas una vez al escribir la foto (plan §3.6):
+ *
+ *   retencion(o) = Σ cargos registrados − debidoVisto(o)
+ *
+ * `debidoVisto` usa solo asientos con `createdAt <=` el ultimo recalculo del ultimo corte que contiene el
+ * pedido (`recalculatedAt`, por id de corte). Asi una re-entrega posterior aun sin cortar no queda congelada
+ * (la cobra el siguiente corte), y un recaudo BORRADO por una correccion si, porque el asiento ya no existe
+ * (KNT-007828). Con esto, desplegar no cambia el efectivo de ningun corte (RNF_01).
+ *
+ * Devuelve solo los pedidos con retencion distinta de 0, en el orden en que aparecen en los cortes.
+ */
+export function computeHolds(input: {
+  entries: readonly WalletEntryDoc[];
+  context: DriverLedgerContext;
+  recalculatedAt: ReadonlyMap<string, string>;
+}): DriverCashHold[] {
+  const { context } = input;
+  const seenUntil = new Map<string, string>();
+  for (const settlement of context.settlements) {
+    const time = input.recalculatedAt.get(settlement.id) ?? "";
+    for (const orderId of (settlement.orderIds ?? []).map(String)) {
+      const previous = seenUntil.get(orderId);
+      if (previous === undefined || time > previous) seenUntil.set(orderId, time);
+    }
+  }
+  const registered = registeredByAllCortes(context);
+  const holds: DriverCashHold[] = [];
+  for (const [orderId, until] of seenUntil) {
+    const visible = input.entries.filter(
+      (entry) => String(entry.orderId ?? "") === orderId && (!until || String(entry.createdAt ?? "") <= until)
+    );
+    const owedSeen = orderOwedByDriver(visible, context.driverId).get(orderId)?.owedCop ?? 0;
+    const holdCop = (registered.get(orderId) ?? 0) - owedSeen;
+    if (holdCop !== 0) holds.push({ orderId, holdCop });
+  }
+  return holds;
+}
+
+/** Una fila de la previsualizacion de compensacion (RF_13). */
+export type CompensationRow = {
+  orderId: string;
+  /** Lo que los cortes le cobraron por el pedido. */
+  chargedCop: number;
+  /** Lo que el pedido debe hoy. */
+  owedCop: number;
+  /** Retencion que se libera: positivo = se le devuelve; negativo = se le cobra. */
+  releaseCop: number;
+  excluded: boolean;
+  excludedReason?: string;
+  /** "next": entra al siguiente corte (RF_07); "pending:<id>": lo absorbe ese corte al recalcularse. */
+  entersVia: string;
+};
+
+export type CompensationPlan = {
+  driverId: string;
+  rows: CompensationRow[];
+  /** Suma de `releaseCop` de las filas no excluidas. */
+  totalCop: number;
+  excludedCop: number;
+  /** Huella determinista de las filas: aplicar exige la misma (RF_14). */
+  fingerprint: string;
+};
+
+/** FNV-1a de 32 bits: huella estable sin dependencias y sin `crypto` (el modulo es puro). */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * Previsualiza la compensacion historica de un domiciliario (RF_13, RF_16), con la misma regla que cobra
+ * los cortes (no una segunda copia). No escribe nada. Las filas son las retenciones vigentes; los pedidos de
+ * `exclude` se listan con su motivo y no suman al total.
+ */
+export function planDriverCompensation(input: {
+  entries: readonly WalletEntryDoc[];
+  context: DriverLedgerContext;
+  exclude?: ReadonlyMap<string, string>;
+}): CompensationPlan {
+  const { context } = input;
+  const active = (context.holds?.holds ?? []).filter((hold) => !hold.releasedAt && hold.holdCop !== 0);
+  const registered = registeredByAllCortes(context);
+  const owed = orderOwedByDriver(input.entries, context.driverId);
+  const pendingByOrder = new Map<string, string>();
+  for (const settlement of context.settlements) {
+    if (settlement.status !== "pending") continue;
+    for (const orderId of (settlement.orderIds ?? []).map(String)) pendingByOrder.set(orderId, settlement.id);
+  }
+  const rows = active.map((hold): CompensationRow => {
+    const reason = input.exclude?.get(hold.orderId);
+    const pending = pendingByOrder.get(hold.orderId);
+    return {
+      orderId: hold.orderId,
+      chargedCop: registered.get(hold.orderId) ?? 0,
+      owedCop: owed.get(hold.orderId)?.owedCop ?? 0,
+      releaseCop: hold.holdCop,
+      excluded: reason !== undefined,
+      ...(reason !== undefined ? { excludedReason: reason } : {}),
+      entersVia: pending ? `pending:${pending}` : "next"
+    };
+  });
+  const totalCop = rows.filter((row) => !row.excluded).reduce((sum, row) => sum + row.releaseCop, 0);
+  const excludedCop = rows.filter((row) => row.excluded).reduce((sum, row) => sum + row.releaseCop, 0);
+  return { driverId: context.driverId, rows, totalCop, excludedCop, fingerprint: fnv1a(JSON.stringify({ driverId: context.driverId, rows })) };
+}
+
+export type CompensationApproval = {
+  approvedBy: string;
+  reason: string;
+  /** ISO de la aplicacion; lo pone el llamador (el modulo no lee el reloj). */
+  at: string;
+  compensationId: string;
+  /** Huella de la previsualizacion que se aprobo. */
+  expectedFingerprint: string;
+};
+
+export type CompensationAudit = {
+  compensationId: string;
+  driverId: string;
+  approvedBy: string;
+  reason: string;
+  at: string;
+  fingerprint: string;
+  releasedOrderIds: string[];
+  excludedOrderIds: string[];
+  totalCop: number;
+  rows: CompensationRow[];
+};
+
+/**
+ * Aplica una compensacion aprobada (RF_14, RF_15): libera exactamente las filas no excluidas del plan y
+ * devuelve el registro de auditoria. No toca ningun corte: el siguiente corte del domiciliario recoge los
+ * pedidos liberados por `pendingDeltaOrders`. Si la huella no es la aprobada, los datos cambiaron desde la
+ * previsualizacion y lanza. Aplicar otra vez no libera nada mas: esas filas ya no estan vigentes.
+ */
+export function applyCompensationPlan(
+  holds: DriverCashHolds,
+  plan: CompensationPlan,
+  approval: CompensationApproval
+): { holds: DriverCashHolds; audit: CompensationAudit } {
+  if (plan.fingerprint !== approval.expectedFingerprint) {
+    throw new Error(`Spec 038: la huella de la compensacion cambio (${approval.expectedFingerprint} -> ${plan.fingerprint}); vuelve a previsualizar.`);
+  }
+  const toRelease = new Map(plan.rows.filter((row) => !row.excluded).map((row) => [row.orderId, row.releaseCop]));
+  const nextHolds = holds.holds.map((hold) => {
+    const releaseCop = toRelease.get(hold.orderId);
+    if (releaseCop === undefined || hold.releasedAt) return { ...hold };
+    return {
+      ...hold,
+      releasedCop: releaseCop,
+      releasedBy: approval.approvedBy,
+      releasedAt: approval.at,
+      compensationId: approval.compensationId
+    };
+  });
+  return {
+    holds: { ...holds, holds: nextHolds },
+    audit: {
+      compensationId: approval.compensationId,
+      driverId: plan.driverId,
+      approvedBy: approval.approvedBy,
+      reason: approval.reason,
+      at: approval.at,
+      fingerprint: plan.fingerprint,
+      releasedOrderIds: Array.from(toRelease.keys()),
+      excludedOrderIds: plan.rows.filter((row) => row.excluded).map((row) => row.orderId),
+      totalCop: plan.totalCop,
+      rows: plan.rows
+    }
+  };
+}

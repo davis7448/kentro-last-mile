@@ -91,7 +91,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     KNT-005724) entra; un pedido en corte pendiente no entra; uno retenido no entra; una vez cobrado deja de
     entrar
 
-- [ ] **T8: Retenciones y compensacion**
+- [x] **T8: Retenciones y compensacion**
   * Requisitos cubiertos: RF_13, RF_14, RF_15, RF_16, RF_17
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `computeHolds(...)` con `debidoVisto` (§3.6); `planDriverCompensation(input)`: por pedido

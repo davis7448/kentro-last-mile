@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 // Spec 038: la unica regla de cuanto efectivo le cobra un corte a un domiciliario.
 // T1: lo que un pedido debe hoy (RF_01, RF_02; plan §3.1).
 import {
+  applyCompensationPlan,
   computeDriverCorte,
+  computeHolds,
   type DriverLedgerContext,
   type DriverLedgerSettlement,
   lastRecalculatedAt,
   orderOwedByDriver,
   pendingDeltaOrders,
+  planDriverCompensation,
   rebuildHistoricalCharges
 } from "../../functions/src/driver-cash-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
@@ -408,5 +411,105 @@ describe("pendingDeltaOrders", () => {
     const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000), cod("c2", "o2", 30000), pay("p2", "o2", 8000)];
     // o1 cuadra; o2 debe 22.000 y se cobraron 30.000: vuelve con -8.000 (el pago que no se desconto).
     expect(pendingDeltaOrders({ entries, context })).toEqual([{ orderId: "o2", deltaCop: -8000 }]);
+  });
+});
+
+// T8: retenciones y compensacion (RF_13-RF_17; plan §3.6).
+describe("computeHolds", () => {
+  const times = new Map([["A", "2026-08-08T10:00:00.000Z"]]);
+
+  it("retiene la diferencia historica de un pedido cuyo recaudo se borro (forma de KNT-007828)", () => {
+    // A cobro 81.900; una correccion borro el recaudo de la tienda (no queda asiento): debe -8.000.
+    const settlements = [newCorte("A", [["o1", 81900]])];
+    const entries = [pay("p1", "o1", 8000, at("2026-08-05T10:00:00.000Z"))];
+    expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([{ orderId: "o1", holdCop: 89900 }]);
+  });
+
+  it("una re-entrega de hoy aun sin cortar no queda retenida: la cobra el siguiente corte", () => {
+    const settlements = [newCorte("A", [["o1", 70900]])];
+    const entries = [
+      cod("c1", "o1", 78900, at("2026-08-05T10:00:00.000Z")),
+      pay("p1", "o1", 8000, at("2026-08-05T10:00:00.000Z")),
+      entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -78900, orderId: "o1", createdAt: "2026-11-08T10:00:00.000Z" }),
+      cod("c2", "o1", 78900, at("2026-11-08T12:00:00.000Z"))
+    ];
+    expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([]);
+  });
+
+  it("un pedido que cuadra no se retiene, y uno cobrado de menos si (signo negativo)", () => {
+    const settlements = [newCorte("A", [["o1", 42000], ["o2", 30000]])];
+    const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000), cod("c2", "o2", 30000), pay("p2", "o2", 8000)];
+    // o2: se cobraron 30.000 y debia 22.000 -> retencion 8.000. Reves: si se cobraran 14.000, -8.000.
+    expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([{ orderId: "o2", holdCop: 8000 }]);
+    const under = [newCorte("A", [["o1", 42000], ["o2", 14000]])];
+    expect(computeHolds({ entries, context: ctx({ settlements: under }), recalculatedAt: times })).toEqual([{ orderId: "o2", holdCop: -8000 }]);
+  });
+});
+
+describe("planDriverCompensation y applyCompensationPlan", () => {
+  const settlements = [newCorte("A", [["o1", 81900], ["o2", 30000], ["o3", 46000]])];
+  const entries = [pay("p1", "o1", 8000), cod("c2", "o2", 30000), pay("p2", "o2", 8000), cod("c3", "o3", 27000), pay("p3", "o3", 8000)];
+  const holds = {
+    driverId: DRIVER,
+    createdAt: "2026-11-09T00:00:00.000Z",
+    holds: [
+      { orderId: "o1", holdCop: 89900 },
+      { orderId: "o2", holdCop: 8000 },
+      { orderId: "o3", holdCop: 27000 }
+    ]
+  };
+  const exclude = new Map([["o3", "Pendiente de aclarar si el cliente pago en efectivo"]]);
+  const approval = { approvedBy: "responsable", reason: "Compensacion opcion A", at: "2026-11-10T00:00:00.000Z", compensationId: "comp-1" };
+
+  it("previsualiza por pedido; los excluidos se listan y quedan fuera del total", () => {
+    const plan = planDriverCompensation({ entries, context: ctx({ settlements, holds }), exclude });
+    expect(plan.rows).toEqual([
+      { orderId: "o1", chargedCop: 81900, owedCop: -8000, releaseCop: 89900, excluded: false, entersVia: "next" },
+      { orderId: "o2", chargedCop: 30000, owedCop: 22000, releaseCop: 8000, excluded: false, entersVia: "next" },
+      { orderId: "o3", chargedCop: 46000, owedCop: 19000, releaseCop: 27000, excluded: true, excludedReason: "Pendiente de aclarar si el cliente pago en efectivo", entersVia: "next" }
+    ]);
+    expect(plan).toMatchObject({ totalCop: 97900, excludedCop: 27000 });
+    expect(plan.fingerprint).toMatch(/^[0-9a-f]{8}$/);
+    expect(planDriverCompensation({ entries, context: ctx({ settlements, holds }), exclude }).fingerprint).toBe(plan.fingerprint);
+  });
+
+  it("un pedido en un corte pendiente se compensa al recalcular ese corte", () => {
+    const pending = [newCorte("A", [["o1", 81900]], { status: "pending" })];
+    const plan = planDriverCompensation({ entries, context: ctx({ settlements: pending, holds: { ...holds, holds: [holds.holds[0]] } }) });
+    expect(plan.rows[0].entersVia).toBe("pending:A");
+  });
+
+  it("aplicar libera exactamente lo previsualizado, con autor y motivo, y deja los excluidos", () => {
+    const plan = planDriverCompensation({ entries, context: ctx({ settlements, holds }), exclude });
+    const result = applyCompensationPlan(holds, plan, { ...approval, expectedFingerprint: plan.fingerprint });
+    expect(result.holds.holds).toEqual([
+      { orderId: "o1", holdCop: 89900, releasedCop: 89900, releasedBy: "responsable", releasedAt: approval.at, compensationId: "comp-1" },
+      { orderId: "o2", holdCop: 8000, releasedCop: 8000, releasedBy: "responsable", releasedAt: approval.at, compensationId: "comp-1" },
+      { orderId: "o3", holdCop: 27000 }
+    ]);
+    expect(result.audit).toMatchObject({
+      compensationId: "comp-1", driverId: DRIVER, approvedBy: "responsable", reason: "Compensacion opcion A",
+      fingerprint: plan.fingerprint, releasedOrderIds: ["o1", "o2"], excludedOrderIds: ["o3"], totalCop: 97900
+    });
+    expect(holds.holds[0]).toEqual({ orderId: "o1", holdCop: 89900 });
+  });
+
+  it("aplicar con una huella distinta de la previsualizada lanza (los datos cambiaron)", () => {
+    const plan = planDriverCompensation({ entries, context: ctx({ settlements, holds }), exclude });
+    expect(() => applyCompensationPlan(holds, plan, { ...approval, expectedFingerprint: "deadbeef" })).toThrow(/huella/);
+  });
+
+  it("aplicar dos veces no cambia nada, y el pedido liberado no se devuelve dos veces", () => {
+    const plan = planDriverCompensation({ entries, context: ctx({ settlements, holds }), exclude });
+    const first = applyCompensationPlan(holds, plan, { ...approval, expectedFingerprint: plan.fingerprint });
+    const again = planDriverCompensation({ entries, context: ctx({ settlements, holds: first.holds }), exclude });
+    expect(again.rows.filter((r) => !r.excluded)).toEqual([]);
+    expect(applyCompensationPlan(first.holds, again, { ...approval, compensationId: "comp-2", expectedFingerprint: again.fingerprint }).holds).toEqual(first.holds);
+
+    // El siguiente corte recoge la devolucion de o1 y o2 una vez; despues ya no vuelven.
+    const back = pendingDeltaOrders({ entries, context: ctx({ settlements, holds: first.holds }) });
+    expect(back).toEqual([{ orderId: "o1", deltaCop: -89900 }, { orderId: "o2", deltaCop: -8000 }]);
+    const refunded = [...settlements, newCorte("B", [["o1", -89900], ["o2", -8000]])];
+    expect(pendingDeltaOrders({ entries, context: ctx({ settlements: refunded, holds: first.holds }) })).toEqual([]);
   });
 });
