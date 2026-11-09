@@ -1,0 +1,27 @@
+# Spec 038 T20 — PREVISUALIZACION de scripts/compensate-038.js contra produccion (solo lectura, sin --apply), 2026-11-09. Opcion A: excluye KNT-005724 y KNT-006347.
+Spec 038 · compensacion de driver-1778271901513 · 2026-11-09T21:42:23.421Z
+AVISO: la foto aun no esta escrita; las retenciones se derivan en memoria como las escribiria el script de la foto ahora. Solo previsualizacion.
+
+pedido         |    cobrado |     debido | diferencia | entra por            | estado
+KNT-000262     |   $109.900 |         $0 |   $109.900 | next                 | a compensar
+KNT-002682     |   $187.800 |    $93.900 |    $93.900 | next                 | a compensar
+KNT-007828     |    $73.900 |    $-8.000 |    $81.900 | pending:stl-1794233484852-driver-driver-1778271901513 | a compensar
+KNT-003259     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003837     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003827     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-004540     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-006258     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-005724     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (pendiente de aclarar si paso a prepago (spec §5))
+KNT-006347     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (pendiente de aclarar si paso a prepago (spec §5))
+KNT-002965     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-003316     |   $113.900 |   $121.900 |    $-8.000 | next                 | a compensar
+KNT-003387     |    $65.900 |    $73.900 |    $-8.000 | next                 | a compensar
+KNT-003493     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-006650     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+KNT-006722     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+
+A compensar: $632.200 (positivo = a favor del domiciliario) · excluido y pendiente: $54.000
+Huella: fd1c3b81
+Para aplicar (solo con aprobacion): driver-1778271901513 --exclude KNT-005724,KNT-006347 --exclude-reason "pendiente de aclarar si paso a prepago (spec §5)" --apply --approved-by "<nombre>" --reason "<motivo>" --fingerprint fd1c3b81
+
+Previsualizacion: no se escribe nada (anade --apply con aprobacion para aplicar).

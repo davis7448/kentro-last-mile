@@ -200,3 +200,46 @@ describe("spec 038 · T19 · la foto historica de un domiciliario real", () => {
     expect(snapshot.holds).toMatchObject({ driverId: fixture.driverId, createdAt: "2026-11-09T12:00:00.000Z" });
   });
 });
+
+/**
+ * Spec 038 · T20 (analyze B2): la compensacion del domiciliario real con la opcion A, sobre los datos del
+ * 2026-11-09. Previsualizar no escribe; aplicar libera exactamente lo previsualizado, con autor y motivo.
+ */
+describe("spec 038 · T20 · compensacion del domiciliario real (opcion A)", () => {
+  const { fixture, context, idOf } = load(driver16);
+  const recalculatedAt = new Map(fixture.settlements.map((s) => [s.id, lastRecalculatedAt(s)]));
+  const holds = { driverId: fixture.driverId, createdAt: "2026-11-09T12:00:00.000Z", holds: computeHolds({ entries: fixture.entries, context, recalculatedAt }) };
+  const held = { ...context, holds };
+  const reason = "pendiente de aclarar si paso a prepago (spec §5)";
+  const exclude = new Map([[idOf("KNT-005724"), reason], [idOf("KNT-006347"), reason]]);
+
+  it("excluyendo KNT-005724 y KNT-006347: $632.200 a compensar y esos dos listados como pendientes ($54.000)", async () => {
+    const { planDriverCompensation } = await import("../../functions/src/driver-cash-ledger");
+    const plan = planDriverCompensation({ entries: fixture.entries, context: held, exclude });
+    expect(plan.totalCop).toBe(632200);
+    expect(plan.excludedCop).toBe(54000);
+    expect(plan.rows.filter((row) => row.excluded).map((row) => [row.orderId, row.releaseCop, row.excludedReason]).sort()).toEqual(
+      [[idOf("KNT-005724"), 27000, reason], [idOf("KNT-006347"), 27000, reason]].sort()
+    );
+    expect(plan.rows).toHaveLength(16);
+    // Sin la exclusion es la diferencia entera de la medicion.
+    expect(planDriverCompensation({ entries: fixture.entries, context: held }).totalCop).toBe(686200);
+  });
+
+  it("aplicar libera exactamente las 14 filas no excluidas, con autor y motivo; aplicar otra vez no libera nada", async () => {
+    const { applyCompensationPlan, planDriverCompensation } = await import("../../functions/src/driver-cash-ledger");
+    const plan = planDriverCompensation({ entries: fixture.entries, context: held, exclude });
+    const approval = { approvedBy: "Responsable", reason: "compensacion historica 038", at: "2026-11-10T09:00:00.000Z", compensationId: "cmp-1", expectedFingerprint: plan.fingerprint };
+    const { holds: next, audit } = applyCompensationPlan(holds, plan, approval);
+    const released = next.holds.filter((hold) => hold.releasedAt);
+    expect(released).toHaveLength(14);
+    expect(released.every((hold) => hold.releasedBy === "Responsable" && hold.compensationId === "cmp-1" && hold.releasedCop === hold.holdCop)).toBe(true);
+    expect(released.reduce((sum, hold) => sum + (hold.releasedCop ?? 0), 0)).toBe(632200);
+    expect(next.holds.filter((hold) => !hold.releasedAt).map((hold) => hold.orderId).sort()).toEqual([idOf("KNT-005724"), idOf("KNT-006347")].sort());
+    expect(audit).toMatchObject({ approvedBy: "Responsable", reason: "compensacion historica 038", totalCop: 632200, excludedOrderIds: expect.arrayContaining([idOf("KNT-005724"), idOf("KNT-006347")]) });
+
+    const again = planDriverCompensation({ entries: fixture.entries, context: { ...held, holds: next }, exclude });
+    expect(again.totalCop).toBe(0);
+    expect(again.rows.map((row) => row.orderId).sort()).toEqual([idOf("KNT-005724"), idOf("KNT-006347")].sort());
+  });
+});

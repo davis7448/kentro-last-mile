@@ -235,9 +235,10 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: corrida en seco contra produccion (solo lectura): 16 retenciones y la cifra de la medicion de ese dia ($686.200 el 2026-11-09) para
     `driver-1778271901513`, 0 para el resto; la salida se guarda como evidencia. **No** se corre con `--write`
 
-- [ ] **T20: Script de compensacion (previsualizar y, con aprobacion, aplicar)**
+- [x] **T20: Script de compensacion (previsualizar y, con aprobacion, aplicar)**
   * Requisitos cubiertos: RF_13, RF_14, RF_15, RF_16
-  * Archivos: scripts/compensate-038.js, src/lib/driver-cash-ledger.cases.test.ts
+  * Archivos: scripts/compensate-038.js, src/lib/driver-cash-ledger.cases.test.ts, src/lib/compensate-038.test.ts
+    (anadido al ejecutar: las pruebas del propio script, con un doble de la transaccion)
   * Accion: previsualiza con `planDriverCompensation`; con `--apply --approved-by --reason --exclude` corre
     `applyCompensationPlan` dentro de una transaccion que recalcula la huella y aborta si difiere. No toca
     cortes
