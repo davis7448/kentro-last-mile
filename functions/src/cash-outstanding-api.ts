@@ -48,6 +48,8 @@ import {
   type NoticeReportInput
 } from "./cash-overdue-notice";
 import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
+import type { DriverCashHolds, DriverLedgerBaseline } from "./driver-cash-ledger";
+import { DRIVER_CASH_HOLDS, DRIVER_LEDGER_BASELINES } from "./driver-ledger-io";
 import { isOpsChannelConfigured, sendOpsNotice, type OpsNoticeResult } from "./ops-notify";
 import { buildCodReceivedSet } from "./seller-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
@@ -185,6 +187,17 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
     rawEntries = reads.flat();
   }
 
+  // Spec 038: la conciliacion recalcula cada corte con la regla nueva, y necesita la foto historica y las
+  // retenciones de cada domiciliario. Dos lecturas de colecciones pequenas (un documento por domiciliario).
+  const driverLedgerDocs = isFull
+    ? await Promise.all([readDocs(db.collection(DRIVER_LEDGER_BASELINES)), readDocs(db.collection(DRIVER_CASH_HOLDS))]).then(
+        ([baselineDocs, holdDocs]) => ({
+          baselines: new Map(baselineDocs.map((doc) => [doc.id, doc as unknown as DriverLedgerBaseline])),
+          holds: new Map(holdDocs.map((doc) => [doc.id, doc as unknown as DriverCashHolds]))
+        })
+      )
+    : undefined;
+
   const { entries: parsedEntries, unreadableEntryIds } = parseWalletEntries(rawEntries);
   const entries = parsedEntries as unknown as WalletEntryDoc[];
   const receivableEntries = entries.filter((entry) => isReceivableCodEntry(entry) || isReceivableDriverPay(entry));
@@ -216,7 +229,8 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
     now: options.now,
     unreadableOrderIds,
     unreadableSettlementIds,
-    unreadableEntryIds
+    unreadableEntryIds,
+    ...(driverLedgerDocs ? { driverLedgerDocs } : {})
   };
 }
 

@@ -60,6 +60,16 @@ export function buildCodReceivedSet(settlements: SettlementDoc[], codByOrder?: R
   return codReceived;
 }
 
+/**
+ * El efectivo de un pedido en UN corte de domiciliario ya llego: su asignacion cubierta, o el corte saldado en
+ * total (spec 027 RF_01). Es la pieza por corte de la regla de recibido; la usan `isOrderCodSettled` y la
+ * conciliacion de la 026, para que no haya dos copias.
+ */
+export function isOrderCashSettledInCorte(settlement: SettlementDoc, orderId: string): boolean {
+  if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) return true;
+  return (settlement.cashAllocations ?? []).some((row: { orderId?: string; covered?: boolean }) => String(row?.orderId ?? "") === orderId && Boolean(row?.covered));
+}
+
 /** Lo minimo de un asiento de recaudo que necesita la regla de recibido. */
 export type CodEntryLike = { amountCop: number; createdAt?: string };
 
@@ -82,14 +92,12 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
     const charge = settlement.cashCharges.find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
     if (!charge) continue;
-    const totallySettled = isDriverSettlementCashSettled(settlement as MathSettlementDoc);
-    let settled = totallySettled;
-    if (Number(charge.chargedCop) > 0) {
-      const allocation = (settlement.cashAllocations ?? []).find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
-      // Como hoy (018 RF_04): una asignacion cubierta cuenta aunque el corte siga pendiente.
-      settled = totallySettled || Boolean(allocation?.covered);
-      if (!settled) return false;
-    }
+    // Un cargo positivo exige su efectivo: asignacion cubierta (aunque el corte siga pendiente, como hoy en la
+    // 018 RF_04) o corte saldado en total. Un corte que solo devuelve cuenta si esta saldado en total.
+    const settled = Number(charge.chargedCop) > 0
+      ? isOrderCashSettledInCorte(settlement, orderId)
+      : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
+    if (Number(charge.chargedCop) > 0 && !settled) return false;
     if (settled) {
       const at = lastRecalculatedAt(settlement as MathSettlementDoc);
       if (at > lastSettledAt) lastSettledAt = at;

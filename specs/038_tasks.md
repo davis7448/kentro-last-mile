@@ -172,10 +172,12 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: pruebas: entregado→fallido con corte conciliado muestra el delta exacto y no toca ese corte;
     con corte pendiente lo recalcula; previsualizado y aplicado tienen la misma huella
 
-- [ ] **T15: El informe de efectivo de la 026 sin el parche T25**
+- [x] **T15: El informe de efectivo de la 026 sin el parche T25**
   * Requisitos cubiertos: RF_09, RF_12
   * Archivos: functions/src/cash-outstanding.ts, functions/src/cash-outstanding-api.ts,
-    src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-loads.test.ts, src/lib/spec-026-guards.test.ts
+    src/lib/cash-outstanding.test.ts, src/lib/cash-outstanding-loads.test.ts, src/lib/spec-026-guards.test.ts,
+    src/lib/cash-outstanding-view.ts, functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts (anadidos en
+    T15: las etiquetas de las causas nuevas, y `isOrderCashSettledInCorte` para no copiar la regla de recibido)
   * Accion: se quita `belongsHere` y se usa `computeDriverCorteSummary`; `cash-outstanding-api.ts` carga el
     contexto de cada domiciliario (analyze M1)
   * Verificacion: la prueba de identidad de reconciliacion de la 026 se reescribe con la regla nueva y cierra

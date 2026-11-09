@@ -18,8 +18,19 @@
  */
 import { computeDriverReceivable, isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
 import type { CashAlertSettings } from "./cash-outstanding-schemas";
-import { buildCodReceivedSet, codPartialReceivedCop } from "./seller-ledger";
-import { computeDriverCashSummary, isDriverSettlementCashSettled, settlementCashReceivedCop } from "./settlement-math";
+import { buildCodReceivedSet, codPartialReceivedCop, isOrderCashSettledInCorte } from "./seller-ledger";
+import { isDriverSettlementCashSettled, settlementCashReceivedCop } from "./settlement-math";
+import {
+  computeDriverCorte,
+  computeHolds,
+  type DriverBaselineCharge,
+  type DriverCashHolds,
+  type DriverLedgerBaseline,
+  type DriverLedgerContext,
+  type DriverLedgerSettlement,
+  lastRecalculatedAt,
+  rebuildHistoricalCharges
+} from "./driver-cash-ledger";
 import { groupWithheldBySupplier } from "./supplier-withheld";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
@@ -70,6 +81,20 @@ export type CashOutstandingInput = {
   unreadableOrderIds: string[];
   unreadableSettlementIds: string[];
   unreadableEntryIds: string[];
+  /**
+   * Spec 038: contexto (cortes, foto historica, retenciones) de cada domiciliario, como lo carga la API.
+   * Si falta el de uno, se deriva de `settlements` reconstruyendo sus cortes viejos (lo mismo que hara la
+   * foto); asi la conciliacion nunca vuelve a calcular con la regla vieja.
+   */
+  driverLedgers?: ReadonlyMap<string, DriverLedgerContext>;
+  /**
+   * La foto historica y las retenciones de Firestore, por domiciliario (las carga la API en la conciliacion).
+   * Con la foto de un domiciliario, su contexto se arma con sus cortes de `settlements` y estos documentos.
+   */
+  driverLedgerDocs?: {
+    baselines: ReadonlyMap<string, DriverLedgerBaseline>;
+    holds: ReadonlyMap<string, DriverCashHolds>;
+  };
 };
 
 export type SupplierWithheld = { supplierId: string; supplierName: string; amountCop: number };
@@ -132,6 +157,8 @@ export type ReconciliationCause =
   | "settlement_cash_pending_stale"
   | "settlement_cash_pending_missing"
   | "settlement_later_correction"
+  | "settlement_credit_in"
+  | "settlement_orders_no_cash_here"
   | "settlement_orders_received"
   | "settlement_orders_covered_by_netting"
   | "settlement_orders_outside_universe"
@@ -621,34 +648,24 @@ export function reconcileWithPlatformPosition(
     entriesByOrder.set(entry.orderId, list);
   }
 
+  const ledgerOf = driverLedgerResolver(input, driverSettlements, entriesByOrder);
   for (const settlement of driverSettlements) {
-    // T25 (RNF_02): un pedido que tambien esta en un corte de domiciliario POSTERIOR solo aporta a este
-    // corte los asientos creados hasta su `createdAt`; lo escrito despues (p. ej. la correccion de fallido
-    // a entregado) le pertenece al corte que lo cobro. Recalcular con eso inflaria el esperado y marcaria
-    // "pendiente viejo" a un corte sano. Los pedidos que solo estan aqui usan todos sus asientos, como antes.
-    // La misma vista alimenta la descomposicion de abajo, para que la identidad siga exacta.
-    const laterOrderIds = new Set(
-      (settlement.orderIds ?? []).filter((orderId) =>
-        (settlementsOf.get(orderId) ?? []).some((other) => other.createdAt > settlement.createdAt)
-      )
-    );
-    const belongsHere = (entry: WalletEntryDoc): boolean =>
-      !entry.orderId || !laterOrderIds.has(entry.orderId) || !entry.createdAt || entry.createdAt <= settlement.createdAt;
-    const viewEntries = laterOrderIds.size === 0 ? input.receivableEntries : input.receivableEntries.filter(belongsHere);
-    const viewNetByOrder = new Map<string, number>();
-    for (const orderId of laterOrderIds) {
-      const orderAmounts = amountsByOrder((entriesByOrder.get(orderId) ?? []).filter(belongsHere)).get(orderId);
-      viewNetByOrder.set(orderId, orderAmounts ? orderAmounts.codCop - orderAmounts.driverPayCop : 0);
-    }
-    const netHere = (orderId: string): number => viewNetByOrder.get(orderId) ?? netOf(orderId);
-
-    const cashInputs = {
-      sellerEntries: viewEntries.filter(isReceivableCodEntry),
-      driverEntries: viewEntries.filter(isReceivableDriverPay),
-      orderMeta: new Map()
-    };
+    // Spec 038 (RF_09): el corte se recalcula con la regla unica, sabiendo lo que los DEMAS cortes del
+    // domiciliario ya registraron. Sustituye al parche por fechas de T25: lo que otro corte ya cobro (o
+    // devolvio) no se le vuelve a atribuir a este, sin mirar fechas. El neto de un pedido "en este corte" es
+    // su cargo en este corte, y la misma vista alimenta la descomposicion de abajo: la identidad sigue exacta.
     const receivedCop = settlementCashReceivedCop(settlement);
-    const summary = computeDriverCashSummary(cashInputs, settlement.orderIds ?? [], receivedCop);
+    const figures = computeDriverCorte({
+      settlementId: settlement.id,
+      orderIds: settlement.orderIds ?? [],
+      ownEntryIds: settlement.walletEntryIds ?? [],
+      entries: input.receivableEntries,
+      context: ledgerOf(settlement.ownerId),
+      receivedCop
+    });
+    const chargeByOrder = new Map(figures.charges.map((charge) => [charge.orderId, charge.chargedCop] as const));
+    const netHere = (orderId: string): number => chargeByOrder.get(orderId) ?? 0;
+    const summary = { expectedCop: figures.cashExpectedCop };
     const recalculatedPendingCop = Math.max(0, summary.expectedCop - receivedCop);
     const storedPendingCop = Math.round(Number(settlement.cashPendingCop) || 0);
     if (settlement.cashPendingCop === undefined) {
@@ -675,11 +692,24 @@ export function reconcileWithPlatformPosition(
         receivedOnRowsCop += row.receivedCop;
       } else if (row) {
         add("settlement_orders_attributed_elsewhere", orderNetCop, [orderId], settlement.id);
+      } else if (reasonOf(orderId) === null && orderNetCop <= 0) {
+        // Spec 038: con la regla nueva un pedido puede estar en un corte sin efectivo que cobrar en EL: una
+        // devolucion (lo cobro otro corte y ahora debe menos) o un cargo 0 (ya lo cobro otro). No esta en la
+        // lista porque no debe nada, y no es "recibido" (RF_11). Su cifra en este corte es su cargo.
+        add("settlement_orders_no_cash_here", orderNetCop, [orderId], settlement.id);
+      } else if (reasonOf(orderId) === null && isOrderCashSettledInCorte(settlement, orderId)) {
+        // Su efectivo en ESTE corte llego (asignacion cubierta o corte saldado), aunque el pedido aun no sea
+        // "recibido" porque otro corte le devuelve o le cobra algo despues (RF_11).
+        add("settlement_orders_received", orderNetCop, [orderId], settlement.id);
       } else {
         addUnlisted(orderId, settlement.id, orderNetCop);
       }
     }
-    const expectedClampCop = Math.max(0, -settlementNetCop);
+    // Lo que el corte recibe de los demas (saldo a favor, o deuda si es negativo) resta del esperado; lo que
+    // su total negativo deja para el siguiente es el tope a 0 del esperado (RF_08). settlementNetCop es la
+    // suma de cargos, asi que esperado = suma - credito de entrada + credito de salida.
+    if (figures.creditInCop !== 0) add("settlement_credit_in", -figures.creditInCop, [], settlement.id);
+    const expectedClampCop = figures.creditOutCop;
     if (expectedClampCop !== 0) add("settlement_expected_clamp", expectedClampCop, [], settlement.id);
     const excessReceivedCop = Math.max(0, receivedCop - summary.expectedCop);
     if (excessReceivedCop !== 0) add("settlement_excess_received", excessReceivedCop, [], settlement.id);
@@ -703,6 +733,77 @@ export function reconcileWithPlatformPosition(
     missingPendingSettlementsCop: sumOf("settlement_cash_pending_missing"),
     unexplainedCop: deltaCop - causes.reduce((total, item) => total + item.amountCop, 0),
     unexplainedOrderIds: [...unexplainedIds].sort()
+  };
+}
+
+/**
+ * Spec 038: el contexto de calculo de cada domiciliario. El que trae la entrada (la API lo carga de
+ * Firestore) manda; si falta, se deriva de los cortes de la entrada con la foto Y las retenciones que
+ * escribiria `scripts/snapshot-038-baseline.js` en este momento: asi lo historico queda congelado (RF_17) y el
+ * informe no cambia por desplegar. Nunca la regla vieja.
+ */
+function driverLedgerResolver(
+  input: CashOutstandingInput,
+  driverSettlements: SettlementDoc[],
+  entriesByOrder: Map<string, WalletEntryDoc[]>
+): (driverId: string) => DriverLedgerContext {
+  const cache = new Map<string, DriverLedgerContext>();
+  return (driverId) => {
+    const provided = input.driverLedgers?.get(driverId);
+    if (provided) return provided;
+    const cached = cache.get(driverId);
+    if (cached) return cached;
+    const own = driverSettlements.filter((settlement) => settlement.ownerId === driverId);
+    const codByOrder = new Map<string, WalletEntryDoc[]>();
+    const payByOrder = new Map<string, WalletEntryDoc[]>();
+    for (const [orderId, entries] of entriesByOrder) {
+      codByOrder.set(orderId, entries.filter(isReceivableCodEntry));
+      payByOrder.set(orderId, entries.filter((entry) => isReceivableDriverPay(entry) && entry.ownerId === driverId));
+    }
+    const settlements: DriverLedgerSettlement[] = own.map((settlement) => {
+      const record = settlement as SettlementDoc & Partial<Pick<DriverLedgerSettlement, "cashCharges" | "creditInCop" | "creditOutCop">>;
+      return {
+        id: settlement.id,
+        status: settlement.status,
+        orderIds: settlement.orderIds ?? [],
+        ...(record.cashCharges ? { cashCharges: record.cashCharges } : {}),
+        ...(typeof record.creditInCop === "number" ? { creditInCop: record.creditInCop } : {}),
+        ...(typeof record.creditOutCop === "number" ? { creditOutCop: record.creditOutCop } : {})
+      };
+    });
+    const storedBaseline = input.driverLedgerDocs?.baselines.get(driverId);
+    if (storedBaseline) {
+      // Produccion: la foto y las retenciones escritas (RF_05b, RF_17), no una derivacion.
+      const fromDocs: DriverLedgerContext = {
+        driverId,
+        settlements,
+        baseline: storedBaseline,
+        holds: input.driverLedgerDocs?.holds.get(driverId) ?? null
+      };
+      cache.set(driverId, fromDocs);
+      return fromDocs;
+    }
+    const baselineSettlements: Record<string, DriverBaselineCharge[]> = {};
+    for (const settlement of own) {
+      if (!(settlement as { cashCharges?: unknown }).cashCharges) {
+        baselineSettlements[settlement.id] = rebuildHistoricalCharges(settlement, codByOrder, payByOrder);
+      }
+    }
+    const withoutHolds: DriverLedgerContext = {
+      driverId,
+      settlements,
+      baseline: { driverId, createdAt: input.now, createdBy: "derived", measuredDiffCop: 0, settlements: baselineSettlements },
+      holds: null
+    };
+    const driverEntries = Array.from(entriesByOrder.values()).flat().filter((entry) => isReceivableCodEntry(entry) || (isReceivableDriverPay(entry) && entry.ownerId === driverId));
+    const holds = computeHolds({
+      entries: driverEntries,
+      context: withoutHolds,
+      recalculatedAt: new Map(own.map((settlement) => [settlement.id, lastRecalculatedAt(settlement)]))
+    });
+    const context: DriverLedgerContext = { ...withoutHolds, holds: { driverId, createdAt: input.now, holds } };
+    cache.set(driverId, context);
+    return context;
   };
 }
 
