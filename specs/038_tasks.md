@@ -24,7 +24,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: `npx vitest run src/lib/driver-cash-ledger.test.ts`: reversa de recaudo resta, pago de otro
     domiciliario no cuenta, pedido con recaudo en dos tiendas suma las dos
 
-- [ ] **T2: Reconstruccion historica de un corte viejo**
+- [x] **T2: Reconstruccion historica de un corte viejo**
   * Requisitos cubiertos: RF_05, RF_05b
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `rebuildHistoricalCharges(settlement, entriesByOrder, payByOrder)` con la regla validada de

@@ -14,7 +14,7 @@
  * cobra por un pedido lo que el pedido debe hoy menos lo que los demas cortes ya registraron (RF_02), y
  * deja registrada su cifra, sin recortar, para el siguiente (RF_03).
  */
-import type { WalletEntryDoc } from "./settlement-math";
+import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
 /** Tipos de asiento de tienda que son recaudo contra entrega (el positivo y su reversa). */
 export const COD_ENTRY_TYPES: ReadonlySet<WalletEntryDoc["type"]> = new Set(["cod_revenue", "cod_remittance"]);
@@ -141,4 +141,69 @@ export function orderOwedByDriver(entries: readonly WalletEntryDoc[], driverId: 
   }
   for (const row of owed.values()) row.owedCop = row.codCop - row.driverPayCop;
   return owed;
+}
+
+/** Lo que `rebuildHistoricalCharges` necesita de un corte viejo. */
+export type HistoricalSettlement = Pick<
+  SettlementDoc,
+  "id" | "orderIds" | "createdAt" | "paidAt" | "reconciledAt" | "cashReceipts" | "cashAllocations"
+>;
+
+/**
+ * Ultimo instante en que un corte viejo recalculo su efectivo: lo hacia al crearse, en cada abono y al
+ * pagarse o conciliarse. Los asientos posteriores no los vio, asi que no los cobro.
+ */
+export function lastRecalculatedAt(settlement: Pick<HistoricalSettlement, "createdAt" | "paidAt" | "reconciledAt" | "cashReceipts">): string {
+  const times = [
+    settlement.createdAt,
+    settlement.paidAt,
+    settlement.reconciledAt,
+    ...(settlement.cashReceipts ?? []).map((receipt) => receipt.receivedAt)
+  ]
+    .filter((time): time is string => Boolean(time))
+    .map(String);
+  return times.sort().pop() ?? "";
+}
+
+function sumUntil(entries: readonly WalletEntryDoc[] | undefined, until: string): number {
+  return (entries ?? [])
+    .filter((entry) => !until || String(entry.createdAt ?? "") <= until)
+    .reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
+}
+
+/**
+ * Lo que un corte creado antes de la 038 cobro por cada pedido (RF_05). Es la regla que
+ * `specs/038_measure.js` valido contra los 60 cortes de produccion el 2026-11-07:
+ *
+ * - si el corte guardo la asignacion del pedido, esa es la cifra: es el registro de lo que se le pidio,
+ *   y reconstruir desde asientos falla cuando una correccion los borro despues (KNT-004540, KNT-007828);
+ * - si el corte tiene asignaciones pero no lista el pedido, el pedido no aporto recaudo: como mucho
+ *   resto el pago (`min(0, …)`). Es KNT-000056 en el corte del 2026-05-29, que un script anterior al
+ *   planificador recalculo tras corregir el pedido;
+ * - si el corte no tiene asignaciones, se reconstruye con los asientos que existian en su ultimo recalculo.
+ *
+ * `codEntriesByOrder` son los asientos de recaudo de tienda; `payEntriesByOrder`, los `driver_earning` del
+ * domiciliario del corte. Se ejecuta una vez, al escribir la foto (RF_05b); despues se lee la foto.
+ */
+export function rebuildHistoricalCharges(
+  settlement: HistoricalSettlement,
+  codEntriesByOrder: ReadonlyMap<string, readonly WalletEntryDoc[]>,
+  payEntriesByOrder: ReadonlyMap<string, readonly WalletEntryDoc[]>
+): DriverBaselineCharge[] {
+  const until = lastRecalculatedAt(settlement);
+  const allocationByOrder = new Map<string, number>();
+  for (const allocation of settlement.cashAllocations ?? []) {
+    if (allocation.orderId) allocationByOrder.set(String(allocation.orderId), Number(allocation.expectedCop) || 0);
+  }
+  const hasAllocations = allocationByOrder.size > 0;
+  const orderIds = Array.from(new Set((settlement.orderIds ?? []).map(String)));
+  return orderIds.map((orderId) => {
+    const driverPayCop = sumUntil(payEntriesByOrder.get(orderId), until);
+    const allocated = allocationByOrder.get(orderId);
+    if (allocated !== undefined) {
+      return { orderId, chargedCop: allocated, driverPayCop, source: "allocation" as const };
+    }
+    const rebuilt = sumUntil(codEntriesByOrder.get(orderId), until) - driverPayCop;
+    return { orderId, chargedCop: hasAllocations ? Math.min(0, rebuilt) : rebuilt, driverPayCop, source: "rebuilt" as const };
+  });
 }
