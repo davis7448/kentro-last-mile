@@ -69,18 +69,19 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     pedido `Σ cargos = debido + retencion`, y `esperado + creditoEntrada − creditoSalida = Σ cargos`; 500
     secuencias, mismo resultado en dos corridas
 
-- [ ] **T6: Casos reales como fixtures**
+- [x] **T6: Casos reales como fixtures**
   * Requisitos cubiertos: RNF_03, RF_05, RF_05b
   * Archivos: specs/038_measure.js, src/lib/fixtures/038-knt-003259.json, src/lib/fixtures/038-knt-004540.json,
     src/lib/fixtures/038-knt-002682.json, src/lib/fixtures/038-knt-002965.json,
-    src/lib/fixtures/038-driver-16.json, src/lib/driver-cash-ledger.cases.test.ts
+    src/lib/fixtures/038-driver-16.json, src/lib/driver-cash-ledger.cases.test.ts,
+    functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts (ampliado en T6: ver §3.6 del plan)
   * Accion: opcion `--fixtures <dir>` del script de medicion (solo lectura) que vuelca cortes y asientos
     **anonimizados** (sin telefono, direccion ni nombre; quedan ids y tracking): los cuatro casos y un fixture
     con los 16 pedidos de §1 mas el corte del 2026-05-29 (KNT-000056) (analyze B3, M15)
   * Verificacion: `npx vitest run src/lib/driver-cash-ledger.cases.test.ts`: en los cuatro casos la regla vieja
     (copiada en la prueba como referencia) reproduce el cobro de produccion y la nueva da el debido (+78.900,
     +78.900, +93.900, −8.000 de diferencia); en el fixture de 16, las 16 filas de §1 (cobrado, debido,
-    diferencia; total +694.200) y cada pedido con asignacion reconstruye su `expectedCop`
+    diferencia; total +686.200 en la medicion del 2026-11-09, ver nota de T6) y cada pedido con asignacion reconstruye su `expectedCop`
 
 - [x] **T7: Pedidos que vuelven solos al siguiente corte**
   * Requisitos cubiertos: RF_06, RF_07
@@ -216,7 +217,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     run build`); sin flags imprime lo que escribiria (cortes, pedidos, retenciones, total); con `--write
     --approved-by "<nombre>"` escribe un documento por domiciliario y aborta si las retenciones no coinciden
     con la medicion del momento
-  * Verificacion: corrida en seco contra produccion (solo lectura): 16 retenciones y $694.200 para
+  * Verificacion: corrida en seco contra produccion (solo lectura): 16 retenciones y la cifra de la medicion de ese dia ($686.200 el 2026-11-09) para
     `driver-1778271901513`, 0 para el resto; la salida se guarda como evidencia. **No** se corre con `--write`
 
 - [ ] **T20: Script de compensacion (previsualizar y, con aprobacion, aplicar)**
@@ -226,7 +227,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     `applyCompensationPlan` dentro de una transaccion que recalcula la huella y aborta si difiere. No toca
     cortes
   * Verificacion: prueba sobre `038-driver-16.json` (analyze B2): la previsualizacion con exclusion de
-    KNT-005724 y KNT-006347 da la opcion A, $640.200, con esos dos listados como pendientes; aplicar sobre
+    KNT-005724 y KNT-006347 da la opcion A ($686.200 − $54.000 = $632.200 con los datos del 2026-11-09), con esos dos listados como pendientes; aplicar sobre
     el fixture libera exactamente esas filas con autor y motivo. **No** se corre con `--apply`
 
 - [ ] **T21: El script de medicion usa el modulo y comprueba antes de desplegar**
@@ -236,7 +237,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     `functions/lib`; `--check` falla si un solo pedido con asignacion no reconstruye su cifra;
     `--deploy-check` compara, para cada corte pendiente y el siguiente de cada domiciliario, esperado viejo
     vs. nuevo con las retenciones que escribiria la foto, y el conjunto de "recibidos" viejo vs. nuevo
-  * Verificacion: contra produccion (solo lectura): mismo resultado de hoy (694.202 / 694.200, 0 cortes sin
+  * Verificacion: contra produccion (solo lectura): mismo resultado que la medicion del dia (686.202 / 686.200 el 2026-11-09, 0 cortes sin
     cuadrar), `--check` en verde y `--deploy-check` con ambas diferencias en 0 (si no, la cifra va al
     responsable). Salidas guardadas como evidencia
 

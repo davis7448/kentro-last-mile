@@ -436,6 +436,28 @@ describe("computeHolds", () => {
     expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([]);
   });
 
+  it("un pedido que la regla vieja no volveria a traer congela tambien lo posterior a su corte (KNT-005724)", () => {
+    // Su unico corte cobro 19.000; el 2026-11-04, despues del corte, se revirtio el recaudo. No tiene pago
+    // sin cortar ni corte pendiente: la regla vieja no lo cobraria nunca, asi que la diferencia es historica.
+    const settlements = [newCorte("A", [["o1", 19000]])];
+    const entries = [
+      cod("c1", "o1", 27000, at("2026-08-05T10:00:00.000Z")),
+      pay("p1", "o1", 8000, { createdAt: "2026-08-05T10:00:00.000Z", settlementId: "A" }),
+      entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -27000, orderId: "o1", createdAt: "2026-11-04T16:46:11.312Z" })
+    ];
+    expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([{ orderId: "o1", holdCop: 27000 }]);
+  });
+
+  it("un pedido en un corte pendiente sigue cortando por fecha: ese corte cobra lo nuevo", () => {
+    const settlements = [newCorte("A", [["o1", 19000]], { status: "pending" })];
+    const entries = [
+      cod("c1", "o1", 27000, at("2026-08-05T10:00:00.000Z")),
+      pay("p1", "o1", 8000, { createdAt: "2026-08-05T10:00:00.000Z", settlementId: "A" }),
+      entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -27000, orderId: "o1", createdAt: "2026-11-04T16:46:11.312Z" })
+    ];
+    expect(computeHolds({ entries, context: ctx({ settlements }), recalculatedAt: times })).toEqual([]);
+  });
+
   it("un pedido que cuadra no se retiene, y uno cobrado de menos si (signo negativo)", () => {
     const settlements = [newCorte("A", [["o1", 42000], ["o2", 30000]])];
     const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000), cod("c2", "o2", 30000), pay("p2", "o2", 8000)];

@@ -284,10 +284,18 @@ reescribir ningun corte cerrado.
 |---|---|---|
 | 2026-11-07 | Borrador con medicion pedido a pedido y propuesta de compensacion | Pregunta del responsable sobre la diferencia en cortes viejos |
 | 2026-11-08 | RF_11 reescrito: "recibido" = todo cobro en cortes saldados y sin recaudo nuevo desde el ultimo | El plan mostro el costo de leer pagos del domiciliario en tienda/API/proveedor; decidido por el responsable |
+| 2026-11-09 | Remedicion en T6: 686.200 (corte pendiente nuevo con KNT-007828); la retencion congela tambien lo posterior al ultimo corte de un pedido que la regla vieja no volveria a traer (KNT-005724/006347) | Datos reales; RF_17 sin cambios, el plan §3.6 se corrige para cumplirlo |
 | 2026-11-09 | Analyze: RNF_02 cuenta la retencion de RF_17; RF_08 admite saldo negativo y arrastra (no transfiere) un corte a favor; RNF_04 lista las lecturas extra | Hallazgos M9 y M10 del auditor independiente; aprobados por el responsable |
 | 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)
+
+> **Actualizacion 2026-11-09 (T6).** Produccion creo hoy un corte **pendiente** con la regla vieja que le
+> devuelve 8.000 al domiciliario por KNT-007828. La diferencia de ese pedido baja de 89.900 a 81.900 y el total
+> de 694.200 a **686.200** (mismos 16 pedidos). La opcion A queda en **$632.200** (686.200 − 54.000). Como el
+> corte esta pendiente, al desplegar lo recalcula la regla nueva y el pedido conserva su retencion: el total
+> que se le devuelve por KNT-007828 sigue siendo 89.900 entre los dos cortes. Las cifras de abajo son las del
+> 2026-11-07; la que vale al aplicar es la de la previsualizacion de ese dia (RF_13).
 
 Lo que propongo, una vez desplegado el arreglo:
 

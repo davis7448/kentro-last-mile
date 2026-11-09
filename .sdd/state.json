@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T6",
+  "activeTask": "T9",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -17,7 +17,7 @@
     "T3": { "requirements": ["RF_02", "RF_03", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T4": { "requirements": ["RF_08", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T5": { "requirements": ["RF_01", "RF_08", "RNF_02"], "files": ["src/lib/driver-cash-ledger.property.test.ts"], "testWritten": true, "done": true },
-    "T6": { "requirements": ["RNF_03", "RF_05", "RF_05b"], "files": ["specs/038_measure.js", "src/lib/fixtures/038-knt-003259.json", "src/lib/fixtures/038-knt-004540.json", "src/lib/fixtures/038-knt-002682.json", "src/lib/fixtures/038-knt-002965.json", "src/lib/fixtures/038-driver-16.json", "src/lib/driver-cash-ledger.cases.test.ts"], "testWritten": false, "done": false },
+    "T6": { "requirements": ["RNF_03", "RF_05", "RF_05b"], "files": ["specs/038_measure.js", "src/lib/fixtures/038-knt-003259.json", "src/lib/fixtures/038-knt-004540.json", "src/lib/fixtures/038-knt-002682.json", "src/lib/fixtures/038-knt-002965.json", "src/lib/fixtures/038-driver-16.json", "src/lib/driver-cash-ledger.cases.test.ts", "functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T7": { "requirements": ["RF_06", "RF_07"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T8": { "requirements": ["RF_13", "RF_14", "RF_15", "RF_16", "RF_17"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T9": { "requirements": ["RF_11", "RF_12"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/seller-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/seller-ledger.test.ts"], "testWritten": false, "done": false },

@@ -9,6 +9,8 @@
  *   node specs/038_measure.js                       # todos los domiciliarios, resumen
  *   node specs/038_measure.js driver-1778271901513  # un domiciliario, detalle por pedido
  *   node specs/038_measure.js --json salida.json    # ademas vuelca el detalle en JSON
+ *   node specs/038_measure.js driver-X --fixtures src/lib/fixtures
+ *       # T6: vuelca, ANONIMIZADOS, los casos reales de la spec como fixtures de prueba (ver abajo)
  *
  * Que mide:
  *  - "cobrado"  = suma de `cashExpectedCop` de los cortes del domiciliario (lo que se le pidio).
@@ -31,7 +33,11 @@ const db = admin.firestore();
 const args = process.argv.slice(2);
 const jsonIdx = args.indexOf("--json");
 const jsonOut = jsonIdx >= 0 ? args[jsonIdx + 1] : null;
-const onlyDriver = args.find((a, i) => !a.startsWith("--") && (jsonIdx < 0 || i !== jsonIdx + 1)) || null;
+const fixturesIdx = args.indexOf("--fixtures");
+const fixturesDir = fixturesIdx >= 0 ? args[fixturesIdx + 1] : null;
+const valueIdx = new Set([jsonIdx, fixturesIdx].filter((i) => i >= 0).map((i) => i + 1));
+const onlyDriver = args.find((a, i) => !a.startsWith("--") && !valueIdx.has(i)) || null;
+const path = require("path");
 
 const COD_TYPES = new Set(["cod_revenue", "cod_remittance"]);
 const cop = (n) => Math.round(n).toLocaleString("es-CO");
@@ -50,17 +56,111 @@ function isSettled(s) {
   return (s.status === "paid" || s.status === "reconciled") && num(s.cashPendingCop) === 0 && typeof s.cashExpectedCop === "number" && received >= s.cashExpectedCop;
 }
 
+/**
+ * T6 de la spec 038: fixtures ANONIMIZADOS para las pruebas de casos reales (RNF_03, RF_05b).
+ *
+ * Solo se copian ids, tracking, estados, montos, tipos y fechas: nada de nombres, telefonos, direcciones,
+ * descripciones ni notas. Los ids de tienda y de domiciliario se quedan porque son la evidencia (no
+ * identifican a una persona fuera de la plataforma). Se escriben:
+ *  - un archivo por cada caso de RNF_03 (038-knt-003259.json, ...);
+ *  - 038-driver-16.json con todos los pedidos de la tabla de §1 y el corte con KNT-000056.
+ * Cada fixture trae los cortes del domiciliario que contienen esos pedidos, recortados a esos pedidos
+ * (orderIds; las asignaciones van enteras); el corte de KNT-000056 va entero para poder cuadrar su total.
+ */
+const FIXTURE_CASES = ["KNT-003259", "KNT-004540", "KNT-002682", "KNT-002965"];
+const WHOLE_CORTE_TRACKING = "KNT-000056";
+
+function anonEntry(e) {
+  const out = { id: e.id, ownerType: e.ownerType, ownerId: e.ownerId, orderId: e.orderId, type: e.type, amountCop: num(e.amountCop), description: "", createdAt: String(e.createdAt ?? "") };
+  if (e.settlementId) out.settlementId = e.settlementId;
+  return out;
+}
+
+function anonSettlement(s, keepOrderIds) {
+  const keep = keepOrderIds ? new Set(keepOrderIds) : null;
+  const ids = Array.from(new Set(s.orderIds ?? [])).filter((id) => !keep || keep.has(id));
+  const out = {
+    id: s.id, kind: "driver", ownerId: s.ownerId, ownerName: "", status: s.status,
+    startDate: s.startDate ?? "", endDate: s.endDate ?? "", createdAt: String(s.createdAt ?? ""),
+    orderIds: ids, walletEntryIds: [], codCop: 0, feesCop: 0, driverPayCop: 0, platformMarginCop: 0, netCop: 0,
+    trimmed: Boolean(keep)
+  };
+  if (s.paidAt) out.paidAt = String(s.paidAt);
+  if (s.reconciledAt) out.reconciledAt = String(s.reconciledAt);
+  if (typeof s.cashExpectedCop === "number") out.cashExpectedCop = s.cashExpectedCop;
+  if (Array.isArray(s.cashReceipts)) out.cashReceipts = s.cashReceipts.map((r) => ({ amountCop: num(r.amountCop), receivedAt: String(r.receivedAt ?? "") }));
+  if (Array.isArray(s.cashAllocations)) {
+    // Se guardan TODAS las asignaciones aunque el corte este recortado: si el corte tenia asignaciones y el
+    // pedido no figura, la reconstruccion aplica min(0, ...) (RF_05), y eso depende de que existan.
+    out.cashAllocations = s.cashAllocations
+      .map((a) => ({ orderId: String(a.orderId), expectedCop: num(a.expectedCop), receivedCop: num(a.receivedCop), covered: Boolean(a.covered) }));
+  }
+  return out;
+}
+
+function writeFixtures({ fixturesDir, driverId, report, orders, settlementsByDriver, sellerEntriesByOrder, payByDriverOrder }) {
+  const row = report.find((r) => r.driverId === driverId);
+  if (!row) throw new Error(`sin cortes para ${driverId}`);
+  const byTracking = new Map(Array.from(orders.entries()).map(([id, o]) => [o.trackingCode, id]));
+  const cortes = settlementsByDriver.get(driverId) ?? [];
+  const build = (name, orderIds, wholeCorteIds = []) => {
+    const ids = new Set(orderIds);
+    const whole = new Set(wholeCorteIds);
+    const settlements = cortes
+      .filter((s) => (s.orderIds ?? []).some((id) => ids.has(id)) || whole.has(s.id))
+      .map((s) => anonSettlement(s, whole.has(s.id) ? null : orderIds));
+    const allIds = new Set(settlements.flatMap((s) => s.orderIds));
+    const entries = [];
+    for (const id of allIds) {
+      for (const e of sellerEntriesByOrder.get(id) ?? []) entries.push(anonEntry(e));
+      for (const e of payByDriverOrder.get(`${driverId}|${id}`) ?? []) entries.push(anonEntry(e));
+    }
+    const fixtureOrders = Array.from(allIds).sort().map((id) => {
+      const o = orders.get(id) ?? {};
+      return { id, trackingCode: o.trackingCode ?? "?", status: o.status ?? "?", createdAt: String(o.createdAt ?? ""), paymentMethod: o.paymentMethod ?? "" };
+    });
+    const expected = row.rows.filter((r) => ids.has(r.orderId)).map((r) => ({ orderId: r.orderId, trackingCode: r.trackingCode, chargedCop: r.chargedCop, dueCop: r.dueCop, excessCop: r.excessCop }));
+    const file = path.join(fixturesDir, name);
+    const payload = {
+      source: "specs/038_measure.js --fixtures (solo lectura, anonimizado)",
+      generatedAt: new Date().toISOString(),
+      driverId,
+      expected,
+      orders: fixtureOrders,
+      settlements: settlements.sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      entries: entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+    };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2) + "\n");
+    console.log(`fixture ${file}: ${fixtureOrders.length} pedidos, ${payload.settlements.length} cortes, ${entries.length} asientos`);
+  };
+  for (const tracking of FIXTURE_CASES) {
+    const id = byTracking.get(tracking);
+    if (!id) throw new Error(`no existe ${tracking}`);
+    build(`038-${tracking.toLowerCase()}.json`, [id]);
+  }
+  const sixteen = row.rows.map((r) => r.orderId);
+  const knt56 = byTracking.get(WHOLE_CORTE_TRACKING);
+  const corte56 = cortes.filter((s) => (s.orderIds ?? []).includes(knt56) && Array.isArray(s.cashAllocations) && !s.cashAllocations.some((a) => a.orderId === knt56));
+  build("038-driver-16.json", sixteen, corte56.map((s) => s.id));
+}
+
 (async () => {
   const [settlementSnap, sellerEntrySnap, driverEntrySnap, orderSnap] = await Promise.all([
     db.collection("settlements").where("kind", "==", "driver").get(),
     db.collection("walletEntries").where("ownerType", "==", "seller").get(),
     db.collection("walletEntries").where("ownerType", "==", "driver").get(),
-    db.collection("orders").select("trackingCode", "status", "driverId").get()
+    db.collection("orders").select("trackingCode", "status", "driverId", "createdAt", "paymentMethod").get()
   ]);
   const orders = new Map(orderSnap.docs.map((d) => [d.id, d.data()]));
   const codEntriesByOrder = new Map();
+  const sellerEntriesByOrder = new Map(); // todos los asientos de tienda, para los fixtures
   for (const doc of sellerEntrySnap.docs) {
     const e = doc.data();
+    if (e.orderId) {
+      const all = sellerEntriesByOrder.get(e.orderId) ?? [];
+      all.push({ id: doc.id, ...e });
+      sellerEntriesByOrder.set(e.orderId, all);
+    }
     if (!COD_TYPES.has(e.type) || !e.orderId) continue;
     const list = codEntriesByOrder.get(e.orderId) ?? [];
     list.push({ id: doc.id, ...e });
@@ -165,6 +265,10 @@ function isSettled(s) {
   }
   console.log(`\nRiesgo buildCodReceivedSet (COD nuevo tras corte saldado): ${riskRows.length} pedido(s)`);
   for (const row of riskRows) console.log(`  ${row.driverId} ${row.settlementId} ${row.orderId} ${cop(row.laterCodCop)}`);
+  if (fixturesDir) {
+    if (!onlyDriver) throw new Error("--fixtures necesita el id del domiciliario");
+    writeFixtures({ fixturesDir, driverId: onlyDriver, report, orders, settlementsByDriver, sellerEntriesByOrder, payByDriverOrder });
+  }
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify({ generatedAt: new Date().toISOString(), report, riskRows }, null, 2));
   process.exit(0);
 })().catch((err) => {

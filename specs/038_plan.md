@@ -254,6 +254,14 @@ asientos con `createdAt <=` el ultimo recalculo del ultimo corte que contiene `o
 movimientos nuevos aun sin cortar (una re-entrega de hoy) no queda retenido por error, y uno cuyo recaudo se
 **borro** (KNT-007828) si lo queda. Con esto, al desplegar, ningun corte cambia (RNF_01 = 0).
 
+**Corregido en T6 (2026-11-09), con los datos reales:** el corte por fecha solo vale para pedidos que la regla
+vieja **si** volveria a cobrar: los que tienen un `driver_earning` del domiciliario sin cortar (sin
+`settlementId`) o estan en un corte pendiente. Un pedido sin nada de eso no vuelve nunca a un corte con la
+regla vieja, asi que cualquier diferencia que arrastre al hacer la foto es historica y se congela entera:
+para el, `debidoVisto` usa **todos** los asientos. Sin esto, KNT-005724 y KNT-006347 (recaudo revertido el
+2026-11-04, despues de su unico corte, y sin movimientos propios) salian con retencion 0 y la regla nueva les
+devolvia 27.000 a cada uno sola al desplegar, contra RF_17 y contra su exclusion pendiente.
+
 Compensar = liberar retenciones. `planDriverCompensation` devuelve, por pedido retenido: cobrado, debido,
 diferencia, si esta excluido (RF_16) y si el domiciliario tiene corte donde entraria. Aplicar escribe
 `releasedBy/releasedAt/compensationId` en esas filas y un registro de auditoria; **nada mas**. El siguiente

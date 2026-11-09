@@ -451,6 +451,12 @@ function registeredByAllCortes(context: DriverLedgerContext): Map<string, number
  * (la cobra el siguiente corte), y un recaudo BORRADO por una correccion si, porque el asiento ya no existe
  * (KNT-007828). Con esto, desplegar no cambia el efectivo de ningun corte (RNF_01).
  *
+ * El corte por fecha solo se aplica a pedidos que la regla vieja SI volveria a cobrar: con un
+ * `driver_earning` del domiciliario sin cortar (sin `settlementId`) o en un corte pendiente. Un pedido sin
+ * nada de eso no vuelve nunca a un corte con la regla vieja, asi que lo que arrastre es historico y se
+ * congela entero (todos los asientos). Es KNT-005724/KNT-006347: recaudo revertido despues de su unico corte
+ * y sin movimientos propios; con el corte por fecha salian sin retencion y se les devolvia solo (RF_17).
+ *
  * Devuelve solo los pedidos con retencion distinta de 0, en el orden en que aparecen en los cortes.
  */
 export function computeHolds(input: {
@@ -467,9 +473,19 @@ export function computeHolds(input: {
       if (previous === undefined || time > previous) seenUntil.set(orderId, time);
     }
   }
+  const reachable = new Set<string>();
+  for (const settlement of context.settlements) {
+    if (settlement.status === "pending") for (const orderId of settlement.orderIds ?? []) reachable.add(String(orderId));
+  }
+  for (const entry of input.entries) {
+    if (entry.ownerType === "driver" && entry.ownerId === context.driverId && entry.type === "driver_earning" && !entry.settlementId) {
+      reachable.add(String(entry.orderId ?? ""));
+    }
+  }
   const registered = registeredByAllCortes(context);
   const holds: DriverCashHold[] = [];
-  for (const [orderId, until] of seenUntil) {
+  for (const [orderId, seenTime] of seenUntil) {
+    const until = reachable.has(orderId) ? seenTime : "";
     const visible = input.entries.filter(
       (entry) => String(entry.orderId ?? "") === orderId && (!until || String(entry.createdAt ?? "") <= until)
     );
