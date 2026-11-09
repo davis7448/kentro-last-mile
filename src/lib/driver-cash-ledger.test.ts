@@ -297,3 +297,63 @@ describe("computeDriverCorte", () => {
     expect(() => computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries: [], context })).toThrow(/OLD/);
   });
 });
+
+// T4: saldo a favor, neto y reparto de lo recibido (RF_08, RF_09b; tabla de plan §3.3).
+describe("computeDriverCorte: saldo a favor, neto y reparto", () => {
+  const meta = new Map([
+    ["o1", { createdAt: "2026-08-01T00:00:00.000Z", trackingCode: "KNT-1" }],
+    ["o2", { createdAt: "2026-08-02T00:00:00.000Z", trackingCode: "KNT-2" }],
+    ["o3", { createdAt: "2026-08-01T00:00:00.000Z", trackingCode: "KNT-0" }]
+  ]);
+
+  it("corte normal: esperado = suma de cargos, neto = -esperado, sin 4x1000 ni credito", () => {
+    const entries = [cod("c1", "o1", 100000), pay("p1", "o1", 8000)];
+    const r = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context: ctx(), receivedCop: 0, orderMeta: meta });
+    expect(r).toMatchObject({ creditInCop: 0, creditOutCop: 0, cashExpectedCop: 92000, grossNetCop: -92000, netCop: -92000, gmfCop: 0 });
+  });
+
+  it("devolucion mayor que lo debido: esperado 0, neto 0 y el resto como credito exacto", () => {
+    // A cobro 78.900 por o1; la reversa lo devuelve. o2 debe 42.000. Bruto = 42.000 - 86.900 = -44.900.
+    const entries = [
+      cod("c1", "o1", 78900),
+      entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -78900, orderId: "o1" }),
+      pay("p1", "o1", 8000),
+      cod("c2", "o2", 50000),
+      pay("p2", "o2", 8000)
+    ];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 78900]])] });
+    const r = computeDriverCorte({ settlementId: "X", orderIds: ["o1", "o2"], ownEntryIds: ["p2"], entries, context, receivedCop: 0, orderMeta: meta });
+    expect(r.chargedTotalCop).toBe(42000 - 86900);
+    expect(r).toMatchObject({ cashExpectedCop: 0, creditOutCop: 44900, netCop: 0, grossNetCop: 0 });
+  });
+
+  it("el siguiente corte consume el credito una sola vez", () => {
+    const entries = [cod("c1", "o4", 60000), pay("p1", "o4", 8000)];
+    const withCredit = newCorte("X", [["o1", -44900]], { creditInCop: 0, creditOutCop: 44900 });
+    const first = computeDriverCorte({ settlementId: "Y", orderIds: ["o4"], ownEntryIds: ["p1"], entries, context: ctx({ settlements: [withCredit] }), receivedCop: 0, orderMeta: meta });
+    expect(first).toMatchObject({ creditInCop: 44900, cashExpectedCop: 52000 - 44900, creditOutCop: 0 });
+
+    const consumed = newCorte("Y", [["o4", 52000]], { creditInCop: 44900, creditOutCop: 0 });
+    const second = computeDriverCorte({ settlementId: "Z", orderIds: ["o5"], ownEntryIds: [], entries: [cod("c5", "o5", 30000)], context: ctx({ settlements: [withCredit, consumed] }), receivedCop: 0, orderMeta: meta });
+    expect(second).toMatchObject({ creditInCop: 0, cashExpectedCop: 30000 });
+  });
+
+  it("un credito que un corte pendiente consumio de mas se cobra en el siguiente (credito de entrada negativo)", () => {
+    // X dejo 10.000; Y consumio 10.000; luego X se recalculo y solo deja 4.000. Z debe cobrar los 6.000.
+    const x = newCorte("X", [["o1", -4000]], { status: "pending", creditInCop: 0, creditOutCop: 4000 });
+    const y = newCorte("Y", [["o2", 20000]], { creditInCop: 10000, creditOutCop: 0 });
+    const r = computeDriverCorte({ settlementId: "Z", orderIds: ["o3"], ownEntryIds: [], entries: [cod("c3", "o3", 30000)], context: ctx({ settlements: [x, y] }), receivedCop: 0, orderMeta: meta });
+    expect(r).toMatchObject({ creditInCop: -6000, cashExpectedCop: 36000 });
+  });
+
+  it("reparte lo recibido entre los pedidos con cargo positivo, por fecha y tracking", () => {
+    const entries = [cod("c1", "o1", 50000), cod("c2", "o2", 40000), cod("c3", "o3", 30000), pay("p4", "o4", 8000)];
+    const r = computeDriverCorte({ settlementId: "X", orderIds: ["o1", "o2", "o3", "o4"], ownEntryIds: ["p4"], entries, context: ctx(), receivedCop: 70000, orderMeta: meta });
+    expect(r.allocations).toEqual([
+      { orderId: "o3", expectedCop: 30000, receivedCop: 30000, covered: true },
+      { orderId: "o1", expectedCop: 50000, receivedCop: 40000, covered: false },
+      { orderId: "o2", expectedCop: 40000, receivedCop: 0, covered: false }
+    ]);
+    expect(r.allocations.reduce((a, x) => a + x.receivedCop, 0)).toBe(70000);
+  });
+});

@@ -14,7 +14,7 @@
  * cobra por un pedido lo que el pedido debe hoy menos lo que los demas cortes ya registraron (RF_02), y
  * deja registrada su cifra, sin recortar, para el siguiente (RF_03).
  */
-import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
+import type { DriverCashAllocation, SettlementDoc, SettlementOrderDoc, WalletEntryDoc } from "./settlement-math";
 
 /** Tipos de asiento de tienda que son recaudo contra entrega (el positivo y su reversa). */
 export const COD_ENTRY_TYPES: ReadonlySet<WalletEntryDoc["type"]> = new Set(["cod_revenue", "cod_remittance"]);
@@ -223,6 +223,10 @@ export type DriverCorteInput = {
   /** Asientos de tienda de los pedidos del corte y `driver_earning` del domiciliario. */
   entries: readonly WalletEntryDoc[];
   context: DriverLedgerContext;
+  /** Efectivo ya recibido del domiciliario para este corte (suma de sus abonos). */
+  receivedCop?: number;
+  /** Fecha de creacion y tracking de cada pedido, para repartir lo recibido en el orden de hoy. */
+  orderMeta?: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">>;
 };
 
 export type DriverCorteFigures = {
@@ -232,9 +236,57 @@ export type DriverCorteFigures = {
   driverPayCop: number;
   feesCop: number;
   platformMarginCop: number;
-  /** Suma de `chargedCop`, sin recortar. El saldo a favor y el esperado los anade T4. */
+  /** Suma de `chargedCop`, sin recortar. */
   chargedTotalCop: number;
+  /** Saldo que este corte recibe de los demas: a favor si es positivo, deuda si es negativo (RF_08). */
+  creditInCop: number;
+  /** Lo que su total negativo deja para el siguiente corte (>= 0). */
+  creditOutCop: number;
+  /** max(0, chargedTotalCop - creditInCop): el efectivo que el domiciliario debe entregar. */
+  cashExpectedCop: number;
+  /** -cashExpectedCop. Un corte a favor del domiciliario no se transfiere: se arrastra. */
+  grossNetCop: number;
+  netCop: number;
+  /** 0: un corte de domiciliario ya no gira dinero, asi que no hay 4x1000. */
+  gmfCop: number;
+  /** Reparto de lo recibido entre los pedidos con cargo positivo (lo leen la 026 y la 027). */
+  allocations: DriverCashAllocation[];
 };
+
+/**
+ * Saldo neto que los DEMAS cortes del domiciliario dejaron: lo que generaron menos lo que consumieron.
+ * Puede ser negativo: si un corte pendiente reduce despues un credito que otro ya consumio, la diferencia
+ * es una deuda que el siguiente corte cobra (RF_08, ratificado el 2026-11-09).
+ */
+export function creditCarriedIn(context: DriverLedgerContext, settlementId: string): number {
+  return context.settlements
+    .filter((settlement) => settlement.id !== settlementId)
+    .reduce((sum, settlement) => sum + (Number(settlement.creditOutCop) || 0) - (Number(settlement.creditInCop) || 0), 0);
+}
+
+/** Reparte lo recibido entre los cargos positivos, por fecha de creacion y tracking (el orden de hoy). */
+function allocateReceived(
+  charges: readonly DriverCashCharge[],
+  receivedCop: number,
+  orderMeta: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">>
+): DriverCashAllocation[] {
+  const owing = charges
+    .filter((charge) => charge.chargedCop > 0)
+    .sort((left, right) => {
+      const leftMeta = orderMeta.get(left.orderId);
+      const rightMeta = orderMeta.get(right.orderId);
+      return (
+        String(leftMeta?.createdAt ?? "").localeCompare(String(rightMeta?.createdAt ?? "")) ||
+        String(leftMeta?.trackingCode ?? left.orderId).localeCompare(String(rightMeta?.trackingCode ?? right.orderId))
+      );
+    });
+  let remaining = Math.max(0, Number(receivedCop) || 0);
+  return owing.map((charge) => {
+    const received = Math.min(charge.chargedCop, remaining);
+    remaining -= received;
+    return { orderId: charge.orderId, expectedCop: charge.chargedCop, receivedCop: received, covered: received >= charge.chargedCop };
+  });
+}
 
 /** Retencion vigente (sin liberar) de un pedido, segun RF_17. */
 export function activeHoldCop(holds: DriverCashHolds | null, orderId: string): number {
@@ -317,12 +369,25 @@ export function computeDriverCorte(input: DriverCorteInput): DriverCorteFigures 
   );
   const codCop = charges.reduce((sum, charge) => sum + charge.codCop, 0);
   const driverPayCop = charges.reduce((sum, charge) => sum + charge.driverPayCop, 0);
+  const chargedTotalCop = charges.reduce((sum, charge) => sum + charge.chargedCop, 0);
+  const creditInCop = creditCarriedIn(context, input.settlementId);
+  // Un saldo a favor (positivo) reduce lo que se entrega; una deuda (negativo) lo aumenta.
+  const grossCop = chargedTotalCop - creditInCop;
+  const cashExpectedCop = Math.max(0, grossCop);
   return {
     charges,
     codCop,
     driverPayCop,
     feesCop,
     platformMarginCop: feesCop - driverPayCop,
-    chargedTotalCop: charges.reduce((sum, charge) => sum + charge.chargedCop, 0)
+    chargedTotalCop,
+    creditInCop,
+    creditOutCop: Math.max(0, -grossCop),
+    cashExpectedCop,
+    // `0 - x` y no `-x`: un -0 rompe toEqual y se colaria en Firestore.
+    grossNetCop: 0 - cashExpectedCop,
+    netCop: 0 - cashExpectedCop,
+    gmfCop: 0,
+    allocations: allocateReceived(charges, input.receivedCop ?? 0, input.orderMeta ?? new Map())
   };
 }

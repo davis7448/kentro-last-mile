@@ -47,11 +47,11 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     descuenta dos veces; ningun pedido con dos montos; `recaudo − pago = Σ cargos`; un pedido que entra sin
     asiento propio aporta 0 a fletes y margen
 
-- [ ] **T4: Saldo a favor, neto y reparto de lo recibido**
+- [x] **T4: Saldo a favor, neto y reparto de lo recibido**
   * Requisitos cubiertos: RF_08, RF_09b
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `creditoEntrada = Σ creditOut − Σ creditIn` de los demas cortes (puede ser negativo);
-    `bruto = Σ cargos + creditoEntrada`; `esperado = max(0, bruto)`; `creditoSalida = max(0, −bruto)`;
+    `bruto = Σ cargos − creditoEntrada`; `esperado = max(0, bruto)`; `creditoSalida = max(0, −bruto)`;
     `netCop = grossNetCop = −esperado`, `gmfCop = 0` (tabla de §3.3). `cashAllocations` reparte el efectivo
     recibido entre los pedidos con cargo > 0, en el orden de hoy (creacion, tracking), con los campos que leen
     la 026 y la 027
@@ -66,7 +66,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     fallida, correccion entregado→fallido con corte cerrado o pendiente, recaudo borrado, re-entrega, cambio
     de tienda, abonos parciales, cortes recalculados en distinto orden, retenciones y liberacion
   * Verificacion: `npx vitest run src/lib/driver-cash-ledger.property.test.ts`: tras cada paso, para todo
-    pedido `Σ cargos = debido + retencion`, y `esperado − creditoEntrada + creditoSalida = Σ cargos`; 500
+    pedido `Σ cargos = debido + retencion`, y `esperado + creditoEntrada − creditoSalida = Σ cargos`; 500
     secuencias, mismo resultado en dos corridas
 
 - [ ] **T6: Casos reales como fixtures**

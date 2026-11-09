@@ -197,7 +197,8 @@ pago_X(o)    = Σ driver_earning del domiciliario con settlementId == X (o que e
 recaudo_X(o) = cargo_X(o) + pago_X(o)
 ```
 
-Totales: `recaudo = Σ recaudo_X`, `pago = Σ pago_X`, `bruto = Σ cargo_X + creditoEntrada`.
+Totales: `recaudo = Σ recaudo_X`, `pago = Σ pago_X`, `bruto = Σ cargo_X − creditoEntrada` (un saldo a favor
+resta; una deuda, que es negativa, suma; corregido en T4).
 `efectivoEsperado = max(0, bruto)`, `creditoSalida = max(0, −bruto)`.
 `creditoEntrada = Σ creditOut − Σ creditIn` de los **demas** cortes del domiciliario: puede ser negativo (una
 deuda), y asi un saldo a favor que un corte pendiente reduce despues se cobra en el siguiente y no se pierde.
@@ -290,7 +291,7 @@ la tienda y la API de tiendas no leen. RF_11 se reescribio asi el 2026-11-08, de
 - **Propiedad (RNF_02)**: generador propio y determinista (semilla fija, sin dependencia nueva) de secuencias
   por pedido: entrega, visita fallida, correccion entregado→fallido con corte cerrado o pendiente, recaudo
   borrado, re-entrega, cambio de tienda, abonos parciales, cortes que se recalculan en distinto orden. Tras
-  cada paso: `Σ cargos = debido + retencion` y `efectivoEsperado − creditoEntrada + creditoSalida = Σ cargos`.
+  cada paso: `Σ cargos = debido + retencion` y `efectivoEsperado + creditoEntrada − creditoSalida = Σ cargos`.
 - RF_04b: dos recalculos con el mismo contexto viejo → el segundo detecta el cambio (prueba del pure check y
   del IO con un doble del `updateTime`).
 - RF_08: corte con devolucion mayor que su recaudo → esperado 0, credito de salida exacto, el siguiente lo
