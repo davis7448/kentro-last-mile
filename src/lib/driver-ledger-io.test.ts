@@ -4,7 +4,8 @@ import {
   assertNoCrossedRecalc,
   CrossedRecalcError,
   loadDriverLedgerContext,
-  MissingBaselineError
+  MissingBaselineError,
+  recalculateDriverSettlement
 } from "../../functions/src/driver-ledger-io";
 
 const DRIVER = "driver-1";
@@ -12,7 +13,7 @@ const DRIVER = "driver-1";
 type FakeDoc = { id: string; data: Record<string, unknown>; updateTime: string };
 
 /** Firestore falso: solo lo que usa el cargador, y cuenta cada lectura (consulta o documento). */
-function fakeDb(state: { settlements: FakeDoc[]; docs: Record<string, Record<string, unknown> | undefined> }) {
+function fakeDb(state: { settlements: FakeDoc[]; docs: Record<string, Record<string, unknown> | undefined>; collections?: Record<string, FakeDoc[]> }) {
   const reads: string[] = [];
   const snapshotOf = (doc: FakeDoc) => ({
     id: doc.id,
@@ -29,7 +30,8 @@ function fakeDb(state: { settlements: FakeDoc[]; docs: Record<string, Record<str
         },
         async get() {
           reads.push(`query:${name}:${filters.map(([f, v]) => `${f}=${v}`).join(",")}`);
-          const docs = state.settlements.filter((d) => filters.every(([f, v]) => d.data[f] === v)).map(snapshotOf);
+          const pool = name === "settlements" ? state.settlements : (state.collections?.[name] ?? []);
+          const docs = pool.filter((d) => filters.every(([f, v]) => d.data[f] === v)).map(snapshotOf);
           return { docs };
         },
         doc(id: string) {
@@ -37,7 +39,7 @@ function fakeDb(state: { settlements: FakeDoc[]; docs: Record<string, Record<str
             async get() {
               reads.push(`doc:${name}/${id}`);
               const data = state.docs[`${name}/${id}`];
-              return { exists: data !== undefined, data: () => data };
+              return { id, exists: data !== undefined, data: () => data };
             }
           };
         }
@@ -148,5 +150,51 @@ describe("assertNoCrossedRecalc (RF_04b)", () => {
     const before = ctx([{ id: "C", status: "reconciled", updateTime: "t1" }]);
     const after = ctx([{ id: "C", status: "reconciled", updateTime: "t5" }]);
     expect(() => assertNoCrossedRecalc(before, after, "X")).not.toThrow();
+  });
+});
+
+describe("recalculateDriverSettlement (T13)", () => {
+  const walletDoc = (id: string, data: Record<string, unknown>): FakeDoc => ({ id, updateTime: "2026-11-10T10:00:00.000Z", data: { id, description: "", createdAt: "2026-11-10T09:00:00.000Z", ...data } });
+  const state = () => ({
+    settlements: [corte("X", { status: "pending", orderIds: ["o1"], walletEntryIds: ["p1"], cashCharges: [] })],
+    docs: { "orders/o1": { createdAt: "2026-11-09T00:00:00.000Z", trackingCode: "KNT-1" } },
+    collections: {
+      walletEntries: [
+        walletDoc("c1", { ownerType: "seller", ownerId: "s1", orderId: "o1", type: "cod_revenue", amountCop: 50000 }),
+        walletDoc("p1", { ownerType: "driver", ownerId: DRIVER, orderId: "o1", type: "driver_earning", amountCop: 8000, settlementId: "X" })
+      ]
+    }
+  });
+  const txOf = () => ({
+    sets: 0,
+    async get(target: { get: () => Promise<unknown> }) {
+      return target.get();
+    },
+    async getAll(...refs: Array<{ get: () => Promise<unknown> }>) {
+      return Promise.all(refs.map((ref) => ref.get()));
+    },
+    set() {
+      this.sets += 1;
+    }
+  });
+  const settlement = { id: "X", ownerId: DRIVER, orderIds: ["o1"], walletEntryIds: ["p1"] };
+
+  it("recalcula un corte pendiente dentro de la transaccion con la regla nueva", async () => {
+    const { db } = fakeDb(state());
+    const before = await loadDriverLedgerContext(db as never, DRIVER);
+    const fields = await recalculateDriverSettlement(db as never, txOf() as never, { settlement, receivedCop: 20000, before });
+    expect(fields).toMatchObject({ cashExpectedCop: 42000, cashReceivedCop: 20000, cashPendingCop: 22000, cashReceiptStatus: "partial", ledgerVersion: 1 });
+    expect(fields.cashCharges).toEqual([{ orderId: "o1", codCop: 50000, driverPayCop: 8000, chargedCop: 42000, codSeenCop: 50000 }]);
+  });
+
+  it("si otro corte pendiente cambio desde la lectura de fuera, lanza y no escribe nada", async () => {
+    const world = state();
+    world.settlements.push(corte("Y", { status: "pending", orderIds: ["o9"], cashCharges: [] }));
+    const { db } = fakeDb(world);
+    const before = await loadDriverLedgerContext(db as never, DRIVER);
+    world.settlements[1].updateTime = "2026-11-10T11:00:00.000Z";
+    const tx = txOf();
+    await expect(recalculateDriverSettlement(db as never, tx as never, { settlement, receivedCop: 0, before })).rejects.toBeInstanceOf(CrossedRecalcError);
+    expect(tx.sets).toBe(0);
   });
 });

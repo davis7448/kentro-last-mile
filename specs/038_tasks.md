@@ -149,10 +149,11 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     `cashExpectedCop` presente al crear; margen igual que hoy en un corte normal; corte solo de devoluciones
     valido. `npx tsc --noEmit` en `functions/` limpio
 
-- [ ] **T13: Abonos, pagado y conciliado dentro de la transaccion**
+- [x] **T13: Abonos, pagado y conciliado dentro de la transaccion**
   * Requisitos cubiertos: RF_04, RF_04b, RF_09
   * Archivos: functions/src/driver-cash-ledger.ts, functions/src/orders.ts, src/lib/driver-cash-ledger.test.ts,
-    src/lib/driver-ledger-io.test.ts
+    src/lib/driver-ledger-io.test.ts, functions/src/driver-ledger-io.ts (anadido en T13: el recalculo dentro de la
+    transaccion es E/S y se prueba con el doble de T11)
   * Accion: `recordDriverCashReceipt` y `updateSettlementStatus` calculan con `buildDriverSettlementFields` y
     el contexto leido **en** la transaccion, comparado con el de fuera; un corte `paid`/`reconciled` no
     recalcula `cashCharges` ni sus cifras. Se elimina `cashSummaryBeforeReceipt`

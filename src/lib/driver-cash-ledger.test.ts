@@ -13,7 +13,8 @@ import {
   orderOwedByDriver,
   pendingDeltaOrders,
   planDriverCompensation,
-  rebuildHistoricalCharges
+  rebuildHistoricalCharges,
+  refreshFrozenReceipts
 } from "../../functions/src/driver-cash-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
 
@@ -593,5 +594,43 @@ describe("buildDriverSettlementFields", () => {
     const base = { settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context: ctx(), orderMeta: meta };
     expect(buildDriverSettlementFields({ ...base, receivedCop: 20000 })).toMatchObject({ cashPendingCop: 22000, cashExcessCop: 0, cashReceiptStatus: "partial" });
     expect(buildDriverSettlementFields({ ...base, receivedCop: 50000 })).toMatchObject({ cashPendingCop: 0, cashExcessCop: 8000, cashReceiptStatus: "complete" });
+  });
+});
+
+// T13: un corte pagado o conciliado no recalcula sus cifras; solo registra lo recibido (RF_04).
+describe("refreshFrozenReceipts", () => {
+  const meta = new Map([
+    ["o1", { createdAt: "2026-11-01T00:00:00.000Z", trackingCode: "KNT-1" }],
+    ["o2", { createdAt: "2026-11-02T00:00:00.000Z", trackingCode: "KNT-2" }]
+  ]);
+
+  it("corte nuevo congelado: conserva esperado y cargos, y reparte lo recibido sobre sus cargos guardados", () => {
+    const frozen = {
+      cashExpectedCop: 72000,
+      cashCharges: [
+        { orderId: "o1", codCop: 50000, driverPayCop: 8000, chargedCop: 42000, codSeenCop: 50000 },
+        { orderId: "o2", codCop: 30000, driverPayCop: 0, chargedCop: 30000, codSeenCop: 30000 },
+        { orderId: "o3", codCop: -8000, driverPayCop: 0, chargedCop: -8000, codSeenCop: 0 }
+      ]
+    };
+    expect(refreshFrozenReceipts(frozen, 80000, meta)).toEqual({
+      cashReceivedCop: 80000,
+      cashPendingCop: 0,
+      cashExcessCop: 8000,
+      cashReceiptStatus: "complete",
+      cashAllocations: [
+        { orderId: "o1", expectedCop: 42000, receivedCop: 42000, covered: true },
+        { orderId: "o2", expectedCop: 30000, receivedCop: 30000, covered: true }
+      ]
+    });
+  });
+
+  it("corte viejo congelado (sin cashCharges): reparte sobre sus asignaciones guardadas, sin la regla vieja", () => {
+    const frozen = { cashExpectedCop: 92000, cashAllocations: [{ orderId: "o1", expectedCop: 92000, receivedCop: 0, covered: false }] };
+    expect(refreshFrozenReceipts(frozen, 50000, meta)).toMatchObject({
+      cashPendingCop: 42000,
+      cashReceiptStatus: "partial",
+      cashAllocations: [{ orderId: "o1", expectedCop: 92000, receivedCop: 50000, covered: false }]
+    });
   });
 });

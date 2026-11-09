@@ -9,6 +9,8 @@
  * `HttpsError("failed-precondition", ...)`.
  */
 import type { Firestore, Transaction } from "firebase-admin/firestore";
+import { buildDriverSettlementFields, type DriverSettlementFields } from "./driver-cash-ledger";
+import type { SettlementOrderDoc, WalletEntryDoc } from "./settlement-math";
 import type {
   DriverCashCharge,
   DriverCashHolds,
@@ -110,4 +112,44 @@ export function assertNoCrossedRecalc(before: DriverLedgerContext, after: Driver
     return !previous || !current || previous.status !== current.status || previous.updateTime !== current.updateTime;
   });
   if (crossed.length > 0) throw new CrossedRecalcError(crossed.sort());
+}
+
+/**
+ * Recalcula un corte de domiciliario PENDIENTE dentro de una transaccion (RF_04b, RF_09): lee el contexto,
+ * los asientos de tienda, los pagos del domiciliario y los pedidos por la transaccion, comprueba que ningun
+ * otro corte pendiente cambio desde `before` (la lectura de fuera) y devuelve los campos a escribir. No
+ * escribe: si lanza, el llamador no ha tocado nada. Todas sus lecturas van antes de cualquier escritura.
+ */
+export async function recalculateDriverSettlement(
+  db: Firestore,
+  tx: Transaction,
+  input: {
+    settlement: { id: string; ownerId: string; orderIds?: string[]; walletEntryIds?: string[] };
+    receivedCop: number;
+    before: DriverLedgerContext;
+  }
+): Promise<DriverSettlementFields> {
+  const { settlement } = input;
+  const orderIds = Array.from(new Set((settlement.orderIds ?? []).map(String)));
+  type Snap = { id: string; data: () => Record<string, unknown> | undefined; exists?: boolean };
+  const toEntry = (doc: Snap) => ({ id: doc.id, ...(doc.data() ?? {}) }) as WalletEntryDoc;
+  const [after, sellerSnap, driverSnap, orderSnaps] = await Promise.all([
+    loadDriverLedgerContext(db, settlement.ownerId, tx),
+    tx.get(db.collection("walletEntries").where("ownerType", "==", "seller")) as unknown as Promise<{ docs: Snap[] }>,
+    tx.get(db.collection("walletEntries").where("ownerType", "==", "driver").where("ownerId", "==", settlement.ownerId)) as unknown as Promise<{ docs: Snap[] }>,
+    (orderIds.length > 0 ? tx.getAll(...orderIds.map((orderId) => db.collection("orders").doc(orderId))) : Promise.resolve([])) as unknown as Promise<Snap[]>
+  ]);
+  assertNoCrossedRecalc(input.before, after, settlement.id);
+  const orderMeta = new Map(
+    orderSnaps.filter((snap) => snap.exists !== false && snap.data()).map((snap) => [snap.id, snap.data() as SettlementOrderDoc])
+  );
+  return buildDriverSettlementFields({
+    settlementId: settlement.id,
+    orderIds,
+    ownEntryIds: (settlement.walletEntryIds ?? []).map(String),
+    entries: [...sellerSnap.docs.map(toEntry), ...driverSnap.docs.map(toEntry)],
+    context: after,
+    receivedCop: input.receivedCop,
+    orderMeta
+  });
 }

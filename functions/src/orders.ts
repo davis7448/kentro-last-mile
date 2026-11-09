@@ -13,15 +13,13 @@ import {
   summarizeOrderLines
 } from "./inventory-movements";
 import { gmfForPayout } from "./gmf";
-import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext } from "./driver-cash-ledger";
-import { assertNoCrossedRecalc, CrossedRecalcError, loadDriverLedgerContext, MissingBaselineError } from "./driver-ledger-io";
+import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext, refreshFrozenReceipts } from "./driver-cash-ledger";
+import { assertNoCrossedRecalc, CrossedRecalcError, loadDriverLedgerContext, MissingBaselineError, recalculateDriverSettlement } from "./driver-ledger-io";
 import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange } from "./seller-ledger";
 import { computeSellerBalance, payoutRejectionMessage, selectSettlementEntries } from "./seller-balance";
 import { loadSellerBalanceInput } from "./seller-balance-api";
 import {
-  computeDriverCashSummary,
   type DriverCashInputs,
-  type DriverCashSummary,
   settlementCashReceivedCop,
   type SettlementDoc,
   type SettlementOrderDoc,
@@ -1534,15 +1532,12 @@ export const updateSettlementStatus = onCall(async (request) => {
     throw new HttpsError("not-found", "Settlement not found.");
   }
   const settlementPreview = { id: settlementPreviewSnap.id, ...settlementPreviewSnap.data() } as SettlementDoc;
-  const previewReceivedCop = settlementCashReceivedCop(settlementPreview);
-  const driverCash = settlementPreview.kind === "driver" ? await calculateDriverCashSummary(db, settlementPreview, previewReceivedCop) : null;
-  const previewPendingCop = driverCash ? Math.max(0, driverCash.expectedCop - previewReceivedCop) : 0;
-  if (driverCash && input.status === "paid" && previewPendingCop > 0) {
-    throw new HttpsError("failed-precondition", "Este domiciliario aun tiene saldo pendiente. Registra primero el dinero recibido.");
-  }
-  if (driverCash && input.status === "reconciled" && previewPendingCop > 0) {
-    throw new HttpsError("failed-precondition", "No se puede conciliar un corte de domiciliario con saldo pendiente.");
-  }
+  // Spec 038: el corte de domiciliario pendiente se recalcula DENTRO de la transaccion con la regla nueva
+  // (RF_04b, RF_09); aqui solo se lee el contexto con el que se comparara. Uno ya pagado no se recalcula al
+  // conciliarlo (RF_04): conserva sus cifras.
+  const ledgerBefore = settlementPreview.kind === "driver" && settlementPreview.status === "pending"
+    ? await withLedgerErrors(() => loadDriverLedgerContext(db, settlementPreview.ownerId))
+    : null;
 
   return db.runTransaction(async (transaction) => {
     const settlementSnap = await transaction.get(settlementRef);
@@ -1557,8 +1552,15 @@ export const updateSettlementStatus = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "Only paid settlements can be reconciled.");
     }
     const receivedCop = settlementCashReceivedCop(settlement);
-    const liveDriverCash = settlement.kind === "driver" ? await calculateDriverCashSummary(db, settlement, receivedCop) : null;
-    const pendingCop = liveDriverCash ? Math.max(0, liveDriverCash.expectedCop - receivedCop) : 0;
+    if (settlement.kind === "driver" && settlement.status === "pending" && !ledgerBefore) {
+      throw new HttpsError("failed-precondition", "El corte cambio de estado mientras se actualizaba. Vuelve a intentarlo.", { code: "recalculo_cruzado" });
+    }
+    const liveDriverCash = settlement.kind !== "driver"
+      ? null
+      : settlement.status === "pending"
+        ? await withLedgerErrors(() => recalculateDriverSettlement(db, transaction, { settlement, receivedCop, before: ledgerBefore as DriverLedgerContext }))
+        : refreshFrozenReceipts(settlement, receivedCop);
+    const pendingCop = liveDriverCash ? liveDriverCash.cashPendingCop : 0;
     if (liveDriverCash && pendingCop > 0) {
       throw new HttpsError(
         "failed-precondition",
@@ -1570,18 +1572,7 @@ export const updateSettlementStatus = onCall(async (request) => {
 
     const nextSettlement = stripUndefined({
       ...settlement,
-      ...(liveDriverCash ? {
-        codCop: liveDriverCash.codCop,
-        feesCop: liveDriverCash.feesCop,
-        driverPayCop: liveDriverCash.driverPayCop,
-        platformMarginCop: liveDriverCash.platformMarginCop,
-        netCop: liveDriverCash.driverPayCop - liveDriverCash.codCop,
-        cashExpectedCop: liveDriverCash.expectedCop,
-        cashReceivedCop: receivedCop,
-        cashPendingCop: pendingCop,
-        cashReceiptStatus: liveDriverCash.expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
-        cashAllocations: liveDriverCash.allocations
-      } : {}),
+      ...(liveDriverCash ?? {}),
       status: input.status,
       paidAt: input.status === "paid" ? now : settlement.paidAt,
       reconciledAt: input.status === "reconciled" ? now : settlement.reconciledAt,
@@ -1651,13 +1642,23 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     throw new HttpsError("failed-precondition", "Reconciled settlements cannot receive cash updates.");
   }
 
-  const cashSummaryBeforeReceipt = await calculateDriverCashSummary(db, currentSettlement, 0);
+  // Spec 038: un corte pendiente se recalcula DENTRO de la transaccion con la regla nueva, comparando el
+  // contexto del domiciliario con el leido aqui (RF_04b). Antes el esperado se calculaba fuera, con la regla
+  // vieja, y se usaba dentro: ese era el hueco. Un corte pagado no se recalcula (RF_04).
+  const ledgerBefore = currentSettlement.status === "pending"
+    ? await withLedgerErrors(() => loadDriverLedgerContext(db, currentSettlement.ownerId))
+    : null;
 
   return db.runTransaction(async (transaction) => {
     const liveSnap = await transaction.get(settlementRef);
     if (!liveSnap.exists) throw new HttpsError("not-found", "Settlement not found.");
     const settlement = { id: liveSnap.id, ...liveSnap.data() } as SettlementDoc;
-    const expectedCop = cashSummaryBeforeReceipt.expectedCop;
+    if (settlement.status === "reconciled") {
+      throw new HttpsError("failed-precondition", "Reconciled settlements cannot receive cash updates.");
+    }
+    if (settlement.status === "pending" && !ledgerBefore) {
+      throw new HttpsError("failed-precondition", "El corte cambio de estado mientras se registraba el abono. Vuelve a intentarlo.", { code: "recalculo_cruzado" });
+    }
     const previousReceivedCop = settlementCashReceivedCop(settlement);
     // Se registra el monto REAL entregado, sin topar en lo esperado. Antes se aplicaba
     // Math.min(..., expectedCop - previousReceivedCop): si el domiciliario entregaba de
@@ -1665,52 +1666,35 @@ export const recordDriverCashReceipt = onCall(async (request) => {
     // "EXCEDENTE QUE NO SE PUDO REGISTRAR" que aparecio en produccion).
     const receivedNowCop = Math.max(0, Math.round(Number(input.receivedNowCop || 0)));
     const receivedCop = previousReceivedCop + receivedNowCop;
-    const pendingCop = Math.max(0, expectedCop - receivedCop);
-    // Excedente: lo que el domiciliario entrego por encima de lo esperado. Queda visible
-    // para acreditarselo en el proximo corte en vez de desaparecer.
-    const excessCop = Math.max(0, receivedCop - expectedCop);
-    const cashSummary = await calculateDriverCashSummary(db, settlement, receivedCop);
+    // Pendiente: cifras completas con la regla nueva. Pagado: congelado, solo lo recibido y su reparto.
+    // El excedente (lo entregado por encima de lo esperado) sigue quedando visible, como antes.
+    const cashFields = settlement.status === "pending"
+      ? await withLedgerErrors(() => recalculateDriverSettlement(db, transaction, { settlement, receivedCop, before: ledgerBefore as DriverLedgerContext }))
+      : refreshFrozenReceipts(settlement, receivedCop);
+    const pendingCop = cashFields.cashPendingCop;
     const receipts = [
       ...(Array.isArray(settlement.cashReceipts) ? settlement.cashReceipts : []),
       ...(receivedNowCop > 0 ? [stripUndefined({ amountCop: receivedNowCop, receivedAt: now, note: input.note?.trim() || undefined })] : [])
     ];
+    // Un corte ya pagado conserva su fecha de pago: un abono tardio no lo "vuelve a pagar".
+    const paidAt = pendingCop === 0 ? (settlement.status === "paid" ? settlement.paidAt ?? now : now) : undefined;
     const nextSettlement = {
       ...settlement,
+      ...cashFields,
       status: pendingCop === 0 ? "paid" : "pending",
-      paidAt: pendingCop === 0 ? now : FieldValue.delete(),
+      paidAt: paidAt ?? FieldValue.delete(),
       // reconciledAt puede no existir aun; undefined no es valido para Firestore
       reconciledAt: pendingCop === 0 ? settlement.reconciledAt ?? FieldValue.delete() : FieldValue.delete(),
-      codCop: cashSummary.codCop,
-      feesCop: cashSummary.feesCop,
-      driverPayCop: cashSummary.driverPayCop,
-      platformMarginCop: cashSummary.platformMarginCop,
-      netCop: cashSummary.driverPayCop - cashSummary.codCop,
-      cashExpectedCop: expectedCop,
-      cashReceivedCop: receivedCop,
-      cashPendingCop: pendingCop,
-      cashExcessCop: excessCop,
-      cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
       cashReceipts: receipts,
-      cashAllocations: cashSummary.allocations,
       note: input.note?.trim() || settlement.note || FieldValue.delete()
     };
     const responseSettlement = stripUndefined({
       ...settlement,
+      ...cashFields,
       status: pendingCop === 0 ? "paid" : "pending",
-      paidAt: pendingCop === 0 ? now : undefined,
+      paidAt,
       reconciledAt: pendingCop === 0 ? settlement.reconciledAt : undefined,
-      codCop: cashSummary.codCop,
-      feesCop: cashSummary.feesCop,
-      driverPayCop: cashSummary.driverPayCop,
-      platformMarginCop: cashSummary.platformMarginCop,
-      netCop: cashSummary.driverPayCop - cashSummary.codCop,
-      cashExpectedCop: expectedCop,
-      cashReceivedCop: receivedCop,
-      cashPendingCop: pendingCop,
-      cashExcessCop: excessCop,
-      cashReceiptStatus: expectedCop === 0 ? "complete" : pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
       cashReceipts: receipts,
-      cashAllocations: cashSummary.allocations,
       note: input.note?.trim() || settlement.note
     });
     const shortageRef = db.collection("walletEntries").doc(`we-${settlement.id}-cash-shortage`);
@@ -2020,15 +2004,6 @@ async function withLedgerErrors<T>(run: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
-}
-
-async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, settlement: SettlementDoc, receivedCop: number): Promise<DriverCashSummary> {
-  const orderIds = Array.from(new Set(settlement.orderIds ?? []));
-  if (orderIds.length === 0) {
-    return { codCop: 0, feesCop: 0, driverPayCop: 0, platformMarginCop: 0, expectedCop: 0, allocations: [] };
-  }
-  const inputs = await loadDriverCashInputs(db, orderIds);
-  return computeDriverCashSummary(inputs, orderIds, receivedCop);
 }
 
 function buildSettlement(

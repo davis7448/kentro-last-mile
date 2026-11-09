@@ -696,3 +696,40 @@ export function buildDriverSettlementFields(input: DriverCorteInput & { received
     ledgerVersion: 1
   };
 }
+
+/** Lo que un corte congelado (pagado o conciliado) actualiza al recibir efectivo. */
+export type FrozenReceiptFields = Pick<
+  DriverSettlementFields,
+  "cashReceivedCop" | "cashPendingCop" | "cashExcessCop" | "cashReceiptStatus" | "cashAllocations"
+>;
+
+/**
+ * RF_04: un corte pagado o conciliado NO recalcula sus cifras ni su registro por pedido. Si recibe efectivo
+ * (un abono tardio a un corte pagado), solo se actualiza lo recibido y su reparto, sobre lo que el corte ya
+ * guardo: `cashCharges` si es de la 038, y si es viejo, sus `cashAllocations`. Nunca con la regla vieja.
+ */
+export function refreshFrozenReceipts(
+  frozen: { cashExpectedCop?: number; cashCharges?: readonly DriverCashCharge[]; cashAllocations?: readonly DriverCashAllocation[] },
+  receivedCop: number,
+  orderMeta: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">> = new Map()
+): FrozenReceiptFields {
+  const expectedCop = Math.max(0, Number(frozen.cashExpectedCop) || 0);
+  const received = Math.max(0, Math.round(Number(receivedCop) || 0));
+  const charges: DriverCashCharge[] = frozen.cashCharges
+    ? [...frozen.cashCharges]
+    : (frozen.cashAllocations ?? []).map((allocation) => ({
+        orderId: allocation.orderId,
+        codCop: allocation.expectedCop,
+        driverPayCop: 0,
+        chargedCop: allocation.expectedCop,
+        codSeenCop: 0
+      }));
+  const pendingCop = Math.max(0, expectedCop - received);
+  return {
+    cashReceivedCop: received,
+    cashPendingCop: pendingCop,
+    cashExcessCop: Math.max(0, received - expectedCop),
+    cashReceiptStatus: expectedCop === 0 || pendingCop === 0 ? "complete" : received > 0 ? "partial" : "none",
+    cashAllocations: allocateReceived(charges, received, orderMeta)
+  };
+}
