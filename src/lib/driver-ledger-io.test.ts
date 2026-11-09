@@ -4,6 +4,7 @@ import {
   assertNoCrossedRecalc,
   CrossedRecalcError,
   loadDriverLedgerContext,
+  loadDriverLedgerSnapshot,
   MissingBaselineError,
   recalculateDriverSettlement
 } from "../../functions/src/driver-ledger-io";
@@ -196,5 +197,18 @@ describe("recalculateDriverSettlement (T13)", () => {
     const tx = txOf();
     await expect(recalculateDriverSettlement(db as never, tx as never, { settlement, receivedCop: 0, before })).rejects.toBeInstanceOf(CrossedRecalcError);
     expect(tx.sets).toBe(0);
+  });
+});
+
+describe("loadDriverLedgerSnapshot (T14)", () => {
+  it("devuelve el contexto y las referencias de los cortes PENDIENTES con su updateTime crudo, para precondiciones", async () => {
+    const { db } = fakeDb({
+      settlements: [corte("P", { status: "pending", cashCharges: [] }), corte("C", { status: "reconciled", cashCharges: [] })],
+      docs: {}
+    });
+    const snapshot = await loadDriverLedgerSnapshot(db as never, DRIVER);
+    expect(snapshot.context.settlements.map((s) => s.id)).toEqual(["P", "C"]);
+    expect(Array.from(snapshot.pendingSettlements.keys())).toEqual(["P"]);
+    expect(snapshot.pendingSettlements.get("P")?.updateTime).toBeDefined();
   });
 });

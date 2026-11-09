@@ -75,10 +75,26 @@ function toLedgerSettlement(id: string, data: Record<string, unknown>, updateTim
  * calcular sin ella cobraria otra vez lo que esos cortes ya cobraron.
  */
 export async function loadDriverLedgerContext(db: Firestore, driverId: string, tx?: Transaction): Promise<DriverLedgerContext> {
+  return (await loadDriverLedgerSnapshot(db, driverId, tx)).context;
+}
+
+/** Un corte pendiente con su referencia y su `updateTime` CRUDO (el ISO pierde precision para precondiciones). */
+export type PendingSettlementRef = { ref: unknown; updateTime: unknown };
+
+/**
+ * Como `loadDriverLedgerContext`, y ademas las referencias de los cortes PENDIENTES del domiciliario con su
+ * `updateTime` tal cual lo da Firestore. Lo usa la correccion de pedidos, que escribe en batch: pone una
+ * precondicion `lastUpdateTime` sobre esos cortes para que un recalculo cruzado falle (RF_04b).
+ */
+export async function loadDriverLedgerSnapshot(
+  db: Firestore,
+  driverId: string,
+  tx?: Transaction
+): Promise<{ context: DriverLedgerContext; pendingSettlements: Map<string, PendingSettlementRef> }> {
   const read = <T>(target: Readable): Promise<T> => (tx ? (tx.get(target as never) as Promise<T>) : (target.get() as Promise<T>));
   const settlementsQuery = db.collection("settlements").where("kind", "==", "driver").where("ownerId", "==", driverId);
   const [settlementSnap, baselineSnap, holdsSnap] = await Promise.all([
-    read<{ docs: Array<{ id: string; data: () => Record<string, unknown>; updateTime?: unknown }> }>(settlementsQuery),
+    read<{ docs: Array<{ id: string; ref?: unknown; data: () => Record<string, unknown>; updateTime?: unknown }> }>(settlementsQuery),
     read<{ exists: boolean; data: () => unknown }>(db.collection(DRIVER_LEDGER_BASELINES).doc(driverId)),
     read<{ exists: boolean; data: () => unknown }>(db.collection(DRIVER_CASH_HOLDS).doc(driverId))
   ]);
@@ -88,7 +104,11 @@ export async function loadDriverLedgerContext(db: Firestore, driverId: string, t
   if (!baseline && settlements.some((settlement) => !Array.isArray(settlement.cashCharges))) {
     throw new MissingBaselineError(driverId);
   }
-  return { driverId, settlements, baseline, holds };
+  const pendingSettlements = new Map<string, PendingSettlementRef>();
+  for (const doc of settlementSnap.docs) {
+    if (String((doc.data() ?? {}).status ?? "") === "pending") pendingSettlements.set(doc.id, { ref: doc.ref, updateTime: doc.updateTime });
+  }
+  return { context: { driverId, settlements, baseline, holds }, pendingSettlements };
 }
 
 /**

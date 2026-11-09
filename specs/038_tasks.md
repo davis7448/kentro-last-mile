@@ -160,10 +160,11 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: pruebas: abono en corte pendiente recalcula; un corte conciliado conserva sus cifras al
     recibir un abono; con el doble de T11, un recalculo cruzado lanza y no llama a `set`
 
-- [ ] **T14: Correcciones: previsualizar lo que se devuelve**
+- [x] **T14: Correcciones: previsualizar lo que se devuelve**
   * Requisitos cubiertos: RF_04, RF_04b, RF_10
   * Archivos: functions/src/order-corrections-plan.ts, functions/src/order-corrections.ts,
-    src/lib/order-corrections-plan.test.ts
+    src/lib/order-corrections-plan.test.ts, functions/src/driver-ledger-io.ts, src/lib/driver-ledger-io.test.ts
+    (anadidos en T14: la callable necesita las referencias de los otros cortes pendientes para la precondicion)
   * Accion: el recalculo de cortes pendientes de domiciliario usa `computeDriverCorteSummary`; para cada corte
     cerrado que cobro el pedido, `driverNextCorteDeltaCop` y un aviso con la cifra, dentro de la huella del
     plan. `order-corrections.ts` carga el contexto y pone precondicion `lastUpdateTime` sobre los otros

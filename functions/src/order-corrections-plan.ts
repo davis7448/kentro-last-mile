@@ -39,8 +39,9 @@ import {
   inventoryMovementsForOrder,
   orderOwnsInventoryReservation
 } from "./inventory-movements";
+import { type DriverLedgerContext, type DriverLedgerSettlement, pendingDeltaOrders } from "./driver-cash-ledger";
 import {
-  computeDriverCashSummary,
+  computeDriverCorteSummary,
   type DriverCashInputs,
   type SettlementDoc,
   settlementCashReceivedCop,
@@ -136,6 +137,11 @@ export type OrderCorrectionPlan = {
     driverNetAfterCop: number;
     driverDeltaCop: number;
   };
+  /**
+   * Spec 038 (RF_10): por cada domiciliario con un corte CERRADO que cobro este pedido, lo que su siguiente
+   * corte le cobrara (positivo) o devolvera (negativo) por el, con la regla nueva. Va en la huella del plan.
+   */
+  driverNextCorte: Array<{ driverId: string; orderId: string; deltaCop: number; frozenSettlementIds: string[] }>;
   warnings: PlanNote[];
   blockers: PlanNote[];
   auditAction: string;
@@ -152,6 +158,11 @@ export type PlanInput = {
   settlementsById: Map<string, SettlementDoc>;
   /** Todos los asientos seller/driver + metadatos de pedidos: para recalcular cortes. */
   cashInputs: DriverCashInputs;
+  /**
+   * Spec 038: contexto (cortes, foto, retenciones) de cada domiciliario con cortes afectados o con un corte
+   * cerrado que cobro el pedido. Sin el de un corte de domiciliario a recalcular, el plan se bloquea.
+   */
+  driverLedgers?: ReadonlyMap<string, DriverLedgerContext>;
   tariffs: Record<string, number>;
   productCostLines: ProductCostLine[];
   sellerPaysInCash: boolean;
@@ -458,6 +469,10 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
   ];
 
   const settlementsToRecalculate: PlannedSettlement[] = [];
+  /** Los contextos de domiciliario con los cortes pendientes ya recalculados, para el aviso de RF_10. */
+  const ledgersAfter = new Map<string, DriverLedgerContext>(
+    Array.from(input.driverLedgers ?? new Map<string, DriverLedgerContext>()).map(([id, ledger]) => [id, { ...ledger, settlements: [...ledger.settlements] }])
+  );
   for (const settlementId of pendingSettlementIds) {
     const settlement = settlementsById.get(settlementId);
     if (!settlement) continue;
@@ -479,24 +494,58 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
     let after: PlannedSettlement["after"];
 
     if (settlement.kind === "driver") {
+      const ledger = ledgersAfter.get(settlement.ownerId);
+      if (!ledger) {
+        blockers.push({
+          code: "missing_driver_ledger",
+          message: `Falta el contexto del domiciliario ${settlement.ownerId} para recalcular el corte ${settlement.id}: no se calcula a la antigua.`
+        });
+        continue;
+      }
+      // Spec 038 (RF_07): un corte de domiciliario conserva los pedidos que entraron sin asiento propio para
+      // cobrar o devolver una diferencia; si no, esa diferencia se perderia al recalcularlo.
+      const driverOrderIds = Array.from(new Set([...(settlement.orderIds ?? []), ...orderIds]));
+      patch.orderIds = driverOrderIds;
       const receivedCop = settlementCashReceivedCop(settlement);
-      const summary = computeDriverCashSummary(adjustedInputs, orderIds, receivedCop);
+      const summary = computeDriverCorteSummary({
+        inputs: adjustedInputs,
+        settlementId: settlement.id,
+        orderIds: driverOrderIds,
+        ownEntryIds: walletEntryIds,
+        receivedCop,
+        context: ledger
+      });
       const expectedCop = summary.expectedCop;
       const pendingCop = Math.max(0, expectedCop - receivedCop);
       const excessCop = Math.max(0, receivedCop - expectedCop);
-      const netCop = summary.driverPayCop - summary.codCop;
+      const netCop = summary.netCop;
       Object.assign(patch, {
         codCop: summary.codCop,
         feesCop: summary.feesCop,
         driverPayCop: summary.driverPayCop,
         platformMarginCop: summary.platformMarginCop,
         netCop,
+        gmfCop: summary.gmfCop,
         cashExpectedCop: expectedCop,
         cashPendingCop: pendingCop,
         cashExcessCop: excessCop,
         cashReceiptStatus: expectedCop === 0 || pendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
-        cashAllocations: summary.allocations
+        cashAllocations: summary.allocations,
+        cashCharges: summary.cashCharges,
+        creditInCop: summary.creditInCop,
+        creditOutCop: summary.creditOutCop,
+        ledgerVersion: summary.ledgerVersion
       });
+      const recalculated: DriverLedgerSettlement = {
+        id: settlement.id,
+        status: settlement.status,
+        orderIds: driverOrderIds,
+        cashCharges: summary.cashCharges,
+        creditInCop: summary.creditInCop,
+        creditOutCop: summary.creditOutCop
+      };
+      const others = ledger.settlements.filter((item) => item.id !== settlement.id);
+      ledgersAfter.set(settlement.ownerId, { ...ledger, settlements: [...others, recalculated] });
       // El faltante de efectivo es un asiento propio del corte: si no se mueve con el, la
       // wallet del domiciliario queda descuadrada justo por el delta.
       relatedEntryPatches.push({
@@ -504,7 +553,7 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
         amountCop: pendingCop === 0 ? 0 : -pendingCop,
         reason: "faltante de recaudo recalculado"
       });
-      after = { walletEntryCount: walletEntryIds.length, orderCount: orderIds.length, netCop, cashExpectedCop: expectedCop, cashPendingCop: pendingCop };
+      after = { walletEntryCount: walletEntryIds.length, orderCount: driverOrderIds.length, netCop, cashExpectedCop: expectedCop, cashPendingCop: pendingCop };
     } else {
       const totals = settlementTotals(settlement.kind, finalEntries, [], settlement.kind === "seller" ? input.sellerPaysInCash : false);
       Object.assign(patch, {
@@ -524,6 +573,29 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
     }
 
     settlementsToRecalculate.push({ id: settlement.id, kind: settlement.kind, ownerName: settlement.ownerName, patch, before, after, relatedEntryPatches });
+  }
+
+  // --- Spec 038 (RF_10): lo que el siguiente corte del domiciliario le cobrara o devolvera ---------
+  const driverNextCorte: OrderCorrectionPlan["driverNextCorte"] = [];
+  for (const [driverIdOfLedger, ledger] of ledgersAfter) {
+    const frozenIds = ledger.settlements
+      .filter((item) => (item.status === "paid" || item.status === "reconciled") && (item.orderIds ?? []).includes(orderId))
+      .map((item) => item.id)
+      .sort();
+    if (frozenIds.length === 0) continue;
+    const delta = pendingDeltaOrders({ entries: allAdjusted, context: ledger }).find((row) => row.orderId === orderId);
+    const deltaCop = delta?.deltaCop ?? 0;
+    driverNextCorte.push({ driverId: driverIdOfLedger, orderId, deltaCop, frozenSettlementIds: frozenIds });
+    if (deltaCop !== 0) {
+      const amount = Math.abs(deltaCop).toLocaleString("es-CO");
+      warnings.push({
+        code: "driver_next_corte",
+        message:
+          deltaCop < 0
+            ? `Al domiciliario ${driverIdOfLedger} se le devolveran $${amount} por este pedido en su proximo corte.`
+            : `Al domiciliario ${driverIdOfLedger} se le cobraran $${amount} por este pedido en su proximo corte.`
+      });
+    }
   }
 
   // --- Avisos ------------------------------------------------------------------------------
@@ -600,6 +672,7 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
     entriesToKeep,
     settlementsToRecalculate,
     frozenSettlements: frozenList,
+    driverNextCorte,
     inventory,
     financials: {
       sellerNetBeforeCop,

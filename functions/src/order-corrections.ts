@@ -40,6 +40,8 @@ import {
   planOrderCorrection
 } from "./order-corrections-plan";
 import { buildOrderHistoryRecord } from "./order-seller-actions";
+import type { DriverLedgerContext } from "./driver-cash-ledger";
+import { CrossedRecalcError, loadDriverLedgerSnapshot, MissingBaselineError, type PendingSettlementRef } from "./driver-ledger-io";
 import { loadDriverCashInputs, newAuditRef, OPERATIONAL_TARGET_STATUSES, panelHistoryActor } from "./orders";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 import { resolveProductCostLinesForOrder, resolveTariffs } from "./wallet-entries";
@@ -90,6 +92,8 @@ function hashPlan(plan: OrderCorrectionPlan): string {
     entriesToCreate: plan.entriesToCreate,
     entriesToCompensate: plan.entriesToCompensate,
     settlementsToRecalculate: plan.settlementsToRecalculate,
+    // Spec 038 (RF_10): lo que se le devolvera al domiciliario es parte de lo que se aprueba.
+    driverNextCorte: plan.driverNextCorte,
     blockers: plan.blockers
   });
   return crypto.createHash("sha256").update(JSON.stringify(shape)).digest("hex").slice(0, 32);
@@ -164,12 +168,38 @@ export const correctOrderStatus = onCall(async (request) => {
 
   const sellerCatalog = catalogSnap ? catalogSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>)) : [];
 
+  // Spec 038: el contexto de cada domiciliario involucrado (el del pedido, el elegido, y el dueno de cada
+  // corte o pago de domiciliario del pedido). Sin el, sus cortes no se pueden recalcular con la regla nueva.
+  const involvedDriverIds = new Set<string>(
+    [
+      String(order.driverId ?? ""),
+      input.driverId ?? "",
+      ...entries.filter((entry) => entry.ownerType === "driver").map((entry) => entry.ownerId),
+      ...Array.from(settlementsById.values()).filter((item) => item.kind === "driver").map((item) => item.ownerId)
+    ].filter(Boolean)
+  );
+  const driverLedgers = new Map<string, DriverLedgerContext>();
+  const pendingDriverSettlements = new Map<string, PendingSettlementRef>();
+  try {
+    for (const id of involvedDriverIds) {
+      const snapshot = await loadDriverLedgerSnapshot(db, id);
+      driverLedgers.set(id, snapshot.context);
+      for (const [settlementId, ref] of snapshot.pendingSettlements) pendingDriverSettlements.set(settlementId, ref);
+    }
+  } catch (error) {
+    if (error instanceof CrossedRecalcError || error instanceof MissingBaselineError) {
+      throw new HttpsError("failed-precondition", error.message, { code: error.code });
+    }
+    throw error;
+  }
+
   // --- Planificacion ----------------------------------------------------------------------
   const plan = planOrderCorrection({
     order,
     entries,
     settlementsById,
     cashInputs,
+    driverLedgers,
     tariffs: resolveTariffs(settingsSnap.data() ?? {}, zoneSnap?.data()),
     productCostLines: resolveProductCostLinesForOrder(order, sellerCatalog),
     sellerPaysInCash: Boolean(sellerSnap?.data()?.paysInCash),
@@ -235,6 +265,15 @@ export const correctOrderStatus = onCall(async (request) => {
       if (!exists) continue;
       batch.set(db.collection("walletEntries").doc(related.id), { amountCop: related.amountCop, updatedAt: now }, { merge: true });
     }
+  }
+
+  // Spec 038 (RF_04b): los demas cortes pendientes de los domiciliarios involucrados entraron en el calculo
+  // (lo que ya registraron, su saldo a favor). Si alguno cambio desde la lectura, el batch entero falla. Un
+  // batch no tiene "verificar sin escribir": se marca `ledgerCheckedAt` con la precondicion.
+  const recalculatedIds = new Set(plan.settlementsToRecalculate.map((item) => item.id));
+  for (const [settlementId, pending] of pendingDriverSettlements) {
+    if (recalculatedIds.has(settlementId)) continue;
+    batch.update(pending.ref as never, { ledgerCheckedAt: now }, { lastUpdateTime: pending.updateTime as never });
   }
 
   if (plan.inventory.kind !== "none" && inventorySnap) {
