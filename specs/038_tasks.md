@@ -103,7 +103,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     KNT-007828) si; excluidos listados y fuera del total; aplicar con una huella distinta lanza; aplicar dos
     veces no cambia nada; un pedido liberado que vuelve a entrar a un corte no se devuelve dos veces
 
-- [ ] **T9: "Recibido" con cortes nuevos**
+- [x] **T9: "Recibido" con cortes nuevos**
   * Requisitos cubiertos: RF_11, RF_12
   * Archivos: functions/src/driver-cash-ledger.ts, functions/src/seller-ledger.ts,
     src/lib/driver-cash-ledger.test.ts, src/lib/seller-ledger.test.ts

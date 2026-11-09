@@ -7,6 +7,7 @@
  * paga a una tienda, y ya estaba duplicada entre la UI, store-api.ts y createSettlement.
  */
 
+import { lastRecalculatedAt } from "./driver-cash-ledger";
 import { isDriverSettlementCashSettled, type SettlementDoc as MathSettlementDoc } from "./settlement-math";
 
 export type OrderDoc = Record<string, any>;
@@ -25,8 +26,13 @@ export type SettlementDoc = Record<string, any>;
  * exactamente lo esperado, los ultimos pedidos quedaban "sin cubrir" aunque el efectivo entro entero.
  * Solo se recorren las asignaciones (RF_01b): un pedido que estaba en el corte sin deber efectivo no
  * entra por el. Con faltante real (RF_03) siguen contando solo las cubiertas.
+ *
+ * Spec 038 (RF_11, RF_12): un pedido que ya entro en un corte calculado con la regla nueva (con
+ * `cashCharges`) ademas tiene que pasar `isOrderCodSettled`. `codByOrder` son sus asientos de recaudo
+ * (`cod_revenue`/`cod_remittance`, cualquier tienda); sin el, ese pedido NO se da por recibido: es mas
+ * estricto, nunca mas laxo. Un pedido que solo esta en cortes viejos sigue exactamente con la regla de hoy.
  */
-export function buildCodReceivedSet(settlements: SettlementDoc[]) {
+export function buildCodReceivedSet(settlements: SettlementDoc[], codByOrder?: ReadonlyMap<string, readonly CodEntryLike[]>) {
   const codReceived = new Set<string>();
   for (const settlement of settlements) {
     if (settlement.kind !== "driver") continue;
@@ -41,7 +47,56 @@ export function buildCodReceivedSet(settlements: SettlementDoc[]) {
       for (const orderId of settlement.orderIds ?? []) codReceived.add(String(orderId));
     }
   }
+  const inNewCortes = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
+    for (const charge of settlement.cashCharges) if (charge?.orderId) inNewCortes.add(String(charge.orderId));
+  }
+  for (const orderId of inNewCortes) {
+    const codEntries = codByOrder?.get(orderId);
+    if (!codEntries || !isOrderCodSettled(orderId, settlements, codEntries)) codReceived.delete(orderId);
+    else codReceived.add(orderId);
+  }
   return codReceived;
+}
+
+/** Lo minimo de un asiento de recaudo que necesita la regla de recibido. */
+export type CodEntryLike = { amountCop: number; createdAt?: string };
+
+/**
+ * La parte nueva de "recibido" (spec 038 RF_11; plan §3.7) para un pedido con algun corte de domiciliario
+ * calculado con la regla nueva:
+ *
+ * 1. todo corte nuevo que le cobro efectivo (`chargedCop > 0`) esta saldado para el pedido: su asignacion
+ *    cubierta (aunque el corte siga pendiente, como hoy), o el corte saldado en total (spec 027 RF_01);
+ * 2. hay al menos un corte nuevo saldado para el pedido que lo tiene en `cashCharges` (un corte que solo
+ *    devuelve cuenta si esta saldado en total), y ningun asiento de recaudo del pedido, de cualquier signo,
+ *    es POSTERIOR al ultimo recalculo del ultimo de ellos.
+ *
+ * Se compara por tiempo, no por monto (analyze B5): con montos, A cobra 78.900, B lo devuelve y se salda, y
+ * una re-entrega de 78.900 pasaba por recibida antes de que el domiciliario la entregara.
+ */
+export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): boolean {
+  let lastSettledAt = "";
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
+    const charge = settlement.cashCharges.find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
+    if (!charge) continue;
+    const totallySettled = isDriverSettlementCashSettled(settlement as MathSettlementDoc);
+    let settled = totallySettled;
+    if (Number(charge.chargedCop) > 0) {
+      const allocation = (settlement.cashAllocations ?? []).find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
+      // Como hoy (018 RF_04): una asignacion cubierta cuenta aunque el corte siga pendiente.
+      settled = totallySettled || Boolean(allocation?.covered);
+      if (!settled) return false;
+    }
+    if (settled) {
+      const at = lastRecalculatedAt(settlement as MathSettlementDoc);
+      if (at > lastSettledAt) lastSettledAt = at;
+    }
+  }
+  if (!lastSettledAt) return false;
+  return !codEntries.some((entry) => String(entry.createdAt ?? "") > lastSettledAt);
 }
 
 /**

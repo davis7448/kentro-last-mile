@@ -32,7 +32,9 @@ lean de ella o del documento que ella escribio.
   - `pendingDeltaOrders(input)` → pedidos con diferencia distinta de 0 que deben entrar al siguiente corte
     aunque no tengan asientos nuevos (RF_07, §3.5).
   - `planDriverCompensation(input)` → previsualizacion de la compensacion historica (RF_13, RF_16, §3.6).
-  - `isOrderCodSettled(...)` → la parte nueva de "recibido" (RF_11, §3.7).
+  - ~~`isOrderCodSettled(...)`~~ → vive en `seller-ledger.ts`, junto a `buildCodReceivedSet` (T9): necesita
+    `isDriverSettlementCashSettled` de `settlement-math`, y `settlement-math` va a importar este modulo (T10);
+    ponerla aqui creaba una importacion circular.
   - `buildDriverSettlementFields(input)` → el bloque de campos que se guarda en un corte de domiciliario
     (cifras, `cashCharges`, creditos, asignaciones). `orders.ts` solo lo escribe; asi crear, abonar y cambiar
     de estado se prueban sin Firestore (analyze M5).
