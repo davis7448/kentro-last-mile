@@ -633,3 +633,66 @@ export function applyCompensationPlan(
     }
   };
 }
+
+/**
+ * Pedidos de un corte de domiciliario al CREARLO (RF_07): los de sus asientos sin cortar y, ademas, los que
+ * tienen una diferencia pendiente aunque el domiciliario no tenga movimientos nuevos de ellos. Primero los
+ * de sus asientos, en su orden; despues los que vuelven solos. Un corte formado solo por estos ultimos es
+ * valido: es como se le paga a un domiciliario que ya no trabaja (spec §5).
+ */
+export function driverCorteOrderIdsAtCreation(
+  ownEntries: readonly WalletEntryDoc[],
+  entries: readonly WalletEntryDoc[],
+  context: DriverLedgerContext
+): string[] {
+  const own = ownEntries.map((entry) => String(entry.orderId ?? "")).filter(Boolean);
+  const returning = pendingDeltaOrders({ entries, context }).map((row) => row.orderId);
+  return Array.from(new Set([...own, ...returning]));
+}
+
+/** Lo que se escribe en un corte de domiciliario, al crearlo y en cada recalculo (abono, pago, conciliacion). */
+export type DriverSettlementFields = {
+  codCop: number;
+  feesCop: number;
+  driverPayCop: number;
+  platformMarginCop: number;
+  netCop: number;
+  gmfCop: number;
+  cashExpectedCop: number;
+  cashReceivedCop: number;
+  cashPendingCop: number;
+  cashExcessCop: number;
+  cashReceiptStatus: "none" | "partial" | "complete";
+  cashAllocations: DriverCashAllocation[];
+} & DriverSettlementLedgerFields;
+
+/**
+ * El bloque de campos de un corte de domiciliario con la regla de la 038. `orders.ts` solo lo escribe: asi
+ * crear, abonar y cambiar de estado se prueban sin Firestore, y no pueden calcular distinto (RF_09). Desde la
+ * creacion el corte guarda `cashExpectedCop` y su registro por pedido; antes la app lo pintaba con su propia
+ * copia hasta el primer abono.
+ */
+export function buildDriverSettlementFields(input: DriverCorteInput & { receivedCop: number }): DriverSettlementFields {
+  const figures = computeDriverCorte(input);
+  const receivedCop = Math.max(0, Math.round(Number(input.receivedCop) || 0));
+  const cashPendingCop = Math.max(0, figures.cashExpectedCop - receivedCop);
+  return {
+    codCop: figures.codCop,
+    feesCop: figures.feesCop,
+    driverPayCop: figures.driverPayCop,
+    platformMarginCop: figures.platformMarginCop,
+    netCop: figures.netCop,
+    gmfCop: figures.gmfCop,
+    cashExpectedCop: figures.cashExpectedCop,
+    cashReceivedCop: receivedCop,
+    cashPendingCop,
+    // Lo entregado por encima de lo esperado queda visible, como hoy, en vez de desaparecer.
+    cashExcessCop: Math.max(0, receivedCop - figures.cashExpectedCop),
+    cashReceiptStatus: figures.cashExpectedCop === 0 || cashPendingCop === 0 ? "complete" : receivedCop > 0 ? "partial" : "none",
+    cashAllocations: figures.allocations,
+    cashCharges: figures.charges,
+    creditInCop: figures.creditInCop,
+    creditOutCop: figures.creditOutCop,
+    ledgerVersion: 1
+  };
+}

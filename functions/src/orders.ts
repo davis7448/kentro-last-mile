@@ -13,6 +13,8 @@ import {
   summarizeOrderLines
 } from "./inventory-movements";
 import { gmfForPayout } from "./gmf";
+import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext } from "./driver-cash-ledger";
+import { assertNoCrossedRecalc, CrossedRecalcError, loadDriverLedgerContext, MissingBaselineError } from "./driver-ledger-io";
 import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange } from "./seller-ledger";
 import { computeSellerBalance, payoutRejectionMessage, selectSettlementEntries } from "./seller-balance";
 import { loadSellerBalanceInput } from "./seller-balance-api";
@@ -1366,8 +1368,12 @@ export const createSettlement = onCall(async (request) => {
   }
 
   const candidateRefs = candidateDocs.map((entry) => entry.ref);
+  // Spec 038 (RF_04b): el contexto del domiciliario leido FUERA de la transaccion; dentro se vuelve a leer
+  // y se compara. Un corte de domiciliario puede crearse sin asientos nuevos si hay pedidos que vuelven
+  // solos (RF_07), asi que para el la falta de candidatos se decide dentro.
+  const ledgerBefore = input.kind === "driver" ? await withLedgerErrors(() => loadDriverLedgerContext(db, input.ownerId)) : null;
 
-  if (candidateRefs.length === 0) {
+  if (candidateRefs.length === 0 && input.kind !== "driver") {
     if ((input.kind === "seller" || input.kind === "supplier") && unsettledEntryDocs.length > 0) {
       const ownerLabel = input.kind === "supplier" ? "este proveedor" : "esta tienda";
       throw new HttpsError("failed-precondition", `No hay pedidos habilitados para pagar a ${ownerLabel}. Primero marca recibido el dinero del domiciliario.`);
@@ -1407,18 +1413,48 @@ export const createSettlement = onCall(async (request) => {
       });
     const entries = unsettledSnaps.map((snap) => ({ id: snap.id, ...snap.data() }) as WalletEntryDoc);
 
-    if (entries.length === 0) {
+    if (entries.length === 0 && input.kind !== "driver") {
       throw new HttpsError("failed-precondition", "The wallet movements were already settled.");
     }
 
     const entryOrderIds = Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean)));
-    const relatedSellerEntries = input.kind === "driver" && entryOrderIds.length > 0
-      ? (await transaction.get(db.collection("walletEntries").where("ownerType", "==", "seller")))
-        .docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc)
-        .filter((entry) => entry.orderId && entryOrderIds.includes(entry.orderId))
+    // Spec 038: un corte de domiciliario se calcula con la regla unica (driver-cash-ledger.ts). Necesita
+    // todos los asientos de tienda (ya se leian aqui) y todos los pagos del domiciliario, no solo los
+    // sin cortar, para saber lo que cada pedido debe hoy.
+    const allSellerEntries = input.kind === "driver"
+      ? (await transaction.get(db.collection("walletEntries").where("ownerType", "==", "seller"))).docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc)
       : [];
-    const settlement = buildSettlement(
+    let driverLedger: { orderIds: string[]; fields: ReturnType<typeof buildDriverSettlementFields> } | null = null;
+    if (input.kind === "driver") {
+      const driverEntries = (await transaction.get(
+        db.collection("walletEntries").where("ownerType", "==", "driver").where("ownerId", "==", input.ownerId)
+      )).docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc);
+      const ledgerAfter = await withLedgerErrors(() => loadDriverLedgerContext(db, input.ownerId, transaction));
+      await withLedgerErrors(async () => assertNoCrossedRecalc(ledgerBefore as DriverLedgerContext, ledgerAfter, settlementRef.id));
+      const ledgerEntries = [...allSellerEntries, ...driverEntries];
+      const orderIds = driverCorteOrderIdsAtCreation(entries, ledgerEntries, ledgerAfter);
+      if (orderIds.length === 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          entries.length === 0 && candidateRefs.length > 0
+            ? "The wallet movements were already settled."
+            : "There are no unsettled wallet movements for this account and date range."
+        );
+      }
+      driverLedger = {
+        orderIds,
+        fields: buildDriverSettlementFields({
+          settlementId: settlementRef.id,
+          orderIds,
+          ownEntryIds: entries.map((entry) => entry.id),
+          entries: ledgerEntries,
+          context: ledgerAfter,
+          receivedCop: 0
+        })
+      };
+    }
+    const relatedSellerEntries = allSellerEntries.filter((entry) => entry.orderId && entryOrderIds.includes(entry.orderId));
+    const builtSettlement = buildSettlement(
       settlementRef.id,
       input.kind,
       input.ownerId,
@@ -1433,6 +1469,11 @@ export const createSettlement = onCall(async (request) => {
       // momento si ese giro concreto salio por banco o en efectivo.
       input.chargeGmf === undefined ? Boolean(ownerSnap.data()?.paysInCash) : !input.chargeGmf
     );
+    // Las cifras de un corte de domiciliario son las de la regla nueva, guardadas desde la creacion
+    // (RF_03, RF_09). El asiento de margen sigue saliendo de `driverPayCop`, que es el pago propio del corte.
+    const settlement: SettlementDoc = driverLedger
+      ? { ...builtSettlement, ...driverLedger.fields, orderIds: driverLedger.orderIds }
+      : builtSettlement;
 
     const platformEntry = buildPlatformWalletEntry(settlement, now);
     const gmfEntry = buildGmfWalletEntry(settlement, now);
@@ -1967,6 +2008,18 @@ export async function loadDriverCashInputs(db: ReturnType<typeof getFirestore>, 
     leaderEntries: leaderEntrySnap.docs.map((doc) => doc.data() as WalletEntryDoc),
     orderMeta: new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]))
   };
+}
+
+/** Traduce los errores del libro de efectivo (spec 038) a `failed-precondition` con su codigo. */
+async function withLedgerErrors<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof CrossedRecalcError || error instanceof MissingBaselineError) {
+      throw new HttpsError("failed-precondition", error.message, { code: error.code });
+    }
+    throw error;
+  }
 }
 
 async function calculateDriverCashSummary(db: ReturnType<typeof getFirestore>, settlement: SettlementDoc, receivedCop: number): Promise<DriverCashSummary> {

@@ -137,7 +137,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: pruebas con un doble de Firestore: 3 consultas; dos recalculos con el mismo contexto de
     fuera → el segundo lanza `recalculo_cruzado`; sin foto lanza
 
-- [ ] **T12: Crear el corte de domiciliario con la regla nueva**
+- [x] **T12: Crear el corte de domiciliario con la regla nueva**
   * Requisitos cubiertos: RF_03, RF_04b, RF_07, RF_09
   * Archivos: functions/src/driver-cash-ledger.ts, functions/src/orders.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `buildDriverSettlementFields(input)` puro en el nucleo (analyze M5). `createSettlement` (kind

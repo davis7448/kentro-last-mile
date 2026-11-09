@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 // T1: lo que un pedido debe hoy (RF_01, RF_02; plan §3.1).
 import {
   applyCompensationPlan,
+  buildDriverSettlementFields,
   computeDriverCorte,
+  driverCorteOrderIdsAtCreation,
   computeHolds,
   type DriverLedgerContext,
   type DriverLedgerSettlement,
@@ -533,5 +535,63 @@ describe("planDriverCompensation y applyCompensationPlan", () => {
     expect(back).toEqual([{ orderId: "o1", deltaCop: -89900 }, { orderId: "o2", deltaCop: -8000 }]);
     const refunded = [...settlements, newCorte("B", [["o1", -89900], ["o2", -8000]])];
     expect(pendingDeltaOrders({ entries, context: ctx({ settlements: refunded, holds: first.holds }) })).toEqual([]);
+  });
+});
+
+// T12: lo que se guarda en un corte de domiciliario (al crearlo y en cada recalculo) (RF_03, RF_07, RF_09).
+describe("driverCorteOrderIdsAtCreation", () => {
+  it("los pedidos de sus asientos sin cortar mas los que vuelven solos, sin repetir", () => {
+    const own = [pay("p9", "o9", 8000), pay("p8", "o1", 5000)];
+    const entries = [...own, pay("p1", "o1", 8000), cod("c1", "o1", 27000), entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -27000, orderId: "o1" }), pay("p2", "o2", 8000), cod("c2", "o2", 50000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 19000], ["o2", 42000]])] });
+    expect(driverCorteOrderIdsAtCreation(own, entries, context)).toEqual(["o9", "o1"]);
+  });
+
+  it("un corte formado solo por devoluciones es valido (domiciliario sin movimientos nuevos)", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 70900]])] });
+    expect(driverCorteOrderIdsAtCreation([], entries, context)).toEqual(["o1"]);
+  });
+});
+
+describe("buildDriverSettlementFields", () => {
+  const meta = new Map([["o1", { createdAt: "2026-11-01T00:00:00.000Z", trackingCode: "KNT-1" }]]);
+
+  it("un corte normal: cifras completas desde la creacion, con cashExpectedCop y el registro por pedido", () => {
+    const entries = [cod("c1", "o1", 100000), entry({ id: "f1", ownerType: "seller", type: "delivery_fee", amountCop: -12000, orderId: "o1" }), pay("p1", "o1", 8000)];
+    const fields = buildDriverSettlementFields({ settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context: ctx(), receivedCop: 0, orderMeta: meta });
+    expect(fields).toEqual({
+      codCop: 100000,
+      feesCop: 12000,
+      driverPayCop: 8000,
+      platformMarginCop: 4000,
+      netCop: -92000,
+      gmfCop: 0,
+      cashExpectedCop: 92000,
+      cashReceivedCop: 0,
+      cashPendingCop: 92000,
+      cashExcessCop: 0,
+      cashReceiptStatus: "none",
+      cashAllocations: [{ orderId: "o1", expectedCop: 92000, receivedCop: 0, covered: false }],
+      cashCharges: [{ orderId: "o1", codCop: 100000, driverPayCop: 8000, chargedCop: 92000, codSeenCop: 100000 }],
+      creditInCop: 0,
+      creditOutCop: 0,
+      ledgerVersion: 1
+    });
+  });
+
+  it("un pedido que vuelve solo entra con cargo negativo y no toca el margen", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 70900]])] });
+    const fields = buildDriverSettlementFields({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries, context, receivedCop: 0, orderMeta: meta });
+    expect(fields).toMatchObject({ cashExpectedCop: 0, creditOutCop: 78900, platformMarginCop: 0, driverPayCop: 0, cashReceiptStatus: "complete", cashAllocations: [] });
+    expect(fields.cashCharges[0].chargedCop).toBe(-78900);
+  });
+
+  it("abonos: pendiente, excedente y estado como hoy", () => {
+    const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000)];
+    const base = { settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context: ctx(), orderMeta: meta };
+    expect(buildDriverSettlementFields({ ...base, receivedCop: 20000 })).toMatchObject({ cashPendingCop: 22000, cashExcessCop: 0, cashReceiptStatus: "partial" });
+    expect(buildDriverSettlementFields({ ...base, receivedCop: 50000 })).toMatchObject({ cashPendingCop: 0, cashExcessCop: 8000, cashReceiptStatus: "complete" });
   });
 });
