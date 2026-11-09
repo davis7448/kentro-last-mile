@@ -213,7 +213,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 
 ## Datos, scripts y guardas
 
-- [ ] **T18: Reglas de Firestore para la foto y las retenciones**
+- [x] **T18: Reglas de Firestore para la foto y las retenciones**
   * Requisitos cubiertos: RF_05b, RF_17
   * Archivos: firestore.rules, src/lib/spec-038-rules.test.ts
   * Accion: `driverLedgerBaselines` y `driverCashHolds`: lectura solo admin, escritura nadie desde cliente
