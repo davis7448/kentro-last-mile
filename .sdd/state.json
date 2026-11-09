@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T1",
+  "activeTask": "T2",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -12,7 +12,7 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
-    "T1": { "requirements": ["RF_01", "RF_02"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },
+    "T1": { "requirements": ["RF_01", "RF_02"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RF_05", "RF_05b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },
     "T3": { "requirements": ["RF_02", "RF_03", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },
     "T4": { "requirements": ["RF_08", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },

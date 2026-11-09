@@ -14,7 +14,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 
 ## Nucleo puro: `functions/src/driver-cash-ledger.ts`
 
-- [ ] **T1: Tipos y lo que un pedido debe hoy**
+- [x] **T1: Tipos y lo que un pedido debe hoy**
   * Requisitos cubiertos: RF_01, RF_02
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: tipos `DriverCashCharge`, `DriverSettlementLedgerFields`, `DriverLedgerBaseline`,
