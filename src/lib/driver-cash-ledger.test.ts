@@ -7,6 +7,7 @@ import {
   type DriverLedgerSettlement,
   lastRecalculatedAt,
   orderOwedByDriver,
+  pendingDeltaOrders,
   rebuildHistoricalCharges
 } from "../../functions/src/driver-cash-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
@@ -355,5 +356,57 @@ describe("computeDriverCorte: saldo a favor, neto y reparto", () => {
       { orderId: "o2", expectedCop: 40000, receivedCop: 0, covered: false }
     ]);
     expect(r.allocations.reduce((a, x) => a + x.receivedCop, 0)).toBe(70000);
+  });
+});
+
+// T7: pedidos que vuelven solos al siguiente corte (RF_06, RF_07; plan §3.5).
+describe("pendingDeltaOrders", () => {
+  it("un pedido cuyo recaudo cambio de tienda sin asiento nuevo del domiciliario vuelve (forma de KNT-005724)", () => {
+    // A cobro 19.000 (27.000 - 8.000). Luego el recaudo se movio a otra tienda y quedo en 0 neto.
+    const entries = [
+      cod("c1", "o1", 27000, { ownerId: "seller-a" }),
+      entry({ id: "r1", ownerType: "seller", ownerId: "seller-a", type: "cod_remittance", amountCop: -27000, orderId: "o1" }),
+      pay("p1", "o1", 8000)
+    ];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 19000]])] });
+    expect(pendingDeltaOrders({ entries, context })).toEqual([{ orderId: "o1", deltaCop: -27000 }]);
+  });
+
+  it("un pedido que esta en un corte pendiente no vuelve: lo absorbe ese corte al recalcularse", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 19000]], { status: "pending" })] });
+    expect(pendingDeltaOrders({ entries, context })).toEqual([]);
+  });
+
+  it("un pedido retenido no vuelve hasta que se libere", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const settlements = [newCorte("A", [["o1", 70900]])];
+    const holds = { driverId: DRIVER, createdAt: "", holds: [{ orderId: "o1", holdCop: 78900 }] };
+    expect(pendingDeltaOrders({ entries, context: ctx({ settlements, holds }) })).toEqual([]);
+    const released = { ...holds, holds: [{ ...holds.holds[0], releasedAt: "2026-11-10T00:00:00.000Z", releasedCop: 78900 }] };
+    expect(pendingDeltaOrders({ entries, context: ctx({ settlements, holds: released }) })).toEqual([{ orderId: "o1", deltaCop: -78900 }]);
+  });
+
+  it("una vez cobrada la diferencia deja de volver", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const settlements = [newCorte("A", [["o1", 70900]]), newCorte("B", [["o1", -78900]])];
+    expect(pendingDeltaOrders({ entries, context: ctx({ settlements }) })).toEqual([]);
+  });
+
+  it("los pedidos de cortes viejos se comparan contra la foto", () => {
+    const old: DriverLedgerSettlement = { id: "OLD", status: "reconciled", orderIds: ["o1", "o2"] };
+    const context = ctx({
+      settlements: [old],
+      baseline: {
+        driverId: DRIVER, createdAt: "", createdBy: "", measuredDiffCop: 0,
+        settlements: { OLD: [
+          { orderId: "o1", chargedCop: 42000, driverPayCop: 8000, source: "allocation" },
+          { orderId: "o2", chargedCop: 30000, driverPayCop: 8000, source: "allocation" }
+        ] }
+      }
+    });
+    const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000), cod("c2", "o2", 30000), pay("p2", "o2", 8000)];
+    // o1 cuadra; o2 debe 22.000 y se cobraron 30.000: vuelve con -8.000 (el pago que no se desconto).
+    expect(pendingDeltaOrders({ entries, context })).toEqual([{ orderId: "o2", deltaCop: -8000 }]);
   });
 });

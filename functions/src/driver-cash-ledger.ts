@@ -391,3 +391,46 @@ export function computeDriverCorte(input: DriverCorteInput): DriverCorteFigures 
     allocations: allocateReceived(charges, input.receivedCop ?? 0, input.orderMeta ?? new Map())
   };
 }
+
+/** Un pedido que debe entrar al siguiente corte para cobrar o devolver una diferencia (RF_07). */
+export type PendingDeltaOrder = {
+  orderId: string;
+  /** debido + retencion − lo ya registrado. Negativo: se le devuelve al domiciliario. */
+  deltaCop: number;
+};
+
+/**
+ * Pedidos que deben entrar al siguiente corte del domiciliario AUNQUE no tengan asientos nuevos suyos
+ * (RF_06, RF_07; plan §3.5): estan en algun corte del domiciliario, en ninguno pendiente (ese lo absorbe al
+ * recalcularse), y lo que deben hoy (mas su retencion vigente) no es lo que ya se registro. Hasta la 038 un
+ * pedido solo entraba a un corte de domiciliario por un asiento propio sin cortar, asi que KNT-005724 y
+ * KNT-006347 nunca volvieron a entrar.
+ *
+ * `entries` son los asientos de tienda de esos pedidos y los `driver_earning` del domiciliario.
+ */
+export function pendingDeltaOrders(input: { entries: readonly WalletEntryDoc[]; context: DriverLedgerContext }): PendingDeltaOrder[] {
+  const { context } = input;
+  const inPending = new Set<string>();
+  const seen: string[] = [];
+  for (const settlement of context.settlements) {
+    for (const orderId of (settlement.orderIds ?? []).map(String)) {
+      if (settlement.status === "pending") inPending.add(orderId);
+      seen.push(orderId);
+    }
+  }
+  const candidates = Array.from(new Set(seen)).filter((orderId) => !inPending.has(orderId));
+  if (candidates.length === 0) return [];
+  const candidateSet = new Set(candidates);
+  const owed = orderOwedByDriver(
+    input.entries.filter((entry) => candidateSet.has(String(entry.orderId ?? ""))),
+    context.driverId
+  );
+  // Ningun corte se excluye: se compara contra todo lo registrado por el domiciliario.
+  const registered = registeredByOtherCortes(context, "", candidateSet);
+  return candidates
+    .map((orderId) => ({
+      orderId,
+      deltaCop: (owed.get(orderId)?.owedCop ?? 0) + activeHoldCop(context.holds, orderId) - (registered.get(orderId) ?? 0)
+    }))
+    .filter((row) => row.deltaCop !== 0);
+}

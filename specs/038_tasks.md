@@ -82,7 +82,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     +78.900, +93.900, −8.000 de diferencia); en el fixture de 16, las 16 filas de §1 (cobrado, debido,
     diferencia; total +694.200) y cada pedido con asignacion reconstruye su `expectedCop`
 
-- [ ] **T7: Pedidos que vuelven solos al siguiente corte**
+- [x] **T7: Pedidos que vuelven solos al siguiente corte**
   * Requisitos cubiertos: RF_06, RF_07
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `pendingDeltaOrders(input)` (§3.5): pedidos de algun corte del domiciliario, en ningun corte suyo
