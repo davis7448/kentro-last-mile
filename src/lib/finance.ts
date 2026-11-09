@@ -403,6 +403,12 @@ export type DriverSettlementCashRow = {
   unknownAmountCount: number;
   /** Filas de visitas sin recaudo: su importe va a favor del domiciliario. */
   noCollectionCount: number;
+  /**
+   * Spec 038: saldo que el corte trae de otros cortes menos el que deja (`creditInCop - creditOutCop`). La
+   * cabecera es `detailCashCop - carriedCreditCop`; sin el, las filas de un corte nuevo no suman la cabecera.
+   * 0 en los cortes viejos.
+   */
+  carriedCreditCop: number;
 };
 
 /** De donde salio el importe de una fila del detalle de un corte. */
@@ -465,10 +471,31 @@ export type DriverSettlementFinancials = {
   netCop: number;
 };
 
+/** Spec 038: el corte lo calculo el servidor con la regla nueva y guardo sus cifras (`cashCharges`). */
+function hasStoredCharges(settlement: Partial<Pick<Settlement, "cashCharges">>): settlement is { cashCharges: NonNullable<Settlement["cashCharges"]> } {
+  return Array.isArray(settlement.cashCharges);
+}
+
 export function calculateDriverSettlementFinancials(
   wallet: WalletEntry[],
-  settlement: Pick<Settlement, "ownerId" | "walletEntryIds" | "orderIds">
+  settlement: Pick<Settlement, "ownerId" | "walletEntryIds" | "orderIds"> &
+    Partial<Pick<Settlement, "cashCharges" | "codCop" | "feesCop" | "driverPayCop" | "platformMarginCop" | "netCop" | "cashExpectedCop">>
 ): DriverSettlementFinancials {
+  // Spec 038 (RF_09b): un corte nuevo se pinta con lo que guardo el servidor. Recalcularlo aqui con los asientos
+  // vivos volveria a cobrar lo que otro corte ya cobro: es exactamente el fallo que la 038 corrige. Un corte a
+  // favor del domiciliario no se gira (lo arrastra al siguiente), asi que `receivableCop` = max(0, netCop) = 0.
+  if (hasStoredCharges(settlement)) {
+    const netCop = Number(settlement.netCop) || 0;
+    return {
+      codCop: Number(settlement.codCop) || 0,
+      feesCop: Number(settlement.feesCop) || 0,
+      driverPayCop: Number(settlement.driverPayCop) || 0,
+      platformMarginCop: Number(settlement.platformMarginCop) || 0,
+      cashToReturnCop: Math.max(0, Number(settlement.cashExpectedCop ?? -netCop) || 0),
+      receivableCop: Math.max(0, netCop),
+      netCop
+    };
+  }
   const walletEntryIds = settlement.walletEntryIds ?? [];
   const storedOrderIds = settlement.orderIds ?? [];
   const orderIds = storedOrderIds.length > 0
@@ -599,6 +626,31 @@ function settlementOrderRow(
 }
 
 /**
+ * Fila de un pedido de un corte nuevo (spec 038): el importe es SIEMPRE el que guardo el corte, este o no el
+ * pedido descargado; del pedido solo se toma el rotulo. `source` sigue diciendo si el pedido esta descargado
+ * (`order`) o no (`settlement`, que el panel rotula "Importe del corte"), porque de eso depende su rescate.
+ */
+function storedChargeRow(
+  charge: NonNullable<Settlement["cashCharges"]>[number],
+  order: Order | undefined
+): DriverSettlementOrderRow {
+  const codCop = Number(charge.codCop) || 0;
+  const driverPayCop = Number(charge.driverPayCop) || 0;
+  return {
+    orderId: charge.orderId,
+    trackingCode: order?.trackingCode ?? "",
+    shopifyOrderId: order?.shopifyOrderId ?? "",
+    status: order?.status,
+    totalCop: codCop,
+    driverPayCop,
+    expectedCashCop: Number(charge.chargedCop) || 0,
+    source: order ? "order" : "settlement",
+    amountKnown: true,
+    noCollection: codCop === 0 && driverPayCop > 0
+  };
+}
+
+/**
  * Importes por pedido que guardo el corte, o `null` si el corte no los tiene.
  * `null` y "array vacio" NO son lo mismo: el primero significa "este corte no lo registro",
  * el segundo "no genero efectivo por ningun pedido".
@@ -631,6 +683,8 @@ function resolveDetailStatus(unknownAmountCount: number, detailDeltaCop: number)
 }
 
 function cashExpectedForSettlement(state: AppState, settlement: Settlement, orderIds: string[]) {
+  // Spec 038: el esperado de un corte nuevo es el que guardo el servidor (ya descuenta el saldo de otros cortes).
+  if (hasStoredCharges(settlement)) return Math.max(0, Number(settlement.cashExpectedCop) || 0);
   const orderIdSet = new Set(orderIds);
   const walletEntryIds = settlement.walletEntryIds ?? [];
   const codCop = settlement.codCop > 0
@@ -760,18 +814,24 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
     // Detalle por pedido del corte (nivel caja: COD recaudado, pago al domiciliario, efectivo
     // esperado). Una fila por CADA pedido del corte, tambien las visitas sin recaudo: su pago va a
     // favor del domiciliario y sin ellas el detalle no podria sumar la cabecera.
+    // Spec 038 (analyze M16): un corte nuevo lee `cashCharges`, que trae los cargos negativos; `cashAllocations`
+    // solo trae los positivos y una devolucion se pintaria como 0.
+    const stored = hasStoredCharges(settlement);
     const allocationByOrderId = allocationsByOrderId(settlement);
-    const orders: DriverSettlementOrderRow[] = orderIds.map((orderId) => settlementOrderRow(
-      orderId,
-      ordersById.get(orderId),
-      driverPayForOrder(state.wallet, driverId, orderId),
-      allocationByOrderId
-    ));
+    const orders: DriverSettlementOrderRow[] = stored
+      ? settlement.cashCharges.map((charge) => storedChargeRow(charge, ordersById.get(charge.orderId)))
+      : orderIds.map((orderId) => settlementOrderRow(
+        orderId,
+        ordersById.get(orderId),
+        driverPayForOrder(state.wallet, driverId, orderId),
+        allocationByOrderId
+      ));
+    const carriedCreditCop = stored ? (Number(settlement.creditInCop) || 0) - (Number(settlement.creditOutCop) || 0) : 0;
 
     // Solo las filas con importe: una suma parcial no puede hacerse pasar por el total.
     const detailCashCop = orders.reduce((sum, order) => sum + (order.amountKnown ? order.expectedCashCop : 0), 0);
     const unknownAmountCount = orders.filter((order) => !order.amountKnown).length;
-    const detailDeltaCop = detailCashCop - expectedCashCop;
+    const detailDeltaCop = detailCashCop - carriedCreditCop - expectedCashCop;
 
     settlementRows.push({
       settlementId: settlement.id,
@@ -789,7 +849,8 @@ export function calculateDriverFinancialSummary(state: AppState, driverId: strin
       detailStatus: resolveDetailStatus(unknownAmountCount, detailDeltaCop),
       unavailableOrderCount: orders.filter((order) => order.source !== "order").length,
       unknownAmountCount,
-      noCollectionCount: orders.filter((order) => order.noCollection).length
+      noCollectionCount: orders.filter((order) => order.noCollection).length,
+      carriedCreditCop
     });
 
     receiptRows.push(...driverCashReceiptRows(settlement, expectedCashCop, receivedCop));

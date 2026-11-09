@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, calculatePlatformPosition, driverCashReceiptRows, entriesForClosedOrder, isOrderEligibleForSellerSettlement, selectOpenWalletEntries, sellerAbonoRows, summarizeWalletPeriod } from "./finance";
 import { seedState } from "./seed";
@@ -1191,5 +1193,89 @@ describe("spec 019 · T3-T4 · pedidos del corte fuera de la ventana (RF_09, RF_
     expect(sinPedido.pendingBalanceCop).toBe(conPedido.pendingBalanceCop);
     expect(sinPedido.incompleteSettlementsCop).toBe(conPedido.incompleteSettlementsCop);
     expect(sinPedido.settlementRows[0].expectedCashCop).toBe(conPedido.settlementRows[0].expectedCashCop);
+  });
+});
+
+/**
+ * Spec 038 · T17 (RF_09b, analyze M16): un corte de domiciliario con `cashCharges` (todos los creados tras el
+ * despliegue) se pinta con lo que guardo el servidor, no con una copia del calculo. Un corte viejo, igual que hoy.
+ */
+describe("spec 038 · T17 · la app pinta las cifras guardadas", () => {
+  const newCorte = () => ({
+    id: "stl-new",
+    kind: "driver" as const,
+    ownerId: "driver-1",
+    ownerName: "Driver",
+    startDate: "2026-12-01",
+    endDate: "2026-12-07",
+    walletEntryIds: ["we-pay-a"],
+    orderIds: ["ord-a", "ord-b"],
+    codCop: 11_100,
+    feesCop: 12_000,
+    driverPayCop: 9_000,
+    platformMarginCop: 3_000,
+    netCop: -7_100,
+    gmfCop: 0,
+    status: "pending" as const,
+    createdAt: "2026-12-08T10:00:00.000Z",
+    cashExpectedCop: 7_100,
+    cashPendingCop: 7_100,
+    // ord-a cobra 90.000 - 9.000; ord-b devuelve 78.900 que otro corte le cobro de mas.
+    cashCharges: [
+      { orderId: "ord-a", codCop: 90_000, driverPayCop: 9_000, chargedCop: 81_000, codSeenCop: 90_000 },
+      { orderId: "ord-b", codCop: -78_900, driverPayCop: 0, chargedCop: -78_900, codSeenCop: 0 }
+    ],
+    creditInCop: -5_000,
+    creditOutCop: 0,
+    ledgerVersion: 1,
+    cashAllocations: [{ orderId: "ord-a", expectedCop: 7_100, receivedCop: 0, covered: false }]
+  });
+  // Asientos vivos que darian otra cifra si se recalculara en el cliente.
+  const wallet: WalletEntry[] = [
+    { id: "we-cod-a", ownerType: "seller", ownerId: "seller-1", orderId: "ord-a", type: "cod_revenue", amountCop: 120_000, description: "", createdAt: "2026-12-01T00:00:00.000Z" },
+    { id: "we-pay-a", ownerType: "driver", ownerId: "driver-1", orderId: "ord-a", type: "driver_earning", amountCop: 9_000, description: "", createdAt: "2026-12-01T00:00:00.000Z" }
+  ];
+
+  it("calculateDriverSettlementFinancials devuelve exactamente lo guardado", () => {
+    expect(calculateDriverSettlementFinancials(wallet, newCorte() as never)).toEqual({
+      codCop: 11_100, feesCop: 12_000, driverPayCop: 9_000, platformMarginCop: 3_000,
+      cashToReturnCop: 7_100, receivableCop: 0, netCop: -7_100
+    });
+  });
+
+  it("un corte viejo (sin cashCharges) sigue calculandose como hoy", () => {
+    const { cashCharges, creditInCop, creditOutCop, ledgerVersion, ...old } = newCorte();
+    void cashCharges; void creditInCop; void creditOutCop; void ledgerVersion;
+    const financials = calculateDriverSettlementFinancials(wallet, old as never);
+    expect(financials.codCop).toBe(120_000);
+    expect(financials.cashToReturnCop).toBe(111_000);
+  });
+
+  it("las filas por pedido leen cashCharges: la devolucion sale negativa y el detalle cuadra con la cabecera", () => {
+    const state: AppState = {
+      ...seedState(),
+      orders: [{ ...seedState().orders[0], id: "ord-a", driverId: "driver-1", status: "delivered", paymentMethod: "cod", totalCop: 120_000, trackingCode: "KNT-A" }],
+      wallet,
+      settlements: [newCorte() as never]
+    };
+    const row = calculateDriverFinancialSummary(state, "driver-1").settlementRows[0];
+    expect(row.expectedCashCop).toBe(7_100);
+    expect(row.orders.map((order) => [order.orderId, order.expectedCashCop, order.amountKnown])).toEqual([
+      ["ord-a", 81_000, true],
+      ["ord-b", -78_900, true]
+    ]);
+    // El pedido descargado conserva su rotulo; el que no, sale como importe del corte.
+    expect(row.orders.map((order) => [order.trackingCode, order.source])).toEqual([["KNT-A", "order"], ["", "settlement"]]);
+    // 81.000 - 78.900 = 2.100 de cargos; -5.000 de deuda que trae de otros cortes: 7.100, la cabecera.
+    expect(row.detailCashCop).toBe(2_100);
+    expect(row.carriedCreditCop).toBe(-5_000);
+    expect(row.detailStatus).toBe("balanced");
+  });
+
+  it("operations-app pasa el recaudo por pedido a buildCodReceivedSet en sus dos sitios (RF_11)", () => {
+    const app = readFileSync(resolve(__dirname, "../components/operations-app.tsx"), "utf8");
+    const calls = [...app.matchAll(/buildCodReceivedSet\(([^()]*(?:\([^()]*\))?[^()]*)\)/g)].map((match) => match[1]);
+    expect(calls).toHaveLength(2);
+    for (const args of calls) expect(args).toMatch(/,\s*codEntriesByOrder\(/);
   });
 });

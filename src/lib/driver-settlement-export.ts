@@ -66,6 +66,8 @@ export type DriverSettlementDetailGroup = {
   unavailableOrderCount: number;
   unknownAmountCount: number;
   noCollectionCount: number;
+  /** Spec 038: saldo traido de otros cortes menos el que deja. La cabecera es `detailCashCop - carriedCreditCop`. */
+  carriedCreditCop: number;
 };
 
 export function settlementStatusLabel(status: Settlement["status"]) {
@@ -95,6 +97,7 @@ export function buildDriverSettlementDetailGroups(summary: DriverFinancialSummar
     unavailableOrderCount: settlement.unavailableOrderCount,
     unknownAmountCount: settlement.unknownAmountCount,
     noCollectionCount: settlement.noCollectionCount,
+    carriedCreditCop: settlement.carriedCreditCop,
     rows: settlement.orders.map((order) => {
       const amountKnown = order.amountKnown;
       return {
@@ -159,7 +162,7 @@ export type SettlementDetailNoticeState =
   | { kind: "incomplete"; unknownAmountCount: number }
   | { kind: "budget"; skippedCount: number }
   | { kind: "adjusted"; detailCashCop: number; detailDeltaCop: number; expectedCashCop: number }
-  | { kind: "balanced"; detailCashCop: number };
+  | { kind: "balanced"; detailCashCop: number; carriedCreditCop: number };
 
 /**
  * El orden de las ramas es el que importa:
@@ -186,5 +189,5 @@ export function settlementDetailNotice(
       expectedCashCop: group.expectedCashCop
     };
   }
-  return { kind: "balanced", detailCashCop: group.detailCashCop };
+  return { kind: "balanced", detailCashCop: group.detailCashCop, carriedCreditCop: group.carriedCreditCop };
 }

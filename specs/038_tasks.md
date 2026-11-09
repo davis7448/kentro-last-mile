@@ -198,9 +198,12 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 
 ## Cliente
 
-- [ ] **T17: La app pinta las cifras guardadas**
+- [x] **T17: La app pinta las cifras guardadas**
   * Requisitos cubiertos: RF_09b, RF_11
-  * Archivos: src/lib/finance.ts, src/lib/finance.test.ts, src/components/operations-app.tsx
+  * Archivos: src/lib/finance.ts, src/lib/finance.test.ts, src/components/operations-app.tsx,
+    src/lib/types.ts, src/lib/driver-settlement-export.ts (anadidos al ejecutar: los campos nuevos del corte en
+    el tipo `Settlement`, y el saldo que trae de otros cortes en el aviso del detalle, sin el cual las filas no
+    suman la cabecera)
   * Accion: `calculateDriverSettlementFinancials` devuelve las cifras guardadas cuando el corte trae
     `cashCharges`, y sus filas por pedido leen `cashCharges` (con los negativos), no `cashAllocations`
     (analyze M16); si no hay `cashCharges`, la copia de hoy sin tocar. `operations-app.tsx` pasa `codByOrder`
