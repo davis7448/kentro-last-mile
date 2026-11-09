@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 // Spec 038: la unica regla de cuanto efectivo le cobra un corte a un domiciliario.
 // T1: lo que un pedido debe hoy (RF_01, RF_02; plan §3.1).
-import { lastRecalculatedAt, orderOwedByDriver, rebuildHistoricalCharges } from "../../functions/src/driver-cash-ledger";
+import {
+  computeDriverCorte,
+  type DriverLedgerContext,
+  type DriverLedgerSettlement,
+  lastRecalculatedAt,
+  orderOwedByDriver,
+  rebuildHistoricalCharges
+} from "../../functions/src/driver-cash-ledger";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
 
 const DRIVER = "driver-1";
@@ -187,5 +194,106 @@ describe("rebuildHistoricalCharges", () => {
     });
     const total = rebuildHistoricalCharges(s, new Map(), new Map()).reduce((a, r) => a + r.chargedCop, 0);
     expect(total).toBe(s.cashExpectedCop);
+  });
+});
+
+// T3: el cargo de un corte (RF_02, RF_03, RF_09b; plan §3.2, §3.3).
+
+const fee = (id: string, orderId: string, amountCop: number) =>
+  entry({ id, ownerType: "seller", type: "delivery_fee", amountCop, orderId });
+
+function ctx(over: Partial<DriverLedgerContext> = {}): DriverLedgerContext {
+  return { driverId: DRIVER, settlements: [], baseline: { driverId: DRIVER, createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: {} }, holds: null, ...over };
+}
+
+function newCorte(id: string, charges: Array<[string, number]>, over: Partial<DriverLedgerSettlement> = {}): DriverLedgerSettlement {
+  return {
+    id,
+    status: "reconciled",
+    orderIds: charges.map(([orderId]) => orderId),
+    cashCharges: charges.map(([orderId, chargedCop]) => ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop: 0 })),
+    ...over
+  };
+}
+
+describe("computeDriverCorte", () => {
+  it("un pedido nuevo: cobra recaudo menos su pago, y lo deja registrado", () => {
+    const entries = [cod("c1", "o1", 100000), fee("f1", "o1", -12000), pay("p1", "o1", 8000)];
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context: ctx() });
+    expect(result.charges).toEqual([{ orderId: "o1", codCop: 100000, driverPayCop: 8000, chargedCop: 92000, codSeenCop: 100000 }]);
+    expect(result).toMatchObject({ codCop: 100000, driverPayCop: 8000, feesCop: 12000, platformMarginCop: 4000, chargedTotalCop: 92000 });
+  });
+
+  it("un pedido que otro corte nuevo ya cobro no se cobra otra vez (causa 3, KNT-002682)", () => {
+    const entries = [cod("c1", "o1", 101900), pay("p1", "o1", 8000), pay("p2", "o2", 8000), cod("c2", "o2", 50000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 93900]])] });
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1", "o2"], ownEntryIds: ["p2"], entries, context });
+    expect(result.charges.find((c) => c.orderId === "o1")).toMatchObject({ chargedCop: 0, driverPayCop: 0, codCop: 0 });
+    expect(result.chargedTotalCop).toBe(42000);
+  });
+
+  it("el pago descontado en otro corte no se descuenta dos veces (causa 4, KNT-002965)", () => {
+    // A cobro 70.900 (78.900 - 8.000). Luego la reversa deja el pedido en -8.000: X devuelve 78.900, no 86.900.
+    const entries = [
+      cod("c1", "o1", 78900),
+      entry({ id: "r1", ownerType: "seller", type: "cod_remittance", amountCop: -78900, orderId: "o1" }),
+      pay("p1", "o1", 8000)
+    ];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 70900]])] });
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries, context });
+    expect(result.charges[0]).toMatchObject({ chargedCop: -78900, driverPayCop: 0, codCop: -78900 });
+  });
+
+  it("un corte viejo sin cashCharges se lee de la foto, no de los asientos", () => {
+    // Causa 2 (KNT-004540): una correccion borro el recaudo; la foto conserva lo que el corte cobro.
+    const old: DriverLedgerSettlement = { id: "OLD", status: "reconciled", orderIds: ["o1"] };
+    const context = ctx({
+      settlements: [old],
+      baseline: { driverId: DRIVER, createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: { OLD: [{ orderId: "o1", chargedCop: 70900, driverPayCop: 8000, source: "allocation" }] } }
+    });
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries: [pay("p1", "o1", 8000)], context });
+    expect(result.charges[0].chargedCop).toBe(-78900);
+  });
+
+  it("la retencion sin liberar se suma al cargo; liberada no", () => {
+    const entries = [pay("p1", "o1", 8000)];
+    const settlements = [newCorte("A", [["o1", 70900]])];
+    const held = computeDriverCorte({
+      settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries,
+      context: ctx({ settlements, holds: { driverId: DRIVER, createdAt: "", holds: [{ orderId: "o1", holdCop: 78900 }] } })
+    });
+    expect(held.charges[0].chargedCop).toBe(0);
+    const released = computeDriverCorte({
+      settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries,
+      context: ctx({ settlements, holds: { driverId: DRIVER, createdAt: "", holds: [{ orderId: "o1", holdCop: 78900, releasedAt: "2026-11-10T00:00:00.000Z", releasedCop: 78900 }] } })
+    });
+    expect(released.charges[0].chargedCop).toBe(-78900);
+  });
+
+  it("el propio corte no se cuenta como 'otro' al recalcularse", () => {
+    const entries = [cod("c1", "o1", 50000), pay("p1", "o1", 8000)];
+    const context = ctx({ settlements: [newCorte("X", [["o1", 42000]], { status: "pending" })] });
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: ["p1"], entries, context });
+    expect(result.charges[0].chargedCop).toBe(42000);
+  });
+
+  it("un pedido que entra sin asiento propio no aporta fletes ni margen", () => {
+    const entries = [cod("c1", "o1", 0), fee("f1", "o1", -12000), pay("p1", "o1", 8000)];
+    const context = ctx({ settlements: [newCorte("A", [["o1", 0]])] });
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries, context });
+    expect(result).toMatchObject({ feesCop: 0, driverPayCop: 0, platformMarginCop: 0 });
+  });
+
+  it("un pedido por fila, y recaudo - pago = suma de cargos", () => {
+    const entries = [cod("c1", "o1", 60000), pay("p1", "o1", 8000), pay("p2", "o2", 7000), cod("c2", "o3", 30000), pay("p3", "o3", 8000)];
+    const result = computeDriverCorte({ settlementId: "X", orderIds: ["o1", "o2", "o3", "o1"], ownEntryIds: ["p1", "p2", "p3"], entries, context: ctx() });
+    expect(result.charges.map((c) => c.orderId)).toEqual(["o1", "o2", "o3"]);
+    expect(result.codCop - result.driverPayCop).toBe(result.chargedTotalCop);
+    expect(result.chargedTotalCop).toBe(52000 - 7000 + 22000);
+  });
+
+  it("un corte viejo que contiene el pedido y no esta en la foto es un error, no un cero", () => {
+    const context = ctx({ settlements: [{ id: "OLD", status: "paid", orderIds: ["o1"] }] });
+    expect(() => computeDriverCorte({ settlementId: "X", orderIds: ["o1"], ownEntryIds: [], entries: [], context })).toThrow(/OLD/);
   });
 });

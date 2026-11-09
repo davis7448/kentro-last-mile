@@ -35,7 +35,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     un corte con asignaciones que no lista un pedido da `min(0, …)` (forma del caso KNT-000056); un asiento
     posterior al ultimo recalculo no cuenta. Los datos reales van en T6
 
-- [ ] **T3: El cargo de un corte**
+- [x] **T3: El cargo de un corte**
   * Requisitos cubiertos: RF_02, RF_03, RF_09b
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: `computeDriverCorte(input)` sin saldo a favor todavia: `registrado(o, X)` desde `cashCharges`

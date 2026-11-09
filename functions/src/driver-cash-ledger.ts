@@ -207,3 +207,122 @@ export function rebuildHistoricalCharges(
     return { orderId, chargedCop: hasAllocations ? Math.min(0, rebuilt) : rebuilt, driverPayCop, source: "rebuilt" as const };
   });
 }
+
+/** Fletes de tienda que forman el margen de la plataforma en un corte de domiciliario. */
+const FEE_ENTRY_TYPES: ReadonlySet<WalletEntryDoc["type"]> = new Set(["delivery_fee", "failed_fee", "fulfillment_fee"]);
+
+export type DriverCorteInput = {
+  /** Id del corte que se calcula. Si ya existe en el contexto, no se cuenta como "otro corte". */
+  settlementId: string;
+  orderIds: readonly string[];
+  /**
+   * Ids de los asientos que pertenecen a ESTE corte (`walletEntryIds`, o los que entran al crearlo). El
+   * pago del corte son los `driver_earning` de esta lista; el de otros cortes ya lo registraron ellos.
+   */
+  ownEntryIds: readonly string[];
+  /** Asientos de tienda de los pedidos del corte y `driver_earning` del domiciliario. */
+  entries: readonly WalletEntryDoc[];
+  context: DriverLedgerContext;
+};
+
+export type DriverCorteFigures = {
+  /** Un elemento por pedido, en el orden de `orderIds` y sin repetir (RF_03). */
+  charges: DriverCashCharge[];
+  codCop: number;
+  driverPayCop: number;
+  feesCop: number;
+  platformMarginCop: number;
+  /** Suma de `chargedCop`, sin recortar. El saldo a favor y el esperado los anade T4. */
+  chargedTotalCop: number;
+};
+
+/** Retencion vigente (sin liberar) de un pedido, segun RF_17. */
+export function activeHoldCop(holds: DriverCashHolds | null, orderId: string): number {
+  return (holds?.holds ?? [])
+    .filter((hold) => hold.orderId === orderId && !hold.releasedAt)
+    .reduce((sum, hold) => sum + (Number(hold.holdCop) || 0), 0);
+}
+
+/**
+ * Lo que los demas cortes del domiciliario ya registraron para cada pedido (plan §3.2): de su `cashCharges`
+ * si se calcularon con la 038, y si no, de la foto historica. Un corte viejo que contiene un pedido y no
+ * esta en la foto es un error: devolver 0 cobraria otra vez lo que ese corte ya cobro.
+ */
+export function registeredByOtherCortes(context: DriverLedgerContext, settlementId: string, orderIds: ReadonlySet<string>): Map<string, number> {
+  const registered = new Map<string, number>();
+  const add = (orderId: string, amountCop: number) => registered.set(orderId, (registered.get(orderId) ?? 0) + amountCop);
+  for (const settlement of context.settlements) {
+    if (settlement.id === settlementId) continue;
+    const touched = (settlement.orderIds ?? []).map(String).filter((orderId) => orderIds.has(orderId));
+    if (touched.length === 0) continue;
+    if (Array.isArray(settlement.cashCharges)) {
+      for (const charge of settlement.cashCharges) {
+        if (orderIds.has(charge.orderId)) add(charge.orderId, Number(charge.chargedCop) || 0);
+      }
+      continue;
+    }
+    const rows = context.baseline?.settlements?.[settlement.id];
+    if (!rows) {
+      throw new Error(`Spec 038: el corte ${settlement.id} es anterior a la regla nueva y no esta en la foto historica del domiciliario ${context.driverId}.`);
+    }
+    for (const row of rows) {
+      if (orderIds.has(row.orderId)) add(row.orderId, Number(row.chargedCop) || 0);
+    }
+  }
+  return registered;
+}
+
+/**
+ * Las cifras de un corte de domiciliario con la regla de la 038 (RF_02, RF_03, RF_09b; plan §3.3):
+ *
+ *   cargo_X(o)   = debido(o) − registrado(o, X) + retencion(o)
+ *   pago_X(o)    = driver_earning del domiciliario que pertenecen a X
+ *   recaudo_X(o) = cargo_X(o) + pago_X(o)
+ *
+ * Los fletes (y por tanto el margen) solo cuentan para pedidos que entran a X por un asiento propio del
+ * domiciliario: un pedido que vuelve a un corte solo para devolver o cobrar una diferencia (RF_07) ya
+ * aporto sus fletes en el corte donde se entrego.
+ */
+export function computeDriverCorte(input: DriverCorteInput): DriverCorteFigures {
+  const { context } = input;
+  const orderIds = Array.from(new Set(input.orderIds.map(String)));
+  const orderIdSet = new Set(orderIds);
+  const ownEntryIds = new Set(input.ownEntryIds.map(String));
+  const relevant = input.entries.filter((entry) => orderIdSet.has(String(entry.orderId ?? "")));
+  const owed = orderOwedByDriver(relevant, context.driverId);
+  const registered = registeredByOtherCortes(context, input.settlementId, orderIdSet);
+
+  const ownPayByOrder = new Map<string, number>();
+  for (const entry of relevant) {
+    if (entry.ownerType === "driver" && entry.ownerId === context.driverId && entry.type === "driver_earning" && ownEntryIds.has(entry.id)) {
+      ownPayByOrder.set(entry.orderId, (ownPayByOrder.get(entry.orderId) ?? 0) + (Number(entry.amountCop) || 0));
+    }
+  }
+  const ordersWithOwnEntry = new Set(
+    relevant.filter((entry) => entry.ownerType === "driver" && ownEntryIds.has(entry.id)).map((entry) => entry.orderId)
+  );
+
+  const charges = orderIds.map((orderId): DriverCashCharge => {
+    const owedRow = owed.get(orderId);
+    const chargedCop = (owedRow?.owedCop ?? 0) - (registered.get(orderId) ?? 0) + activeHoldCop(context.holds, orderId);
+    const driverPayCop = ownPayByOrder.get(orderId) ?? 0;
+    return { orderId, codCop: chargedCop + driverPayCop, driverPayCop, chargedCop, codSeenCop: owedRow?.codCop ?? 0 };
+  });
+
+  const feesCop = Math.max(
+    0,
+    -relevant
+      .filter((entry) => entry.ownerType === "seller" && FEE_ENTRY_TYPES.has(entry.type) && ordersWithOwnEntry.has(entry.orderId))
+      .reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0)
+  );
+  const codCop = charges.reduce((sum, charge) => sum + charge.codCop, 0);
+  const driverPayCop = charges.reduce((sum, charge) => sum + charge.driverPayCop, 0);
+  return {
+    charges,
+    codCop,
+    driverPayCop,
+    feesCop,
+    platformMarginCop: feesCop - driverPayCop,
+    chargedTotalCop: charges.reduce((sum, charge) => sum + charge.chargedCop, 0)
+  };
+}
