@@ -127,7 +127,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: pruebas nuevas en `settlement-math.test.ts` (cifras de la tabla de §3.3); las existentes
     sin cambios; `npx tsc --noEmit` en `functions/` limpio
 
-- [ ] **T11: Leer el contexto del domiciliario**
+- [x] **T11: Leer el contexto del domiciliario**
   * Requisitos cubiertos: RF_04b, RF_05b, RNF_04
   * Archivos: functions/src/driver-ledger-io.ts, src/lib/driver-ledger-io.test.ts
   * Accion: `loadDriverLedgerContext(dbOrTx, driverId)`: cortes `kind == driver && ownerId == driverId`
