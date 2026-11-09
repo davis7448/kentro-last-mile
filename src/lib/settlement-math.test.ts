@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 // prueba, pese a ser la funcion que decide cuanto efectivo debe un domiciliario.
 import {
   computeDriverCashSummary,
+  computeDriverCorteSummary,
   type DriverCashInputs,
   settlementCashReceivedCop,
   type SettlementDoc,
@@ -389,5 +390,66 @@ describe("T4 · isDriverSettlementCashSettled: corte de domiciliario con el efec
         driverSettlement({ cashPendingCop: 1_000, cashAllocations: [{ orderId: "o-1", expectedCop: 1, receivedCop: 1, covered: true }] })
       )
     ).toBe(false);
+  });
+});
+
+// Spec 038 T10: la regla nueva expuesta desde settlement-math, con el contexto OBLIGATORIO.
+describe("computeDriverCorteSummary (spec 038)", () => {
+  const DRIVER = "driver-1";
+  const context = (over: Record<string, unknown> = {}) => ({
+    driverId: DRIVER,
+    settlements: [],
+    baseline: { driverId: DRIVER, createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: {} },
+    holds: null,
+    ...over
+  });
+  const sellerEntries = [
+    entry({ id: "c1", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" }),
+    entry({ id: "f1", ownerType: "seller", type: "delivery_fee", amountCop: -12000, orderId: "o1" }),
+    entry({ id: "c2", ownerType: "seller", type: "cod_revenue", amountCop: 78900, orderId: "o2" }),
+    entry({ id: "r2", ownerType: "seller", type: "cod_remittance", amountCop: -78900, orderId: "o2" })
+  ];
+  const driverEntries = [
+    entry({ id: "p1", ownerType: "driver", ownerId: DRIVER, type: "driver_earning", amountCop: 8000, orderId: "o1" }),
+    entry({ id: "p2", ownerType: "driver", ownerId: DRIVER, type: "driver_earning", amountCop: 8000, orderId: "o2", settlementId: "A" })
+  ];
+
+  it("devuelve las cifras de la tabla de §3.3 y el registro por pedido", () => {
+    const summary = computeDriverCorteSummary({
+      inputs: inputs({ sellerEntries, driverEntries }),
+      settlementId: "X",
+      orderIds: ["o1", "o2"],
+      ownEntryIds: ["p1"],
+      receivedCop: 0,
+      context: context({ settlements: [{ id: "A", status: "reconciled", orderIds: ["o2"], cashCharges: [{ orderId: "o2", codCop: 78900, driverPayCop: 8000, chargedCop: 70900, codSeenCop: 78900 }] }] })
+    });
+    // o1: 100.000 - 8.000 = 92.000. o2: debe -8.000, A ya cobro 70.900 -> devuelve 78.900.
+    expect(summary).toMatchObject({
+      codCop: 100000 - 78900,
+      driverPayCop: 8000,
+      feesCop: 12000,
+      platformMarginCop: 4000,
+      expectedCop: 92000 - 78900,
+      creditInCop: 0,
+      creditOutCop: 0,
+      netCop: -(92000 - 78900),
+      gmfCop: 0,
+      ledgerVersion: 1
+    });
+    expect(summary.cashCharges.map((c) => [c.orderId, c.chargedCop])).toEqual([["o1", 92000], ["o2", -78900]]);
+    expect(summary.allocations).toEqual([{ orderId: "o1", expectedCop: 92000, receivedCop: 0, covered: false }]);
+  });
+
+  it("sin contexto lanza: ningun llamador puede calcular con la regla vieja por omision", () => {
+    expect(() =>
+      computeDriverCorteSummary({
+        inputs: inputs({ sellerEntries, driverEntries }),
+        settlementId: "X",
+        orderIds: ["o1"],
+        ownEntryIds: ["p1"],
+        receivedCop: 0,
+        context: undefined as never
+      })
+    ).toThrow(/contexto/);
   });
 });

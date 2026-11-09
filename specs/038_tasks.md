@@ -118,7 +118,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 
 ## Servidor
 
-- [ ] **T10: `settlement-math` expone la regla nueva**
+- [x] **T10: `settlement-math` expone la regla nueva**
   * Requisitos cubiertos: RF_09, RF_09b
   * Archivos: functions/src/settlement-math.ts, src/lib/settlement-math.test.ts
   * Accion: `computeDriverCorteSummary(inputs, orderIds, receivedCop, context)` con contexto **obligatorio**,

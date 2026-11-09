@@ -12,6 +12,7 @@
  * MEMORIA y evalua el resultado. La previsualizacion y la aplicacion recorren exactamente
  * el mismo codigo, asi que no pueden divergir.
  */
+import { computeDriverCorte, type DriverCashCharge, type DriverLedgerContext } from "./driver-cash-ledger";
 import { gmfForPayout } from "./gmf";
 
 export type WalletEntryDoc = {
@@ -133,9 +134,72 @@ export function isDriverSettlementCashSettled(settlement: SettlementDoc): boolea
   );
 }
 
+export type DriverCorteSummaryInput = {
+  inputs: DriverCashInputs;
+  /** Id del corte que se calcula (al crearlo, el id que va a tener). */
+  settlementId: string;
+  orderIds: string[];
+  /** Asientos de ESTE corte (`walletEntryIds`, o los que entran al crearlo). */
+  ownEntryIds: string[];
+  receivedCop: number;
+  /** Obligatorio: los demas cortes del domiciliario, su foto historica y sus retenciones. */
+  context: DriverLedgerContext;
+};
+
+/** Lo de `DriverCashSummary` mas lo que la 038 guarda en el corte. */
+export type DriverCorteSummary = DriverCashSummary & {
+  cashCharges: DriverCashCharge[];
+  creditInCop: number;
+  creditOutCop: number;
+  grossNetCop: number;
+  netCop: number;
+  gmfCop: number;
+  ledgerVersion: 1;
+};
+
+/**
+ * Spec 038: las cifras de un corte de domiciliario con la regla nueva (cada recaudo se cobra una vez).
+ * Delega en `computeDriverCorte` (driver-cash-ledger.ts), la unica regla. El contexto es obligatorio: sin
+ * los demas cortes del domiciliario no se puede saber que ya se cobro, y calcular "a la antigua" fue lo que
+ * le cobro $694.200 de mas a un domiciliario. Convive con `computeDriverCashSummary` mientras se migran los
+ * llamadores (T12-T16); la vieja se borra en T22.
+ */
+export function computeDriverCorteSummary(input: DriverCorteSummaryInput): DriverCorteSummary {
+  if (!input.context) {
+    throw new Error("Spec 038: computeDriverCorteSummary necesita el contexto del domiciliario (sus cortes, foto y retenciones).");
+  }
+  const figures = computeDriverCorte({
+    settlementId: input.settlementId,
+    orderIds: input.orderIds,
+    ownEntryIds: input.ownEntryIds,
+    entries: [...input.inputs.sellerEntries, ...input.inputs.driverEntries],
+    context: input.context,
+    receivedCop: input.receivedCop,
+    orderMeta: input.inputs.orderMeta
+  });
+  return {
+    codCop: figures.codCop,
+    feesCop: figures.feesCop,
+    driverPayCop: figures.driverPayCop,
+    platformMarginCop: figures.platformMarginCop,
+    expectedCop: figures.cashExpectedCop,
+    allocations: figures.allocations,
+    cashCharges: figures.charges,
+    creditInCop: figures.creditInCop,
+    creditOutCop: figures.creditOutCop,
+    grossNetCop: figures.grossNetCop,
+    netCop: figures.netCop,
+    gmfCop: figures.gmfCop,
+    ledgerVersion: 1
+  };
+}
+
 /**
  * Efectivo que el domiciliario debe entregar por los pedidos de un corte, y como se
  * imputa lo ya recibido pedido por pedido.
+ *
+ * REGLA VIEJA (pre-038): resta todo el pago del pedido y no sabe que cobraron otros cortes. Se mantiene
+ * solo mientras se migran sus llamadores; se borra en T22.
  */
 export function computeDriverCashSummary(
   inputs: DriverCashInputs,
