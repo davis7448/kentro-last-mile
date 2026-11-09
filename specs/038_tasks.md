@@ -59,7 +59,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     siguiente corte lo consume una vez; un corte pendiente que reduce su credito despues deja la deuda en el
     siguiente; las asignaciones suman lo recibido
 
-- [ ] **T5: Prueba de propiedad** *(se ejecuta despues de T8)*
+- [x] **T5: Prueba de propiedad** *(se ejecuta despues de T8)*
   * Requisitos cubiertos: RF_01, RF_08, RNF_02
   * Archivos: src/lib/driver-cash-ledger.property.test.ts
   * Accion: LCG con semilla fija (sin dependencia nueva) que genera secuencias por pedido: entrega, visita
