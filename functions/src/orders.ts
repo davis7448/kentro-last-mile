@@ -15,7 +15,7 @@ import {
 import { gmfForPayout } from "./gmf";
 import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext, refreshFrozenReceipts } from "./driver-cash-ledger";
 import { assertNoCrossedRecalc, CrossedRecalcError, loadDriverLedgerContext, MissingBaselineError, recalculateDriverSettlement } from "./driver-ledger-io";
-import { buildCodReceivedSet, isSellerEntryEligible, isWithinSettlementRange } from "./seller-ledger";
+import { buildCodReceivedSet, codEntriesByOrder, isSellerEntryEligible, isWithinSettlementRange, type WalletEntryDoc as LedgerEntryDoc } from "./seller-ledger";
 import { computeSellerBalance, payoutRejectionMessage, selectSettlementEntries } from "./seller-balance";
 import { loadSellerBalanceInput } from "./seller-balance-api";
 import {
@@ -1334,15 +1334,23 @@ export const createSettlement = onCall(async (request) => {
 
   let candidateDocs = unsettledEntryDocs;
   if (input.kind === "seller" || input.kind === "supplier") {
-    const driverSettlementsSnap = await db
-      .collection("settlements")
-      .where("kind", "==", "driver")
-      .get();
-    // Spec 018 RF_04: la definicion unica de "efectivo recibido", la misma de la pantalla.
-    const codReceivedOrderIds = buildCodReceivedSet(driverSettlementsSnap.docs.map((doc) => doc.data()));
-
     const orderIds = Array.from(new Set(unsettledEntryDocs.map((entry) => String((entry.data() ?? {}).orderId ?? "")).filter(Boolean)));
-    const orderSnaps = await Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()));
+    // Spec 038 T16 (analyze M1, M4): el recaudo de los pedidos que se van a pagar, de cualquier tienda. El
+    // proveedor no lo tenia (solo lee costo de producto) y la tienda solo ve lo suyo y lo de su rango.
+    const [driverSettlementsSnap, codEntrySnaps, orderSnaps] = await Promise.all([
+      db.collection("settlements").where("kind", "==", "driver").get(),
+      Promise.all(
+        Array.from({ length: Math.ceil(orderIds.length / 30) }, (_, index) => orderIds.slice(index * 30, index * 30 + 30)).map((ids) =>
+          // Solo `orderId in`: indice de un campo (no hace falta uno nuevo) y el tipo se filtra en memoria.
+          db.collection("walletEntries").where("orderId", "in", ids).get()
+        )
+      ),
+      Promise.all(orderIds.map((orderId) => db.collection("orders").doc(orderId).get()))
+    ]);
+    const codByOrder = codEntriesByOrder(codEntrySnaps.flatMap((snap) => snap.docs.map((doc) => doc.data() as LedgerEntryDoc)));
+    // Spec 018 RF_04: la definicion unica de "efectivo recibido", la misma de la pantalla.
+    const codReceivedOrderIds = buildCodReceivedSet(driverSettlementsSnap.docs.map((doc) => doc.data()), codByOrder);
+
     const ordersById = new Map(orderSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.data() as SettlementOrderDoc]));
     candidateDocs = unsettledEntryDocs.filter((entry) => isSellerEntryEligible(entry.data() ?? {}, ordersById, codReceivedOrderIds));
 

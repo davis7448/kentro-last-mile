@@ -335,3 +335,57 @@ describe("spec 038: recibido con cortes nuevos (cashCharges)", () => {
     expect(isOrderCodSettled("o1", [viejo, devolucion], [cod(78900, "2026-11-30T10:00:00.000Z")])).toBe(false);
   });
 });
+
+/**
+ * Spec 038 · T16: los llamadores de "recibido" pasan el recaudo por pedido. Sin `codByOrder`, un pedido de un
+ * corte nuevo nunca sale recibido (mas estricto): si un llamador olvida pasarlo, la tienda deja de cobrar.
+ */
+describe("spec 038 · T16: codEntriesByOrder y los llamadores de recibido", () => {
+  const corteNuevo = {
+    id: "A", kind: "driver", status: "reconciled", createdAt: "2026-12-01T10:00:00.000Z", reconciledAt: "2026-12-02T10:00:00.000Z",
+    orderIds: ["o1"], cashCharges: [{ orderId: "o1", codCop: 42000, driverPayCop: 0, chargedCop: 42000, codSeenCop: 42000 }],
+    cashExpectedCop: 42000, cashReceivedCop: 42000, cashPendingCop: 0,
+    cashAllocations: [{ orderId: "o1", expectedCop: 42000, receivedCop: 42000, covered: true }]
+  };
+
+  it("agrupa solo el recaudo de tienda (cod_revenue y cod_remittance) por pedido, de cualquier tienda", async () => {
+    const { codEntriesByOrder } = await import("../../functions/src/seller-ledger");
+    const grouped = codEntriesByOrder([
+      { ownerType: "seller", ownerId: "s1", orderId: "o1", type: "cod_revenue", amountCop: 42000, createdAt: "2026-11-30T10:00:00.000Z" },
+      { ownerType: "seller", ownerId: "s2", orderId: "o1", type: "cod_remittance", amountCop: -5000, createdAt: "2026-11-30T11:00:00.000Z" },
+      { ownerType: "seller", ownerId: "s1", orderId: "o1", type: "shipping_fee", amountCop: -9000, createdAt: "2026-11-30T10:00:00.000Z" },
+      { ownerType: "driver", ownerId: "d1", orderId: "o1", type: "driver_earning", amountCop: 7000, createdAt: "2026-11-30T10:00:00.000Z" },
+      { ownerType: "seller", ownerId: "s1", orderId: "", type: "cod_revenue", amountCop: 1, createdAt: "2026-11-30T10:00:00.000Z" }
+    ] as never);
+    expect([...grouped.keys()]).toEqual(["o1"]);
+    expect(grouped.get("o1")?.map((entry) => entry.amountCop)).toEqual([42000, -5000]);
+  });
+
+  it("codPartialReceivedCop con el recaudo: un pedido recibido en un corte nuevo no es parcial", () => {
+    const codByOrder = new Map([["o1", [{ amountCop: 42000, createdAt: "2026-11-30T10:00:00.000Z" }]]]);
+    // Un corte VIEJO (sin cashCharges) recibio parte; el corte nuevo, saldado despues, lo cobro entero.
+    const parcialViejo = { id: "B", kind: "driver", status: "pending", orderIds: ["o1"], cashExpectedCop: 42000, cashReceivedCop: 20000,
+      cashPendingCop: 22000, cashAllocations: [{ orderId: "o1", expectedCop: 42000, receivedCop: 20000, covered: false }] };
+    // Sin recaudo, el corte nuevo saldado no cuenta y la parcial del viejo se sumaria.
+    const both = [corteNuevo, parcialViejo] as never[];
+    expect(codPartialReceivedCop(both).get("o1")).toBe(20000);
+    expect(codPartialReceivedCop(both, codByOrder).get("o1")).toBeUndefined();
+  });
+
+  it("todo llamador de produccion pasa el recaudo por pedido (el prefiltro de la API de la 026, uno vacio a proposito)", () => {
+    const files = [
+      "functions/src/seller-balance.ts", "functions/src/store-api.ts", "functions/src/store-api-orders.ts",
+      "functions/src/cash-outstanding.ts", "functions/src/cash-outstanding-api.ts", "functions/src/orders.ts",
+      "functions/src/seller-ledger.ts"
+    ];
+    const bare: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(resolve(__dirname, "../..", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+      for (const match of text.matchAll(/(buildCodReceivedSet|codPartialReceivedCop)\(([^()]*)\)/g)) {
+        if (match[0].startsWith("buildCodReceivedSet(settlements: SettlementDoc[]") || match[0].startsWith("codPartialReceivedCop(settlements: SettlementDoc[]")) continue;
+        if (!match[2].includes(",")) bare.push(`${file}: ${match[0]}`);
+      }
+    }
+    expect(bare).toEqual([]);
+  });
+});

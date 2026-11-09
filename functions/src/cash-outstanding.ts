@@ -18,7 +18,7 @@
  */
 import { computeDriverReceivable, isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
 import type { CashAlertSettings } from "./cash-outstanding-schemas";
-import { buildCodReceivedSet, codPartialReceivedCop, isOrderCashSettledInCorte } from "./seller-ledger";
+import { buildCodReceivedSet, codEntriesByOrder, codPartialReceivedCop, isOrderCashSettledInCorte } from "./seller-ledger";
 import { isDriverSettlementCashSettled, settlementCashReceivedCop } from "./settlement-math";
 import {
   computeDriverCorte,
@@ -568,7 +568,7 @@ export function reconcileWithPlatformPosition(
   listed: { rows: CashOutstandingRow[]; nettedRows: CashOutstandingRow[] }
 ): PositionReconciliation {
   const driverSettlements = input.settlements.filter((settlement) => settlement.kind === "driver");
-  const received = buildCodReceivedSet(driverSettlements);
+  const received = buildCodReceivedSet(driverSettlements, codEntriesByOrder(input.receivableEntries));
   const universe = new Set(input.orders.map((order) => order.id));
   const unreadable = new Set(input.unreadableOrderIds);
   const settlementsOf = settlementsByOrder(driverSettlements);
@@ -813,8 +813,11 @@ function driverLedgerResolver(
 
 export function buildCashOutstandingReport(input: CashOutstandingInput): CashOutstandingReport {
   // Paso 1: la regla de recibido, importada (RF_01).
-  const received = buildCodReceivedSet(input.settlements);
-  const partialReceived = codPartialReceivedCop(input.settlements);
+  // Spec 038 T16: con el recaudo por pedido. En `targeted` solo llegan los asientos de los candidatos, que son
+  // un superconjunto de lo que hace falta: la API los elige con la regla sin recaudo, que es mas estricta.
+  const codByOrder = codEntriesByOrder(input.receivableEntries);
+  const received = buildCodReceivedSet(input.settlements, codByOrder);
+  const partialReceived = codPartialReceivedCop(input.settlements, codByOrder);
 
   // Con `targeted` solo llegan asientos de no recibidos; como solo se miran los de los candidatos,
   // `full` y `targeted` dan las mismas filas (invariante del plan 4.2).

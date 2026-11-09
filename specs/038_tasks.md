@@ -183,11 +183,14 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: la prueba de identidad de reconciliacion de la 026 se reescribe con la regla nueva y cierra
     (no se relaja); guarda 026 en verde (si una cuenta congelada cambia, se anota el porque en la guarda)
 
-- [ ] **T16: Los llamadores de "recibido" pasan el recaudo por pedido**
+- [x] **T16: Los llamadores de "recibido" pasan el recaudo por pedido**
   * Requisitos cubiertos: RF_11, RF_12
   * Archivos: functions/src/seller-balance.ts, functions/src/store-api.ts, functions/src/store-api-orders.ts,
     functions/src/cash-outstanding.ts, functions/src/cash-outstanding-api.ts, functions/src/orders.ts,
-    src/lib/store-api-orders.test.ts, src/lib/seller-balance.test.ts, src/lib/cash-outstanding-loads.test.ts
+    src/lib/store-api-orders.test.ts, src/lib/seller-balance.test.ts, src/lib/cash-outstanding-loads.test.ts,
+    functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts, src/lib/cash-outstanding.test.ts (anadidos al
+    ejecutar: `codEntriesByOrder` y `codPartialReceivedCop` tambien llaman a la regla, y el informe de la 026 se
+    prueba en su propio archivo; `cash-outstanding-loads.test.ts` es la cache del cliente y no se toca)
   * Accion: cada llamador de `buildCodReceivedSet` le pasa `codByOrder` con los asientos de recaudo que ya
     lee; la liquidacion de proveedor lee los de los pedidos que va a pagar (analyze M1, M4)
   * Verificacion: `npx tsc --noEmit` en `functions/` limpio; `store-api-orders`, `seller-balance`,

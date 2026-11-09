@@ -7,7 +7,7 @@
  * paga a una tienda, y ya estaba duplicada entre la UI, store-api.ts y createSettlement.
  */
 
-import { lastRecalculatedAt } from "./driver-cash-ledger";
+import { COD_ENTRY_TYPES, lastRecalculatedAt } from "./driver-cash-ledger";
 import { isDriverSettlementCashSettled, type SettlementDoc as MathSettlementDoc } from "./settlement-math";
 
 export type OrderDoc = Record<string, any>;
@@ -74,6 +74,23 @@ export function isOrderCashSettledInCorte(settlement: SettlementDoc, orderId: st
 export type CodEntryLike = { amountCop: number; createdAt?: string };
 
 /**
+ * El `codByOrder` de `buildCodReceivedSet` a partir de los asientos que ya lee el llamador (spec 038 T16): el
+ * recaudo de tienda (`cod_revenue`/`cod_remittance`) por pedido, de cualquier tienda. Lo demas se ignora, asi
+ * que se le puede pasar la lectura entera.
+ */
+export function codEntriesByOrder(entries: readonly WalletEntryDoc[]): Map<string, CodEntryLike[]> {
+  const byOrder = new Map<string, CodEntryLike[]>();
+  for (const entry of entries) {
+    const orderId = String(entry?.orderId ?? "");
+    if (!orderId || entry.ownerType !== "seller" || !COD_ENTRY_TYPES.has(entry.type)) continue;
+    const list = byOrder.get(orderId) ?? [];
+    list.push(entry as CodEntryLike);
+    byOrder.set(orderId, list);
+  }
+  return byOrder;
+}
+
+/**
  * La parte nueva de "recibido" (spec 038 RF_11; plan §3.7) para un pedido con algun corte de domiciliario
  * calculado con la regla nueva:
  *
@@ -112,8 +129,8 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
  * RF_01): suma, entre cortes de domiciliario, el `receivedCop` de las asignaciones no cubiertas.
  * La regla de "recibido" es la de buildCodReceivedSet; aqui solo se excluye lo que ella acepta.
  */
-export function codPartialReceivedCop(settlements: SettlementDoc[]): Map<string, number> {
-  const received = buildCodReceivedSet(settlements);
+export function codPartialReceivedCop(settlements: SettlementDoc[], codByOrder?: ReadonlyMap<string, readonly CodEntryLike[]>): Map<string, number> {
+  const received = buildCodReceivedSet(settlements, codByOrder);
   const partial = new Map<string, number>();
   for (const settlement of settlements) {
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashAllocations)) continue;

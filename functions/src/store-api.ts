@@ -6,6 +6,7 @@ import { z } from "zod";
 import { buildSellerBalanceInput, computeSellerBalance } from "./seller-balance";
 import {
   buildCodReceivedSet,
+  codEntriesByOrder,
   isSellerEntryEligible,
   type OrderDoc,
   type SettlementDoc,
@@ -287,7 +288,7 @@ export async function handleStoreApiRequest(
     const sellerEntries = entriesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc);
     const allSettlements = settlementsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
     const settlementsById = new Map(allSettlements.map((settlement) => [String(settlement.id), settlement]));
-    const codReceived = buildCodReceivedSet(allSettlements);
+    const codReceived = buildCodReceivedSet(allSettlements, codEntriesByOrder(sellerEntries));
 
     if (resource === "resumen") {
       const sellerSettlements = allSettlements.filter((s) => s.kind === "seller" && s.ownerId === sellerId);

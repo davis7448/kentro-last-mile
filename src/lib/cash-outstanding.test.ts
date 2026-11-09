@@ -2817,3 +2817,21 @@ describe("spec 038 T15 · la identidad de la 026 con cortes calculados por la re
     expect(source).not.toMatch(/computeDriverCashSummary\(/);
   });
 });
+
+describe("spec 038 · T16 · el informe pasa el recaudo por pedido a la regla de recibido", () => {
+  it("un pedido cobrado y saldado en un corte nuevo no se lista como efectivo sin llegar", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const cod = codEntry("n1", 42_000);
+    const corte = {
+      ...settlement("A", {
+        status: "reconciled", orderIds: ["n1"], walletEntryIds: [cod.id], codCop: 42_000, netCop: -42_000,
+        cashExpectedCop: 42_000, cashReceivedCop: 42_000, cashPendingCop: 0,
+        cashAllocations: [{ orderId: "n1", expectedCop: 42_000, receivedCop: 42_000, covered: true }]
+      }),
+      reconciledAt: "2026-09-30T10:00:00.000Z",
+      cashCharges: [{ orderId: "n1", codCop: 42_000, driverPayCop: 0, chargedCop: 42_000, codSeenCop: 42_000 }]
+    };
+    const report = buildCashOutstandingReport(input({ orders: [order("n1")], settlements: [corte] as never, receivableEntries: [cod] }));
+    expect(listedIds(report)).toEqual([]);
+  });
+});

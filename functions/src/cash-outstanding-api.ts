@@ -51,7 +51,10 @@ import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable
 import type { DriverCashHolds, DriverLedgerBaseline } from "./driver-cash-ledger";
 import { DRIVER_CASH_HOLDS, DRIVER_LEDGER_BASELINES } from "./driver-ledger-io";
 import { isOpsChannelConfigured, sendOpsNotice, type OpsNoticeResult } from "./ops-notify";
-import { buildCodReceivedSet } from "./seller-ledger";
+import { buildCodReceivedSet, type CodEntryLike } from "./seller-ledger";
+
+/** Sin recaudo por pedido, `buildCodReceivedSet` no da por recibido ningun pedido de un corte nuevo. */
+const STRICT_WITHOUT_COD: ReadonlyMap<string, readonly CodEntryLike[]> = new Map();
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
 const opsNoticeWebhookUrl = defineSecret("OPS_NOTICE_WEBHOOK_URL");
@@ -170,7 +173,10 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
   const orders = parsedOrders.map(toCoreOrder);
 
   // Paso 3: la regla de recibido (importada, RF_01) acota que asientos hace falta leer en resumen.
-  const received = buildCodReceivedSet(settlements);
+  // Spec 038 T16: aqui aun no hay asientos, asi que se pasa un recaudo VACIO a proposito: un pedido de un corte
+  // nuevo no sale recibido y sus asientos se leen. Es mas estricto (lee de mas, nunca de menos); el informe
+  // vuelve a aplicar la regla con el recaudo leido.
+  const received = buildCodReceivedSet(settlements, STRICT_WITHOUT_COD);
   const candidateIds = orders.filter((order) => !received.has(order.id)).map((order) => order.id);
   const batches = inBatches(candidateIds, ORDER_ID_IN_BATCH);
 
