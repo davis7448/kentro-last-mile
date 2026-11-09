@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "phase": "analyze",
+  "phase": "implement",
   "activeTask": "T1",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",

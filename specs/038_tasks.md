@@ -303,5 +303,6 @@ responsable:
 
 Auditor independiente sobre spec, plan y tareas: 5 hallazgos bloqueantes y 16 menores. Corregidos en el plan
 y aqui: B1 (orden: la regla vieja convive hasta T22), B2/B3 (fixture de los 16 pedidos), B4 (fletes, margen,
-neto y 4x1000 definidos en §3.3), B5 (RF_11 por tiempo, no por monto), M1-M8, M11-M16. M9 y M10 piden
-cambiar la spec y van al responsable.
+neto y 4x1000 definidos en §3.3), B5 (RF_11 por tiempo, no por monto), M1-M8, M11-M16. M9 y M10 cambiaban
+la spec: el responsable los aprobo el 2026-11-09 (RNF_02 con retencion, RF_08 con saldo negativo, RNF_04
+ampliado). Veredicto: coherente.

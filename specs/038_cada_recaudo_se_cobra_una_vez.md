@@ -145,7 +145,11 @@ reescribir ningun corte cerrado.
   a 0. El registro de RF_03 de cada pedido MUST guardar su cifra **sin recortar** (puede ser negativa); el
   recorte a 0 solo afecta al total del corte, y lo que ese recorte deja sin pagar es exactamente el saldo a
   favor. Asi la suma de los registros pedido a pedido sigue siendo lo debido (RNF_02) y el saldo a favor no
-  vuelve a nacer de los pedidos. *(Grill 1, decidido por el responsable el 2026-11-07.)*
+  vuelve a nacer de los pedidos. *(Grill 1, decidido por el responsable el 2026-11-07.)* El saldo que un
+  corte recibe de los demas MAY ser negativo (una deuda): si un corte pendiente reduce despues un saldo a
+  favor que otro ya consumio, el siguiente corte lo cobra y no se pierde. Un corte de domiciliario a favor del
+  domiciliario no se transfiere: se arrastra (0 de 60 cortes lo han estado nunca). *(Analyze, ratificado por
+  el responsable el 2026-11-09.)*
 
 ### Una sola regla
 
@@ -206,13 +210,17 @@ reescribir ningun corte cerrado.
   la regla nueva. Con RF_17 ese cambio deberia ser 0; si no lo es, la cifra la aprueba el responsable antes
   del despliegue.
 - **RNF_02:** Una prueba de propiedad MUST comprobar que, despues de calcular cualquier corte, la suma de lo
-  registrado por todos los cortes de un domiciliario para un pedido es igual a lo que el pedido debe hoy, en
+  registrado por todos los cortes de un domiciliario para un pedido es igual a lo que el pedido debe hoy **mas
+  su retencion de RF_17** (0 si no tiene o ya se libero), en
   secuencias de entrega, visita fallida, correccion, re-entrega, recaudo borrado y abonos parciales.
 - **RNF_03:** Las cuatro causas de la tabla de §1 (reversa neteada, recaudo borrado, pedido en dos cortes,
   pago descontado dos veces) MUST existir como pruebas con las cifras reales de un pedido de cada una
   (KNT-003259, KNT-004540, KNT-002682, KNT-002965).
-- **RNF_04:** Calcular un corte MUST NOT leer mas documentos que hoy salvo los cortes del propio
-  domiciliario (60 hoy). Hoy ya se barren todos los movimientos de tiendas y domiciliarios.
+- **RNF_04:** Calcular un corte MUST NOT leer mas documentos que hoy salvo: los cortes del propio
+  domiciliario (60 hoy); sus dos documentos de foto historica y retenciones; en la liquidacion de proveedor,
+  los asientos de recaudo de los pedidos que va a pagar (para RF_11); y en una correccion, los cortes del
+  domiciliario del pedido. Ninguna lectura necesita indices nuevos. Hoy ya se barren todos los movimientos de
+  tiendas y domiciliarios. *(Ampliado en analyze, aprobado por el responsable el 2026-11-09.)*
 
 ## 5. Casos limite
 
@@ -276,6 +284,7 @@ reescribir ningun corte cerrado.
 |---|---|---|
 | 2026-11-07 | Borrador con medicion pedido a pedido y propuesta de compensacion | Pregunta del responsable sobre la diferencia en cortes viejos |
 | 2026-11-08 | RF_11 reescrito: "recibido" = todo cobro en cortes saldados y sin recaudo nuevo desde el ultimo | El plan mostro el costo de leer pagos del domiciliario en tienda/API/proveedor; decidido por el responsable |
+| 2026-11-09 | Analyze: RNF_02 cuenta la retencion de RF_17; RF_08 admite saldo negativo y arrastra (no transfiere) un corte a favor; RNF_04 lista las lecturas extra | Hallazgos M9 y M10 del auditor independiente; aprobados por el responsable |
 | 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)
