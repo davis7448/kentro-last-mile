@@ -586,7 +586,8 @@
       "evidence": ".sdd/evidence/028/admin-abre-sin-tocar-2026-11-10.json",
       "p1": "2026-11-10 cerrada: domiciliario 8.000/8.000; fallido de tienda 12.000 (fijo en codigo)",
       "p2": "2026-11-10 revisada: 4 pagos de 9.000 sin zona caen todos en huecos entre actualizaciones de settings/global; 4.000 de mas (3 en cortes conciliados, 1 en pendiente); compensacion sin hacer",
-      "pendiente": "decidir compensacion de los 4.000 y tarifas de las zonas (9.000); plan e implementacion"
+      "p2fix": "2026-11-10 17:38Z: #193210 9.000->8.000 y corte pendiente stl-1794233484852 recalculado (+1.000 esperado); los 3.000 en cortes conciliados se dejan (decision del responsable)",
+      "pendiente": "tarifas de las zonas (9.000/9.000) por confirmar; plan e implementacion"
     },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",

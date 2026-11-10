@@ -192,6 +192,17 @@ nunca a Firestore.
     Lo unico limpio es recalcular el corte pendiente de #193210 con el pago a 8.000, que sube lo esperado en
     1.000. Ademas, esa misma memoria midio que este domiciliario lleva entregados unos 369.000 **de mas** en todo
     su historial: los 4.000 de mas quedan dentro de un saldo que ya es a su favor.
+  - *Decision del responsable (2026-11-10): "Solo el corte pendiente".* Aplicado a las 17:38:36 UTC con
+    `scripts/fix-028-driver-pay-193210.js`:
+    - El pago de #193210 baja de 9.000 a 8.000 (`correctedFromCop: 9000`).
+    - El corte pendiente `stl-1794233484852-…` se recalcula con `computeDriverCashSummary`: lo esperado pasa de
+      6.032.440 a 6.033.440 y el pendiente de 819.895 a 820.895.
+    - El faltante de recaudo del corte se mueve igual (-820.895).
+    - Se registra en `audit` (`YVwk3jOGyVb8o2CfJI0E`).
+
+    Antes de escribir, el calculo sin la correccion reprodujo exactamente el corte guardado. La escritura se hizo
+    con precondiciones `lastUpdateTime`. Los otros 3.000, en cortes conciliados, se quedan asi por decision del
+    responsable.
   - *Hallazgo al margen:* las tres zonas (`zone-center`, `zone-north`, `zone-south`) tienen 9.000 / 9.000 para el
     domiciliario, y ganan a `settings/global`. Desde el 2026-10-11 solo un pedido con zona (`ord-knt-007112`,
     9.000) uso esa tarifa. Si "solo DANDA tiene un valor diferente", las zonas tambien estan mal configuradas.
