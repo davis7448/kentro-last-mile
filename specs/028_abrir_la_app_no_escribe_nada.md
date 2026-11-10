@@ -241,3 +241,4 @@ nunca a Firestore.
 | 2026-11-10 | Borrador inicial con la medicion de produccion | Prueba E2E de la 023: 8 escrituras al abrir como admin |
 | 2026-11-10 | Aprobada | "Aprobar spec 028" del responsable |
 | 2026-11-10 | Implementada (plan `specs/028_plan.md`) | `planAutosave` + cableado; 0 escrituras en local contra produccion |
+| 2026-11-10 | Hosting desplegado, sobre la rama de la 023 | E2E contra produccion: 0 peticiones al canal Write en 45 s; `settings/global` sin cambios de valor; 0 `static{` |

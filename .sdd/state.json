@@ -590,7 +590,9 @@
       "zonas": "2026-11-10 18:16Z: las 3 zonas a 8.000/8.000 en pago al domiciliario (decision del responsable)",
       "plan": "specs/028_plan.md",
       "implemented": "2026-11-10: planAutosave (src/lib/autosave-plan.ts) + state-store + useAppState; suite 3575/69, tsc raiz y functions limpios, lint 0 errores (3 avisos previos); E2E local contra prod: 0 peticiones al canal Write en 45 s (.sdd/evidence/028/local-con-arreglo-2026-11-10.json)",
-      "pendiente": "desplegar hosting (con permiso), E2E contra prod (RNF_02), settings/global igual antes y despues (DoD 5), 3 dias de onSettingsFloorRaise (RNF_03)"
+      "hostingDeployed": "2026-11-10 ~18:30Z, rebasada sobre claude/023-no-relee-historico-ef385f (PR #9 abierto) para no quitar la 023 de produccion",
+      "verify": "2026-11-10: E2E contra prod 0 peticiones al canal Write en 45 s (.sdd/evidence/028/produccion-tras-desplegar-2026-11-10.json); settings/global mismos valores antes y despues (DoD 5); 0 static{ en los chunks de portada",
+      "pendiente": "3 dias de onSettingsFloorRaise (RNF_03; hubo 4 escrituras 18:28-18:31Z, probablemente pestanas abiertas con el bundle viejo); validacion del responsable (DoD 7); PR apilado sobre #9"
     },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
