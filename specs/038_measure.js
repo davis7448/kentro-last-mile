@@ -202,7 +202,8 @@ function deployCheckDriver({ driverId, cortes, entries, orderMeta, now }) {
 /** "Recibidos" de hoy (regla vieja) frente a los de despues de desplegar, con los pendientes ya recalculados. */
 function receivedDiff({ settlements, simulated, entries }) {
   const { buildCodReceivedSet, codEntriesByOrder } = requireLib("seller-ledger.js");
-  const before = buildCodReceivedSet(settlements);
+  // "Hoy": ningun corte tiene `cashCharges`, asi que con o sin recaudo da lo mismo; se pasa igual (RF_11).
+  const before = buildCodReceivedSet(settlements, codEntriesByOrder(entries));
   const replaced = new Map(simulated.map((s) => [s.id, s]));
   const after = buildCodReceivedSet(settlements.map((s) => replaced.get(s.id) ?? s), codEntriesByOrder(entries));
   return {

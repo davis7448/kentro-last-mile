@@ -34,7 +34,13 @@ const admin = require(path.join(__dirname, "../functions/node_modules/firebase-a
 if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile" });
 const db = admin.firestore();
 
-const { buildCodReceivedSet } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
+const { buildCodReceivedSet, codEntriesByOrder } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
+/**
+ * Spec 038 (RF_11): sin el recaudo por pedido, `buildCodReceivedSet` no da por recibido ningun pedido de un corte
+ * nuevo. Los prefiltros que aun no leyeron asientos lo pasan VACIO a proposito, igual que la API de la 026: leen
+ * de mas, nunca de menos.
+ */
+const STRICT_WITHOUT_COD = new Map();
 const { settlementCashReceivedCop } = require(path.join(__dirname, "../functions/lib/settlement-math"));
 const { buildDriverLedgerSnapshot, computeDriverCorte } = require(path.join(__dirname, "../functions/lib/driver-cash-ledger"));
 const { computePlatformPosition } = require(path.join(__dirname, "../functions/lib/platform-position"));
@@ -157,7 +163,7 @@ async function baseline() {
     db.collection("walletEntries").where("type", "in", ["cod_revenue", "cod_remittance", "driver_earning"])
   );
 
-  const received = buildCodReceivedSet(settlements);
+  const received = buildCodReceivedSet(settlements, codEntriesByOrder(receivableEntries));
   const ordersById = new Map(orders.map((order) => [order.id, order]));
   const candidates = orders.filter((order) => !received.has(order.id));
 
@@ -474,7 +480,8 @@ async function loadLikeTheLoader(scope) {
     db.collection("settings").doc("cashAlerts").get().then((snap) => log.push({ label: "settings/cashAlerts", docs: snap.exists ? 1 : 0, ms: 0 })),
     ...nameCollections.map((collection) => timedRead(log, `${collection} (nombres)`, qcNames(collection)))
   ]);
-  const received = buildCodReceivedSet(settlements);
+  // Igual que cash-outstanding-api.ts: el prefiltro aun no tiene asientos.
+  const received = buildCodReceivedSet(settlements, STRICT_WITHOUT_COD);
   const candidateIds = orders.filter((order) => !received.has(order.id)).map((order) => order.id);
   const isFull = scope.kind === "admin" && scope.includeReconciliation;
   const lots = chunks(candidateIds, IN_BATCH);
@@ -538,7 +545,8 @@ async function queryCheck() {
   );
   const leader = leaderCounts.sort((a, b) => b.count - a.count)[0];
   const driverSettlements = (await db.collection("settlements").where("kind", "==", "driver").get()).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const receivedNow = buildCodReceivedSet(driverSettlements);
+  // Muestra de candidatos: con el prefiltro estricto, un superconjunto de los no recibidos.
+  const receivedNow = buildCodReceivedSet(driverSettlements, STRICT_WITHOUT_COD);
   const sampleIds = (await qcCodOrders().select().get()).docs.map((doc) => doc.id).filter((id) => !receivedNow.has(id)).slice(0, IN_BATCH);
 
   // ---- 1. Cada consulta del cargador con limit(1): pide indice? ----
@@ -736,8 +744,8 @@ function readBaselineIds() {
 }
 
 /** Universo (contraentregas entregadas) y recibidos segun la regla compilada, para dar motivo a los cambios. */
-function evidenceFrom(orderIds, settlements) {
-  return { universeOrderIds: orderIds, receivedOrderIds: [...buildCodReceivedSet(settlements)] };
+function evidenceFrom(orderIds, settlements, codEntries) {
+  return { universeOrderIds: orderIds, receivedOrderIds: [...buildCodReceivedSet(settlements, codEntriesByOrder(codEntries))] };
 }
 
 /**
@@ -764,7 +772,7 @@ async function loadCompareLocal() {
     source: "local (functions/lib compilado + ADC, solo lectura)",
     report,
     position,
-    evidence: evidenceFrom(input.orders.map((order) => order.id), input.settlements),
+    evidence: evidenceFrom(input.orders.map((order) => order.id), input.settlements, input.receivableEntries),
     readCounts: `walletEntries ${walletSnapshot.size}, settlements ${settlementSnapshot.size} (posicion); pedidos del universo ${input.orders.length}`
   };
 }
@@ -801,11 +809,12 @@ async function loadCompareDeployed(credentials) {
     body: JSON.stringify({ email: credentials.email, password: credentials.password, returnSecureToken: true })
   }).then((response) => response.json());
   if (!signIn.idToken) throw new Error(`signInWithPassword fallo: ${JSON.stringify(signIn.error ?? signIn)}`);
-  const [report, position, orderSnapshot, settlementSnapshot] = await Promise.all([
+  const [report, position, orderSnapshot, settlementSnapshot, codSnapshot] = await Promise.all([
     callCallable("getCashOutstanding", signIn.idToken, { includeReconciliation: true }),
     callCallable("getPlatformPosition", signIn.idToken, null),
     db.collection("orders").where("paymentMethod", "==", "cod").where("status", "in", ["delivered", "liquidated"]).select().get(),
-    db.collection("settlements").where("kind", "==", "driver").get()
+    db.collection("settlements").where("kind", "==", "driver").get(),
+    db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", ["cod_revenue", "cod_remittance"]).get()
   ]);
   return {
     source: `desplegado (callables getCashOutstanding y getPlatformPosition con sesion de ${credentials.email})`,
@@ -813,7 +822,8 @@ async function loadCompareDeployed(credentials) {
     position,
     evidence: evidenceFrom(
       orderSnapshot.docs.map((doc) => doc.id),
-      settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      codSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
     ),
     readCounts: `pedidos del universo ${orderSnapshot.size}, cortes de domiciliario ${settlementSnapshot.size} (ADC, solo para motivos)`
   };

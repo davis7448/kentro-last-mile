@@ -273,9 +273,11 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: `npx tsc --noEmit` raiz y `functions/`, y `npx vitest run` en verde; `node -c` de los dos
     scripts
 
-- [ ] **T23: Guardas de fuente y suite completa**
+- [x] **T23: Guardas de fuente y suite completa**
   * Requisitos cubiertos: RF_09, RF_12, RF_05b
-  * Archivos: src/lib/spec-038-guards.test.ts
+  * Archivos: src/lib/spec-038-guards.test.ts, scripts/verify-026.js, specs/038_measure.js (anadidos al ejecutar:
+    la guarda encontro cuatro llamadas de `verify-026.js` y una de la medicion sin el recaudo por pedido, que la
+    T22 debio cubrir)
   * Accion: guardas: fuera de `driver-cash-ledger.ts` nadie suma `cod_revenue`/`cod_remittance` contra
     `driver_earning` para decidir el efectivo de un corte, con lista blanca y motivo (`finance.ts`,
     `order-export.ts`, `driver-receivable.ts`, analyze M8); `settlement-math.ts` ya no exporta la funcion
