@@ -1,6 +1,7 @@
 # Spec 038: Que cada recaudo se le cobre al domiciliario una sola vez
 
-- **Estado:** aprobada (2026-11-08, por el responsable de la plataforma, tras el grill)
+- **Estado:** aprobada (2026-11-08, por el responsable de la plataforma, tras el grill); **enmendada el 2026-11-10**
+  tras la verificacion (RF_01b, RF_11, RF_11b; ver §8)
 - **Autor:** Claude (a peticion del responsable de la plataforma)
 - **Fecha:** 2026-11-07
 - **Origen:** el responsable pregunto por que la auditoria de efectivo del domiciliario mostraba cerca de
@@ -101,6 +102,13 @@ reescribir ningun corte cerrado.
 
 - **RF_01 (ubicua):** El sistema MUST cobrarle a un domiciliario cada peso de recaudo de un pedido, y
   descontarle cada peso de su pago por ese pedido, **en un solo corte**.
+- **RF_01b (ubicua):** El recaudo de un pedido MUST cobrarsele **solo al domiciliario que lo entrego**: el
+  `driverId` actual del pedido. Si el pedido tiene asignado a **otro** domiciliario, a este solo se le cuenta su
+  propio pago (lo debido es `−pago`); si el pedido no esta o no tiene `driverId`, el recaudo cuenta como hoy (sin
+  dato no se devuelve dinero). *(Verificacion 2026-11-10, hallazgo H1: la regla atribuia el recaudo a cualquier
+  domiciliario con el pedido en un corte, y una visita fallida de D1 seguida de la entrega de D2 le cobraba el
+  recaudo a los dos. Medido ese dia: 0 pedidos en cortes de dos domiciliarios y 0 con un `driverId` distinto del
+  de su corte, asi que no cambia ninguna cifra medida.)*
 - **RF_02 (evento):** **Cuando** se calcule el efectivo que un corte de domiciliario espera por un pedido,
   el sistema MUST tomar *lo que el pedido debe hoy* (recaudo − pago del domiciliario, con los movimientos
   vigentes) y restarle *lo que los demas cortes de ese domiciliario ya registraron para ese pedido*. Esa
@@ -170,8 +178,11 @@ reescribir ningun corte cerrado.
 
 - **RF_11 (estado):** **Mientras** un pedido que ya entro en un corte calculado con esta spec tenga efectivo
   cobrado en un corte de domiciliario que **no** esta saldado, o tenga recaudo nuevo posterior al ultimo corte
-  saldado que lo cobro, el sistema MUST NOT dar ese pedido por "efectivo recibido" para pagarle a la tienda o
-  al proveedor. Nunca se compara el recaudo bruto contra lo cobrado neto. En un corte saldado en total (spec
+  saldado que lo cobro **que no sume cero**, el sistema MUST NOT dar ese pedido por "efectivo recibido" para
+  pagarle a la tienda o al proveedor. *(Enmienda 2026-11-10, hallazgo H2: con "ningun asiento posterior", un
+  cambio que netea cero para el domiciliario —un cambio de tienda bien hecho, o entregado → fallido → entregado—
+  no devolvia el pedido a ningun corte y la tienda quedaba bloqueada para siempre. Con "suma cero" el caso B5 del
+  analyze sigue bloqueado: una re-entrega de 78.900 suma 78.900.)* Nunca se compara el recaudo bruto contra lo cobrado neto. En un corte saldado en total (spec
   027 RF_01), cada asignacion cuenta como cobrada entera, cubierta o no. Un pedido que solo esta en cortes
   anteriores a esta spec sigue con la regla de hoy. *(Grill 2, el 2026-11-07, eligio neto contra neto; el
   plan, el 2026-11-08, mostro que eso obliga a que el saldo de tienda, la API de tiendas y la liquidacion de
@@ -179,6 +190,10 @@ reescribir ningun corte cerrado.
   sitios ya leen.)* Hoy basta con que el pedido tenga una asignacion en un corte saldado: si se corrige
   y se vuelve a entregar, su recaudo nuevo contaria como recibido antes de que el domiciliario lo entregue.
   Medido el 2026-11-07: 0 casos.
+- **RF_11b (estado):** **Mientras** un pedido tenga una asignacion sin cubrir en un corte de domiciliario
+  anterior a esta spec que no este saldado, el sistema MUST NOT darlo por recibido aunque tambien este en un
+  corte nuevo saldado: la parte nueva de RF_11 se suma a la regla de hoy, nunca la sustituye. *(Hallazgo H3 de la
+  verificacion, 2026-11-10.)*
 - **RF_12 (ubicua):** RF_11 MUST seguir siendo la regla unica de "recibido" (spec 018 RF_04, spec 027
   RF_02): la usan la liquidacion de tienda y de proveedor, el saldo de tienda, la API de tiendas y el informe
   de efectivo de la 026. Un corte saldado que cobro todo el recaudo vigente del pedido MUST seguir dandolo
@@ -236,8 +251,15 @@ reescribir ningun corte cerrado.
 - **Recaudo borrado por una correccion** (causa 2). Lo ya cobrado sale del registro del corte, no de los
   movimientos, asi que la devolucion aparece igual.
 - **El pedido cambia de domiciliario.** "Ya cobrado" es por domiciliario; el recaudo se le cobra al que
-  entrega. Hoy no hay ningun pedido en cortes de dos domiciliarios (medido); si aparece, la compensacion lo
-  MUST listar aparte en lugar de devolverlo.
+  entrega (RF_01b). Hoy no hay ningun pedido en cortes de dos domiciliarios (medido el 2026-11-07 y el
+  2026-11-10); si aparece, la compensacion lo MUST listar aparte en lugar de devolverlo.
+- **Visita fallida de uno y entrega de otro.** D1 cobra su pago de visita en un corte; D2 entrega. A D1 no se le
+  cobra el recaudo (RF_01b): su pedido no vuelve solo a su siguiente corte. A D2 si, entero, menos su pago.
+- **Un pedido entregado sin `driverId`** (lo que dejaba la reimportacion de Shopify antes de la spec 017). El
+  recaudo cuenta para el domiciliario de sus cortes, como hoy: un dato que falta no devuelve dinero. Medido el
+  2026-11-10: 1 pedido sin `driverId` en cortes, y no es un contraentrega entregado.
+- **Cambio que netea cero despues de un corte saldado** (cambio de tienda, o entregado → fallido → entregado). El
+  pedido sigue recibido (RF_11): el efectivo que se entrego no cambio.
 - **KNT-005724 y KNT-006347** (pregunta para el responsable). Ambos siguen **entregados** y contraentrega.
   Una correccion del 2026-11-04 los paso de MercadoTienda a ADMA: revirtio el recaudo de $27.000 en la tienda
   vieja y movio el flete, **pero no creo el recaudo en ADMA**. Hoy ese recaudo no esta en el libro de nadie.
@@ -286,6 +308,7 @@ reescribir ningun corte cerrado.
 | 2026-11-08 | RF_11 reescrito: "recibido" = todo cobro en cortes saldados y sin recaudo nuevo desde el ultimo | El plan mostro el costo de leer pagos del domiciliario en tienda/API/proveedor; decidido por el responsable |
 | 2026-11-09 | Remedicion en T6: 686.200 (corte pendiente nuevo con KNT-007828); la retencion congela tambien lo posterior al ultimo corte de un pedido que la regla vieja no volveria a traer (KNT-005724/006347) | Datos reales; RF_17 sin cambios, el plan §3.6 se corrige para cumplirlo |
 | 2026-11-09 | Analyze: RNF_02 cuenta la retencion de RF_17; RF_08 admite saldo negativo y arrastra (no transfiere) un corte a favor; RNF_04 lista las lecturas extra | Hallazgos M9 y M10 del auditor independiente; aprobados por el responsable |
+| 2026-11-10 | Enmienda tras la verificacion: RF_01b (el recaudo solo al que entrega), RF_11 (lo posterior debe sumar cero), RF_11b (la regla de hoy no se sustituye) | Tres defectos de la revision independiente (H1-H3), reproducidos; aprobada por el responsable |
 | 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)

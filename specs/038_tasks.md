@@ -286,6 +286,51 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: `npx tsc --noEmit` raiz y `functions/`, `npx vitest run` y `npm run lint` en verde; guardas
     018, 026 y 038 y pruebas de la 027 (`seller-ledger.test.ts`, `cash-outstanding.test.ts`) en verde
 
+## Enmienda tras la verificacion (2026-11-10)
+
+- [ ] **T24: El recaudo solo al que entrega, en el nucleo**
+  * Requisitos cubiertos: RF_01b
+  * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts, src/lib/driver-cash-ledger.property.test.ts
+  * Accion: `orderOwedByDriver` con `deliveredBy` (plan §7.1) y su paso por `computeDriverCorte`,
+    `pendingDeltaOrders`, `computeHolds`, `planDriverCompensation` (fila `otherDriver`, fuera del total),
+    `buildDriverLedgerSnapshot` y `driverCorteOrderIdsAtCreation`
+  * Verificacion: el escenario H1 (D1 visita fallida, D2 entrega): D1 0 y su pedido no vuelve solo, D2 91.000;
+    sin dato o con `driverId` nulo, como hoy; la propiedad de RNF_02 sigue en verde; los casos reales sin cambios
+
+- [ ] **T25: Los llamadores pasan quien entrego**
+  * Requisitos cubiertos: RF_01b, RNF_04
+  * Archivos: functions/src/orders.ts, functions/src/driver-ledger-io.ts, functions/src/order-corrections.ts,
+    functions/src/order-corrections-plan.ts, functions/src/cash-outstanding.ts, scripts/snapshot-038-baseline.js,
+    scripts/compensate-038.js, specs/038_measure.js, scripts/verify-026.js, src/lib/driver-ledger-io.test.ts,
+    src/lib/order-corrections-plan.test.ts, src/lib/cash-outstanding.test.ts, src/lib/spec-038-guards.test.ts
+  * Accion: `orderMeta` con `driverId`; `createSettlement` en dos pasadas para los que vuelven solos (plan §7.1);
+    los scripts y el informe con el mapa entero; guarda: todo llamador de `computeDriverCorte` /
+    `pendingDeltaOrders` / `orderOwedByDriver` en produccion pasa `deliveredBy`
+  * Verificacion: doble de Firestore: `createSettlement` lee solo los candidatos; guarda en verde y vista fallar
+
+- [ ] **T26: Recibido: lo posterior suma cero y la regla de hoy no se sustituye**
+  * Requisitos cubiertos: RF_11, RF_11b, RF_12
+  * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
+  * Accion: plan §7.2 y §7.3
+  * Verificacion: escenarios H2 (cambio de tienda que netea cero: recibido) y H3 (corte viejo pendiente sin
+    cubrir: no recibido); B5 sigue sin recibir; las pruebas de la 018 y la 027 sin cambios
+
+- [ ] **T27: Menores de la revision**
+  * Requisitos cubiertos: RF_04, RF_05b
+  * Archivos: functions/src/orders.ts, scripts/snapshot-038-baseline.js, src/lib/snapshot-038-baseline.test.ts,
+    src/lib/driver-cash-ledger.test.ts
+  * Accion: plan §7.4
+  * Verificacion: conciliar un corte viejo pagado no cambia el orden de sus asignaciones; la foto se niega si no
+    cabe en un lote
+
+- [ ] **T28: Medir otra vez y volver a verificar (solo lectura)**
+  * Requisitos cubiertos: RNF_01, RF_05b, RF_17
+  * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/
+  * Accion: `038_measure.js --check --deploy-check`, foto en seco y compensacion previsualizada contra produccion;
+    el revisor independiente vuelve a leer el diff de T24-T27
+  * Verificacion: las cifras de hoy (686.200, 16 retenciones, opcion A 632.200, diferencia 0) o la diferencia
+    explicada pedido a pedido; ningun hallazgo nuevo sin resolver
+
 ## Cobertura de requisitos
 
 | Requisito | Tareas |
@@ -303,7 +348,9 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 | RF_09 | T10, T12, T13, T15, T22, T23 |
 | RF_09b | T3, T4, T10, T17 |
 | RF_10 | T14 |
-| RF_11 | T9, T16, T17 |
+| RF_01b | T24, T25 |
+| RF_11 | T9, T16, T17, T26 |
+| RF_11b | T26 |
 | RF_12 | T9, T15, T16, T22, T23 |
 | RF_13 | T8, T20 |
 | RF_14 | T8, T20 |

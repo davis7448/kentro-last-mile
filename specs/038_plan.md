@@ -362,3 +362,45 @@ Ninguna. El generador de la prueba de propiedad es un LCG de diez lineas con sem
 7. **Funciones mas pesadas**: crear un corte de domiciliario ya barre todos los asientos; se anaden sus cortes
    (58) y dos documentos. Sin indices nuevos (`where kind == driver && ownerId ==` ya existe: lo usa la app del
    domiciliario).
+
+## 7. Enmienda tras la verificacion (2026-11-10)
+
+La revision independiente de la verificacion encontro tres defectos (`.sdd/evidence/038_cada_recaudo_se_cobra_una_vez/verify.md`, §7).
+Diseno de cada arreglo:
+
+### 7.1 El recaudo solo al que entrega (RF_01b, H1)
+
+- `orderOwedByDriver(entries, driverId, deliveredBy?)`: `deliveredBy: ReadonlyMap<orderId, driverId | null>`.
+  Si el pedido figura con **otro** domiciliario (no nulo), su recaudo no cuenta para este; si no figura o es nulo,
+  cuenta como hoy. Es la UNICA funcion que decide lo debido, asi que `computeDriverCorte`, `pendingDeltaOrders`,
+  `computeHolds`, `planDriverCompensation`, `buildDriverLedgerSnapshot` y `driverCorteOrderIdsAtCreation` lo
+  reciben y lo pasan; nadie lo vuelve a calcular.
+- De donde sale `deliveredBy`, sin leer de mas (RNF_04):
+  - `orderMeta` ya trae los pedidos del corte (`recalculateDriverSettlement` los lee con `tx.getAll`; la
+    correccion con `loadDriverCashInputs`); se le anade `driverId`.
+  - `pendingDeltaOrders` mira todos los pedidos de los cortes del domiciliario (4.821). Para no leerlos todos:
+    `createSettlement` calcula los candidatos sin el mapa (lo conservador: con el recaudo), lee con `tx.getAll`
+    SOLO esos pedidos y vuelve a calcular con su `driverId`. Un pedido que entregó otro sale de la lista.
+  - Los scripts (foto, compensacion, medicion) y el informe de la 026 ya leen los pedidos: pasan el mapa entero.
+- La compensacion (RF_13) marca `otherDriver: true` en una fila cuyo pedido tiene otro `driverId`, la deja fuera
+  del total y la lista aparte (spec §5).
+
+### 7.2 Lo posterior debe sumar cero (RF_11, H2)
+
+`isOrderCodSettled`: en vez de "ningun asiento de recaudo posterior al ultimo recalculo del ultimo corte saldado",
+"los asientos posteriores suman 0". La comparacion sigue siendo por tiempo (cuales son posteriores), no por monto
+contra lo cobrado: B5 sigue bloqueado (la re-entrega suma 78.900).
+
+### 7.3 La regla de hoy no se sustituye (RF_11b, H3)
+
+En `buildCodReceivedSet`, un pedido de cortes nuevos que pasa `isOrderCodSettled` solo se da por recibido si
+ademas no tiene una asignacion sin cubrir en un corte viejo (sin `cashCharges`) que no este saldado en total.
+
+### 7.4 Menores de la revision
+
+- El orden de `cashAllocations` al conciliar un corte viejo ya pagado: `updateSettlementStatus` pasa `orderMeta` a
+  `refreshFrozenReceipts`, como el abono.
+- `snapshot-038-baseline.js`: un solo lote mientras quepa (hoy 2 domiciliarios = 4 escrituras); si no cabe, se
+  niega en vez de escribir a medias.
+- Quedan fuera, anotados: la contencion de leer todos los asientos de tienda en cada abono (rendimiento, no
+  dinero) y la precondicion sobre las retenciones en las correcciones (el siguiente corte lo corrige solo).
