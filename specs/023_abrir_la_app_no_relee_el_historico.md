@@ -1,6 +1,6 @@
 # Spec 023: Abrir la app no relee el histórico
 
-- **Estado:** aprobada (fases A y B, por el responsable, 2026-11-10)
+- **Estado:** aprobada y desplegada (fases A y B, 2026-11-10); falta la medicion de 3 dias (DoD 4)
 - **Autor:** Claude, a petición del responsable de la plataforma
 - **Fecha:** 2026-10-01
 - **Origen:** revisión de la subida del costo de Google Cloud, hecha el 2026-10-01 desde
@@ -186,6 +186,8 @@ necesita el histórico completo (spec 018) y esas rutas se piden pocas veces.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-10-01 | Borrador inicial | Subida del costo de Google Cloud: las lecturas se duplicaron de agosto a septiembre |
+| 2026-11-10 | Fase B desplegada (8 indices, backfill de 7 asientos, `getPlatformPosition` por sumas, hosting) | Visto bueno del responsable; evidencia en `.sdd/evidence/023/baseline.md` |
+| 2026-11-10 | Fase A desplegada (`storeApi`) | Visto bueno del responsable |
 | 2026-11-10 | Aprobada A y B juntas; GraphQL se mantiene para evaluarlo en el plan de la fase B | Decisión del responsable |
 | 2026-11-10 | Línea base nueva (1.1), fase A (RF_09–RF_12, RNF_04) antes de la fase B | La medición atribuye el 66–80 % de las lecturas a `GET /orders` de la API de tiendas, no a abrir la app |
 
