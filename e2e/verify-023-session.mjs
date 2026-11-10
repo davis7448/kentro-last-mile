@@ -16,6 +16,7 @@
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const EVIDENCE = path.join(ROOT, ".sdd/evidence/023");
+// El texto y las capturas de pantalla llevan nombres de tiendas y cifras reales: NO van al repositorio.
+const RAW = process.env.VERIFY_RAW_DIR || path.join(os.tmpdir(), "kentro-verify-023");
+fs.mkdirSync(RAW, { recursive: true });
 const [, , BEFORE_DIR, AFTER_DIR] = process.argv;
 if (!BEFORE_DIR || !AFTER_DIR) {
   console.error("uso: node e2e/verify-023-session.mjs <dir-antes> <dir-despues>");
@@ -44,8 +48,8 @@ async function isUp(url) {
 }
 
 async function startNextDev(dir, port, label) {
-  const child = spawn("npx", ["next", "dev", "-p", String(port)], { cwd: dir, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=1536" } });
-  const log = fs.createWriteStream(path.join(EVIDENCE, `next-dev-${label}.log`));
+  const child = spawn("npx", ["next", "dev", "--webpack", "-p", String(port)], { cwd: dir, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=1536" } });
+  const log = fs.createWriteStream(path.join(RAW, `next-dev-${label}.log`));
   child.stdout.pipe(log);
   child.stderr.pipe(log);
   const url = `http://localhost:${port}`;
@@ -97,9 +101,15 @@ async function readScreens(url, account) {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 240000 });
     await page.getByRole("button", { name: "Entrar" }).waitFor({ state: "visible", timeout: 240000 });
-    await page.waitForTimeout(1500);
-    await page.getByLabel("Email").fill(account.email);
-    await page.getByLabel("Contrasena").fill(account.password);
+    // Con webpack en dev la hidratacion llega tarde y se come lo escrito: se comprueba y se repite.
+    await page.waitForLoadState("networkidle", { timeout: 240000 }).catch(() => undefined);
+    await page.waitForTimeout(5000);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.getByLabel("Email").fill(account.email);
+      await page.getByLabel("Contrasena").fill(account.password);
+      await page.waitForTimeout(1000);
+      if ((await page.getByLabel("Email").inputValue()) === account.email && (await page.getByLabel("Contrasena").inputValue()) === account.password) break;
+    }
     await page.getByRole("button", { name: "Entrar" }).click();
     await page.getByRole("button", { name: /Liquidaciones|Cortes/ }).first().waitFor({ timeout: 240000 });
     await page.waitForTimeout(8000);
@@ -126,7 +136,11 @@ async function readScreens(url, account) {
     await page.waitForFunction(() => !/Cargando los movimientos del periodo/.test(document.body.innerText), null, { timeout: 180000 });
     await page.waitForTimeout(3000);
     screens.period = normalize(await page.locator("main").innerText());
-    await page.screenshot({ path: path.join(EVIDENCE, `liquidaciones-periodo-${account.label}.png`), fullPage: false });
+    await page.screenshot({ path: path.join(RAW, `liquidaciones-periodo-${account.label}.png`), fullPage: false });
+  } catch (error) {
+    await page.screenshot({ path: path.join(RAW, `fallo-${account.label}.png`) }).catch(() => undefined);
+    console.error(`[${account.label}] texto de la pagina al fallar:\n`, (await page.locator("body").innerText().catch(() => "")).slice(0, 1500));
+    throw error;
   } finally {
     await browser.close();
   }
@@ -141,7 +155,8 @@ const report = { at: new Date().toISOString(), runs: {} };
 try {
   await auth.createUser({ uid: account.uid, email: account.email, password: account.password, displayName: "Verify 023 admin (desechable)" });
   await auth.setCustomUserClaims(account.uid, { role: "admin" });
-  for (const [label, dir, port] of [["antes", BEFORE_DIR, 3124], ["despues", AFTER_DIR, 3123]]) {
+  const only = process.env.ONLY;
+  for (const [label, dir, port] of [["antes", BEFORE_DIR, 3124], ["despues", AFTER_DIR, 3123]].filter(([label]) => !only || label === only)) {
     const server = await startNextDev(dir, port, label);
     try {
       report.runs[label] = await readScreens(server.url, { ...account, label });
@@ -168,7 +183,7 @@ const diff = (a, b) => {
 };
 report.comparacion = Object.fromEntries(["payable", "closed", "period"].map((key) => [key, before[key] === after[key] ? "igual" : diff(before[key], after[key])]));
 for (const label of ["antes", "despues"]) {
-  for (const key of ["payable", "closed", "period"]) fs.writeFileSync(path.join(EVIDENCE, `pantalla-${key}-${label}.txt`), report.runs[label].screens[key] ?? "");
+  for (const key of ["payable", "closed", "period"]) fs.writeFileSync(path.join(RAW, `pantalla-${key}-${label}.txt`), report.runs[label].screens[key] ?? "");
   delete report.runs[label].screens;
 }
 fs.writeFileSync(path.join(EVIDENCE, "phase-b-session.json"), JSON.stringify(report, null, 2));

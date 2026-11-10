@@ -125,3 +125,44 @@ con rango desde junio, que cubre toda su tienda: esas no ahorran. Los picos de 1
 `verify-023.js compare`, que lee con los cargadores de antes.
 
 **Falta para el DoD 4:** 3 días completos de la métrica por hora, comparados con esta línea base.
+
+## Fase B: comprobacion contra produccion (2026-11-10, antes de desplegar)
+
+**Datos** (`node scripts/verify-023-admin.js`, salida en `phase-b-compare.txt`). Lanza las mismas consultas que el
+navegador y las compara con el libro entero. Las 8 comprobaciones dan **igual**:
+- lo abierto de "Por pagar" (4.995 asientos);
+- los asientos de los 97 pedidos de domiciliario pendientes;
+- el saldo de las 35 tiendas;
+- los 110 cortes cerrados, en 11 paginas;
+- 4 rangos del periodo;
+- las 15 cifras de la posicion, calculadas con sumas de Firestore.
+
+Antes del backfill salian distintos "lo abierto" y el saldo de 2 tiendas. La causa eran los 7 asientos sin
+`settlementId` que escribio un script manual el 2026-11-04; el backfill del mismo dia los arreglo.
+
+**Pantalla** (`node e2e/verify-023-session.mjs`). Prueba A/B: el commit de la fase A frente al de la fase B, con
+una cuenta admin desechable y todas las escrituras abortadas. Compara el texto de Liquidaciones: "Por pagar" con
+los paneles abiertos, "Cortes cerrados" y "Resumen del periodo". Los volcados llevan nombres reales, asi que se
+guardan fuera del repositorio (`backups/evidence-023/` del checkout principal).
+
+**La tabla de cortes cerrados es identica.** Todas las demas diferencias vienen de UN pedido que se entrego
+entre las dos pasadas: `shopify-18982422937713`, a las 16:23:37 UTC, con COD 89.900, flete 13.500 y pago al
+domiciliario 11.000. Esto es lo que cambia, y todo sale de ese pedido:
+
+| Cifra | Cambio |
+|---|---:|
+| COD del periodo | +89.900 |
+| Cobros del periodo | +13.500 |
+| Pago al domiciliario | +11.000 |
+| Margen | +2.500 |
+| Entregados | +1 |
+| Por pagar a tiendas | +76.400 |
+| Domiciliarios deben entregar | +78.900 |
+
+| Abrir la app como admin | Antes | Despues |
+|---|---:|---:|
+| Asientos de wallet que baja | 19.479 | 1.155 (1.152 sin liquidar + 3 cobros de manejo) |
+| Base lista (`next dev`, VPS) | 10,8 s | 1,7 s |
+
+En las dos versiones la app intento 8 escrituras a Firestore al entrar, y la prueba las aborto. Es el
+autoguardado del admin descrito en la memoria "autoguardado-admin-pisa-tarifas", anterior a esta spec.

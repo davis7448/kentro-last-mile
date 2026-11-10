@@ -1,0 +1,225 @@
+{
+  "at": "2026-11-10T16:22:04.884Z",
+  "runs": {
+    "antes": {
+      "perf": [
+        "[Kentro perf] orders listo en 10267 ms (807 docs)",
+        "[Kentro perf] orders listo en 10282 ms (162 docs)",
+        "[Kentro perf] inventory listo en 10283 ms (2 docs)",
+        "[Kentro perf] suppliers listo en 10283 ms (4 docs)",
+        "[Kentro perf] productCatalog listo en 10286 ms (120 docs)",
+        "[Kentro perf] shopifyStores listo en 10287 ms (6 docs)",
+        "[Kentro perf] storeWebhookConfigs listo en 10287 ms (19 docs)",
+        "[Kentro perf] shopifyInstallRequests listo en 10287 ms (5 docs)",
+        "[Kentro perf] shopifySyncIssues listo en 10290 ms (200 docs)",
+        "[Kentro perf] messengers listo en 10291 ms (8 docs)",
+        "[Kentro perf] pickupBatches listo en 10298 ms (391 docs)",
+        "[Kentro perf] wallet listo en 10737 ms (19479 docs)",
+        "[Kentro perf] settlements listo en 10765 ms (110 docs)",
+        "[Kentro perf] payouts listo en 10766 ms (3 docs)",
+        "[Kentro perf] base ligera lista en 10780 ms"
+      ],
+      "blocked": {
+        "firestoreWrites": 8,
+        "callables": []
+      }
+    },
+    "despues": {
+      "perf": [
+        "[Kentro perf] orders listo en 1601 ms (806 docs)",
+        "[Kentro perf] orders listo en 1611 ms (163 docs)",
+        "[Kentro perf] inventory listo en 1612 ms (2 docs)",
+        "[Kentro perf] suppliers listo en 1613 ms (4 docs)",
+        "[Kentro perf] productCatalog listo en 1616 ms (120 docs)",
+        "[Kentro perf] shopifyStores listo en 1617 ms (6 docs)",
+        "[Kentro perf] storeWebhookConfigs listo en 1617 ms (19 docs)",
+        "[Kentro perf] shopifyInstallRequests listo en 1618 ms (5 docs)",
+        "[Kentro perf] shopifySyncIssues listo en 1621 ms (200 docs)",
+        "[Kentro perf] messengers listo en 1622 ms (8 docs)",
+        "[Kentro perf] pickupBatches listo en 1627 ms (391 docs)",
+        "[Kentro perf] wallet listo en 1642 ms (1152 docs)",
+        "[Kentro perf] wallet listo en 1642 ms (3 docs)",
+        "[Kentro perf] settlements listo en 1655 ms (110 docs)",
+        "[Kentro perf] payouts listo en 1656 ms (3 docs)",
+        "[Kentro perf] base ligera lista en 1670 ms"
+      ],
+      "blocked": {
+        "firestoreWrites": 8,
+        "callables": []
+      }
+    }
+  },
+  "comparacion": {
+    "payable": [
+      {
+        "linea": 5,
+        "antes": "$ 11.212.231",
+        "despues": "$ 11.291.131"
+      },
+      {
+        "linea": 13,
+        "antes": "$ 8.200.190",
+        "despues": "$ 8.279.090"
+      },
+      {
+        "linea": 15,
+        "antes": "$ 8.202.330",
+        "despues": "$ 8.278.730"
+      },
+      {
+        "linea": 27,
+        "antes": "Por cobrar al domiciliario: $ 9.020.085",
+        "despues": "Por cobrar al domiciliario: $ 9.098.985"
+      },
+      {
+        "linea": 28,
+        "antes": "en cortes $ 819.895 · COD sin corte $ 8.200.190",
+        "despues": "en cortes $ 819.895 · COD sin corte $ 8.279.090"
+      },
+      {
+        "linea": 30,
+        "antes": "Por pagar a tiendas: $ 11.176.643",
+        "despues": "Por pagar a tiendas: $ 11.253.043"
+      },
+      {
+        "linea": 35,
+        "antes": "Cobros a tiendas: $ 63.627.000",
+        "despues": "Cobros a tiendas: $ 63.640.500"
+      },
+      {
+        "linea": 36,
+        "antes": "Pago a domiciliarios: $ 51.396.000",
+        "despues": "Pago a domiciliarios: $ 51.407.000"
+      },
+      {
+        "linea": 37,
+        "antes": "Utilidad acumulada: $ 12.231.000",
+        "despues": "Utilidad acumulada: $ 12.233.500"
+      },
+      {
+        "linea": 38,
+        "antes": "Activos - obligaciones: $ 26.847.689",
+        "despues": "Activos - obligaciones: $ 26.850.189"
+      },
+      {
+        "linea": 51,
+        "antes": "$ 26.847.689",
+        "despues": "$ 26.850.189"
+      },
+      {
+        "linea": 123,
+        "antes": "Domiciliario\t97 · 93/3\t$ 8.200.190\t$ 0\t-$ 0\t-$ 8.200.190\t$ 0\tpendiente",
+        "despues": "Domiciliario\t98 · 94/3\t$ 8.279.090\t$ 0\t-$ 0\t-$ 8.279.090\t$ 0\tpendiente"
+      },
+      {
+        "linea": 127,
+        "antes": "105 esperando que se marque el dinero recibido",
+        "despues": "106 esperando que se marque el dinero recibido"
+      },
+      {
+        "linea": 130,
+        "antes": "105 pedidos",
+        "despues": "106 pedidos"
+      },
+      {
+        "linea": 192,
+        "antes": "105 registros · pagina 1 de 11",
+        "despues": "106 registros · pagina 1 de 11"
+      }
+    ],
+    "closed": [
+      {
+        "linea": 5,
+        "antes": "$ 11.212.231",
+        "despues": "$ 11.291.131"
+      },
+      {
+        "linea": 13,
+        "antes": "$ 8.200.190",
+        "despues": "$ 8.279.090"
+      },
+      {
+        "linea": 15,
+        "antes": "$ 8.202.330",
+        "despues": "$ 8.278.730"
+      }
+    ],
+    "period": [
+      {
+        "linea": 5,
+        "antes": "$ 11.212.231",
+        "despues": "$ 11.291.131"
+      },
+      {
+        "linea": 13,
+        "antes": "$ 8.200.190",
+        "despues": "$ 8.279.090"
+      },
+      {
+        "linea": 15,
+        "antes": "$ 8.202.330",
+        "despues": "$ 8.278.730"
+      },
+      {
+        "linea": 29,
+        "antes": "$ 35.712.600",
+        "despues": "$ 35.802.500"
+      },
+      {
+        "linea": 31,
+        "antes": "$ 5.029.500",
+        "despues": "$ 5.043.000"
+      },
+      {
+        "linea": 33,
+        "antes": "$ 3.954.000",
+        "despues": "$ 3.965.000"
+      },
+      {
+        "linea": 35,
+        "antes": "$ 1.075.500",
+        "despues": "$ 1.078.000"
+      },
+      {
+        "linea": 39,
+        "antes": "Entregados: 364",
+        "despues": "Entregados: 365"
+      },
+      {
+        "linea": 41,
+        "antes": "Total cerrados: 382",
+        "despues": "Total cerrados: 383"
+      },
+      {
+        "linea": 43,
+        "antes": "Entregas: $ 4.813.500",
+        "despues": "Entregas: $ 4.827.000"
+      },
+      {
+        "linea": 46,
+        "antes": "Total cobrado: $ 5.029.500",
+        "despues": "Total cobrado: $ 5.043.000"
+      },
+      {
+        "linea": 48,
+        "antes": "Entregas: $ 3.825.000",
+        "despues": "Entregas: $ 3.836.000"
+      },
+      {
+        "linea": 50,
+        "antes": "Total pagado: $ 3.954.000",
+        "despues": "Total pagado: $ 3.965.000"
+      },
+      {
+        "linea": 51,
+        "antes": "Margen operativo plataforma: $ 1.075.500",
+        "despues": "Margen operativo plataforma: $ 1.078.000"
+      },
+      {
+        "linea": 56,
+        "antes": "386",
+        "despues": "387"
+      }
+    ]
+  }
+}
