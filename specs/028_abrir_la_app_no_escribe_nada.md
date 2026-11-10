@@ -1,9 +1,10 @@
 # Spec 028: Abrir la app como administrador no escribe nada
 
-- **Estado:** borrador, pendiente de aprobacion del responsable
+- **Estado:** aprobada
 - **Autor:** Claude (prueba E2E de la spec 023, 2026-11-10)
 - **Fecha:** 2026-11-10
-- **Aprobada por:** —
+- **Aprobada por:** el responsable, 2026-11-10 ("Aprobar spec 028"), sobre el borrador del mismo dia. P1 y P2
+  siguen sin responder; no bloquean la implementacion porque la spec no toca valores (RNF_04).
 - **Origen:** la prueba E2E de la spec 023 con una cuenta admin desechable aborto 8 intentos de escritura al
   abrir la app sin tocar nada, igual en la version anterior y en la nueva. Ya se habia visto en octubre
   (memoria "autoguardado-admin-pisa-tarifas", spec 028 sin archivo hasta hoy).
@@ -167,3 +168,4 @@ nunca a Firestore.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-11-10 | Borrador inicial con la medicion de produccion | Prueba E2E de la 023: 8 escrituras al abrir como admin |
+| 2026-11-10 | Aprobada | "Aprobar spec 028" del responsable |
