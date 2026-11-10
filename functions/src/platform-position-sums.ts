@@ -178,7 +178,9 @@ async function countOf(query: Query): Promise<number> {
  *
  * Indices que necesita (todos en `firestore.indexes.json`, spec 023): `walletEntries`
  * (ownerType, settlementId, amountCop), (ownerType, type, amountCop), (ownerType, type, orderId, amountCop),
- * (ownerType, type, supplierSettlementId, amountCop), (ownerType, type, supplierSettlementId, supplierId, amountCop).
+ * (ownerType, type, supplierSettlementId, amountCop), (ownerType, type, supplierSettlementId, supplierId, amountCop),
+ * y para los conteos con desigualdad, sin el campo de suma (uno que acabe en amountCop no les sirve):
+ * (ownerType, settlementId), (ownerType, type, supplierSettlementId), (ownerType, type, supplierSettlementId, supplierId).
  */
 export async function loadPositionSums(
   db: Firestore,

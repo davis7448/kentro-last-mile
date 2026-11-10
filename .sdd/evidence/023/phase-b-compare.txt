@@ -1,22 +1,22 @@
-┌─────────┬───────────────────────────────────────────────────────────────────────────┬─────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ (index) │ comprobacion                                                              │ resultado   │ detalle                                                                                                                                                                                               │
-├─────────┼───────────────────────────────────────────────────────────────────────────┼─────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 0       │ 'Por pagar: asientos abiertos'                                            │ 'DISTINTO'  │ '4991 asientos'                                                                                                                                                                                       │
-│ 1       │ 'Por pagar: asientos de tienda de los pedidos de domiciliario pendientes' │ 'igual'     │ '96 pedidos'                                                                                                                                                                                          │
-│ 2       │ 'Por pagar: saldo de cada tienda (spec 018)'                              │ 'DISTINTO'  │ '35 tiendas, 2 distintas'                                                                                                                                                                             │
-│ 3       │ 'Cortes cerrados: asientos de cada corte y de sus pedidos'                │ 'igual'     │ '110 cortes en 11 paginas, 0 distintos'                                                                                                                                                               │
-│ 4       │ 'Cortes cerrados: los asientos we-{pedido}-... son de ese pedido'         │ 'igual'     │ '0 excepciones'                                                                                                                                                                                       │
-│ 5       │ 'Resumen del periodo: asientos del rango'                                 │ 'igual'     │ '4 rangos'                                                                                                                                                                                            │
-│ 6       │ 'Posicion: sumas (gemelo en memoria) contra lectura completa'             │ 'igual'     │ ''                                                                                                                                                                                                    │
-│ 7       │ 'Posicion: sumas de Firestore'                                            │ 'PENDIENTE' │ 'sumas de Firestore no disponibles: 9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/kentro-last-mile/firestore/indexes?' │
-└─────────┴───────────────────────────────────────────────────────────────────────────┴─────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────┬───────────────────────────────────────────────────────────────────────────┬───────────┬─────────────────────────────────────────┐
+│ (index) │ comprobacion                                                              │ resultado │ detalle                                 │
+├─────────┼───────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────────────────┤
+│ 0       │ 'Por pagar: asientos abiertos'                                            │ 'igual'   │ '4995 asientos'                         │
+│ 1       │ 'Por pagar: asientos de tienda de los pedidos de domiciliario pendientes' │ 'igual'   │ '97 pedidos'                            │
+│ 2       │ 'Por pagar: saldo de cada tienda (spec 018)'                              │ 'igual'   │ '35 tiendas, 0 distintas'               │
+│ 3       │ 'Cortes cerrados: asientos de cada corte y de sus pedidos'                │ 'igual'   │ '110 cortes en 11 paginas, 0 distintos' │
+│ 4       │ 'Cortes cerrados: los asientos we-{pedido}-... son de ese pedido'         │ 'igual'   │ '0 excepciones'                         │
+│ 5       │ 'Resumen del periodo: asientos del rango'                                 │ 'igual'   │ '4 rangos'                              │
+│ 6       │ 'Posicion: sumas (gemelo en memoria) contra lectura completa'             │ 'igual'   │ ''                                      │
+│ 7       │ 'Posicion: sumas de Firestore contra lectura completa (cifras de dinero)' │ 'igual'   │ ''                                      │
+└─────────┴───────────────────────────────────────────────────────────────────────────┴───────────┴─────────────────────────────────────────┘
 {
-  "at": "2026-11-10T15:44:29.383Z",
-  "libroEntero": 19475,
+  "at": "2026-11-10T16:02:51.863Z",
+  "libroEntero": 19479,
   "lecturas": {
-    "abrirLaAppAntes": 19475,
-    "abrirLaAppAhora": 1140,
-    "liquidacionesPorPagar": 4497,
+    "abrirLaAppAntes": 19479,
+    "abrirLaAppAhora": 1151,
+    "liquidacionesPorPagar": 4503,
     "cortesCerradosPorPagina": [
       2972,
       2382,
@@ -30,24 +30,24 @@
       2924,
       1583
     ],
-    "periodoCuatroRangos": 6247
+    "periodoCuatroRangos": 6255
   },
-  "posicion": "sumas de Firestore no disponibles: 9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/kentro-last-mile/firestore/indexes?",
+  "posicion": "nombres de proveedor: antes [sup-1781914882801=ADMA LABORATORIO, sup-1781914554522=ADMA COMPANY], ahora [sup-1781914882801=ADMA LABORATORIO, sup-1781914554522=ADMA COMPANY]",
   "results": [
     {
       "comprobacion": "Por pagar: asientos abiertos",
-      "resultado": "DISTINTO",
-      "detalle": "4991 asientos"
+      "resultado": "igual",
+      "detalle": "4995 asientos"
     },
     {
       "comprobacion": "Por pagar: asientos de tienda de los pedidos de domiciliario pendientes",
       "resultado": "igual",
-      "detalle": "96 pedidos"
+      "detalle": "97 pedidos"
     },
     {
       "comprobacion": "Por pagar: saldo de cada tienda (spec 018)",
-      "resultado": "DISTINTO",
-      "detalle": "35 tiendas, 2 distintas"
+      "resultado": "igual",
+      "detalle": "35 tiendas, 0 distintas"
     },
     {
       "comprobacion": "Cortes cerrados: asientos de cada corte y de sus pedidos",
@@ -70,9 +70,9 @@
       "detalle": ""
     },
     {
-      "comprobacion": "Posicion: sumas de Firestore",
-      "resultado": "PENDIENTE",
-      "detalle": "sumas de Firestore no disponibles: 9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/kentro-last-mile/firestore/indexes?"
+      "comprobacion": "Posicion: sumas de Firestore contra lectura completa (cifras de dinero)",
+      "resultado": "igual",
+      "detalle": ""
     }
   ]
 }
