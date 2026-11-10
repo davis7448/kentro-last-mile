@@ -180,6 +180,18 @@ nunca a Firestore.
     (`stl-1792422938736-…`, dos pagos; `stl-1794012264268-…`, uno) y uno en el corte pendiente
     `stl-1794233484852-…`. Por la regla 10 de la constitucion, los conciliados no se reescriben: se compensan en
     el periodo abierto. Esa correccion **no se ha hecho**; espera decision del responsable.
+  - *2026-11-10, el responsable aprueba compensar; se detiene antes de escribir.* Un asiento de compensacion
+    **no mueve el efectivo del domiciliario**. `computeDriverCashSummary` calcula lo que debe entregar por
+    pedido como `max(0, COD - pagos)`, sumando TODOS los asientos del pedido, tambien los ya cortados.
+    - En los 3 fallidos (COD 0) un `driver_earning` de -1.000 no cambia lo esperado y solo descuadra el
+      `driverPayCop` mostrado.
+    - Sin `orderId` no entra en el calculo.
+    - En #193210 (entregado, corte **pendiente** `stl-1794233484852-…`), una reversa que caiga en un corte nuevo
+      volveria a esperar su COD entero: es el doble cobro de la memoria `auditar-abonos-domiciliario`.
+
+    Lo unico limpio es recalcular el corte pendiente de #193210 con el pago a 8.000, que sube lo esperado en
+    1.000. Ademas, esa misma memoria midio que este domiciliario lleva entregados unos 369.000 **de mas** en todo
+    su historial: los 4.000 de mas quedan dentro de un saldo que ya es a su favor.
   - *Hallazgo al margen:* las tres zonas (`zone-center`, `zone-north`, `zone-south`) tienen 9.000 / 9.000 para el
     domiciliario, y ganan a `settings/global`. Desde el 2026-10-11 solo un pedido con zona (`ord-knt-007112`,
     9.000) uso esa tarifa. Si "solo DANDA tiene un valor diferente", las zonas tambien estan mal configuradas.
