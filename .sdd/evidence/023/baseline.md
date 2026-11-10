@@ -109,3 +109,19 @@ de Infinito, casi todas de un día):
 
 `/resumen` (25 llamadas/semana de DANDA, 19.148 lecturas cada una, ~70.000/día) no cambia en la fase A:
 el saldo necesita el histórico (spec 018).
+
+## Primera hora en producción (despliegue de `storeApi`, revisión `storeapi-00035-rah`, 2026-11-10 14:40 UTC)
+
+Lecturas en el tramo de 10 min que contiene la consulta horaria de las integraciones (`:00`–`:06`):
+
+| Hora UTC | Revisión | Lecturas en el tramo |
+|---|---|---:|
+| 13:00–13:06 | antes | 83.039 |
+| 14:00–14:06 | antes | 77.983 |
+| 15:00–15:06 | **después** | **16.234** |
+
+Las 11 llamadas de las 15:00 respondieron 200, entre 0,3 y 1,4 s, y no hubo errores. Dos de ellas son de Kovia
+con rango desde junio, que cubre toda su tienda: esas no ahorran. Los picos de 14:36 y 14:46 se deben a
+`verify-023.js compare`, que lee con los cargadores de antes.
+
+**Falta para el DoD 4:** 3 días completos de la métrica por hora, comparados con esta línea base.
