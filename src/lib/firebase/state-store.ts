@@ -19,7 +19,7 @@ import {
   type Query
 } from "firebase/firestore";
 import { selectUnsettledWalletEntries } from "@/lib/finance";
-import { mergeCommunitySellers, type LoadReport } from "../load-status";
+import { mergeCommunitySellers, type LoadIssue, type LoadReport } from "../load-status";
 import { emptyState } from "@/lib/seed";
 import type { AppState, AuditEvent, CashSnapshot, City, Community, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
@@ -631,13 +631,16 @@ export function subscribeFirestoreState(
               { key: "shopifySyncIssues", target: query(shopifySyncIssueRef, orderBy("createdAt", "desc"), limitTo(SYNC_ISSUES_LIMIT)) },
               { key: "messengers", target: messengerRef },
               { key: "pickupBatches", target: pickupBatchRef },
-              // El admin SI necesita el ledger completo: calculatePlatformPosition deriva caja,
-              // activos, pasivos y utilidad de los movimientos YA liquidados (lo pagado en cortes
-              // cerrados, los abonos, los fees historicos), y receivedDriverOrderIds tiene un
-              // fallback que lee asientos de cortes aun no cerrados. Recortarlo a lo pendiente
-              // daba cifras mal. El coste queda amortizado por la cache persistente: se baja una
-              // vez por dispositivo y despues solo llegan los cambios.
-              { key: "wallet", target: walletRef },
+              // Spec 023 RF_01: solo lo SIN liquidar (~1.100 asientos, no crece con el historico). Antes
+              // era la coleccion entera (19.400 en nov-2026), que se volvia a pagar en cada apertura.
+              // Lo historico se pide por pantalla y bajo demanda: la posicion de la plataforma al
+              // servidor (`getPlatformPosition`), y los asientos de un corte, de un rango o de unos
+              // pedidos con `fetchWalletEntries*`. Espejo: `getWalletForContext`.
+              { key: "wallet", target: query(walletRef, where("settlementId", "==", "")) },
+              // Los cobros de manejo de bodega, liquidados o no: el saldo de cada tienda (spec 018) solo
+              // necesita saber que EXISTEN para no retener dos veces el de un pedido en la calle. Son
+              // pocos (3 en nov-2026) y la union por clave los junta con lo de arriba.
+              { key: "wallet", target: query(walletRef, where("type", "==", "fulfillment_fee")) },
               { key: "settlements", target: settlementRef },
               // Sin esto una solicitud de liquidacion nueva no le aparece al admin hasta que
               // recargue: exactamente el sintoma que este flujo venia a arreglar.
@@ -658,6 +661,8 @@ export function subscribeFirestoreState(
   // consta que falte nada: dar por rota la mitad de comunidad antes de pedirla seria inventarse un
   // fallo. Cada emision lo reenvia tal cual, asi que el aviso no depende de cuando se pinte.
   let baseReport: LoadReport = { issues: [] };
+  // Incidencias de los listeners (spec 023 RF_04). Se suman al parte de la carga base en cada emision.
+  const liveIssues = new Set<LoadIssue>();
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -783,7 +788,7 @@ export function subscribeFirestoreState(
     rememberRemoteCollections(next);
 
     const paintedAt = Date.now();
-    onState(next, baseReport);
+    onState(next, liveIssues.size === 0 ? baseReport : { issues: [...baseReport.issues, ...[...liveIssues].filter((issue) => !baseReport.issues.includes(issue))] });
     // React renderiza de forma sincrona dentro de setState, asi que este delta
     // aproxima el coste de render del arbol completo.
     perfLog(`emit #${++emitCount} render ${Date.now() - paintedAt} ms`);
@@ -831,6 +836,12 @@ export function subscribeFirestoreState(
       },
       (error) => {
         console.warn("No se pudo sincronizar una coleccion de Live.", error.message);
+        // Spec 023 RF_04: si el listener de la wallet cae, sus cifras se quedan en cero (la carga base
+        // la omite porque la trae el listener). Eso no puede verse como "no se debe nada": se avisa.
+        if (entry.key === "wallet" && !liveIssues.has("wallet_unavailable")) {
+          liveIssues.add("wallet_unavailable");
+          scheduleEmit();
+        }
       }
     )
   );
@@ -989,6 +1000,97 @@ export async function fetchWalletHistoryPage(
   );
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Spec 023: asientos historicos bajo demanda. ESTRICTOS a proposito: a diferencia de
+// `getDocumentsByIds`, un lote que falla hace fallar la llamada entera. Con estos asientos se
+// calculan cifras de dinero, y un lote perdido en silencio las bajaria sin aviso (RF_04).
+// ---------------------------------------------------------------------------------------------------
+
+function chunkIds(ids: string[]): string[][] {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  const chunks: string[][] = [];
+  for (let index = 0; index < unique.length; index += IN_QUERY_LIMIT) chunks.push(unique.slice(index, index + IN_QUERY_LIMIT));
+  return chunks;
+}
+
+function requireClient() {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta disponible.");
+  return client;
+}
+
+/** Todos los asientos (de cualquier dueno) de estos pedidos. */
+export async function fetchWalletEntriesByOrderIds(orderIds: string[]): Promise<WalletEntry[]> {
+  const client = requireClient();
+  const groups = await Promise.all(
+    chunkIds(orderIds).map((chunk) =>
+      getDocs(query(collection(client.db, "walletEntries"), where("orderId", "in", chunk))).then((snapshot) =>
+        snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry)
+      )
+    )
+  );
+  return mergeById(...groups);
+}
+
+/** Asientos por id. Un id que no existe simplemente no vuelve; un lote que falla, falla. */
+export async function fetchWalletEntriesByIds(entryIds: string[]): Promise<WalletEntry[]> {
+  const client = requireClient();
+  const groups = await Promise.all(
+    chunkIds(entryIds).map((chunk) =>
+      getDocs(query(collection(client.db, "walletEntries"), where(documentId(), "in", chunk))).then((snapshot) =>
+        snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry)
+      )
+    )
+  );
+  return mergeById(...groups);
+}
+
+/**
+ * Asientos con `createdAt` en [start, end] (fechas `YYYY-MM-DD`; `start` vacio = desde el principio). El
+ * texto ISO ordena por fecha, asi que `>= start` y `< dia siguiente a end` selecciona lo mismo que comparar
+ * el prefijo de fecha; quien llama vuelve a filtrar con su propia regla de rango.
+ */
+export async function fetchWalletEntriesInRange(start: string, end: string): Promise<WalletEntry[]> {
+  const client = requireClient();
+  const constraints = [] as Parameters<typeof query>[1][];
+  if (start) constraints.push(where("createdAt", ">=", start));
+  if (end) {
+    const next = new Date(`${end}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    constraints.push(where("createdAt", "<", next.toISOString().slice(0, 10)));
+  }
+  const snapshot = await getDocs(query(collection(client.db, "walletEntries"), ...constraints));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry);
+}
+
+/** Todos los asientos de un tipo (p. ej. `fulfillment_fee`, `community_cashback`, que son pocos). */
+export async function fetchWalletEntriesByType(type: WalletEntry["type"]): Promise<WalletEntry[]> {
+  const client = requireClient();
+  const snapshot = await getDocs(query(collection(client.db, "walletEntries"), where("type", "==", type)));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry);
+}
+
+/**
+ * Costos de producto aun sin pagar al proveedor (`supplierSettlementId == ""`), en vivo. Pueden estar ya
+ * liquidados con la tienda, asi que no vienen en la suscripcion de lo sin liquidar. Solo mientras la pagina
+ * de liquidaciones esta abierta.
+ */
+export function subscribeSupplierPendingCosts(
+  onEntries: (entries: WalletEntry[]) => void,
+  onError: (error: Error) => void
+): () => void {
+  const client = getFirebaseClient();
+  if (!client) {
+    onError(new Error("Firebase no esta disponible."));
+    return () => undefined;
+  }
+  return onSnapshot(
+    query(collection(client.db, "walletEntries"), where("type", "==", "product_cost"), where("supplierSettlementId", "==", "")),
+    (snapshot) => onEntries(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry)),
+    (error) => onError(error)
+  );
+}
+
 async function getOwnDocument<T extends { id: string }>(name: string, id: string): Promise<T[]> {
   const client = getFirebaseClient();
   if (!client) return [];
@@ -1130,7 +1232,13 @@ async function getWalletForContext(context?: FirestoreStateContext): Promise<Wal
   // funcion dejo de estar tapada por `skip` y sin esta rama caeria al `getCollection` final —
   // la coleccion ENTERA — que ademas le devolverian las reglas como 403.
   if (context?.role === "messenger" || context?.role === "seller_logistics" || context?.role === "community_leader") return Promise.resolve([]);
-  return getCollection<WalletEntry>("walletEntries");
+  // Spec 023 RF_01: el admin, igual que en la suscripcion: lo sin liquidar mas los cobros de manejo. Nunca
+  // la coleccion entera.
+  const [open, fulfillment] = await Promise.all([
+    getCollection<WalletEntry>("walletEntries", where("settlementId", "==", "")),
+    getCollection<WalletEntry>("walletEntries", where("type", "==", "fulfillment_fee"))
+  ]);
+  return mergeById(open, fulfillment);
 }
 
 /**
