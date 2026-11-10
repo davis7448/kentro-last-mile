@@ -155,6 +155,9 @@ nunca a Firestore.
   - *Respuesta (2026-11-10):* "Si, 8.000 y 8.000" para entrega y visita fallida del domiciliario. **P1 cerrada:**
     los valores de produccion de las tarifas del domiciliario son los correctos y la spec los protege. Con eso,
     los 4 pagos de 9.000 de P2 son, salvo otra regla, 1.000 de mas cada uno.
+  - *Aclaracion del responsable:* "solo DANDA tiene un valor diferente". Coincide con el codigo: DANDA
+    (`seller-1779315416119`) paga 10.000 u 11.000 por entrega y 0 por fallido (`resolveSellerCharges`). Los 4
+    pagos de 9.000 son de Bella Mujer (2) y Kovia (2), no de DANDA, asi que esa regla no los explica.
 - **P2:** ¿Se revisan ahora los 4 pagos de 9.000 al domiciliario en pedidos sin zona, o se dejan para despues
   de arreglar esto?
 
