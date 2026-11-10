@@ -166,3 +166,22 @@ domiciliario 11.000. Esto es lo que cambia, y todo sale de ese pedido:
 
 En las dos versiones la app intento 8 escrituras a Firestore al entrar, y la prueba las aborto. Es el
 autoguardado del admin descrito en la memoria "autoguardado-admin-pisa-tarifas", anterior a esta spec.
+
+## Medicion tras el despliegue: estado al 2026-11-10 17:20 UTC (incompleta)
+
+El DoD 4 pide 3 dias completos despues del despliegue. La fase B se desplego a las 16:35 UTC del 10-nov, asi que
+el primer dia limpio es el **11-nov** y la medicion completa se puede hacer **a partir del 14-nov** con
+`node scripts/measure-023-reads.js 21`.
+
+Lo de hoy no sirve como medida:
+- de 15:00 a 16:40 UTC hubo lecturas de las propias verificaciones de esta spec (`verify-023-admin.js` y la
+  prueba A/B leen el libro entero, ~30.000 cada pasada);
+- de 16:40 a 17:20 UTC la sesion de la spec 028 entro como admin contra produccion para medir sus escrituras.
+
+Unico dato util de hoy, el tramo de la consulta horaria de las tiendas (`:00` a `:06` UTC):
+
+| Tramo | Version | Lecturas |
+|---|---|---:|
+| 13:00-13:06 y 14:00-14:06 | antes | 83.039 / 77.983 |
+| 15:00-15:06 | fase A | 16.234 |
+| 17:00-17:08 | fases A y B (con las pruebas de la 028 en paralelo) | 31.731 |
