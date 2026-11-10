@@ -160,6 +160,29 @@ nunca a Firestore.
     pagos de 9.000 son de Bella Mujer (2) y Kovia (2), no de DANDA, asi que esa regla no los explica.
 - **P2:** ¿Se revisan ahora los 4 pagos de 9.000 al domiciliario en pedidos sin zona, o se dejan para despues
   de arreglar esto?
+  - *Revisado el 2026-11-10 a peticion del responsable (solo lectura).* Los 4 son del mismo domiciliario
+    (`driver-1778271901513`), de tiendas sin regla propia (Bella Mujer y Kovia) y sin zona. En ese mismo caso
+    (sin DANDA y sin zona) hay 228 pagos de 8.000 y solo estos 4 de 9.000. `resolveTariffs` solo puede dar 9.000
+    si `settings/global` decia 9.000 (o le faltaba el campo) en ese momento. Cruzado con las actualizaciones de
+    `settings/global` (ejecuciones de `onSettingsFloorRaise`), **cada 9.000 cae entre una actualizacion y la
+    siguiente, y ningun 8.000 cae en esos huecos:**
+
+    | Pago de 9.000 | Ultima actualizacion antes | Siguiente actualizacion | 8.000 alrededor |
+    |---|---|---|---|
+    | 2026-10-16 13:48:19 y 13:48:51 (fallidos #190267, #4258) | 2026-10-15 17:26:51 | 2026-10-16 14:11:52 | 10-15 16:26 antes; 10-16 15:26 despues |
+    | 2026-11-05 21:31:59 (fallido #4519) | 2026-11-05 21:31:12 (47 s antes) | 2026-11-05 21:47:38 | 20:21 antes |
+    | 2026-11-07 16:18:57 (entregado #193210) | 2026-11-07 14:58:33 | 2026-11-07 17:13:49 | 14:04 antes; 17:57 despues |
+
+    **Conclusion:** es lo que cabe esperar si el lote de fabrica de esta spec **si llego a guardarse** en sesiones
+    reales y se quedo puesto hasta que otro guardado repuso 8.000. No es una prueba directa (Firestore no guarda
+    versiones y no hay registros de acceso a datos), pero no hay otra regla en el codigo que de 9.000 aqui.
+    **Dinero:** 4 x 1.000 = **4.000 de mas** al domiciliario. Tres estan en cortes ya conciliados
+    (`stl-1792422938736-…`, dos pagos; `stl-1794012264268-…`, uno) y uno en el corte pendiente
+    `stl-1794233484852-…`. Por la regla 10 de la constitucion, los conciliados no se reescriben: se compensan en
+    el periodo abierto. Esa correccion **no se ha hecho**; espera decision del responsable.
+  - *Hallazgo al margen:* las tres zonas (`zone-center`, `zone-north`, `zone-south`) tienen 9.000 / 9.000 para el
+    domiciliario, y ganan a `settings/global`. Desde el 2026-10-11 solo un pedido con zona (`ord-knt-007112`,
+    9.000) uso esa tarifa. Si "solo DANDA tiene un valor diferente", las zonas tambien estan mal configuradas.
 
 ## 8. Definition of Done
 
