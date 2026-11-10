@@ -235,7 +235,10 @@ reescribir ningun corte cerrado.
   domiciliario (60 hoy); sus dos documentos de foto historica y retenciones; en la liquidacion de proveedor,
   los asientos de recaudo de los pedidos que va a pagar (para RF_11); y en una correccion, los cortes del
   domiciliario del pedido. Ninguna lectura necesita indices nuevos. Hoy ya se barren todos los movimientos de
-  tiendas y domiciliarios. *(Ampliado en analyze, aprobado por el responsable el 2026-11-09.)*
+  tiendas y domiciliarios. *(Ampliado en analyze, aprobado por el responsable el 2026-11-09.)* Por RF_01b, crear un
+  corte de domiciliario lee ademas el `driverId` (solo ese campo) de los pedidos de sus cortes: unos 4.840 hoy,
+  dentro de la misma transaccion que ya lee unos 10.000 asientos de tienda. Recalcular un corte no lee nada mas:
+  sus pedidos ya se leian. *(Enmienda del 2026-11-10, T25: ver plan §7.1.)*
 
 ## 5. Casos limite
 

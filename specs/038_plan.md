@@ -378,9 +378,12 @@ Diseno de cada arreglo:
 - De donde sale `deliveredBy`, sin leer de mas (RNF_04):
   - `orderMeta` ya trae los pedidos del corte (`recalculateDriverSettlement` los lee con `tx.getAll`; la
     correccion con `loadDriverCashInputs`); se le anade `driverId`.
-  - `pendingDeltaOrders` mira todos los pedidos de los cortes del domiciliario (4.821). Para no leerlos todos:
-    `createSettlement` calcula los candidatos sin el mapa (lo conservador: con el recaudo), lee con `tx.getAll`
-    SOLO esos pedidos y vuelve a calcular con su `driverId`. Un pedido que entregó otro sale de la lista.
+  - `pendingDeltaOrders` mira todos los pedidos de los cortes del domiciliario (4.821). **Corregido en T25:** la
+    idea de calcular primero sin el mapa y leer solo esos candidatos no vale, porque sin el dato NO sale un
+    superconjunto: un pedido que D1 entrego, que se le cobro y que luego entrego D2 tiene diferencia 0 sin el dato
+    y −100.000 con el, asi que se perderia justo el caso que importa. `createSettlement` lee el `driverId` (con
+    `fieldMask`) de todos los pedidos de los cortes del domiciliario y de sus asientos sin cortar
+    (`loadDeliveredBy`, en tandas de 300, dentro de la transaccion). RNF_04 lo recoge.
   - Los scripts (foto, compensacion, medicion) y el informe de la 026 ya leen los pedidos: pasan el mapa entero.
 - La compensacion (RF_13) marca `otherDriver: true` en una fila cuyo pedido tiene otro `driverId`, la deja fuera
   del total y la lista aparte (spec §5).

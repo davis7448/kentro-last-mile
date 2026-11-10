@@ -297,7 +297,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: el escenario H1 (D1 visita fallida, D2 entrega): D1 0 y su pedido no vuelve solo, D2 91.000;
     sin dato o con `driverId` nulo, como hoy; la propiedad de RNF_02 sigue en verde; los casos reales sin cambios
 
-- [ ] **T25: Los llamadores pasan quien entrego**
+- [x] **T25: Los llamadores pasan quien entrego**
   * Requisitos cubiertos: RF_01b, RNF_04
   * Archivos: functions/src/orders.ts, functions/src/driver-ledger-io.ts, functions/src/order-corrections.ts,
     functions/src/order-corrections-plan.ts, functions/src/cash-outstanding.ts, scripts/snapshot-038-baseline.js,

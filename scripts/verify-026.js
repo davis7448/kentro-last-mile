@@ -265,11 +265,13 @@ async function baseline() {
   const orderMeta = new Map(orders.map((order) => [order.id, { paymentMethod: order.paymentMethod, status: order.status, createdAt: order.createdAt, trackingCode: order.trackingCode }]));
   // Spec 038: el contexto de cada domiciliario (sus cortes, foto y retenciones). Solo lecturas.
   const ledgerEntries = [...sellerEntries, ...driverEntries];
+  // RF_01b: quien tiene asignado cada pedido del universo (los demas cuentan como hasta ahora).
+  const deliveredBy = new Map(orders.map((order) => [order.id, order.driverId || null]));
   const contextByDriver = new Map(
     await Promise.all(
       [...new Set(settlements.map((s) => s.ownerId))].map(async (driverId) => {
         const own = settlements.filter((s) => s.ownerId === driverId);
-        const derived = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: ledgerEntries, now: now.toISOString(), createdBy: "verify-026" }).context;
+        const derived = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: ledgerEntries, now: now.toISOString(), createdBy: "verify-026", deliveredBy }).context;
         const [baselineSnap, holdsSnap] = await Promise.all([
           db.collection("driverLedgerBaselines").doc(driverId).get(),
           db.collection("driverCashHolds").doc(driverId).get()
@@ -288,7 +290,8 @@ async function baseline() {
       entries: ledgerEntries,
       context: contextByDriver.get(s.ownerId),
       receivedCop,
-      orderMeta
+      orderMeta,
+      deliveredBy
     });
     const recalculatedPendingCop = Math.max(0, figures.cashExpectedCop - receivedCop);
     const hasField = typeof s.cashPendingCop === "number";

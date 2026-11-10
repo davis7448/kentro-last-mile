@@ -58,7 +58,7 @@ function parseArgs(argv) {
 }
 
 /** Un plan por domiciliario con cortes de domiciliario: su foto, sus retenciones y el total retenido. */
-function planSnapshots({ settlements, entries, now, createdBy, driverId = null }) {
+function planSnapshots({ settlements, entries, now, createdBy, driverId = null, deliveredBy }) {
   const { buildDriverLedgerSnapshot } = loadLedger();
   const byDriver = new Map();
   for (const settlement of settlements) {
@@ -70,7 +70,8 @@ function planSnapshots({ settlements, entries, now, createdBy, driverId = null }
     .sort()
     .map((id) => {
       const own = byDriver.get(id);
-      const snapshot = buildDriverLedgerSnapshot({ driverId: id, settlements: own, entries, now, createdBy });
+      // RF_01b: el recaudo de un pedido que tiene otro domiciliario no se le cuenta a este.
+      const snapshot = buildDriverLedgerSnapshot({ driverId: id, settlements: own, entries, now, createdBy, deliveredBy });
       return { driverId: id, baseline: snapshot.baseline, holds: snapshot.holds, totalHoldCop: snapshot.totalHoldCop, settlementCount: own.length };
     });
 }
@@ -109,12 +110,15 @@ const cop = (value) => `$${Math.round(value).toLocaleString("es-CO")}`;
 
 async function readProduction(db) {
   const docs = (snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const [settlements, cod, pay] = await Promise.all([
+  const [settlements, cod, pay, orders] = await Promise.all([
     db.collection("settlements").where("kind", "==", "driver").get().then(docs),
     db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", COD_TYPES).get().then(docs),
-    db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning").get().then(docs)
+    db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning").get().then(docs),
+    // RF_01b: quien tiene asignado cada pedido (solo el campo).
+    db.collection("orders").select("driverId").get()
   ]);
-  return { settlements, entries: [...cod, ...pay] };
+  const deliveredBy = new Map(orders.docs.map((doc) => [doc.id, doc.get("driverId") || null]));
+  return { settlements, entries: [...cod, ...pay], deliveredBy };
 }
 
 async function trackingCodes(db, orderIds) {
@@ -130,8 +134,8 @@ async function main() {
   const db = admin.firestore();
 
   const now = new Date().toISOString();
-  const { settlements, entries } = await readProduction(db);
-  const plans = planSnapshots({ settlements, entries, now, createdBy: args.approvedBy ?? "dry-run", driverId: args.driverId });
+  const { settlements, entries, deliveredBy } = await readProduction(db);
+  const plans = planSnapshots({ settlements, entries, now, createdBy: args.approvedBy ?? "dry-run", driverId: args.driverId, deliveredBy });
   const heldIds = plans.flatMap((plan) => plan.holds.holds.map((hold) => hold.orderId));
   const tracking = await trackingCodes(db, Array.from(new Set(heldIds)));
 

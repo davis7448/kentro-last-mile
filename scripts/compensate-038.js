@@ -86,9 +86,9 @@ function applyRefusal(args) {
 async function applyCompensation({ db, driverId, exclude, approval, load }) {
   const { planDriverCompensation, applyCompensationPlan } = requireLib(LEDGER_LIB);
   return db.runTransaction(async (tx) => {
-    const { context, entries } = await load(tx);
+    const { context, entries, deliveredBy } = await load(tx);
     if (!context.holds) throw new Error(`${driverId} no tiene documento de retenciones (${HOLDS}): no hay nada que compensar. Escribe antes la foto.`);
-    const plan = planDriverCompensation({ entries, context, exclude });
+    const plan = planDriverCompensation({ entries, context, exclude, deliveredBy });
     const { holds, audit } = applyCompensationPlan(context.holds, plan, approval);
     tx.set(db.collection(HOLDS).doc(driverId), holds);
     tx.create(db.collection(COMPENSATIONS).doc(approval.compensationId), audit);
@@ -108,7 +108,11 @@ function productionLoader(db, driverId) {
       reads.push(tx ? tx.get(query) : query.get());
     }
     const entries = (await Promise.all(reads)).flatMap((snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    return { context, entries };
+    // RF_01b: quien tiene asignado cada pedido retenido (solo el campo), por la transaccion si la hay.
+    const refs = heldIds.map((id) => db.collection("orders").doc(id));
+    const snaps = refs.length ? await (tx ? tx.getAll(...refs, { fieldMask: ["driverId"] }) : db.getAll(...refs, { fieldMask: ["driverId"] })) : [];
+    const deliveredBy = new Map(snaps.filter((snap) => snap.exists).map((snap) => [snap.id, snap.get("driverId") || null]));
+    return { context, entries, deliveredBy };
   };
 }
 
@@ -120,14 +124,16 @@ function productionLoader(db, driverId) {
 async function derivedContext(db, driverId) {
   const { buildDriverLedgerSnapshot } = requireLib(LEDGER_LIB);
   const docs = (snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const [settlements, cod, pay] = await Promise.all([
+  const [settlements, cod, pay, orders] = await Promise.all([
     db.collection("settlements").where("kind", "==", "driver").where("ownerId", "==", driverId).get().then(docs),
     db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", ["cod_revenue", "cod_remittance"]).get().then(docs),
-    db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning").get().then(docs)
+    db.collection("walletEntries").where("ownerType", "==", "driver").where("type", "==", "driver_earning").get().then(docs),
+    db.collection("orders").select("driverId").get()
   ]);
   const entries = [...cod, ...pay];
-  const { context } = buildDriverLedgerSnapshot({ driverId, settlements, entries, now: new Date().toISOString(), createdBy: "derived-preview" });
-  return { context, entries };
+  const deliveredBy = new Map(orders.docs.map((doc) => [doc.id, doc.get("driverId") || null]));
+  const { context } = buildDriverLedgerSnapshot({ driverId, settlements, entries, now: new Date().toISOString(), createdBy: "derived-preview", deliveredBy });
+  return { context, entries, deliveredBy };
 }
 
 const cop = (value) => `$${Math.round(value).toLocaleString("es-CO")}`;
@@ -150,13 +156,13 @@ async function main() {
   // Sin foto escrita: se previsualiza con la que se escribiria ahora, y no se puede aplicar.
   const derived = !loaded || !loaded.context.holds;
   if (derived) loaded = await derivedContext(db, args.driverId);
-  const { context, entries } = loaded;
+  const { context, entries, deliveredBy } = loaded;
   const heldIds = context.holds.holds.map((hold) => hold.orderId);
   const snaps = heldIds.length ? await db.getAll(...heldIds.map((id) => db.collection("orders").doc(id))) : [];
   const trackingById = new Map(snaps.map((snap) => [snap.id, snap.exists ? snap.get("trackingCode") ?? snap.id : snap.id]));
   const orderIdByTracking = new Map(Array.from(trackingById.entries()).map(([id, code]) => [code, id]));
   const exclude = resolveExclusions(args.exclude, orderIdByTracking, args.excludeReason);
-  const plan = planDriverCompensation({ entries, context, exclude });
+  const plan = planDriverCompensation({ entries, context, exclude, deliveredBy });
 
   console.log(`Spec 038 · compensacion de ${args.driverId} · ${new Date().toISOString()}`);
   if (derived) console.log("AVISO: la foto aun no esta escrita; las retenciones se derivan en memoria como las escribiria el script de la foto ahora. Solo previsualizacion.");

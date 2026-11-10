@@ -646,6 +646,9 @@ export function reconcileWithPlatformPosition(
   }
 
   const ledgerOf = driverLedgerResolver(input, driverSettlements, entriesByOrder);
+  // Spec 038 (RF_01b): a quien se le cobra el recaudo. Los pedidos fuera del universo del informe no figuran y
+  // cuentan como hasta ahora.
+  const deliveredBy = deliveredByOf(input);
   for (const settlement of driverSettlements) {
     // Spec 038 (RF_09): el corte se recalcula con la regla unica, sabiendo lo que los DEMAS cortes del
     // domiciliario ya registraron. Sustituye al parche por fechas de T25: lo que otro corte ya cobro (o
@@ -658,7 +661,8 @@ export function reconcileWithPlatformPosition(
       ownEntryIds: settlement.walletEntryIds ?? [],
       entries: input.receivableEntries,
       context: ledgerOf(settlement.ownerId),
-      receivedCop
+      receivedCop,
+      deliveredBy
     });
     const chargeByOrder = new Map(figures.charges.map((charge) => [charge.orderId, charge.chargedCop] as const));
     const netHere = (orderId: string): number => chargeByOrder.get(orderId) ?? 0;
@@ -733,6 +737,11 @@ export function reconcileWithPlatformPosition(
   };
 }
 
+/** Spec 038 (RF_01b): el `driverId` de cada pedido del informe. */
+function deliveredByOf(input: CashOutstandingInput): Map<string, string | null> {
+  return new Map(input.orders.map((order) => [order.id, order.driverId ?? null] as const));
+}
+
 /**
  * Spec 038: el contexto de calculo de cada domiciliario. El que trae la entrada (la API lo carga de
  * Firestore) manda; si falta, se deriva de los cortes de la entrada con la foto Y las retenciones que
@@ -776,7 +785,7 @@ function driverLedgerResolver(
     }
     // La misma foto y las mismas retenciones que escribiria el script en este momento (una sola copia).
     const driverEntries = Array.from(entriesByOrder.values()).flat().filter((entry) => isReceivableCodEntry(entry) || (isReceivableDriverPay(entry) && entry.ownerId === driverId));
-    const { context } = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: driverEntries, now: input.now, createdBy: "derived" });
+    const { context } = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: driverEntries, now: input.now, createdBy: "derived", deliveredBy: deliveredByOf(input) });
     cache.set(driverId, context);
     return context;
   };

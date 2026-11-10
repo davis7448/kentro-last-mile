@@ -600,3 +600,39 @@ describe("planOrderCorrection - spec 038", () => {
     expect(result.settlementsToRecalculate[0].patch.orderIds).toEqual(["o5", "o-vuelve"]);
   });
 });
+
+// Spec 038 T25 (RF_01b): una correccion que le pasa el pedido a otro domiciliario no le cobra el recaudo al primero.
+describe("planOrderCorrection - spec 038 T25: el recaudo solo al que entrega", () => {
+  const order = {
+    id: "o7",
+    trackingCode: "KNT-007777",
+    status: "failed",
+    sellerId: "seller-1",
+    driverId: "driver-1",
+    paymentMethod: "cod",
+    totalCop: 100000,
+    failedCategory: "failed_visit",
+    evidence: [{ id: "ev-1", type: "failed", photoLabel: "Fachada", note: "nadie abrio", failedCategory: "failed_visit", createdAt: "2026-08-02T10:00:00.000Z", actorId: "driver-1" }]
+  };
+  // La visita fallida de driver-1 ya se le pago en un corte conciliado (registro -5.000).
+  const entries = [entry({ id: "we-o7-driver-failed-pay", ownerType: "driver", ownerId: "driver-1", type: "driver_earning", amountCop: 5000, orderId: "o7", settlementId: "stl-d1" })];
+  const settlementsById = new Map<string, SettlementDoc>([
+    ["stl-d1", {
+      ...settlement({ id: "stl-d1", kind: "driver", status: "reconciled", ownerId: "driver-1", ownerName: "Lider", walletEntryIds: ["we-o7-driver-failed-pay"], orderIds: ["o7"] }),
+      cashCharges: [{ orderId: "o7", codCop: 0, driverPayCop: 5000, chargedCop: -5000, codSeenCop: 0 }]
+    } as SettlementDoc]
+  ]);
+
+  it("fallido a entregado por driver-3: a driver-1 no se le cobran los 100.000 que recaudo driver-3 (solo se le recupera su visita)", () => {
+    const result = plan({ order, request: { kind: "failed_to_delivered", reason: "Lo entrego otro.", driverId: "driver-3" }, entries, settlementsById });
+    expect(result.blockers).toEqual([]);
+    const forDriver1 = result.driverNextCorte.find((item) => item.driverId === "driver-1");
+    // La correccion revierte su pago de la visita fallida (el pedido no fallo: lo entrego driver-3), asi que su
+    // siguiente corte recupera esos 5.000. Lo que NO se le cobra son los 100.000 de recaudo: antes de RF_01b
+    // salian 105.000.
+    expect(forDriver1?.deltaCop).toBe(5000);
+    expect(result.warnings.filter((item) => item.code === "driver_next_corte").map((item) => item.message)).toEqual([
+      "Al domiciliario driver-1 se le cobraran $5.000 por este pedido en su proximo corte."
+    ]);
+  });
+});

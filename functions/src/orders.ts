@@ -14,7 +14,7 @@ import {
 } from "./inventory-movements";
 import { gmfForPayout } from "./gmf";
 import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext, refreshFrozenReceipts } from "./driver-cash-ledger";
-import { assertNoCrossedRecalc, CrossedRecalcError, loadDriverLedgerContext, MissingBaselineError, recalculateDriverSettlement } from "./driver-ledger-io";
+import { assertNoCrossedRecalc, CrossedRecalcError, loadDeliveredBy, loadDriverLedgerContext, MissingBaselineError, recalculateDriverSettlement } from "./driver-ledger-io";
 import { buildCodReceivedSet, codEntriesByOrder, isSellerEntryEligible, isWithinSettlementRange, type WalletEntryDoc as LedgerEntryDoc } from "./seller-ledger";
 import { computeSellerBalance, payoutRejectionMessage, selectSettlementEntries } from "./seller-balance";
 import { loadSellerBalanceInput } from "./seller-balance-api";
@@ -1439,7 +1439,14 @@ export const createSettlement = onCall(async (request) => {
       const ledgerAfter = await withLedgerErrors(() => loadDriverLedgerContext(db, input.ownerId, transaction));
       await withLedgerErrors(async () => assertNoCrossedRecalc(ledgerBefore as DriverLedgerContext, ledgerAfter, settlementRef.id));
       const ledgerEntries = [...allSellerEntries, ...driverEntries];
-      const orderIds = driverCorteOrderIdsAtCreation(entries, ledgerEntries, ledgerAfter);
+      // Spec 038 (RF_01b): quien tiene asignado cada pedido de los cortes del domiciliario y de sus asientos sin
+      // cortar. Hacen falta todos: que un pedido vuelva solo al corte depende de a quien se le cobra su recaudo, y
+      // no se sabe sin leerlo (una primera pasada sin el dato no da un superconjunto). Solo el campo driverId.
+      const deliveredBy = await loadDeliveredBy(db, transaction, [
+        ...ledgerAfter.settlements.flatMap((item) => item.orderIds ?? []),
+        ...entries.map((entry) => String(entry.orderId ?? ""))
+      ]);
+      const orderIds = driverCorteOrderIdsAtCreation(entries, ledgerEntries, ledgerAfter, deliveredBy);
       if (orderIds.length === 0) {
         throw new HttpsError(
           "failed-precondition",
@@ -1456,7 +1463,8 @@ export const createSettlement = onCall(async (request) => {
           ownEntryIds: entries.map((entry) => entry.id),
           entries: ledgerEntries,
           context: ledgerAfter,
-          receivedCop: 0
+          receivedCop: 0,
+          deliveredBy
         })
       };
     }

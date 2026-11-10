@@ -444,6 +444,11 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
   }
 
   // --- Cortes pendientes que hay que recalcular -------------------------------------------
+  // Spec 038 (RF_01b): a quien se le cobra el recaudo de cada pedido. Los pedidos de los cortes afectados ya
+  // estan en `orderMeta`; el que se corrige, con el domiciliario que queda DESPUES de la correccion.
+  const deliveredBy = new Map<string, string | null>();
+  for (const [id, meta] of input.cashInputs.orderMeta) deliveredBy.set(id, meta?.driverId ? String(meta.driverId) : null);
+  deliveredBy.set(orderId, driverId || null);
   const deletedIds = new Set(entriesToDelete.map((entry) => entry.id));
   const createdEntries = [...entriesToCreate, ...entriesToCompensate.map((item) => item.entry)];
   const adjustedInputs: DriverCashInputs = {
@@ -514,7 +519,8 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
         orderIds: driverOrderIds,
         ownEntryIds: walletEntryIds,
         receivedCop,
-        context: ledger
+        context: ledger,
+        deliveredBy
       });
       const expectedCop = summary.expectedCop;
       const pendingCop = Math.max(0, expectedCop - receivedCop);
@@ -585,7 +591,7 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
       .map((item) => item.id)
       .sort();
     if (frozenIds.length === 0) continue;
-    const delta = pendingDeltaOrders({ entries: allAdjusted, context: ledger }).find((row) => row.orderId === orderId);
+    const delta = pendingDeltaOrders({ entries: allAdjusted, context: ledger, deliveredBy }).find((row) => row.orderId === orderId);
     const deltaCop = delta?.deltaCop ?? 0;
     driverNextCorte.push({ driverId: driverIdOfLedger, orderId, deltaCop, frozenSettlementIds: frozenIds });
     if (deltaCop !== 0) {

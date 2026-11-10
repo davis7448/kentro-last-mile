@@ -8,6 +8,7 @@ import {
   MissingBaselineError,
   recalculateDriverSettlement
 } from "../../functions/src/driver-ledger-io";
+import * as ledgerIo from "../../functions/src/driver-ledger-io";
 
 const DRIVER = "driver-1";
 
@@ -171,8 +172,9 @@ describe("recalculateDriverSettlement (T13)", () => {
     async get(target: { get: () => Promise<unknown> }) {
       return target.get();
     },
-    async getAll(...refs: Array<{ get: () => Promise<unknown> }>) {
-      return Promise.all(refs.map((ref) => ref.get()));
+    async getAll(...refs: Array<{ get: () => Promise<unknown> } | { fieldMask: string[] }>) {
+      // El ultimo argumento puede ser `{ fieldMask }` (spec 038 T25): no es una referencia.
+      return Promise.all(refs.filter((ref): ref is { get: () => Promise<unknown> } => "get" in ref).map((ref) => ref.get()));
     },
     set() {
       this.sets += 1;
@@ -186,6 +188,17 @@ describe("recalculateDriverSettlement (T13)", () => {
     const fields = await recalculateDriverSettlement(db as never, txOf() as never, { settlement, receivedCop: 20000, before });
     expect(fields).toMatchObject({ cashExpectedCop: 42000, cashReceivedCop: 20000, cashPendingCop: 22000, cashReceiptStatus: "partial", ledgerVersion: 1 });
     expect(fields.cashCharges).toEqual([{ orderId: "o1", codCop: 50000, driverPayCop: 8000, chargedCop: 42000, codSeenCop: 50000 }]);
+  });
+
+  it("spec 038 T25 (RF_01b): el recaudo de un pedido que tiene otro domiciliario no se le cobra a este", async () => {
+    const world = state();
+    const docs: Record<string, Record<string, unknown> | undefined> = { ...world.docs, "orders/o1": { createdAt: "2026-11-09T00:00:00.000Z", trackingCode: "KNT-1", driverId: "driver-2" } };
+    const { db } = fakeDb({ ...world, docs });
+    const before = await loadDriverLedgerContext(db as never, DRIVER);
+    const fields = await recalculateDriverSettlement(db as never, txOf() as never, { settlement, receivedCop: 0, before });
+    // Solo queda su pago de la visita: -8.000 a su favor, nada que entregar.
+    expect(fields.cashCharges).toEqual([expect.objectContaining({ orderId: "o1", codCop: 0, driverPayCop: 8000, chargedCop: -8000 })]);
+    expect(fields).toMatchObject({ cashExpectedCop: 0, creditOutCop: 8000 });
   });
 
   it("si otro corte pendiente cambio desde la lectura de fuera, lanza y no escribe nada", async () => {
@@ -210,5 +223,26 @@ describe("loadDriverLedgerSnapshot (T14)", () => {
     expect(snapshot.context.settlements.map((s) => s.id)).toEqual(["P", "C"]);
     expect(Array.from(snapshot.pendingSettlements.keys())).toEqual(["P"]);
     expect(snapshot.pendingSettlements.get("P")?.updateTime).toBeDefined();
+  });
+});
+
+describe("loadDeliveredBy (spec 038 T25, RF_01b)", () => {
+  it("lee el driverId de cada pedido por la transaccion, con fieldMask y sin repetir; los que no existen no figuran", async () => {
+    const loadDeliveredBy = (ledgerIo as Record<string, unknown>).loadDeliveredBy as
+      | ((db: unknown, tx: unknown, orderIds: string[]) => Promise<Map<string, string | null>>)
+      | undefined;
+    expect(typeof loadDeliveredBy).toBe("function");
+    const { db, reads } = fakeDb({ settlements: [], docs: { "orders/o1": { driverId: "driver-1" }, "orders/o2": { driverId: null } } });
+    const masks: unknown[] = [];
+    const tx = {
+      async getAll(...refs: unknown[]) {
+        masks.push(refs[refs.length - 1]);
+        return Promise.all(refs.filter((ref): ref is { get: () => Promise<unknown> } => typeof (ref as { get?: unknown }).get === "function").map((ref) => ref.get()));
+      }
+    };
+    const map = await loadDeliveredBy!(db, tx, ["o1", "o2", "o1", "o-borrado"]);
+    expect(map).toEqual(new Map([["o1", "driver-1"], ["o2", null]]));
+    expect(reads.sort()).toEqual(["doc:orders/o-borrado", "doc:orders/o1", "doc:orders/o2"]);
+    expect(masks).toEqual([{ fieldMask: ["driverId"] }]);
   });
 });

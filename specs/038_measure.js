@@ -114,7 +114,9 @@ function measureDriver({ driverId, cortes, entries, orders }) {
     }
   }
 
-  const owed = orderOwedByDriver(entries, driverId);
+  // RF_01b: el recaudo de un pedido que tiene otro domiciliario no se le cuenta a este.
+  const deliveredBy = new Map(Array.from(orders.entries()).map(([id, order]) => [id, order?.driverId || null]));
+  const owed = orderOwedByDriver(entries, driverId, deliveredBy);
   let dueTotal = 0;
   const rows = [];
   for (const [orderId, row] of perOrder) {
@@ -167,7 +169,8 @@ function deployCheckDriver({ driverId, cortes, entries, orderMeta, now }) {
   const ledger = requireLib("driver-cash-ledger.js");
   const { settlementCashReceivedCop } = requireLib("settlement-math.js");
   const { isLiquidationWalletType } = requireLib("wallet-entries.js");
-  const { context } = ledger.buildDriverLedgerSnapshot({ driverId, settlements: cortes, entries, now, createdBy: "deploy-check" });
+  const deliveredBy = new Map(Array.from(orderMeta.entries()).map(([id, meta]) => [id, meta?.driverId || null]));
+  const { context } = ledger.buildDriverLedgerSnapshot({ driverId, settlements: cortes, entries, now, createdBy: "deploy-check", deliveredBy });
   const oldInputs = {
     sellerEntries: entries.filter((e) => e.ownerType === "seller"),
     driverEntries: entries.filter((e) => e.ownerType === "driver"),
@@ -183,7 +186,7 @@ function deployCheckDriver({ driverId, cortes, entries, orderMeta, now }) {
     const receivedCop = settlementCashReceivedCop(corte);
     const oldCop = legacyExpectedCop(oldInputs, orderIds);
     const fields = ledger.buildDriverSettlementFields({
-      settlementId: corte.id, orderIds, ownEntryIds: (corte.walletEntryIds ?? []).map(String), entries: newEntries, context, receivedCop, orderMeta
+      settlementId: corte.id, orderIds, ownEntryIds: (corte.walletEntryIds ?? []).map(String), entries: newEntries, context, receivedCop, orderMeta, deliveredBy
     });
     pending.push({ settlementId: corte.id, oldCop, newCop: fields.cashExpectedCop, deltaCop: fields.cashExpectedCop - oldCop });
     simulatedCortes.push({ ...corte, ...fields });
@@ -192,9 +195,9 @@ function deployCheckDriver({ driverId, cortes, entries, orderMeta, now }) {
   const ownUnsettled = entries.filter((e) => e.ownerType === "driver" && e.ownerId === driverId && !e.settlementId && e.orderId && isLiquidationWalletType(String(e.type ?? "")));
   const oldOrderIds = Array.from(new Set(ownUnsettled.map((e) => String(e.orderId))));
   const oldCop = legacyExpectedCop(oldInputs, oldOrderIds);
-  const newOrderIds = ledger.driverCorteOrderIdsAtCreation(ownUnsettled, newEntries, context);
+  const newOrderIds = ledger.driverCorteOrderIdsAtCreation(ownUnsettled, newEntries, context, deliveredBy);
   const newCop = newOrderIds.length
-    ? ledger.computeDriverCorte({ settlementId: "deploy-check-next", orderIds: newOrderIds, ownEntryIds: ownUnsettled.map((e) => String(e.id)), entries: newEntries, context, orderMeta }).cashExpectedCop
+    ? ledger.computeDriverCorte({ settlementId: "deploy-check-next", orderIds: newOrderIds, ownEntryIds: ownUnsettled.map((e) => String(e.id)), entries: newEntries, context, orderMeta, deliveredBy }).cashExpectedCop
     : 0;
   return { pending, next: { oldOrderIds, newOrderIds, oldCop, newCop, deltaCop: newCop - oldCop }, simulatedCortes };
 }
@@ -377,7 +380,7 @@ async function main() {
 
   if (runDeployCheck) {
     const now = new Date().toISOString();
-    const orderMeta = new Map(Array.from(orders.entries()).map(([id, o]) => [id, { createdAt: o.createdAt, trackingCode: o.trackingCode }]));
+    const orderMeta = new Map(Array.from(orders.entries()).map(([id, o]) => [id, { createdAt: o.createdAt, trackingCode: o.trackingCode, driverId: o.driverId ?? null }]));
     const simulated = [];
     let totalDelta = 0;
     console.log(`\n--deploy-check (RNF_01), ${now}: esperado regla vieja -> regla nueva con las retenciones de la foto`);

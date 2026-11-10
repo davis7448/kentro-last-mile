@@ -12,7 +12,7 @@
  * MEMORIA y evalua el resultado. La previsualizacion y la aplicacion recorren exactamente
  * el mismo codigo, asi que no pueden divergir.
  */
-import { computeDriverCorte, type DriverCashCharge, type DriverLedgerContext } from "./driver-cash-ledger";
+import { computeDriverCorte, type DeliveredBy, type DriverCashCharge, type DriverLedgerContext } from "./driver-cash-ledger";
 import { gmfForPayout } from "./gmf";
 
 export type WalletEntryDoc = {
@@ -81,6 +81,8 @@ export type SettlementOrderDoc = {
   status?: string;
   createdAt?: string;
   trackingCode?: string;
+  /** Spec 038 (RF_01b): quien tiene asignado el pedido, para cobrarle el recaudo solo al que entrego. */
+  driverId?: string | null;
 };
 
 export type DriverCashAllocation = {
@@ -144,6 +146,8 @@ export type DriverCorteSummaryInput = {
   receivedCop: number;
   /** Obligatorio: los demas cortes del domiciliario, su foto historica y sus retenciones. */
   context: DriverLedgerContext;
+  /** Spec 038 (RF_01b): quien tiene asignado cada pedido. Sin el dato, el recaudo cuenta como hasta ahora. */
+  deliveredBy?: DeliveredBy;
 };
 
 /** Lo de `DriverCashSummary` mas lo que la 038 guarda en el corte. */
@@ -174,7 +178,8 @@ export function computeDriverCorteSummary(input: DriverCorteSummaryInput): Drive
     entries: [...input.inputs.sellerEntries, ...input.inputs.driverEntries],
     context: input.context,
     receivedCop: input.receivedCop,
-    orderMeta: input.inputs.orderMeta
+    orderMeta: input.inputs.orderMeta,
+    deliveredBy: input.deliveredBy
   });
   return {
     codCop: figures.codCop,

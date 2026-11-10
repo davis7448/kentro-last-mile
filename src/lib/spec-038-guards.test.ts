@@ -167,3 +167,45 @@ describe("spec 038 · T23 · los scripts usan el modulo compilado (RF_05b)", () 
     expect(code("scripts/compensate-038.js")).toMatch(/planDriverCompensation\(/);
   });
 });
+
+describe("spec 038 · T25 · todo llamador de la regla pasa quien entrego (RF_01b)", () => {
+  // Las funciones del nucleo que deciden lo debido. Sin `deliveredBy` el recaudo de un pedido que entrego otro se
+  // le cobraria tambien a este (hallazgo H1). Se buscan en produccion y en los scripts de la 038.
+  const RULE_CALLS = [
+    "computeDriverCorte",
+    "computeDriverCorteSummary",
+    "buildDriverSettlementFields",
+    "pendingDeltaOrders",
+    "driverCorteOrderIdsAtCreation",
+    "computeHolds",
+    "buildDriverLedgerSnapshot",
+    "planDriverCompensation",
+    "orderOwedByDriver"
+  ];
+  const files = [
+    ...productionFiles().filter((file) => file !== "functions/src/driver-cash-ledger.ts"),
+    "scripts/verify-026.js",
+    "scripts/snapshot-038-baseline.js",
+    "scripts/compensate-038.js",
+    "specs/038_measure.js"
+  ];
+
+  it("cada llamada lleva deliveredBy (o lo pasa por posicion con ese nombre)", () => {
+    const missing = files.flatMap((file) =>
+      RULE_CALLS.flatMap((name) =>
+        callsOf(code(file), name)
+          .filter((args) => !/\bdeliveredBy\b/.test(args))
+          .map((args) => `${file}: ${name}(${args.slice(0, 80)})`)
+      )
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("dentro del nucleo, las funciones que llaman a la regla tambien lo pasan", () => {
+    const ledger = code("functions/src/driver-cash-ledger.ts");
+    const inner = ["orderOwedByDriver", "pendingDeltaOrders", "computeHolds"].flatMap((name) =>
+      callsOf(ledger, name).filter((args) => !/deliveredBy/.test(args)).map((args) => `${name}(${args.slice(0, 80)})`)
+    );
+    expect(inner).toEqual([]);
+  });
+});

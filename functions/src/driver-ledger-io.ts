@@ -9,7 +9,7 @@
  * `HttpsError("failed-precondition", ...)`.
  */
 import type { Firestore, Transaction } from "firebase-admin/firestore";
-import { buildDriverSettlementFields, type DriverSettlementFields } from "./driver-cash-ledger";
+import { buildDriverSettlementFields, type DeliveredBy, type DriverSettlementFields } from "./driver-cash-ledger";
 import type { SettlementOrderDoc, WalletEntryDoc } from "./settlement-math";
 import type {
   DriverCashCharge,
@@ -111,6 +111,42 @@ export async function loadDriverLedgerSnapshot(
   return { context: { driverId, settlements, baseline, holds }, pendingSettlements };
 }
 
+/** Lecturas por tanda de `getAll` (Firestore no fija un tope, pero tandas cortas no bloquean la transaccion). */
+const GET_ALL_BATCH = 300;
+
+/**
+ * Spec 038 (RF_01b): quien tiene asignado cada pedido, para cobrarle el recaudo solo al que entrego. Lee por la
+ * transaccion y solo el campo `driverId` (`fieldMask`). Un pedido que ya no existe no figura: sin dato, la regla
+ * cuenta el recaudo como hasta ahora.
+ */
+export async function loadDeliveredBy(db: Firestore, tx: Transaction, orderIds: readonly string[]): Promise<Map<string, string | null>> {
+  const ids = Array.from(new Set(orderIds.map(String).filter(Boolean)));
+  const deliveredBy = new Map<string, string | null>();
+  type Snap = { id: string; exists?: boolean; data: () => Record<string, unknown> | undefined };
+  for (let start = 0; start < ids.length; start += GET_ALL_BATCH) {
+    const refs = ids.slice(start, start + GET_ALL_BATCH).map((orderId) => db.collection("orders").doc(orderId));
+    const snaps = (await (tx.getAll as (...args: unknown[]) => Promise<unknown>)(...refs, { fieldMask: ["driverId"] })) as Snap[];
+    for (const snap of snaps) {
+      const data = snap.exists === false ? undefined : snap.data();
+      if (!data) continue;
+      const driverId = data.driverId;
+      deliveredBy.set(snap.id, typeof driverId === "string" && driverId ? driverId : null);
+    }
+  }
+  return deliveredBy;
+}
+
+/** `deliveredBy` a partir de pedidos ya leidos (los del corte, o los que traiga el llamador). */
+export function deliveredByFromOrders(orders: Iterable<[string, { driverId?: unknown } | undefined]>): Map<string, string | null> {
+  const deliveredBy = new Map<string, string | null>();
+  for (const [orderId, order] of orders) {
+    if (!order) continue;
+    const driverId = order.driverId;
+    deliveredBy.set(orderId, typeof driverId === "string" && driverId ? driverId : null);
+  }
+  return deliveredBy;
+}
+
 /**
  * RF_04b. `before` es el contexto que la callable leyo al empezar, FUERA de la transaccion; `after`, el que
  * leyo DENTRO. Si algun otro corte pendiente del domiciliario (en cualquiera de las dos lecturas) aparecio,
@@ -163,6 +199,8 @@ export async function recalculateDriverSettlement(
   const orderMeta = new Map(
     orderSnaps.filter((snap) => snap.exists !== false && snap.data()).map((snap) => [snap.id, snap.data() as SettlementOrderDoc])
   );
+  // RF_01b: los pedidos del corte ya se leen; su `driverId` dice a quien se le cobra el recaudo.
+  const deliveredBy: DeliveredBy = deliveredByFromOrders(orderMeta);
   return buildDriverSettlementFields({
     settlementId: settlement.id,
     orderIds,
@@ -170,6 +208,7 @@ export async function recalculateDriverSettlement(
     entries: [...sellerSnap.docs.map(toEntry), ...driverSnap.docs.map(toEntry)],
     context: after,
     receivedCop: input.receivedCop,
-    orderMeta
+    orderMeta,
+    deliveredBy
   });
 }
