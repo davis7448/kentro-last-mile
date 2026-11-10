@@ -308,7 +308,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     `pendingDeltaOrders` / `orderOwedByDriver` en produccion pasa `deliveredBy`
   * Verificacion: doble de Firestore: `createSettlement` lee solo los candidatos; guarda en verde y vista fallar
 
-- [ ] **T26: Recibido: lo posterior suma cero y la regla de hoy no se sustituye**
+- [x] **T26: Recibido: lo posterior suma cero y la regla de hoy no se sustituye**
   * Requisitos cubiertos: RF_11, RF_11b, RF_12
   * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
   * Accion: plan §7.2 y §7.3

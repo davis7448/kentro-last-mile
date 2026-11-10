@@ -52,9 +52,20 @@ export function buildCodReceivedSet(settlements: SettlementDoc[], codByOrder?: R
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
     for (const charge of settlement.cashCharges) if (charge?.orderId) inNewCortes.add(String(charge.orderId));
   }
+  // Spec 038 RF_11b (hallazgo H3): la parte nueva se SUMA a la regla de hoy. Un pedido con una asignacion sin
+  // cubrir en un corte viejo (sin `cashCharges`) que no esta saldado en total sigue sin efectivo recibido, aunque
+  // un corte nuevo saldado lo tenga.
+  const uncoveredInOpenOldCorte = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || Array.isArray(settlement.cashCharges)) continue;
+    if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) continue;
+    for (const allocation of settlement.cashAllocations ?? []) {
+      if (allocation?.orderId && !allocation.covered) uncoveredInOpenOldCorte.add(String(allocation.orderId));
+    }
+  }
   for (const orderId of inNewCortes) {
     const codEntries = codByOrder?.get(orderId);
-    if (!codEntries || !isOrderCodSettled(orderId, settlements, codEntries)) codReceived.delete(orderId);
+    if (!codEntries || uncoveredInOpenOldCorte.has(orderId) || !isOrderCodSettled(orderId, settlements, codEntries)) codReceived.delete(orderId);
     else codReceived.add(orderId);
   }
   return codReceived;
@@ -97,8 +108,8 @@ export function codEntriesByOrder(entries: readonly WalletEntryDoc[]): Map<strin
  * 1. todo corte nuevo que le cobro efectivo (`chargedCop > 0`) esta saldado para el pedido: su asignacion
  *    cubierta (aunque el corte siga pendiente, como hoy), o el corte saldado en total (spec 027 RF_01);
  * 2. hay al menos un corte nuevo saldado para el pedido que lo tiene en `cashCharges` (un corte que solo
- *    devuelve cuenta si esta saldado en total), y ningun asiento de recaudo del pedido, de cualquier signo,
- *    es POSTERIOR al ultimo recalculo del ultimo de ellos.
+ *    devuelve cuenta si esta saldado en total), y los asientos de recaudo del pedido POSTERIORES al ultimo
+ *    recalculo del ultimo de ellos suman cero (enmienda del 2026-11-10, hallazgo H2).
  *
  * Se compara por tiempo, no por monto (analyze B5): con montos, A cobra 78.900, B lo devuelve y se salda, y
  * una re-entrega de 78.900 pasaba por recibida antes de que el domiciliario la entregara.
@@ -121,7 +132,14 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
     }
   }
   if (!lastSettledAt) return false;
-  return !codEntries.some((entry) => String(entry.createdAt ?? "") > lastSettledAt);
+  // Spec 038 RF_11 enmendado (hallazgo H2): lo posterior al ultimo corte saldado debe SUMAR cero, no estar vacio.
+  // Un cambio que netea cero (cambio de tienda, entregado -> fallido -> entregado) deja el efectivo igual que
+  // cuando se saldo; con "ninguno posterior" el pedido no volvia a ningun corte y la tienda quedaba bloqueada para
+  // siempre. Se sigue mirando por tiempo cuales son posteriores (analyze B5: una re-entrega suma su monto).
+  const laterCop = codEntries
+    .filter((entry) => String(entry.createdAt ?? "") > lastSettledAt)
+    .reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
+  return laterCop === 0;
 }
 
 /**

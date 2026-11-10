@@ -297,8 +297,16 @@ describe("spec 038: recibido con cortes nuevos (cashCharges)", () => {
   });
 
   it("re-entrega: recaudo nuevo posterior al ultimo corte saldado no cuenta hasta saldar el siguiente", () => {
-    const codByOrder = new Map([["o1", [cod(50000, "2026-11-30T10:00:00.000Z"), cod(-50000, "2026-12-03T10:00:00.000Z"), cod(50000, "2026-12-04T10:00:00.000Z")]]]);
+    // Spec 038 T26 (RF_11 enmendado): lo posterior debe SUMAR cero. Una re-entrega que no netea, si bloquea.
+    const codByOrder = new Map([["o1", [cod(50000, "2026-11-30T10:00:00.000Z"), cod(-50000, "2026-12-03T10:00:00.000Z"), cod(50000, "2026-12-04T10:00:00.000Z"), cod(30000, "2026-12-05T10:00:00.000Z")]]]);
     expect(buildCodReceivedSet([saldado("A", "o1", 42000)], codByOrder).has("o1")).toBe(false);
+  });
+
+  it("T26 (H2): entregado -> fallido -> entregado despues del corte saldado netea cero: sigue recibido", () => {
+    // Antes de la enmienda era "no recibido" para siempre: el domiciliario debe lo mismo, asi que el pedido no
+    // vuelve a ningun corte y nada movia el ultimo recalculo. El efectivo que entrego en A no cambio.
+    const codByOrder = new Map([["o1", [cod(50000, "2026-11-30T10:00:00.000Z"), cod(-50000, "2026-12-03T10:00:00.000Z"), cod(50000, "2026-12-04T10:00:00.000Z")]]]);
+    expect(buildCodReceivedSet([saldado("A", "o1", 42000)], codByOrder).has("o1")).toBe(true);
   });
 
   it("analyze B5: A cobra, B devuelve y se salda, re-entrega del mismo monto NO cuenta (comparacion por tiempo)", () => {
@@ -363,9 +371,11 @@ describe("spec 038 · T16: codEntriesByOrder y los llamadores de recibido", () =
 
   it("codPartialReceivedCop con el recaudo: un pedido recibido en un corte nuevo no es parcial", () => {
     const codByOrder = new Map([["o1", [{ amountCop: 42000, createdAt: "2026-11-30T10:00:00.000Z" }]]]);
-    // Un corte VIEJO (sin cashCharges) recibio parte; el corte nuevo, saldado despues, lo cobro entero.
-    const parcialViejo = { id: "B", kind: "driver", status: "pending", orderIds: ["o1"], cashExpectedCop: 42000, cashReceivedCop: 20000,
-      cashPendingCop: 22000, cashAllocations: [{ orderId: "o1", expectedCop: 42000, receivedCop: 20000, covered: false }] };
+    // Un corte VIEJO (sin cashCharges) saldado en total por compensacion (027 RF_01) dejo la asignacion de o1 sin
+    // cubrir con 20.000 recibidos; el corte nuevo, saldado despues, lo cobro entero. T26 (RF_11b): si el viejo
+    // siguiera PENDIENTE, o1 no estaria recibido con o sin recaudo (era el hallazgo H3), asi que aqui va saldado.
+    const parcialViejo = { id: "B", kind: "driver", status: "reconciled", orderIds: ["o1"], cashExpectedCop: 42000, cashReceivedCop: 42000,
+      cashPendingCop: 0, cashAllocations: [{ orderId: "o1", expectedCop: 42000, receivedCop: 20000, covered: false }] };
     // Sin recaudo, el corte nuevo saldado no cuenta y la parcial del viejo se sumaria.
     const both = [corteNuevo, parcialViejo] as never[];
     expect(codPartialReceivedCop(both).get("o1")).toBe(20000);
@@ -387,5 +397,51 @@ describe("spec 038 · T16: codEntriesByOrder y los llamadores de recibido", () =
       }
     }
     expect(bare).toEqual([]);
+  });
+});
+
+/** Spec 038 · T26: los hallazgos H2 y H3 de la verificacion (RF_11 enmendado, RF_11b). */
+describe("spec 038 · T26 · recibido tras la verificacion", () => {
+  const charge = (orderId: string, chargedCop: number) => ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop: 0 });
+  const codFrom = (ownerId: string, amountCop: number, createdAt: string) => ({ ownerType: "seller", ownerId, type: "cod_revenue", amountCop, createdAt });
+  const corteX = {
+    id: "X", kind: "driver", status: "reconciled", createdAt: "2026-12-01T00:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
+    orderIds: ["o"], cashCharges: [charge("o", 100000)], cashExpectedCop: 100000, cashReceivedCop: 100000, cashPendingCop: 0,
+    cashAllocations: [{ orderId: "o", expectedCop: 100000, receivedCop: 100000, covered: true }]
+  };
+
+  it("H2: el pedido pasa de la tienda A a la B despues del corte saldado (netea cero): la tienda B puede cobrar", () => {
+    const codByOrder = new Map([["o", [
+      codFrom("sA", 100000, "2026-11-30T00:00:00.000Z"),
+      codFrom("sA", -100000, "2026-12-03T00:00:00.000Z"),
+      codFrom("sB", 100000, "2026-12-03T00:00:01.000Z")
+    ]]]);
+    expect(buildCodReceivedSet([corteX], codByOrder).has("o")).toBe(true);
+    expect(isOrderCodSettled("o", [corteX], codByOrder.get("o")!)).toBe(true);
+  });
+
+  it("H2: un cambio posterior que NO netea (otro monto) sigue bloqueando hasta el siguiente corte", () => {
+    const entries = [codFrom("sA", 100000, "2026-11-30T00:00:00.000Z"), codFrom("sA", -100000, "2026-12-03T00:00:00.000Z"), codFrom("sB", 73000, "2026-12-03T00:00:01.000Z")];
+    expect(isOrderCodSettled("o", [corteX], entries)).toBe(false);
+  });
+
+  it("H3: con una asignacion sin cubrir en un corte viejo pendiente, un corte nuevo saldado no lo da por recibido", () => {
+    const viejoPendiente = { id: "A", kind: "driver", status: "pending", createdAt: "2026-11-01T00:00:00.000Z", orderIds: ["o", "q"],
+      cashExpectedCop: 195000, cashReceivedCop: 0, cashPendingCop: 195000,
+      cashAllocations: [{ orderId: "o", expectedCop: 95000, receivedCop: 0, covered: false }, { orderId: "q", expectedCop: 100000, receivedCop: 0, covered: false }] };
+    const nuevoSaldado = { id: "B", kind: "driver", status: "reconciled", createdAt: "2026-12-01T00:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
+      orderIds: ["o"], cashCharges: [charge("o", -5000)], cashExpectedCop: 0, cashReceivedCop: 0, cashPendingCop: 0, cashAllocations: [] };
+    const codByOrder = new Map([["o", [codFrom("sA", 100000, "2026-10-30T00:00:00.000Z")]]]);
+    expect(buildCodReceivedSet([viejoPendiente, nuevoSaldado], codByOrder).has("o")).toBe(false);
+  });
+
+  it("H3: la asignacion sin cubrir de un corte viejo SALDADO en total no frena (027 RF_01 sin cambios)", () => {
+    const viejoSaldado = { id: "A", kind: "driver", status: "reconciled", createdAt: "2026-11-01T00:00:00.000Z", reconciledAt: "2026-11-02T00:00:00.000Z",
+      orderIds: ["o", "q"], cashExpectedCop: 100000, cashReceivedCop: 100000, cashPendingCop: 0,
+      cashAllocations: [{ orderId: "o", expectedCop: 95000, receivedCop: 0, covered: false }, { orderId: "q", expectedCop: 5000, receivedCop: 100000, covered: true }] };
+    const nuevoSaldado = { id: "B", kind: "driver", status: "reconciled", createdAt: "2026-12-01T00:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
+      orderIds: ["o"], cashCharges: [charge("o", -5000)], cashExpectedCop: 0, cashReceivedCop: 0, cashPendingCop: 0, cashAllocations: [] };
+    const codByOrder = new Map([["o", [codFrom("sA", 100000, "2026-10-30T00:00:00.000Z")]]]);
+    expect(buildCodReceivedSet([viejoSaldado, nuevoSaldado], codByOrder).has("o")).toBe(true);
   });
 });

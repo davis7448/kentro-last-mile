@@ -1,0 +1,7 @@
+# Spec 038 T26 — node specs/038_measure.js --deploy-check con RF_11 enmendado y RF_11b (solo lectura), 2026-11-10
+--deploy-check (RNF_01), 2026-11-10T03:00:53.935Z: esperado regla vieja -> regla nueva con las retenciones de la foto
+  driver-1778271901513 pendiente stl-1794233484852-driver-driver-1778271901513: 6.032.440 -> 6.032.440 (diferencia 0)
+  driver-1778271901513 siguiente corte: 75 -> 75 pedidos, 6.547.910 -> 6.547.910 (diferencia 0)
+  driver-1784251215977 siguiente corte: 0 -> 0 pedidos, 0 -> 0 (diferencia 0)
+  recibidos: 0 pasan a recibido, 1 dejan de estarlo (KNT-007828)
+--deploy-check CON DIFERENCIAS: la cifra la aprueba el responsable antes de desplegar
