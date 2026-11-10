@@ -584,7 +584,8 @@
       "approved": "2026-11-10 (\"Aprobar spec 028\" del responsable)",
       "origen": "2026-11-10: E2E de la 023 aborta 8 escrituras al abrir como admin; medido con e2e/verify-028-writes.mjs: settings/global (tarifas de fabrica) + cities/city-cali a los ~600 ms, antes de la base",
       "evidence": ".sdd/evidence/028/admin-abre-sin-tocar-2026-11-10.json",
-      "pendiente": "respuesta a P1/P2; plan e implementacion"
+      "p1": "2026-11-10 cerrada: domiciliario 8.000/8.000; fallido de tienda 12.000 (fijo en codigo)",
+      "pendiente": "P2; plan e implementacion"
     },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",

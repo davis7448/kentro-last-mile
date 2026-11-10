@@ -151,7 +151,10 @@ nunca a Firestore.
   - *Respuesta parcial (2026-11-10):* "a la tienda se le cobra 12". Ya es asi: `resolveSellerCharges` fija el
     fallido de tienda en `SELLER_FAILED_FEE_FIXED_COP = 12000` e ignora el 9.000 de `settings/global` (62 de 63
     `failed_fee` desde el 2026-10-11 son de 12.000). Ese 9.000 es un valor muerto que confunde; corregirlo es
-    cosa aparte. Falta confirmar las dos tarifas del domiciliario.
+    cosa aparte.
+  - *Respuesta (2026-11-10):* "Si, 8.000 y 8.000" para entrega y visita fallida del domiciliario. **P1 cerrada:**
+    los valores de produccion de las tarifas del domiciliario son los correctos y la spec los protege. Con eso,
+    los 4 pagos de 9.000 de P2 son, salvo otra regla, 1.000 de mas cada uno.
 - **P2:** ¿Se revisan ahora los 4 pagos de 9.000 al domiciliario en pedidos sin zona, o se dejan para despues
   de arreglar esto?
 
