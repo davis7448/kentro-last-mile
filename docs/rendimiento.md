@@ -189,6 +189,20 @@ Tras tocar el bundle, repetir la comprobación de `browserslist` que documenta e
 descargar los chunks de producción y verificar que `grep -o 'static{'` da **0**. Un
 `class static block` es un error de SINTAXIS en iOS 14 y tira el bundle entero.
 
+## API de tiendas: `GET /orders` y `/kpis` leen solo el rango (spec 023, fase A)
+
+Hasta el 2026-11-10, cada `GET /orders?from=&to=` bajaba **todos** los pedidos y asientos de la tienda
+aunque pidiera un día: 19.151 lecturas por llamada para DANDA. Las integraciones de las tiendas la
+consultan cada hora, día y noche, y eso era **el 66–80 % de las lecturas del proyecto** y el suelo
+nocturno de ~75.000/h. Ahora (`functions/src/store-api-range.ts`) pide por `sellerId + createdAt` y
+los asientos por `orderId in` de los pedidos que devuelve: 113 lecturas para el mismo día, respuesta
+idéntica. Para volver a comprobarlo: `node scripts/verify-023.js compare` (tras `npm run build` en
+`functions`). Evidencia y línea base en `.sdd/evidence/023/`.
+
+**Si el suelo nocturno vuelve a subir, mirar primero las rutas de la API** (`storeapi` en Cloud Run,
+peticiones por hora) antes que la app: a las 3 de la mañana nadie abre la app, pero las integraciones
+siguen preguntando.
+
 ## Pendiente
 
 **El admin sigue bajando el ledger completo.** `getPlatformPosition`

@@ -1,0 +1,3986 @@
+{
+  "timeSeries": [
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "applyOrderTransition",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "assignMessengerToOrders",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "cleanupShopifySyncIssues"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "closeOrder"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T03:00:00Z",
+            "endTime": "2026-11-10T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "32"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "189"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "28"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "107"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "118"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "102"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "94"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "130"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "44"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "138"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "confirmImportedOrder",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "correctOrderStatus"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "createOrUpdatePickupBatch"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T03:00:00Z",
+            "endTime": "2026-11-10T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "createSettlement"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "createStoreWebhookConfig",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "getBootstrapStatus",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "21"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "16"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "16"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "17"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "24"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "24"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "getCashOutstanding"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "getMyStoreTariff",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "getOrderAuditTrail",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "getOrderStats",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "getSellerBalance"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "7"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "27"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "30"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T20:00:00Z",
+            "endTime": "2026-11-07T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "23"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "27"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "28"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "notifyOverdueCash"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "onSettingsFloorRaise"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "onstockOrderWebhook"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T03:00:00Z",
+            "endTime": "2026-11-09T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "7"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T20:00:00Z",
+            "endTime": "2026-11-07T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "pullUchatConfirmations",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T03:00:00Z",
+            "endTime": "2026-11-10T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T09:00:00Z",
+            "endTime": "2026-11-09T10:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T07:00:00Z",
+            "endTime": "2026-11-09T08:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T06:00:00Z",
+            "endTime": "2026-11-09T07:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T05:00:00Z",
+            "endTime": "2026-11-09T06:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T04:00:00Z",
+            "endTime": "2026-11-09T05:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T03:00:00Z",
+            "endTime": "2026-11-09T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "recordDriverCashReceipt"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "recordSellerAbono"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "repairOwnDriverProfile",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "16"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "shopifyWebhook"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T09:00:00Z",
+            "endTime": "2026-11-09T10:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T04:00:00Z",
+            "endTime": "2026-11-09T05:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T03:00:00Z",
+            "endTime": "2026-11-09T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "15"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "21"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "49"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "60"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "44"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "159"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T20:00:00Z",
+            "endTime": "2026-11-07T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "29"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "69"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "56"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "55"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "63"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "87"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "103"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "ssrkentrolastmile",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "125"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "126"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T09:00:00Z",
+            "endTime": "2026-11-09T10:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T07:00:00Z",
+            "endTime": "2026-11-09T08:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T06:00:00Z",
+            "endTime": "2026-11-09T07:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "123"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "3"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "1"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "6"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "4"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "storeApi"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T03:00:00Z",
+            "endTime": "2026-11-10T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T09:00:00Z",
+            "endTime": "2026-11-09T10:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T07:00:00Z",
+            "endTime": "2026-11-09T08:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T06:00:00Z",
+            "endTime": "2026-11-09T07:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T05:00:00Z",
+            "endTime": "2026-11-09T06:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T04:00:00Z",
+            "endTime": "2026-11-09T05:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T03:00:00Z",
+            "endTime": "2026-11-09T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "11"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "7"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T20:00:00Z",
+            "endTime": "2026-11-07T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "19"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "10"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "15"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "storeOrderWebhook",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "19"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "97"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T03:00:00Z",
+            "endTime": "2026-11-10T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T02:00:00Z",
+            "endTime": "2026-11-10T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T01:00:00Z",
+            "endTime": "2026-11-10T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "31"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-10T00:00:00Z",
+            "endTime": "2026-11-10T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "15"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T23:00:00Z",
+            "endTime": "2026-11-10T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T22:00:00Z",
+            "endTime": "2026-11-09T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T20:00:00Z",
+            "endTime": "2026-11-09T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "21"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T19:00:00Z",
+            "endTime": "2026-11-09T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "23"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T18:00:00Z",
+            "endTime": "2026-11-09T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T17:00:00Z",
+            "endTime": "2026-11-09T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "17"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "22"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T15:00:00Z",
+            "endTime": "2026-11-09T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "14"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T13:00:00Z",
+            "endTime": "2026-11-09T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "35"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "32"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "24"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T10:00:00Z",
+            "endTime": "2026-11-09T11:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T09:00:00Z",
+            "endTime": "2026-11-09T10:00:00Z"
+          },
+          "value": {
+            "int64Value": "20"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T08:00:00Z",
+            "endTime": "2026-11-09T09:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T07:00:00Z",
+            "endTime": "2026-11-09T08:00:00Z"
+          },
+          "value": {
+            "int64Value": "5"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T06:00:00Z",
+            "endTime": "2026-11-09T07:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T05:00:00Z",
+            "endTime": "2026-11-09T06:00:00Z"
+          },
+          "value": {
+            "int64Value": "33"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T04:00:00Z",
+            "endTime": "2026-11-09T05:00:00Z"
+          },
+          "value": {
+            "int64Value": "33"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T03:00:00Z",
+            "endTime": "2026-11-09T04:00:00Z"
+          },
+          "value": {
+            "int64Value": "50"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T02:00:00Z",
+            "endTime": "2026-11-09T03:00:00Z"
+          },
+          "value": {
+            "int64Value": "37"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T01:00:00Z",
+            "endTime": "2026-11-09T02:00:00Z"
+          },
+          "value": {
+            "int64Value": "67"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T00:00:00Z",
+            "endTime": "2026-11-09T01:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T23:00:00Z",
+            "endTime": "2026-11-09T00:00:00Z"
+          },
+          "value": {
+            "int64Value": "21"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T22:00:00Z",
+            "endTime": "2026-11-08T23:00:00Z"
+          },
+          "value": {
+            "int64Value": "25"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "95"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "68"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T20:00:00Z",
+            "endTime": "2026-11-07T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "26"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "60"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T18:00:00Z",
+            "endTime": "2026-11-07T19:00:00Z"
+          },
+          "value": {
+            "int64Value": "41"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T17:00:00Z",
+            "endTime": "2026-11-07T18:00:00Z"
+          },
+          "value": {
+            "int64Value": "48"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T16:00:00Z",
+            "endTime": "2026-11-07T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "91"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T15:00:00Z",
+            "endTime": "2026-11-07T16:00:00Z"
+          },
+          "value": {
+            "int64Value": "40"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T14:00:00Z",
+            "endTime": "2026-11-07T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "81"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "syncShopifyHistoricalOrders"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-08T21:00:00Z",
+            "endTime": "2026-11-08T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "0"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-08T20:00:00Z",
+            "endTime": "2026-11-08T21:00:00Z"
+          },
+          "value": {
+            "int64Value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "function_name": "unassignMessengerFromOrders",
+          "project_id": "kentro-last-mile"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T13:00:00Z",
+            "endTime": "2026-11-10T14:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T21:00:00Z",
+            "endTime": "2026-11-09T22:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "updateImportedOrder"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-10T12:00:00Z",
+            "endTime": "2026-11-10T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "9"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T16:00:00Z",
+            "endTime": "2026-11-09T17:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T12:00:00Z",
+            "endTime": "2026-11-09T13:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-09T11:00:00Z",
+            "endTime": "2026-11-09T12:00:00Z"
+          },
+          "value": {
+            "int64Value": "18"
+          }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "cloudfunctions.googleapis.com/function/execution_count"
+      },
+      "resource": {
+        "type": "cloud_function",
+        "labels": {
+          "project_id": "kentro-last-mile",
+          "function_name": "updateSettlementStatus"
+        }
+      },
+      "metricKind": "DELTA",
+      "valueType": "INT64",
+      "points": [
+        {
+          "interval": {
+            "startTime": "2026-11-09T14:00:00Z",
+            "endTime": "2026-11-09T15:00:00Z"
+          },
+          "value": {
+            "int64Value": "8"
+          }
+        },
+        {
+          "interval": {
+            "startTime": "2026-11-07T19:00:00Z",
+            "endTime": "2026-11-07T20:00:00Z"
+          },
+          "value": {
+            "int64Value": "2"
+          }
+        }
+      ]
+    }
+  ],
+  "unit": "1"
+}

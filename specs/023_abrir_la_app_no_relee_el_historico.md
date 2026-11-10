@@ -1,6 +1,6 @@
 # Spec 023: Abrir la app no relee el histórico
 
-- **Estado:** borrador
+- **Estado:** aprobada (fases A y B, por el responsable, 2026-11-10)
 - **Autor:** Claude, a petición del responsable de la plataforma
 - **Fecha:** 2026-10-01
 - **Origen:** revisión de la subida del costo de Google Cloud, hecha el 2026-10-01 desde
@@ -39,6 +39,26 @@ mañana, cierres y cortes de la tarde. La causa está documentada en `docs/rendi
   carga completa.
 
 Por eso el costo crece con el histórico de la plataforma, no con el trabajo del día.
+
+### 1.1 Línea base del 2026-11-10: el que más lee no es la app, es la API de tiendas
+
+Medido con la misma métrica (detalle y datos crudos en `.sdd/evidence/023/baseline.md`):
+
+- El proyecto lee **~2,5 M documentos por día hábil** (mediana 27-oct a 9-nov).
+- El suelo nocturno ya no es de 13.000/h sino de **~72.000–78.000/h constantes**, unos 1,75 M/día.
+- Ese suelo lo produce `GET /orders?from=&to=` de la API de tiendas (`functions/src/store-api.ts`):
+  aunque pida un solo día, cada llamada lee **todos** los pedidos de la tienda, **todos** sus asientos
+  y **todos** los cortes. Para DANDA son **19.148 lecturas por llamada**. Las integraciones de las
+  tiendas la consultan cada hora, día y noche.
+- **La API de tiendas es entre el 66 % y el 80 % de todas las lecturas.** Abrir la app es el resto,
+  ~0,6–0,9 M/día.
+
+Por eso esta spec se parte en dos fases, en este orden:
+
+- **Fase A — la API de tiendas lee solo el rango pedido** (RF_09 a RF_12). Solo servidor, sin
+  pantalla, y por sí sola debería cumplir RNF_01.
+- **Fase B — abrir la app no relee el histórico** (RF_01 a RF_08). El objetivo original. Se mide de
+  nuevo después de la fase A, con su propio plan, porque toca las pantallas de dinero del admin.
 
 **Objetivo:** que lo que cuesta abrir la app dependa de lo que la pantalla muestra, no
 del tamaño del histórico, sin que ninguna cifra de dinero cambie.
@@ -88,8 +108,28 @@ producir una cifra de dinero menor sin aviso.
   dejar un aviso visible para el responsable. El aviso no puede bloquear el uso de la
   app.
 
+### Fase A — API de tiendas
+
+- **RF_09 (evento):** **Cuando** una tienda pide `GET /orders` o `GET /kpis` con `from` o `to`, el
+  sistema MUST leer de la base de datos solo los pedidos de esa tienda cuya fecha cae en el rango, y
+  MUST NOT leer los pedidos de fuera del rango.
+- **RF_10 (evento):** **Cuando** `GET /orders` necesita el estado de pago de los pedidos devueltos, el
+  sistema MUST leer solo los asientos de esos pedidos, y MUST NOT leer el resto de los asientos de la
+  tienda.
+- **RF_11 (ubicua):** La respuesta de `GET /orders` y `GET /kpis` MUST ser idéntica, campo por campo y
+  peso por peso, a la que da hoy para el mismo rango. Se demuestra con una prueba que compara las dos
+  cargas con los mismos datos y con una comparación contra producción de la respuesta antes y después.
+- **RF_12 (error):** **Si** la lectura dirigida de asientos falla en parte, el sistema MUST responder
+  con error y MUST NOT devolver un estado de pago calculado con asientos incompletos.
+
+Sin `from` ni `to`, y en `/resumen` y `/settlements`, la carga sigue como hoy: el saldo de la tienda
+necesita el histórico completo (spec 018) y esas rutas se piden pocas veces.
+
 ## 4. Requisitos no funcionales
 
+- **RNF_04 (fase A):** Una llamada `GET /orders` de un día de DANDA MUST leer menos de 1.000
+  documentos (hoy 19.148), y la mediana de lecturas por hora entre las 0 y las 6 h MUST bajar de
+  ~72.000 a menos de 15.000.
 - **RNF_01:** En una semana normal después del despliegue, las lecturas totales del
   proyecto MUST bajar al menos un 70 % respecto a la línea base medida antes del cambio.
   Se mide con la métrica de lecturas de la base de datos por hora, como en la sección 1.
@@ -121,8 +161,9 @@ producir una cifra de dinero menor sin aviso.
   los datos y cuántos se leen.
 - **Los webhooks de Shopify, de tiendas y de OnStock**, salvo que la medición de la línea
   base demuestre que pesan. Hoy suman unas 47.000 ejecuciones al mes.
-- **La lectura nocturna constante de unas 13.000 por hora.** El plan técnico debe
-  atribuirla. Si no la causa la app abierta, va en una spec propia.
+- ~~La lectura nocturna constante~~ **Ya atribuida (1.1):** es la API de tiendas, y entra en la fase A.
+- **Cambiar la frecuencia con que las integraciones de las tiendas consultan la API.** No son
+  nuestras. Si tras la fase A siguen pesando, se habla con cada tienda o se pone un límite, en otra spec.
 - **La búsqueda en el servidor para líder y mensajero**, que es otro punto pendiente de
   `docs/rendimiento.md`.
 
@@ -145,6 +186,8 @@ producir una cifra de dinero menor sin aviso.
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-10-01 | Borrador inicial | Subida del costo de Google Cloud: las lecturas se duplicaron de agosto a septiembre |
+| 2026-11-10 | Aprobada A y B juntas; GraphQL se mantiene para evaluarlo en el plan de la fase B | Decisión del responsable |
+| 2026-11-10 | Línea base nueva (1.1), fase A (RF_09–RF_12, RNF_04) antes de la fase B | La medición atribuye el 66–80 % de las lecturas a `GET /orders` de la API de tiendas, no a abrir la app |
 
 ## 9. Decisiones de arquitectura pedidas por el dueño (se concretan en el plan)
 

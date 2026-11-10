@@ -1,0 +1,105 @@
+┌─────────┬────────────┬────────────────────────────────────────────────────┬───────────┬─────────┬───────────────┬─────────────────┬─────────┬───────────┬──────────┐
+│ (index) │ tienda     │ ruta                                               │ http      │ pedidos │ lecturasAntes │ lecturasDespues │ msAntes │ msDespues │ identica │
+├─────────┼────────────┼────────────────────────────────────────────────────┼───────────┼─────────┼───────────────┼─────────────────┼─────────┼───────────┼──────────┤
+│ 0       │ 'DANDA'    │ '/orders?limit=1000&from=2026-11-10&to=2026-11-10' │ '200/200' │ 2       │ 19151         │ 113             │ 4400    │ 593       │ 'si'     │
+│ 1       │ 'DANDA'    │ '/orders?limit=1000&from=2026-10-14&to=2026-10-14' │ '200/200' │ 26      │ 19151         │ 204             │ 3950    │ 690       │ 'si'     │
+│ 2       │ 'DANDA'    │ '/orders?limit=1000&from=2026-11-03&to=2026-11-09' │ '200/200' │ 549     │ 19151         │ 1215            │ 4055    │ 905       │ 'si'     │
+│ 3       │ 'DANDA'    │ '/kpis?from=2026-11-01&to=2026-11-10'              │ '200/200' │ '-'     │ 7083          │ 676             │ 2334    │ 386       │ 'si'     │
+│ 4       │ 'Kovia'    │ '/orders?limit=1000&from=2026-11-10&to=2026-11-10' │ '200/200' │ 0       │ 576           │ 111             │ 839     │ 596       │ 'si'     │
+│ 5       │ 'Kovia'    │ '/orders?limit=1000&from=2026-09-26&to=2026-11-10' │ '200/200' │ 67      │ 576           │ 291             │ 722     │ 762       │ 'si'     │
+│ 6       │ 'Kovia'    │ '/orders?limit=300'                                │ '200/200' │ 182     │ 576           │ 576             │ 696     │ 735       │ 'si'     │
+│ 7       │ 'Infinito' │ '/orders?limit=1000&from=2026-11-07&to=2026-11-10' │ '200/200' │ 1       │ 117           │ 112             │ 453     │ 464       │ 'si'     │
+└─────────┴────────────┴────────────────────────────────────────────────────┴───────────┴─────────┴───────────────┴─────────────────┴─────────┴───────────┴──────────┘
+{
+  "at": "2026-11-10T14:37:07.047Z",
+  "rows": [
+    {
+      "tienda": "DANDA",
+      "ruta": "/orders?limit=1000&from=2026-11-10&to=2026-11-10",
+      "http": "200/200",
+      "pedidos": 2,
+      "lecturasAntes": 19151,
+      "lecturasDespues": 113,
+      "msAntes": 4400,
+      "msDespues": 593,
+      "identica": "si"
+    },
+    {
+      "tienda": "DANDA",
+      "ruta": "/orders?limit=1000&from=2026-10-14&to=2026-10-14",
+      "http": "200/200",
+      "pedidos": 26,
+      "lecturasAntes": 19151,
+      "lecturasDespues": 204,
+      "msAntes": 3950,
+      "msDespues": 690,
+      "identica": "si"
+    },
+    {
+      "tienda": "DANDA",
+      "ruta": "/orders?limit=1000&from=2026-11-03&to=2026-11-09",
+      "http": "200/200",
+      "pedidos": 549,
+      "lecturasAntes": 19151,
+      "lecturasDespues": 1215,
+      "msAntes": 4055,
+      "msDespues": 905,
+      "identica": "si"
+    },
+    {
+      "tienda": "DANDA",
+      "ruta": "/kpis?from=2026-11-01&to=2026-11-10",
+      "http": "200/200",
+      "pedidos": "-",
+      "lecturasAntes": 7083,
+      "lecturasDespues": 676,
+      "msAntes": 2334,
+      "msDespues": 386,
+      "identica": "si"
+    },
+    {
+      "tienda": "Kovia",
+      "ruta": "/orders?limit=1000&from=2026-11-10&to=2026-11-10",
+      "http": "200/200",
+      "pedidos": 0,
+      "lecturasAntes": 576,
+      "lecturasDespues": 111,
+      "msAntes": 839,
+      "msDespues": 596,
+      "identica": "si"
+    },
+    {
+      "tienda": "Kovia",
+      "ruta": "/orders?limit=1000&from=2026-09-26&to=2026-11-10",
+      "http": "200/200",
+      "pedidos": 67,
+      "lecturasAntes": 576,
+      "lecturasDespues": 291,
+      "msAntes": 722,
+      "msDespues": 762,
+      "identica": "si"
+    },
+    {
+      "tienda": "Kovia",
+      "ruta": "/orders?limit=300",
+      "http": "200/200",
+      "pedidos": 182,
+      "lecturasAntes": 576,
+      "lecturasDespues": 576,
+      "msAntes": 696,
+      "msDespues": 735,
+      "identica": "si"
+    },
+    {
+      "tienda": "Infinito",
+      "ruta": "/orders?limit=1000&from=2026-11-07&to=2026-11-10",
+      "http": "200/200",
+      "pedidos": 1,
+      "lecturasAntes": 117,
+      "lecturasDespues": 112,
+      "msAntes": 453,
+      "msDespues": 464,
+      "identica": "si"
+    }
+  ]
+}
