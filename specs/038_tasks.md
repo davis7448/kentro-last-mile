@@ -246,9 +246,10 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     KNT-005724 y KNT-006347 da la opcion A ($686.200 − $54.000 = $632.200 con los datos del 2026-11-09), con esos dos listados como pendientes; aplicar sobre
     el fixture libera exactamente esas filas con autor y motivo. **No** se corre con `--apply`
 
-- [ ] **T21: El script de medicion usa el modulo y comprueba antes de desplegar**
+- [x] **T21: El script de medicion usa el modulo y comprueba antes de desplegar**
   * Requisitos cubiertos: RF_05b, RNF_01
-  * Archivos: specs/038_measure.js
+  * Archivos: specs/038_measure.js, src/lib/measure-038.test.ts (anadido al ejecutar: las pruebas del script,
+    que pasa a exportar sus funciones y solo lee produccion al ejecutarse directamente)
   * Accion: quita su copia de la regla e importa `rebuildHistoricalCharges` y `orderOwedByDriver` de
     `functions/lib`; `--check` falla si un solo pedido con asignacion no reconstruye su cifra;
     `--deploy-check` compara, para cada corte pendiente y el siguiente de cada domiciliario, esperado viejo

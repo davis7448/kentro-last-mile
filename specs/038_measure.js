@@ -3,12 +3,16 @@
  * Spec 038 — SOLO LECTURA. Mide, pedido a pedido, cuanto efectivo le cobraron los cortes a cada
  * domiciliario de mas (o de menos) frente a lo que justifican los asientos actuales.
  *
- * No escribe nada: solo hace `get()` sobre settlements, walletEntries y orders. Credenciales ADC,
- * como dice CLAUDE.md ("Verificar datos en vivo").
+ * No escribe nada en Firestore: solo hace `get()` sobre settlements, walletEntries y orders. Credenciales ADC,
+ * como dice CLAUDE.md ("Verificar datos en vivo"). La regla NO es una copia: sale de `functions/lib`
+ * (`rebuildHistoricalCharges`, `orderOwedByDriver`, RF_05b), asi que hay que compilar antes con
+ * `cd functions && npm run build`.
  *
  *   node specs/038_measure.js                       # todos los domiciliarios, resumen
  *   node specs/038_measure.js driver-1778271901513  # un domiciliario, detalle por pedido
- *   node specs/038_measure.js --json salida.json    # ademas vuelca el detalle en JSON
+ *   node specs/038_measure.js --json salida.json    # ademas vuelca el detalle en JSON (archivo local)
+ *   node specs/038_measure.js --check               # T21: falla si un corte viejo no cuadra con lo guardado
+ *   node specs/038_measure.js --deploy-check        # T21 (RNF_01): regla vieja vs nueva antes de desplegar
  *   node specs/038_measure.js driver-X --fixtures src/lib/fixtures
  *       # T6: vuelca, ANONIMIZADOS, los casos reales de la spec como fixtures de prueba (ver abajo)
  *
@@ -17,43 +21,180 @@
  *  - "debido"   = por cada pedido UNICO de sus cortes: COD neto de la tienda (cod_revenue +
  *                 cod_remittance) menos lo que el gana por ese pedido (driver_earning, solo suyos).
  *                 Es lo que el domiciliario debe entregar si cada asiento se cobra una sola vez.
- *  - Por pedido: cuanto aporto cada corte que lo contenia, reconstruido con los asientos que
- *    existian cuando ese corte se calculo por ultima vez (creacion, abonos, pago o conciliacion).
- *    La reconstruccion se valida contra el `cashExpectedCop` guardado; los cortes que no cuadran
- *    se listan aparte.
+ *  - Por pedido: cuanto aporto cada corte que lo contenia. Un corte viejo se reconstruye con la regla de la
+ *    foto historica (asignacion guardada si existe; si no, los asientos que existian cuando ese corte se
+ *    calculo por ultima vez). Un corte nuevo (con `cashCharges`) aporta lo que guardo. La reconstruccion se
+ *    valida contra el `cashExpectedCop` guardado; los cortes que no cuadran se listan aparte.
  *  - Riesgo de `buildCodReceivedSet`: pedidos con asignacion en un corte saldado que despues
  *    recibieron COD nuevo (otra entrega tras una correccion). Hoy deberia dar 0.
+ *
+ * `--check` falla (codigo de salida 1) si un solo corte viejo no cuadra o si un pedido con asignacion no
+ * reconstruye exactamente su cifra. `--deploy-check` (RNF_01) compara, para cada corte pendiente y para el
+ * siguiente corte de cada domiciliario, el esperado de la regla vieja con el de la nueva CON las retenciones que
+ * escribiria la foto, y el conjunto de "recibidos" viejo con el nuevo; falla si alguna diferencia no es 0 (esa
+ * cifra la aprueba el responsable antes de desplegar).
  */
-const admin = require("../functions/node_modules/firebase-admin");
 const fs = require("fs");
-
-admin.initializeApp({ projectId: "kentro-last-mile" });
-const db = admin.firestore();
-
-const args = process.argv.slice(2);
-const jsonIdx = args.indexOf("--json");
-const jsonOut = jsonIdx >= 0 ? args[jsonIdx + 1] : null;
-const fixturesIdx = args.indexOf("--fixtures");
-const fixturesDir = fixturesIdx >= 0 ? args[fixturesIdx + 1] : null;
-const valueIdx = new Set([jsonIdx, fixturesIdx].filter((i) => i >= 0).map((i) => i + 1));
-const onlyDriver = args.find((a, i) => !a.startsWith("--") && !valueIdx.has(i)) || null;
 const path = require("path");
+
+const LIB = path.resolve(__dirname, "../functions/lib");
+function requireLib(name) {
+  try {
+    return require(path.join(LIB, name));
+  } catch (error) {
+    throw new Error(`No se encontro functions/lib/${name}. Compila antes: cd functions && npm run build (${error.message})`);
+  }
+}
 
 const COD_TYPES = new Set(["cod_revenue", "cod_remittance"]);
 const cop = (n) => Math.round(n).toLocaleString("es-CO");
 const num = (v) => Number(v || 0);
-
-/** Ultimo instante en que el corte recalculo su efectivo esperado (lo hace en cada abono y al pagar/conciliar). */
-function lastComputedAt(s) {
-  const times = [s.createdAt, s.paidAt, s.reconciledAt, ...(s.cashReceipts ?? []).map((r) => r.receivedAt)]
-    .filter(Boolean)
-    .map(String);
-  return times.sort().pop() ?? "";
-}
+const byCreatedAt = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
 
 function isSettled(s) {
   const received = typeof s.cashReceivedCop === "number" ? s.cashReceivedCop : (s.cashReceipts ?? []).reduce((a, r) => a + num(r.amountCop), 0);
   return (s.status === "paid" || s.status === "reconciled") && num(s.cashPendingCop) === 0 && typeof s.cashExpectedCop === "number" && received >= s.cashExpectedCop;
+}
+
+/** Recaudo de tienda y pago propio del domiciliario, por pedido (lo que necesita la reconstruccion). */
+function entriesByOrderFor(entries, driverId) {
+  const codByOrder = new Map();
+  const payByOrder = new Map();
+  for (const e of entries) {
+    if (!e.orderId) continue;
+    if (e.ownerType === "seller" && COD_TYPES.has(e.type)) codByOrder.set(e.orderId, [...(codByOrder.get(e.orderId) ?? []), e]);
+    if (e.ownerType === "driver" && e.ownerId === driverId && e.type === "driver_earning") payByOrder.set(e.orderId, [...(payByOrder.get(e.orderId) ?? []), e]);
+  }
+  return { codByOrder, payByOrder };
+}
+
+/** La medicion de un domiciliario. `entries`: asientos de tienda y de domiciliarios (de cualquiera). */
+function measureDriver({ driverId, cortes, entries, orders }) {
+  const { rebuildHistoricalCharges, orderOwedByDriver } = requireLib("driver-cash-ledger.js");
+  const { codByOrder, payByOrder } = entriesByOrderFor(entries, driverId);
+  const sorted = [...cortes].sort(byCreatedAt);
+  let chargedTotal = 0;
+  const perOrder = new Map();
+  const unverifiable = [];
+  const allocationMismatches = [];
+  const riskRows = [];
+  for (const s of sorted) {
+    chargedTotal += num(s.cashExpectedCop);
+    let contrib;
+    if (Array.isArray(s.cashCharges)) {
+      contrib = s.cashCharges.map((c) => ({ orderId: String(c.orderId), cop: num(c.chargedCop) }));
+    } else {
+      const rows = rebuildHistoricalCharges(s, codByOrder, payByOrder);
+      contrib = rows.map((r) => ({ orderId: r.orderId, cop: r.chargedCop }));
+      const reconstructed = Math.max(0, rows.reduce((a, r) => a + r.chargedCop, 0));
+      if (Math.abs(reconstructed - num(s.cashExpectedCop)) > 1) {
+        unverifiable.push({ id: s.id, createdAt: s.createdAt, status: s.status, storedCop: num(s.cashExpectedCop), reconstructedCop: reconstructed });
+      }
+      const rowByOrder = new Map(rows.map((r) => [r.orderId, r]));
+      const inCorte = new Set((s.orderIds ?? []).map(String));
+      for (const a of s.cashAllocations ?? []) {
+        if (!a.orderId || !inCorte.has(String(a.orderId))) continue;
+        const row = rowByOrder.get(String(a.orderId));
+        if (!row || row.source !== "allocation" || row.chargedCop !== num(a.expectedCop)) {
+          allocationMismatches.push({ settlementId: s.id, orderId: String(a.orderId), storedCop: num(a.expectedCop), rebuiltCop: row ? row.chargedCop : null });
+        }
+      }
+    }
+    for (const c of contrib) {
+      const row = perOrder.get(c.orderId) ?? { contributions: [] };
+      row.contributions.push({ settlementId: s.id, createdAt: s.createdAt, status: s.status, cop: c.cop });
+      perOrder.set(c.orderId, row);
+    }
+    if (isSettled(s) && Array.isArray(s.cashAllocations)) {
+      const closedAt = String(s.reconciledAt || s.paidAt || "");
+      for (const a of s.cashAllocations) {
+        const later = (codByOrder.get(a.orderId) ?? []).filter((e) => closedAt && String(e.createdAt ?? "") > closedAt && num(e.amountCop) > 0);
+        if (later.length > 0) riskRows.push({ driverId, settlementId: s.id, orderId: a.orderId, laterCodCop: later.reduce((t, e) => t + num(e.amountCop), 0) });
+      }
+    }
+  }
+
+  const owed = orderOwedByDriver(entries, driverId);
+  let dueTotal = 0;
+  const rows = [];
+  for (const [orderId, row] of perOrder) {
+    const due = owed.get(orderId)?.owedCop ?? 0;
+    dueTotal += due;
+    const chargedForOrder = row.contributions.reduce((a, c) => a + c.cop, 0);
+    const excess = chargedForOrder - due;
+    if (Math.abs(excess) >= 1) {
+      rows.push({ orderId, trackingCode: orders.get(orderId)?.trackingCode ?? "?", status: orders.get(orderId)?.status ?? "?", dueCop: due, chargedCop: chargedForOrder, excessCop: excess, contributions: row.contributions });
+    }
+  }
+  rows.sort((a, b) => b.excessCop - a.excessCop);
+  return {
+    driverId, cortes: sorted.length, orders: perOrder.size, chargedTotal, dueTotal, diff: chargedTotal - dueTotal,
+    perOrderExcess: rows.reduce((a, r) => a + r.excessCop, 0), rows, unverifiable, allocationMismatches, riskRows
+  };
+}
+
+/** `--check`: lo que no cuadra, una linea por problema. Vacio = en verde. */
+function checkFailures(reports) {
+  const failures = [];
+  for (const r of reports) {
+    for (const u of r.unverifiable) failures.push(`${r.driverId}: corte ${u.id} guardado ${cop(u.storedCop)} reconstruido ${cop(u.reconstructedCop)}`);
+    for (const m of r.allocationMismatches) failures.push(`${r.driverId}: corte ${m.settlementId} pedido ${m.orderId} asignacion ${cop(m.storedCop)} reconstruido ${m.rebuiltCop === null ? "sin fila" : cop(m.rebuiltCop)}`);
+  }
+  return failures;
+}
+
+/**
+ * `--deploy-check` de un domiciliario (RNF_01). Regla vieja = `computeDriverCashSummary`, tal cual la llamaba
+ * `loadDriverCashInputs` (todos los asientos de tienda y de domiciliarios). Regla nueva = la del corte, con el
+ * contexto que dejaria la foto escrita AHORA (`buildDriverLedgerSnapshot`). Devuelve tambien los cortes
+ * pendientes ya recalculados con la regla nueva, para comparar los "recibidos".
+ */
+function deployCheckDriver({ driverId, cortes, entries, orderMeta, now }) {
+  const ledger = requireLib("driver-cash-ledger.js");
+  const { computeDriverCashSummary, settlementCashReceivedCop } = requireLib("settlement-math.js");
+  const { isLiquidationWalletType } = requireLib("wallet-entries.js");
+  const { context } = ledger.buildDriverLedgerSnapshot({ driverId, settlements: cortes, entries, now, createdBy: "deploy-check" });
+  const oldInputs = {
+    sellerEntries: entries.filter((e) => e.ownerType === "seller"),
+    driverEntries: entries.filter((e) => e.ownerType === "driver"),
+    orderMeta
+  };
+  const newEntries = entries.filter((e) => e.ownerType === "seller" || (e.ownerType === "driver" && e.ownerId === driverId));
+
+  const pending = [];
+  const simulatedCortes = [];
+  for (const corte of [...cortes].sort(byCreatedAt)) {
+    if (corte.status !== "pending" || Array.isArray(corte.cashCharges)) continue;
+    const orderIds = Array.from(new Set((corte.orderIds ?? []).map(String)));
+    const receivedCop = settlementCashReceivedCop(corte);
+    const oldCop = computeDriverCashSummary(oldInputs, orderIds, receivedCop).expectedCop;
+    const fields = ledger.buildDriverSettlementFields({
+      settlementId: corte.id, orderIds, ownEntryIds: (corte.walletEntryIds ?? []).map(String), entries: newEntries, context, receivedCop, orderMeta
+    });
+    pending.push({ settlementId: corte.id, oldCop, newCop: fields.cashExpectedCop, deltaCop: fields.cashExpectedCop - oldCop });
+    simulatedCortes.push({ ...corte, ...fields });
+  }
+
+  const ownUnsettled = entries.filter((e) => e.ownerType === "driver" && e.ownerId === driverId && !e.settlementId && e.orderId && isLiquidationWalletType(String(e.type ?? "")));
+  const oldOrderIds = Array.from(new Set(ownUnsettled.map((e) => String(e.orderId))));
+  const oldCop = oldOrderIds.length ? computeDriverCashSummary(oldInputs, oldOrderIds, 0).expectedCop : 0;
+  const newOrderIds = ledger.driverCorteOrderIdsAtCreation(ownUnsettled, newEntries, context);
+  const newCop = newOrderIds.length
+    ? ledger.computeDriverCorte({ settlementId: "deploy-check-next", orderIds: newOrderIds, ownEntryIds: ownUnsettled.map((e) => String(e.id)), entries: newEntries, context, orderMeta }).cashExpectedCop
+    : 0;
+  return { pending, next: { oldOrderIds, newOrderIds, oldCop, newCop, deltaCop: newCop - oldCop }, simulatedCortes };
+}
+
+/** "Recibidos" de hoy (regla vieja) frente a los de despues de desplegar, con los pendientes ya recalculados. */
+function receivedDiff({ settlements, simulated, entries }) {
+  const { buildCodReceivedSet, codEntriesByOrder } = requireLib("seller-ledger.js");
+  const before = buildCodReceivedSet(settlements);
+  const replaced = new Map(simulated.map((s) => [s.id, s]));
+  const after = buildCodReceivedSet(settlements.map((s) => replaced.get(s.id) ?? s), codEntriesByOrder(entries));
+  return {
+    added: [...after].filter((id) => !before.has(id)).sort(),
+    removed: [...before].filter((id) => !after.has(id)).sort()
+  };
 }
 
 /**
@@ -144,7 +285,21 @@ function writeFixtures({ fixturesDir, driverId, report, orders, settlementsByDri
   build("038-driver-16.json", sixteen, corte56.map((s) => s.id));
 }
 
-(async () => {
+async function main() {
+  const args = process.argv.slice(2);
+  const jsonIdx = args.indexOf("--json");
+  const jsonOut = jsonIdx >= 0 ? args[jsonIdx + 1] : null;
+  const fixturesIdx = args.indexOf("--fixtures");
+  const fixturesDir = fixturesIdx >= 0 ? args[fixturesIdx + 1] : null;
+  const valueIdx = new Set([jsonIdx, fixturesIdx].filter((i) => i >= 0).map((i) => i + 1));
+  const onlyDriver = args.find((a, i) => !a.startsWith("--") && !valueIdx.has(i)) || null;
+  const runCheck = args.includes("--check");
+  const runDeployCheck = args.includes("--deploy-check");
+
+  const admin = require("../functions/node_modules/firebase-admin");
+  admin.initializeApp({ projectId: "kentro-last-mile" });
+  const db = admin.firestore();
+
   const [settlementSnap, sellerEntrySnap, driverEntrySnap, orderSnap] = await Promise.all([
     db.collection("settlements").where("kind", "==", "driver").get(),
     db.collection("walletEntries").where("ownerType", "==", "seller").get(),
@@ -152,98 +307,27 @@ function writeFixtures({ fixturesDir, driverId, report, orders, settlementsByDri
     db.collection("orders").select("trackingCode", "status", "driverId", "createdAt", "paymentMethod").get()
   ]);
   const orders = new Map(orderSnap.docs.map((d) => [d.id, d.data()]));
-  const codEntriesByOrder = new Map();
+  const sellerEntries = sellerEntrySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const driverEntries = driverEntrySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const entries = [...sellerEntries, ...driverEntries];
   const sellerEntriesByOrder = new Map(); // todos los asientos de tienda, para los fixtures
-  for (const doc of sellerEntrySnap.docs) {
-    const e = doc.data();
-    if (e.orderId) {
-      const all = sellerEntriesByOrder.get(e.orderId) ?? [];
-      all.push({ id: doc.id, ...e });
-      sellerEntriesByOrder.set(e.orderId, all);
-    }
-    if (!COD_TYPES.has(e.type) || !e.orderId) continue;
-    const list = codEntriesByOrder.get(e.orderId) ?? [];
-    list.push({ id: doc.id, ...e });
-    codEntriesByOrder.set(e.orderId, list);
-  }
-  const payByDriverOrder = new Map(); // `${driver}|${order}` -> asientos driver_earning
-  for (const doc of driverEntrySnap.docs) {
-    const e = doc.data();
+  for (const e of sellerEntries) if (e.orderId) sellerEntriesByOrder.set(e.orderId, [...(sellerEntriesByOrder.get(e.orderId) ?? []), e]);
+  const payByDriverOrder = new Map(); // `${driver}|${order}` -> asientos driver_earning, para los fixtures
+  for (const e of driverEntries) {
     if (e.type !== "driver_earning" || !e.orderId) continue;
     const key = `${e.ownerId}|${e.orderId}`;
-    const list = payByDriverOrder.get(key) ?? [];
-    list.push({ id: doc.id, ...e });
-    payByDriverOrder.set(key, list);
+    payByDriverOrder.set(key, [...(payByDriverOrder.get(key) ?? []), e]);
   }
+  const allSettlements = settlementSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   const settlementsByDriver = new Map();
-  for (const doc of settlementSnap.docs) {
-    const s = { id: doc.id, ...doc.data() };
-    const list = settlementsByDriver.get(s.ownerId) ?? [];
-    list.push(s);
-    settlementsByDriver.set(s.ownerId, list);
-  }
+  for (const s of allSettlements) settlementsByDriver.set(s.ownerId, [...(settlementsByDriver.get(s.ownerId) ?? []), s]);
 
-  const sum = (list, until) => (list ?? []).filter((e) => !until || String(e.createdAt ?? "") <= until).reduce((a, e) => a + num(e.amountCop), 0);
   const report = [];
-  const riskRows = [];
   for (const [driverId, cortes] of settlementsByDriver) {
     if (onlyDriver && driverId !== onlyDriver) continue;
-    cortes.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-
-    let chargedTotal = 0;
-    const perOrder = new Map();
-    const unverifiable = [];
-    for (const s of cortes) {
-      chargedTotal += num(s.cashExpectedCop);
-      const until = lastComputedAt(s);
-      const ids = Array.from(new Set(s.orderIds ?? []));
-      // Lo cobrado por pedido sale de la asignacion GUARDADA en el corte cuando existe: es el registro
-      // de lo que se le pidio. Reconstruir desde asientos falla cuando una correccion los borro despues
-      // (KNT-004540, KNT-007828: el COD de la tienda se elimino porque su corte de tienda seguia
-      // pendiente). Sin asignacion (pedido sin efectivo neto, cortes viejos) se reconstruye.
-      // Si el corte tiene asignaciones, un pedido que no figura en ellas no aporto efectivo: como
-      // mucho resto el pago del domiciliario (por eso min(0, ...)). KNT-000056 en el corte del
-      // 2026-05-29 es el caso: un script anterior al planificador recalculo ese corte ya conciliado
-      // tras corregir el pedido, y su asignacion desaparecio.
-      const allocationByOrder = new Map((s.cashAllocations ?? []).filter((a) => a.orderId).map((a) => [String(a.orderId), num(a.expectedCop)]));
-      const hasAllocations = allocationByOrder.size > 0;
-      const contrib = ids.map((orderId) => {
-        if (allocationByOrder.has(orderId)) return { orderId, cop: allocationByOrder.get(orderId) };
-        const rebuilt = sum(codEntriesByOrder.get(orderId), until) - sum(payByDriverOrder.get(`${driverId}|${orderId}`), until);
-        return { orderId, cop: hasAllocations ? Math.min(0, rebuilt) : rebuilt };
-      });
-      const reconstructed = Math.max(0, contrib.reduce((a, c) => a + c.cop, 0));
-      if (Math.abs(reconstructed - num(s.cashExpectedCop)) > 1) {
-        unverifiable.push({ id: s.id, createdAt: s.createdAt, status: s.status, storedCop: num(s.cashExpectedCop), reconstructedCop: reconstructed });
-      }
-      for (const c of contrib) {
-        const row = perOrder.get(c.orderId) ?? { contributions: [] };
-        row.contributions.push({ settlementId: s.id, createdAt: s.createdAt, status: s.status, cop: c.cop });
-        perOrder.set(c.orderId, row);
-      }
-      if (isSettled(s) && Array.isArray(s.cashAllocations)) {
-        const closedAt = String(s.reconciledAt || s.paidAt || "");
-        for (const a of s.cashAllocations) {
-          const later = (codEntriesByOrder.get(a.orderId) ?? []).filter((e) => closedAt && String(e.createdAt ?? "") > closedAt && num(e.amountCop) > 0);
-          if (later.length > 0) riskRows.push({ driverId, settlementId: s.id, orderId: a.orderId, laterCodCop: sum(later) });
-        }
-      }
-    }
-
-    let dueTotal = 0;
-    const rows = [];
-    for (const [orderId, row] of perOrder) {
-      const due = sum(codEntriesByOrder.get(orderId)) - sum(payByDriverOrder.get(`${driverId}|${orderId}`));
-      dueTotal += due;
-      const chargedForOrder = row.contributions.reduce((a, c) => a + c.cop, 0);
-      const excess = chargedForOrder - due;
-      if (Math.abs(excess) >= 1) {
-        rows.push({ orderId, trackingCode: orders.get(orderId)?.trackingCode ?? "?", status: orders.get(orderId)?.status ?? "?", dueCop: due, chargedCop: chargedForOrder, excessCop: excess, contributions: row.contributions });
-      }
-    }
-    rows.sort((a, b) => b.excessCop - a.excessCop);
-    report.push({ driverId, cortes: cortes.length, orders: perOrder.size, chargedTotal, dueTotal, diff: chargedTotal - dueTotal, perOrderExcess: rows.reduce((a, r) => a + r.excessCop, 0), rows, unverifiable });
+    report.push(measureDriver({ driverId, cortes, entries, orders }));
   }
+  const riskRows = report.flatMap((r) => r.riskRows);
 
   report.sort((a, b) => b.diff - a.diff);
   console.log("domiciliario | cortes | pedidos | cobrado | debido | diferencia | suma por pedido | cortes sin cuadrar");
@@ -265,13 +349,62 @@ function writeFixtures({ fixturesDir, driverId, report, orders, settlementsByDri
   }
   console.log(`\nRiesgo buildCodReceivedSet (COD nuevo tras corte saldado): ${riskRows.length} pedido(s)`);
   for (const row of riskRows) console.log(`  ${row.driverId} ${row.settlementId} ${row.orderId} ${cop(row.laterCodCop)}`);
+
+  let failed = false;
+  if (runCheck) {
+    const failures = checkFailures(report);
+    const cortesChecked = report.reduce((a, r) => a + r.cortes, 0);
+    console.log(`\n--check: ${cortesChecked} cortes, ${failures.length} problema(s)`);
+    for (const line of failures) console.log(`  ${line}`);
+    console.log(failures.length === 0 ? "--check EN VERDE" : "--check FALLA");
+    failed = failed || failures.length > 0;
+  }
+
+  if (runDeployCheck) {
+    const now = new Date().toISOString();
+    const orderMeta = new Map(Array.from(orders.entries()).map(([id, o]) => [id, { createdAt: o.createdAt, trackingCode: o.trackingCode }]));
+    const simulated = [];
+    let totalDelta = 0;
+    console.log(`\n--deploy-check (RNF_01), ${now}: esperado regla vieja -> regla nueva con las retenciones de la foto`);
+    for (const [driverId, cortes] of settlementsByDriver) {
+      if (onlyDriver && driverId !== onlyDriver) continue;
+      const check = deployCheckDriver({ driverId, cortes, entries, orderMeta, now });
+      simulated.push(...check.simulatedCortes);
+      for (const p of check.pending) {
+        console.log(`  ${driverId} pendiente ${p.settlementId}: ${cop(p.oldCop)} -> ${cop(p.newCop)} (diferencia ${cop(p.deltaCop)})`);
+        totalDelta += Math.abs(p.deltaCop);
+      }
+      const n = check.next;
+      const newOnly = n.newOrderIds.filter((id) => !n.oldOrderIds.includes(id)).map((id) => orders.get(id)?.trackingCode ?? id);
+      const oldOnly = n.oldOrderIds.filter((id) => !n.newOrderIds.includes(id)).map((id) => orders.get(id)?.trackingCode ?? id);
+      console.log(`  ${driverId} siguiente corte: ${n.oldOrderIds.length} -> ${n.newOrderIds.length} pedidos, ${cop(n.oldCop)} -> ${cop(n.newCop)} (diferencia ${cop(n.deltaCop)})` +
+        (newOnly.length ? ` · solo con la nueva: ${newOnly.join(", ")}` : "") + (oldOnly.length ? ` · solo con la vieja: ${oldOnly.join(", ")}` : ""));
+      totalDelta += Math.abs(n.deltaCop);
+    }
+    const scope = onlyDriver ? allSettlements.filter((s) => s.ownerId === onlyDriver) : allSettlements;
+    const diff = receivedDiff({ settlements: scope, simulated, entries });
+    const label = (ids) => ids.map((id) => orders.get(id)?.trackingCode ?? id).join(", ");
+    console.log(`  recibidos: ${diff.added.length} pasan a recibido${diff.added.length ? ` (${label(diff.added)})` : ""}, ${diff.removed.length} dejan de estarlo${diff.removed.length ? ` (${label(diff.removed)})` : ""}`);
+    const ok = totalDelta === 0 && diff.added.length === 0 && diff.removed.length === 0;
+    console.log(ok ? "--deploy-check EN VERDE: desplegar no cambia ningun esperado ni ningun recibido" : "--deploy-check CON DIFERENCIAS: la cifra la aprueba el responsable antes de desplegar");
+    failed = failed || !ok;
+  }
+
   if (fixturesDir) {
     if (!onlyDriver) throw new Error("--fixtures necesita el id del domiciliario");
     writeFixtures({ fixturesDir, driverId: onlyDriver, report, orders, settlementsByDriver, sellerEntriesByOrder, payByDriverOrder });
   }
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify({ generatedAt: new Date().toISOString(), report, riskRows }, null, 2));
-  process.exit(0);
-})().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+  return failed ? 1 : 0;
+}
+
+module.exports = { measureDriver, checkFailures, deployCheckDriver, receivedDiff };
+
+if (require.main === module) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
