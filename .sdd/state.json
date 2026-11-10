@@ -578,6 +578,13 @@
       "status": "borrador",
       "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
     },
+    "028": {
+      "file": "specs/028_abrir_la_app_no_escribe_nada.md",
+      "status": "borrador",
+      "origen": "2026-11-10: E2E de la 023 aborta 8 escrituras al abrir como admin; medido con e2e/verify-028-writes.mjs: settings/global (tarifas de fabrica) + cities/city-cali a los ~600 ms, antes de la base",
+      "evidence": ".sdd/evidence/028/admin-abre-sin-tocar-2026-11-10.json",
+      "pendiente": "aprobacion del responsable y respuesta a P1/P2"
+    },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
       "status": "aprobada",
