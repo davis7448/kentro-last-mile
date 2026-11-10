@@ -257,7 +257,9 @@ describe("spec 018 · T14 · hallazgos de la revision adversarial (ronda 1)", ()
   it("R1-RF_20-1: una tienda con efectivo, retenido o ilegibles no desaparece del cierre del admin", () => {
     expect(/function buildLiquidationRows\(.*keepSellerIds: ReadonlySet<string>/.test(app)).toBe(true);
     expect(/keepSellerIds\.has\(row\.id\)/.test(app)).toBe(true);
-    expect(/buildLiquidationRows\(state, selectedSellerEntries, state\.wallet, audits, \w+\)/.test(app)).toBe(true);
+    // Spec 023: la wallet relacionada ya no es `state.wallet` (el libro entero) sino `relatedWallet` (lo vivo mas
+    // los asientos de esos pedidos). Lo que esta guarda protege es que se pase `keepSellerIds`.
+    expect(/buildLiquidationRows\(state, selectedSellerEntries, (state\.wallet|relatedWallet), audits, \w+\)/.test(app)).toBe(true);
   });
 
   it("R1-RF_22-1: la API para tiendas no devuelve cifra con asientos ilegibles", () => {

@@ -58,7 +58,7 @@ import { buildCodReceivedSet, isSellerEntryEligible } from "../../functions/src/
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
-import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletEntriesByIds, fetchWalletEntriesByOrderIds, fetchWalletEntriesByType, fetchWalletEntriesInRange, fetchWalletHistoryPage, subscribeSupplierPendingCosts, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
+import { canUseFirestoreStore, countSellerEntriesWithoutSettlementFlags, fetchOrdersByIds, fetchWalletEntriesByIds, fetchWalletEntriesByOrderIds, fetchWalletEntriesByType, fetchWalletEntriesInRange, fetchWalletHistoryPage, subscribeSupplierPendingCosts, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import type { FirestoreStateControls, PinOrdersResult } from "@/lib/firebase/state-store";
 import { useEntriesByIds, useEntriesByOrderIds, useWalletRead, useWalletSubscription } from "./use-wallet-supplement";
 import { combineStatus, driverPendingOrderIds, mergePreferringLive, orderIdsOfEntries, settlementSupplementIds, settlementsSignature } from "@/lib/wallet-supplement";
@@ -7221,11 +7221,14 @@ function WalletPage({ state, session }: { state: AppState; session: Session }) {
   };
 
   const walletSource = useMemo(() => {
+    // Spec 023: la wallet del admin trae, ademas de lo sin liquidar, los cobros de manejo ya liquidados (los
+    // necesita el saldo de cada tienda). Aqui "por defecto, lo pendiente" tiene que ser solo lo pendiente.
+    const pending = session.role === "admin" ? state.wallet.filter((entry) => !entry.settlementId) : state.wallet;
     const relevantHistory = historyLoadedFor === scopeKey ? historyEntries : [];
-    if (relevantHistory.length === 0) return state.wallet;
-    const known = new Set(state.wallet.map((entry) => entry.id));
-    return [...state.wallet, ...relevantHistory.filter((entry) => !known.has(entry.id))];
-  }, [state.wallet, historyEntries, historyLoadedFor, scopeKey]);
+    if (relevantHistory.length === 0) return pending;
+    const known = new Set(pending.map((entry) => entry.id));
+    return [...pending, ...relevantHistory.filter((entry) => !known.has(entry.id))];
+  }, [state.wallet, session.role, historyEntries, historyLoadedFor, scopeKey]);
 
   const visibleEntries = useMemo(() => walletSource
     .filter((entry) => {
@@ -7963,13 +7966,23 @@ function LiquidationsPage({ state, setState, uid, walletLive = true }: { state: 
   const liveWallet = useMemo(() => mergePreferringLive(state.wallet, supplierPending.entries), [state.wallet, supplierPending.entries]);
   // Solo para sumas POR PEDIDO de las filas de domiciliario: lo pendiente sale de `liveWallet`.
   const relatedWallet = useMemo(() => mergePreferringLive(liveWallet, relatedSupplement.entries), [liveWallet, relatedSupplement.entries]);
-  const payableStatus = walletLive ? combineStatus(supplierPending.status, relatedSupplement.status) : "failed";
+  // Un asiento sin `settlementId` no entra en la suscripcion de lo sin liquidar: seria dinero pendiente que esta
+  // pagina no ve. Se cuentan (unas decenas de lecturas) y, si hay alguno, no se pinta ninguna cifra.
+  const flagCheck = useWalletRead(remoteWallet ? `flags|${settledSignature}` : null, async () => {
+    const missing = await countSellerEntriesWithoutSettlementFlags();
+    if (missing.settlement > 0 || missing.supplier > 0) {
+      throw new Error(`Hay ${missing.settlement + missing.supplier} movimiento(s) de tienda sin marca de liquidacion; las cifras saldrian incompletas. Hay que correr scripts/backfill-wallet-settlement-flag.js.`);
+    }
+    return [];
+  });
+  const payableStatus = walletLive ? combineStatus(supplierPending.status, relatedSupplement.status, flagCheck.status) : "failed";
   const payableError = !walletLive
     ? "Se perdio la conexion con los movimientos sin liquidar."
-    : supplierPending.error ?? relatedSupplement.error;
+    : flagCheck.error ?? supplierPending.error ?? relatedSupplement.error;
   const retryPayable = () => {
     supplierPending.retry();
     relatedSupplement.retry();
+    flagCheck.retry();
   };
   const payableReady = payableStatus === "ready";
 

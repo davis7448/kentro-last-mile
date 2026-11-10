@@ -18,8 +18,8 @@ líder y mensajero.
 
 JavaScript del primer pintado: **1,55 MB sin comprimir / 358 KB por la red**.
 
-De la carga del admin, **3,58 MB son la colección `walletEntries` entera** (10.452 asientos, el
-68%), y crece ~3.700 al mes. Es la próxima deuda: ver "Pendiente" abajo.
+De la carga del admin, **3,58 MB eran la colección `walletEntries` entera** (10.452 asientos entonces, 19.475
+en noviembre). Desde la spec 023 baja solo lo sin liquidar: ver "Pendiente" abajo.
 
 ## Tarjeta heroe de la tienda (spec 018, RNF_04)
 
@@ -205,15 +205,29 @@ siguen preguntando.
 
 ## Pendiente
 
-**El admin sigue bajando el ledger completo.** `getPlatformPosition`
-(`functions/src/platform-position.ts`) ya calcula en servidor las quince cifras que lo obligan, y
-una prueba ata su aritmética a la del cliente. Lo que falta es recortar la suscripción, y no es
-trivial: **seis** consumidores necesitan asientos ya liquidados —`settlementFinancialView`,
-`settlementLiquidationRow`, `ClosedSettlementDetail`, `buildLiquidationOrderAudits` sobre el wallet
-completo, `summarizeWalletPeriod` por rango y `orderCashToReturnCop`—. Recortar exige que la tabla
-de liquidaciones cerradas cargue los asientos de cada corte bajo demanda (sus ids ya vienen en
-`settlement.walletEntryIds`). Es la pantalla donde un error se ve como dinero mal, así que merece su
-propio cambio y su propia verificación.
+**~~El admin sigue bajando el ledger completo.~~ Resuelto en la spec 023, fase B.** Al abrir, el admin
+baja solo lo sin liquidar y los cobros de manejo (1.140 documentos el 2026-11-10, frente a los 19.475 del
+libro entero), y no crece con el historico. Cada pantalla de dinero pide lo demas y no pinta una cifra hasta
+tenerlo (RF_04):
+
+| Pantalla | Que pide | Lecturas (2026-11-10) |
+|---|---|---:|
+| Posicion de la plataforma | `getPlatformPosition` por sumas de Firestore (`platform-position-sums.ts`) | ~650 (antes 19.535) |
+| Liquidaciones, "Por pagar" | costos sin pagar al proveedor (en vivo) y asientos de los pedidos de domiciliario pendientes | ~4.500 |
+| Cortes cerrados | por pagina de 10: asientos de sus pedidos y, por id, los que no son de un pedido | 1.200-3.400 |
+| Resumen del periodo | asientos del rango (`createdAt`) | ~1.500 por semana |
+| Comunidades | todos los `community_cashback` | 0 hoy |
+| Exportes del admin | asientos de los pedidos exportados, al pulsar | segun el export |
+
+Las dos trampas que hay que conocer:
+- **Un asiento sin el campo `settlementId` es invisible para la consulta de lo sin liquidar.** Habia 7 (un
+  script manual del 2026-11-04). `getPlatformPosition` y "Por pagar" cuentan y fallan con el motivo si aparece
+  uno; `scripts/backfill-wallet-settlement-flag.js --apply` lo arregla.
+- **Lo pendiente sale solo de lo vivo.** Lo leido bajo demanda puede quedarse viejo (se liquido despues de
+  leerlo), asi que solo alimenta sumas por pedido o por corte. Ver `src/lib/wallet-supplement.ts`.
+
+Comprobacion contra produccion, solo lectura: `node scripts/verify-023-admin.js` (tras `npm run build` en
+`functions`).
 
 **Búsqueda en servidor para líder y mensajero.** `findFirestoreOrders` ya soporta el scoping, pero
 la UI lo cierra a los roles con ventana. Abrirlo pediría seis índices más

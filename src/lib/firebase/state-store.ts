@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   documentId,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit as limitTo,
@@ -1068,6 +1069,31 @@ export async function fetchWalletEntriesByType(type: WalletEntry["type"]): Promi
   const client = requireClient();
   const snapshot = await getDocs(query(collection(client.db, "walletEntries"), where("type", "==", type)));
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as WalletEntry);
+}
+
+/**
+ * Asientos de tienda que la suscripcion de lo sin liquidar NO puede ver: los que no tienen el campo
+ * `settlementId` (o, en costos de producto, `supplierSettlementId`). Firestore no filtra por campo ausente, asi
+ * que un asiento escrito sin el campo (lo hizo un script manual el 2026-11-04) es dinero pendiente que la
+ * pantalla no veria. Se cuenta: total menos los que tienen el campo vacio o con valor. Cuesta ~1 lectura por
+ * cada 1.000 asientos. `scripts/backfill-wallet-settlement-flag.js` los arregla.
+ */
+export async function countSellerEntriesWithoutSettlementFlags(): Promise<{ settlement: number; supplier: number }> {
+  const client = requireClient();
+  const wallet = collection(client.db, "walletEntries");
+  const seller = where("ownerType", "==", "seller");
+  const productCost = where("type", "==", "product_cost");
+  const count = (...constraints: Parameters<typeof query>[1][]) =>
+    getCountFromServer(query(wallet, ...constraints)).then((snapshot) => snapshot.data().count);
+  const [total, open, closed, pcTotal, pcOpen, pcClosed] = await Promise.all([
+    count(seller),
+    count(seller, where("settlementId", "==", "")),
+    count(seller, where("settlementId", ">", "")),
+    count(seller, productCost),
+    count(seller, productCost, where("supplierSettlementId", "==", "")),
+    count(seller, productCost, where("supplierSettlementId", ">", ""))
+  ]);
+  return { settlement: total - open - closed, supplier: pcTotal - pcOpen - pcClosed };
 }
 
 /**

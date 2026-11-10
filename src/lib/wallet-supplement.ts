@@ -10,8 +10,8 @@
  *  - al unir, la copia viva gana siempre (`mergePreferringLive`);
  *  - lo leido bajo demanda solo alimenta sumas POR PEDIDO o POR CORTE, que no dependen de si el asiento esta
  *    liquidado (cuanto COD tuvo un pedido, cuanto se le pago al domiciliario por el);
- *  - lo que solo importa por EXISTIR (el cobro de manejo de un pedido de bodega) se marca como cobrado, igual
- *    que hace el servidor en `seller-balance-api.ts` (`asChargedOutsideLive`).
+ *  - lo que solo importa por EXISTIR (el cobro de manejo de un pedido de bodega) va en la propia suscripcion,
+ *    liquidado o no, porque son poquisimos.
  */
 import type { Settlement, WalletEntry } from "./types";
 
@@ -20,19 +20,9 @@ export type SupplementStatus = "loading" | "ready" | "failed";
 /** Union por id; si un asiento esta en las dos, gana la copia viva. */
 export function mergePreferringLive(live: readonly WalletEntry[], ...extras: ReadonlyArray<readonly WalletEntry[]>): WalletEntry[] {
   const merged = new Map<string, WalletEntry>();
-  for (const group of extras) for (const entry of group) merged.set(entry.id, entry);
   for (const entry of live) merged.set(entry.id, entry);
+  for (const group of extras) for (const entry of group) if (!merged.has(entry.id)) merged.set(entry.id, entry);
   return [...merged.values()];
-}
-
-/**
- * Asientos leidos bajo demanda que NO estan entre los vivos: si no estan vivos es que ya no estan sin
- * liquidar, asi que se marcan como liquidados para que ninguna cuenta de "pendiente" los cuente. Mismo
- * criterio que el servidor con los cobros de manejo (`settlementId: "charged"`).
- */
-export function asChargedOutsideLive(live: readonly WalletEntry[], fetched: readonly WalletEntry[]): WalletEntry[] {
-  const liveIds = new Set(live.map((entry) => entry.id));
-  return fetched.filter((entry) => !liveIds.has(entry.id)).map((entry) => (entry.settlementId ? entry : { ...entry, settlementId: "charged" }));
 }
 
 /** Pedidos de los asientos de domiciliario sin liquidar: sus filas de "Domiciliarios por cortar" necesitan los asientos de tienda de esos pedidos, liquidados o no. */
