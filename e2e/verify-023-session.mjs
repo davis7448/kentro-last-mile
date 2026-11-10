@@ -28,7 +28,9 @@ const EVIDENCE = path.join(ROOT, ".sdd/evidence/023");
 const RAW = process.env.VERIFY_RAW_DIR || path.join(os.tmpdir(), "kentro-verify-023");
 fs.mkdirSync(RAW, { recursive: true });
 const [, , BEFORE_DIR, AFTER_DIR] = process.argv;
-if (!BEFORE_DIR || !AFTER_DIR) {
+// Modo produccion: una sola pasada contra la app desplegada (PROD_URL), sin comparar.
+const PROD_URL = process.env.PROD_URL;
+if (!PROD_URL && (!BEFORE_DIR || !AFTER_DIR)) {
   console.error("uso: node e2e/verify-023-session.mjs <dir-antes> <dir-despues>");
   process.exit(2);
 }
@@ -125,7 +127,9 @@ async function readScreens(url, account) {
       await page.waitForTimeout(1500);
     }
     await page.waitForFunction(() => !/Calculando la posicion/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => undefined);
-    screens.payable = normalize(await page.locator("main").innerText());
+    const payableRaw = await page.locator("main").innerText();
+    screens.positionStamp = /Calculada a las/.test(payableRaw);
+    screens.payable = normalize(payableRaw);
 
     await page.getByRole("tab", { name: "Cortes cerrados" }).click();
     await page.waitForFunction(() => !/Cargando los movimientos de los cortes/.test(document.body.innerText), null, { timeout: 180000 });
@@ -152,6 +156,25 @@ const account = { uid: `verify023-admin-${runId}`, email: `verify023-${runId}@ke
 const auth = admin.auth();
 
 const report = { at: new Date().toISOString(), runs: {} };
+if (PROD_URL) {
+  const prodAccount = { ...account, label: "produccion" };
+  try {
+    await auth.createUser({ uid: account.uid, email: account.email, password: account.password, displayName: "Verify 023 admin (desechable)" });
+    await auth.setCustomUserClaims(account.uid, { role: "admin" });
+    const run = await readScreens(PROD_URL, prodAccount);
+    const text = [run.screens.payable, run.screens.closed, run.screens.period].join("\n");
+    const checks = {
+      sinAvisosDeFallo: !/No se pudo cargar|No se pudo calcular la posicion/.test(text),
+      posicionDelServidorNuevo: run.screens.positionStamp === true,
+      walletAlAbrir: run.perf.filter((line) => /wallet listo/.test(line))
+    };
+    for (const key of ["payable", "closed", "period"]) fs.writeFileSync(path.join(RAW, `pantalla-${key}-produccion.txt`), run.screens[key] ?? "");
+    console.log(JSON.stringify({ at: new Date().toISOString(), checks, blocked: run.blocked, perf: run.perf }, null, 2));
+  } finally {
+    await auth.deleteUser(account.uid).catch((error) => console.error("No se pudo borrar la cuenta desechable", account.uid, error));
+  }
+  process.exit(0);
+}
 try {
   await auth.createUser({ uid: account.uid, email: account.email, password: account.password, displayName: "Verify 023 admin (desechable)" });
   await auth.setCustomUserClaims(account.uid, { role: "admin" });
