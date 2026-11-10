@@ -1405,16 +1405,47 @@ type T9Reconciliation = import("../../functions/src/cash-outstanding").PositionR
 type T9ReconcileFn = (input: ReportInput, listed: { rows: T9Row[]; nettedRows: T9Row[] }) => T9Reconciliation;
 type T9Entry = ReturnType<typeof codEntry> | ReturnType<typeof payEntry>;
 
+type T9CashInputs = { sellerEntries: T9Entry[]; driverEntries: T9Entry[]; orderMeta: Map<string, unknown> };
+type T9LegacySummary = { expectedCop: number; allocations: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }> };
+
 type T9Math = {
-  computeDriverCashSummary: typeof import("../../functions/src/settlement-math").computeDriverCashSummary;
+  /**
+   * Spec 038 T22: la regla vieja (`computeDriverCashSummary`) se retiro de functions/. Estas pruebas la necesitan
+   * para FABRICAR cortes viejos tal como los guardaba produccion antes de la 038 (es lo que hay en la base hoy);
+   * no para cobrar nada. Copia de referencia, rotulada, de su `expectedCop` y sus asignaciones.
+   */
+  legacyCashSummary: (inputs: T9CashInputs, orderIds: string[], receivedCop: number) => T9LegacySummary;
   computeDriverReceivable: typeof import("../../functions/src/driver-receivable").computeDriverReceivable;
 };
 
+function t9LegacyCashSummary(inputs: T9CashInputs, orderIds: string[], receivedCop: number): T9LegacySummary {
+  const ids = Array.from(new Set(orderIds));
+  const byOrder = (list: T9Entry[], keep: (entry: T9Entry) => boolean) => {
+    const totals = new Map<string, number>();
+    for (const entry of list) if (ids.includes(entry.orderId) && keep(entry)) totals.set(entry.orderId, (totals.get(entry.orderId) ?? 0) + entry.amountCop);
+    return totals;
+  };
+  const cod = byOrder(inputs.sellerEntries, (entry) => entry.type === "cod_revenue" || entry.type === "cod_remittance");
+  const pay = byOrder(inputs.driverEntries, (entry) => entry.type === "driver_earning");
+  const owedOf = (orderId: string) => Math.max(0, (cod.get(orderId) ?? 0) - (pay.get(orderId) ?? 0));
+  let remaining = Math.max(0, receivedCop);
+  const allocations = ids
+    .filter((orderId) => owedOf(orderId) > 0)
+    .sort((left, right) => left.localeCompare(right))
+    .map((orderId) => {
+      const expectedCop = owedOf(orderId);
+      const received = Math.min(expectedCop, remaining);
+      remaining -= received;
+      return { orderId, expectedCop, receivedCop: received, covered: received >= expectedCop };
+    });
+  const total = (values: Map<string, number>) => Array.from(values.values()).reduce((sum, value) => sum + value, 0);
+  return { expectedCop: ids.length === 0 ? 0 : Math.max(0, total(cod) - total(pay)), allocations };
+}
+
 async function t9LoadMath(): Promise<T9Math> {
-  const settlementMath = await import("../../functions/src/settlement-math");
   const receivable = await import("../../functions/src/driver-receivable");
   return {
-    computeDriverCashSummary: settlementMath.computeDriverCashSummary,
+    legacyCashSummary: t9LegacyCashSummary,
     computeDriverReceivable: receivable.computeDriverReceivable
   };
 }
@@ -1527,8 +1558,9 @@ type T9SettlementOptions = {
 };
 
 /**
- * Corte de domiciliario COHERENTE por construccion: esperado, asignaciones y pendiente salen de
- * `computeDriverCashSummary` sobre los mismos asientos que recibe el informe.
+ * Corte de domiciliario COHERENTE por construccion: esperado, asignaciones y pendiente salen de la regla
+ * vieja (`legacyCashSummary`, como los guardaba produccion antes de la 038) sobre los mismos asientos que
+ * recibe el informe.
  */
 function t9Settlement(math: T9Math, id: string, entries: T9Entry[], options: T9SettlementOptions): SettlementFixture {
   const cashInputs = {
@@ -1536,9 +1568,9 @@ function t9Settlement(math: T9Math, id: string, entries: T9Entry[], options: T9S
     driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
     orderMeta: new Map()
   };
-  const expectedCop = math.computeDriverCashSummary(cashInputs as never, options.orderIds, 0).expectedCop;
+  const expectedCop = math.legacyCashSummary(cashInputs, options.orderIds, 0).expectedCop;
   const receivedCop = options.received === "expected" ? expectedCop : options.received;
-  const summary = math.computeDriverCashSummary(cashInputs as never, options.orderIds, receivedCop);
+  const summary = math.legacyCashSummary(cashInputs, options.orderIds, receivedCop);
   const recalculatedPending = Math.max(0, summary.expectedCop - receivedCop);
   const built = settlement(id, {
     status: options.status,
@@ -1562,7 +1594,7 @@ function t9RecalculatedPending(math: T9Math, entries: T9Entry[], stored: Settlem
     driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
     orderMeta: new Map()
   };
-  const expectedCop = math.computeDriverCashSummary(cashInputs as never, stored.orderIds, 0).expectedCop;
+  const expectedCop = math.legacyCashSummary(cashInputs, stored.orderIds, 0).expectedCop;
   return Math.max(0, expectedCop - (stored.cashReceivedCop ?? 0));
 }
 

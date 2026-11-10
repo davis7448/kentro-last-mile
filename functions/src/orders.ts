@@ -23,7 +23,9 @@ import {
   settlementCashReceivedCop,
   type SettlementDoc,
   type SettlementOrderDoc,
+  type NonDriverSettlementKind,
   settlementTotals,
+  type SettlementTotals,
   type WalletEntryDoc
 } from "./settlement-math";
 import { createCommunityPricingResolver } from "./community-order-pricing";
@@ -1423,7 +1425,6 @@ export const createSettlement = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "The wallet movements were already settled.");
     }
 
-    const entryOrderIds = Array.from(new Set(entries.map((entry) => entry.orderId).filter(Boolean)));
     // Spec 038: un corte de domiciliario se calcula con la regla unica (driver-cash-ledger.ts). Necesita
     // todos los asientos de tienda (ya se leian aqui) y todos los pagos del domiciliario, no solo los
     // sin cortar, para saber lo que cada pedido debe hoy.
@@ -1459,7 +1460,22 @@ export const createSettlement = onCall(async (request) => {
         })
       };
     }
-    const relatedSellerEntries = allSellerEntries.filter((entry) => entry.orderId && entryOrderIds.includes(entry.orderId));
+    // El override de la pantalla manda sobre la marca de la cuenta: quien paga sabe en el momento si ese giro
+    // concreto salio por banco o en efectivo.
+    const paysInCash = input.chargeGmf === undefined ? Boolean(ownerSnap.data()?.paysInCash) : !input.chargeGmf;
+    // Spec 038 T22: las cifras de un corte de domiciliario son las de la regla nueva; los demas, sus asientos.
+    const totals: SettlementTotals = driverLedger
+      ? {
+          codCop: driverLedger.fields.codCop,
+          feesCop: driverLedger.fields.feesCop,
+          productCostCop: 0,
+          driverPayCop: driverLedger.fields.driverPayCop,
+          platformMarginCop: driverLedger.fields.platformMarginCop,
+          grossNetCop: driverLedger.fields.netCop,
+          gmfCop: driverLedger.fields.gmfCop,
+          netCop: driverLedger.fields.netCop
+        }
+      : settlementTotals(input.kind as NonDriverSettlementKind, entries, paysInCash);
     const builtSettlement = buildSettlement(
       settlementRef.id,
       input.kind,
@@ -1469,11 +1485,8 @@ export const createSettlement = onCall(async (request) => {
       input.endDate,
       entries,
       now,
-      input.note,
-      relatedSellerEntries,
-      // El override de la pantalla manda sobre la marca de la cuenta: quien paga sabe en el
-      // momento si ese giro concreto salio por banco o en efectivo.
-      input.chargeGmf === undefined ? Boolean(ownerSnap.data()?.paysInCash) : !input.chargeGmf
+      totals,
+      input.note
     );
     // Las cifras de un corte de domiciliario son las de la regla nueva, guardadas desde la creacion
     // (RF_03, RF_09). El asiento de margen sigue saliendo de `driverPayCop`, que es el pago propio del corte.
@@ -1978,8 +1991,8 @@ export const recordSellerAbono = onCall(async (request) => {
 });
 
 /**
- * Carga lo que la aritmetica de efectivo necesita del mundo. Se separa de
- * `computeDriverCashSummary` (settlement-math.ts) porque la correccion administrativa de
+ * Carga lo que la aritmetica de efectivo necesita del mundo. Se separa de la regla del corte
+ * (`computeDriverCorteSummary`, settlement-math.ts) porque la correccion administrativa de
  * pedidos necesita evaluar el corte sobre un estado que AUN NO se escribio: carga estos
  * inputs una vez, les aplica el delta en memoria y vuelve a calcular.
  *
@@ -2023,15 +2036,13 @@ function buildSettlement(
   endDate: string,
   entries: WalletEntryDoc[],
   now: string,
-  note?: string,
-  relatedSellerEntries: WalletEntryDoc[] = [],
-  paysInCash = false
+  totals: SettlementTotals,
+  note?: string
 ): SettlementDoc {
-  // La aritmetica vive en settlement-math.ts para que la correccion administrativa de
-  // pedidos pueda recalcular un corte sin duplicarla. El gravamen queda ademas como
+  // La aritmetica vive fuera (settlement-math.ts y, para el domiciliario, driver-cash-ledger.ts) para que la
+  // correccion administrativa de pedidos pueda recalcular un corte sin duplicarla. El gravamen queda ademas como
   // asiento propio para que la wallet de la cuenta cuadre en cero.
-  const { codCop, feesCop, productCostCop, driverPayCop, platformMarginCop, gmfCop, netCop } =
-    settlementTotals(kind, entries, relatedSellerEntries, paysInCash);
+  const { codCop, feesCop, productCostCop, driverPayCop, platformMarginCop, gmfCop, netCop } = totals;
   // Con rango abierto el documento guarda el periodo REAL que cubrio el corte (primer y ultimo
   // movimiento incluido). Sin esto el historico de liquidaciones quedaria con fechas en blanco.
   const entryDates = entries.map((entry) => String(entry.createdAt ?? "").slice(0, 10)).filter(Boolean).sort();

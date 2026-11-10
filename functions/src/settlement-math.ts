@@ -99,7 +99,7 @@ export type DriverCashSummary = {
   allocations: DriverCashAllocation[];
 };
 
-/** Lo que `computeDriverCashSummary` necesita del mundo. Se carga una sola vez por invocacion. */
+/** Lo que la regla del corte de domiciliario necesita del mundo. Se carga una sola vez por invocacion. */
 export type DriverCashInputs = {
   sellerEntries: WalletEntryDoc[];
   driverEntries: WalletEntryDoc[];
@@ -161,8 +161,7 @@ export type DriverCorteSummary = DriverCashSummary & {
  * Spec 038: las cifras de un corte de domiciliario con la regla nueva (cada recaudo se cobra una vez).
  * Delega en `computeDriverCorte` (driver-cash-ledger.ts), la unica regla. El contexto es obligatorio: sin
  * los demas cortes del domiciliario no se puede saber que ya se cobro, y calcular "a la antigua" fue lo que
- * le cobro $694.200 de mas a un domiciliario. Convive con `computeDriverCashSummary` mientras se migran los
- * llamadores (T12-T16); la vieja se borra en T22.
+ * le cobro $694.200 de mas a un domiciliario. La regla vieja (`computeDriverCashSummary`) se retiro en la T22.
  */
 export function computeDriverCorteSummary(input: DriverCorteSummaryInput): DriverCorteSummary {
   if (!input.context) {
@@ -194,81 +193,6 @@ export function computeDriverCorteSummary(input: DriverCorteSummaryInput): Drive
   };
 }
 
-/**
- * Efectivo que el domiciliario debe entregar por los pedidos de un corte, y como se
- * imputa lo ya recibido pedido por pedido.
- *
- * REGLA VIEJA (pre-038): resta todo el pago del pedido y no sabe que cobraron otros cortes. Se mantiene
- * solo mientras se migran sus llamadores; se borra en T22.
- */
-export function computeDriverCashSummary(
-  inputs: DriverCashInputs,
-  settlementOrderIds: string[],
-  receivedCop: number
-): DriverCashSummary {
-  const orderIds = Array.from(new Set(settlementOrderIds ?? []));
-  if (orderIds.length === 0) {
-    return { codCop: 0, feesCop: 0, driverPayCop: 0, platformMarginCop: 0, expectedCop: 0, allocations: [] };
-  }
-
-  const orderIdSet = new Set(orderIds);
-  const codByOrder = new Map<string, number>();
-  const feesByOrder = new Map<string, number>();
-  for (const entry of inputs.sellerEntries) {
-    const orderId = String(entry.orderId ?? "");
-    if (!orderIdSet.has(orderId)) continue;
-    // cod_remittance neteado: una reversa de COD (pedido revertido a fallido) deja
-    // el COD del pedido en 0 y no debe figurar como efectivo esperado del domiciliario.
-    if (entry.type === "cod_revenue" || entry.type === "cod_remittance") {
-      codByOrder.set(orderId, (codByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-    }
-    if (["delivery_fee", "failed_fee", "fulfillment_fee"].includes(entry.type)) {
-      feesByOrder.set(orderId, (feesByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-    }
-  }
-  const driverPayByOrder = new Map<string, number>();
-  for (const entry of inputs.driverEntries) {
-    const orderId = String(entry.orderId ?? "");
-    if (entry.type !== "driver_earning" || !orderIdSet.has(orderId)) continue;
-    driverPayByOrder.set(orderId, (driverPayByOrder.get(orderId) ?? 0) + Number(entry.amountCop || 0));
-  }
-  const sortedOrderIds = orderIds
-    .filter((orderId) => Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0)) > 0)
-    .sort((left, right) => {
-      const leftOrder = inputs.orderMeta.get(left);
-      const rightOrder = inputs.orderMeta.get(right);
-      return (
-        String(leftOrder?.createdAt ?? "").localeCompare(String(rightOrder?.createdAt ?? "")) ||
-        String(leftOrder?.trackingCode ?? left).localeCompare(String(rightOrder?.trackingCode ?? right))
-      );
-    });
-
-  let remaining = Math.max(0, Number(receivedCop) || 0);
-  const allocations = sortedOrderIds.map((orderId) => {
-    const expectedOrderCop = Math.max(0, (codByOrder.get(orderId) ?? 0) - (driverPayByOrder.get(orderId) ?? 0));
-    const receivedOrderCop = Math.min(expectedOrderCop, remaining);
-    remaining -= receivedOrderCop;
-    return {
-      orderId,
-      expectedCop: expectedOrderCop,
-      receivedCop: receivedOrderCop,
-      covered: receivedOrderCop >= expectedOrderCop
-    };
-  });
-
-  const codCop = Array.from(codByOrder.values()).reduce((sum, amount) => sum + amount, 0);
-  const feesCop = Math.max(0, -Array.from(feesByOrder.values()).reduce((sum, amount) => sum + amount, 0));
-  const driverPayCop = Array.from(driverPayByOrder.values()).reduce((sum, amount) => sum + amount, 0);
-  return {
-    codCop,
-    feesCop,
-    driverPayCop,
-    platformMarginCop: feesCop - driverPayCop,
-    expectedCop: Math.max(0, codCop - driverPayCop),
-    allocations
-  };
-}
-
 export type SettlementTotals = {
   codCop: number;
   feesCop: number;
@@ -280,18 +204,25 @@ export type SettlementTotals = {
   netCop: number;
 };
 
+/** Los cortes que se calculan con `settlementTotals`. El de domiciliario no: ver abajo. */
+export type NonDriverSettlementKind = "seller" | "supplier" | "community_leader";
+
 /**
- * Cifras de un corte a partir de sus asientos. En un corte de domiciliario el COD y los
- * fletes salen de los asientos de la TIENDA de esos mismos pedidos (`relatedSellerEntries`),
- * porque el domiciliario no tiene asientos de recaudo propios.
+ * Cifras de un corte de tienda, proveedor o lider a partir de sus asientos.
+ *
+ * Spec 038 T22: un corte de domiciliario NO pasa por aqui. Su rama vieja restaba todo el pago del pedido y no
+ * sabia que cobraron otros cortes; sus cifras son las de `buildDriverSettlementFields` (driver-cash-ledger.ts).
+ * Lanza si se le pide uno, para que nadie vuelva a calcularlo asi desde JavaScript sin tipos.
  */
 export function settlementTotals(
-  kind: "seller" | "driver" | "supplier" | "community_leader",
+  kind: NonDriverSettlementKind,
   entries: WalletEntryDoc[],
-  relatedSellerEntries: WalletEntryDoc[] = [],
   paysInCash = false
 ): SettlementTotals {
-  const financialEntries = kind === "driver" ? relatedSellerEntries : entries;
+  if ((kind as string) === "driver") {
+    throw new Error("Spec 038: un corte de domiciliario se calcula con buildDriverSettlementFields, no con settlementTotals.");
+  }
+  const financialEntries = entries;
   const codCop = financialEntries
     .filter((entry) => entry.type === "cod_revenue" || entry.type === "cod_remittance")
     .reduce((sum, entry) => sum + Number(entry.amountCop), 0);
@@ -309,7 +240,7 @@ export function settlementTotals(
   );
   const driverPayCop = entries.filter((entry) => entry.type === "driver_earning").reduce((sum, entry) => sum + Number(entry.amountCop), 0);
   const entryNetCop = entries.reduce((sum, entry) => sum + Number(entry.amountCop), 0);
-  const grossNetCop = kind === "driver" ? driverPayCop - codCop : kind === "supplier" ? productCostCop : entryNetCop;
+  const grossNetCop = kind === "supplier" ? productCostCop : entryNetCop;
   // 4x1000 sobre lo que sale por transferencia. `netCop` es lo que de verdad se gira.
   const gmfCop = gmfForPayout(grossNetCop, paysInCash);
   return {
@@ -317,7 +248,7 @@ export function settlementTotals(
     feesCop,
     productCostCop,
     driverPayCop,
-    platformMarginCop: kind === "seller" || kind === "driver" ? feesCop - driverPayCop : 0,
+    platformMarginCop: kind === "seller" ? feesCop - driverPayCop : 0,
     grossNetCop,
     gmfCop,
     netCop: grossNetCop - gmfCop

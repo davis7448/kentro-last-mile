@@ -6,7 +6,7 @@
  * La regla vieja se copia aqui SOLO como linea base de comparacion; la nueva se importa de functions/lib.
  */
 const admin = require("../functions/node_modules/firebase-admin");
-const { buildCodReceivedSet, SELLER_LIQUIDATION_TYPES } = require("../functions/lib/seller-ledger.js");
+const { buildCodReceivedSet, codEntriesByOrder, SELLER_LIQUIDATION_TYPES } = require("../functions/lib/seller-ledger.js");
 const { computeSellerBalance } = require("../functions/lib/seller-balance.js");
 const { loadSellerBalanceInput } = require("../functions/lib/seller-balance-api.js");
 
@@ -35,7 +35,8 @@ function oldRule(settlements) {
   const settlements = settlementSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const sellerName = new Map(sellerSnap.docs.map((d) => [d.id, d.data().name]));
   const before = oldRule(settlements);
-  const after = buildCodReceivedSet(settlements);
+  // Spec 038 T22: con el recaudo por pedido, como todos los llamadores (RF_11).
+  const after = buildCodReceivedSet(settlements, codEntriesByOrder(sellerEntrySnap.docs.map((d) => d.data())));
   const released = [...after].filter((id) => !before.has(id));
   const lost = [...before].filter((id) => !after.has(id));
   console.log(`Pedidos que pasan a recibidos: ${released.length}. Pedidos que dejan de estarlo: ${lost.length} (debe ser 0)`);

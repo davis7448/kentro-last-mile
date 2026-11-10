@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T22",
+  "activeTask": "T23",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -33,7 +33,7 @@
     "T19": { "requirements": ["RF_05b", "RF_17"], "files": ["scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.cases.test.ts", "functions/src/cash-outstanding.ts"], "testWritten": true, "done": true },
     "T20": { "requirements": ["RF_13", "RF_14", "RF_15", "RF_16"], "files": ["scripts/compensate-038.js", "src/lib/driver-cash-ledger.cases.test.ts", "src/lib/compensate-038.test.ts"], "testWritten": true, "done": true },
     "T21": { "requirements": ["RF_05b", "RNF_01"], "files": ["specs/038_measure.js", "src/lib/measure-038.test.ts"], "testWritten": true, "done": true },
-    "T22": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts", "scripts/verify-026.js", "scripts/verify-027.js"], "testWritten": false, "done": false },
+    "T22": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts", "scripts/verify-026.js", "scripts/verify-027.js", "functions/src/orders.ts", "functions/src/order-corrections-plan.ts", "specs/038_measure.js", "src/lib/cash-outstanding.test.ts", "src/lib/spec-026-guards.test.ts"], "testWritten": true, "done": true },
     "T23": { "requirements": ["RF_09", "RF_12", "RF_05b"], "files": ["src/lib/spec-038-guards.test.ts"], "testWritten": false, "done": false }
   },
   "archivedTasks036": {

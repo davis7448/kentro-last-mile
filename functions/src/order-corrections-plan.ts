@@ -45,6 +45,7 @@ import {
   type DriverCashInputs,
   type SettlementDoc,
   settlementCashReceivedCop,
+  type NonDriverSettlementKind,
   settlementTotals,
   type WalletEntryDoc
 } from "./settlement-math";
@@ -555,7 +556,8 @@ export function planOrderCorrection(input: PlanInput): OrderCorrectionPlan {
       });
       after = { walletEntryCount: walletEntryIds.length, orderCount: driverOrderIds.length, netCop, cashExpectedCop: expectedCop, cashPendingCop: pendingCop };
     } else {
-      const totals = settlementTotals(settlement.kind, finalEntries, [], settlement.kind === "seller" ? input.sellerPaysInCash : false);
+      // La rama de domiciliario va arriba (regla nueva); aqui solo tienda, proveedor y lider (spec 038 T22).
+      const totals = settlementTotals(settlement.kind as NonDriverSettlementKind, finalEntries, settlement.kind === "seller" ? input.sellerPaysInCash : false);
       Object.assign(patch, {
         codCop: totals.codCop,
         feesCop: totals.feesCop,

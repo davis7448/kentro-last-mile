@@ -17,8 +17,10 @@
  *     { over30Days, coveredByNetting, rows } — T18 compara contra estos ids (plan 5.3, hallazgo D).
  *
  * Usa ADC con las librerias de functions/node_modules y la logica COMPILADA de functions/lib
- * (buildCodReceivedSet, computeDriverCashSummary, settlementCashReceivedCop,
+ * (buildCodReceivedSet, computeDriverCorte + buildDriverLedgerSnapshot, settlementCashReceivedCop,
  * computePlatformPosition): nada de esa aritmetica se copia aqui. Requiere `cd functions && npm run build`.
+ * Spec 038 T22: el "pendiente recalculado" de cada corte sale de la regla nueva con el contexto del
+ * domiciliario (la foto escrita si existe; si no, la que escribiria el script de la foto ahora).
  *
  * Nota para quien lo edite: la guarda de T1 (src/lib/spec-026-guards.test.ts) prohibe en el fuente
  * los literales de las llamadas de escritura de Firestore, incluidos Map/Set/hash con esos mismos
@@ -33,7 +35,8 @@ if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile"
 const db = admin.firestore();
 
 const { buildCodReceivedSet } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
-const { computeDriverCashSummary, settlementCashReceivedCop } = require(path.join(__dirname, "../functions/lib/settlement-math"));
+const { settlementCashReceivedCop } = require(path.join(__dirname, "../functions/lib/settlement-math"));
+const { buildDriverLedgerSnapshot, computeDriverCorte } = require(path.join(__dirname, "../functions/lib/driver-cash-ledger"));
 const { computePlatformPosition } = require(path.join(__dirname, "../functions/lib/platform-position"));
 
 const EVIDENCE_DIR = path.join(__dirname, "../.sdd/evidence/026_efectivo_que_no_llega_a_un_corte");
@@ -254,11 +257,34 @@ async function baseline() {
 
   // ---- Cortes: pendiente ausente y pendiente distinto del recalculado (plan 4.4, hallazgo B) ----
   const orderMeta = new Map(orders.map((order) => [order.id, { paymentMethod: order.paymentMethod, status: order.status, createdAt: order.createdAt, trackingCode: order.trackingCode }]));
-  const cashInputs = { sellerEntries, driverEntries, orderMeta };
+  // Spec 038: el contexto de cada domiciliario (sus cortes, foto y retenciones). Solo lecturas.
+  const ledgerEntries = [...sellerEntries, ...driverEntries];
+  const contextByDriver = new Map(
+    await Promise.all(
+      [...new Set(settlements.map((s) => s.ownerId))].map(async (driverId) => {
+        const own = settlements.filter((s) => s.ownerId === driverId);
+        const derived = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: ledgerEntries, now: now.toISOString(), createdBy: "verify-026" }).context;
+        const [baselineSnap, holdsSnap] = await Promise.all([
+          db.collection("driverLedgerBaselines").doc(driverId).get(),
+          db.collection("driverCashHolds").doc(driverId).get()
+        ]);
+        const context = baselineSnap.exists ? { ...derived, baseline: baselineSnap.data(), holds: holdsSnap.exists ? holdsSnap.data() : null } : derived;
+        return [driverId, context];
+      })
+    )
+  );
   const settlementChecks = settlements.map((s) => {
     const receivedCop = settlementCashReceivedCop(s);
-    const summary = computeDriverCashSummary(cashInputs, s.orderIds ?? [], receivedCop);
-    const recalculatedPendingCop = Math.max(0, summary.expectedCop - receivedCop);
+    const figures = computeDriverCorte({
+      settlementId: s.id,
+      orderIds: s.orderIds ?? [],
+      ownEntryIds: s.walletEntryIds ?? [],
+      entries: ledgerEntries,
+      context: contextByDriver.get(s.ownerId),
+      receivedCop,
+      orderMeta
+    });
+    const recalculatedPendingCop = Math.max(0, figures.cashExpectedCop - receivedCop);
     const hasField = typeof s.cashPendingCop === "number";
     return {
       id: s.id,
@@ -287,7 +313,7 @@ async function baseline() {
   // ---- Evidencia legible ----
   say(`Spec 026 · T1 · linea base contra produccion (SOLO LECTURA)`);
   say(`Generado: ${now.toISOString()}  ·  comando: node scripts/verify-026.js baseline`);
-  say(`Logica: functions/lib (buildCodReceivedSet, computeDriverCashSummary, settlementCashReceivedCop, computePlatformPosition);`);
+  say(`Logica: functions/lib (buildCodReceivedSet, computeDriverCorte con buildDriverLedgerSnapshot, settlementCashReceivedCop, computePlatformPosition);`);
   say(`        isDriverSettlementCashSettled reproducido localmente hasta que T4 lo cree (plan 2.9).`);
   say();
   say(`1. Universo`);
@@ -348,7 +374,7 @@ async function baseline() {
   }
   for (const id of onlyInPlan) {
     const row = nettedRows.find((r) => r.orderId === id);
-    // computeDriverCashSummary solo asigna a pedidos con efectivo esperado > 0: uno con neto <= 0 no
+    // La regla del corte solo asigna a pedidos con efectivo esperado > 0: uno con neto <= 0 no
     // tiene asignacion, asi que no esta en a) pero tampoco en buildCodReceivedSet.
     const reason = row.expectedCashCop === 0 ? "efectivo esperado 0 (neto <= 0): sin asignacion en cashAllocations, nunca 'covered'" : "con asignacion cubierta en otro corte o sin asignacion";
     say(`       ${id}: recaudo ${cop(row.collectedCop)}, esperado ${cop(row.expectedCashCop)} — ${reason}`);
@@ -357,7 +383,7 @@ async function baseline() {
   say(`6. Cortes de domiciliario (${settlements.length}; ${Object.entries(countBy(settlements, (s) => s.status)).map(([k, v]) => `${k} ${v}`).join(", ")})`);
   say(`  Sin cashPendingCop (hallazgo B): ${missingPending.length}; recalculado ${cop(sumBy(missingPending, (c) => c.recalculatedPendingCop))}`);
   for (const c of missingPending) say(`    ${c.id} · ${c.status} · ${c.ownerName || "-"} · ${String(c.createdAt || "").slice(0, 10)} · recalculado ${cop(c.recalculatedPendingCop)}`);
-  say(`  Con cashPendingCop distinto del recalculado (computeDriverCashSummary): ${stalePending.length}; guardado ${cop(sumBy(stalePending, (c) => c.storedPendingCop))} vs recalculado ${cop(sumBy(stalePending, (c) => c.recalculatedPendingCop))}`);
+  say(`  Con cashPendingCop distinto del recalculado (computeDriverCorte, regla 038): ${stalePending.length}; guardado ${cop(sumBy(stalePending, (c) => c.storedPendingCop))} vs recalculado ${cop(sumBy(stalePending, (c) => c.recalculatedPendingCop))}`);
   for (const c of stalePending) say(`    ${c.id} · ${c.status} · ${c.ownerName || "-"} · guardado ${cop(c.storedPendingCop)} · recalculado ${cop(c.recalculatedPendingCop)}`);
   say(`  Asientos driver_earning sin settlementId: ${driverEntriesWithoutSettlement.length} (${cop(sumBy(driverEntriesWithoutSettlement, (e) => e.amountCop))})`);
   say(`  driverReceivableCop de la posicion (computePlatformPosition con los mismos asientos): ${cop(position.driverReceivableCop)}`);

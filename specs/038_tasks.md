@@ -258,10 +258,14 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     cuadrar), `--check` en verde y `--deploy-check` con ambas diferencias en 0 (si no, la cifra va al
     responsable). Salidas guardadas como evidencia
 
-- [ ] **T22: Retirar la regla vieja**
+- [x] **T22: Retirar la regla vieja**
   * Requisitos cubiertos: RF_09, RF_12
   * Archivos: functions/src/settlement-math.ts, src/lib/settlement-math.test.ts, scripts/verify-026.js,
-    scripts/verify-027.js
+    scripts/verify-027.js, functions/src/orders.ts, functions/src/order-corrections-plan.ts, specs/038_measure.js,
+    src/lib/cash-outstanding.test.ts, src/lib/spec-026-guards.test.ts (anadidos al ejecutar: `settlementTotals`
+    pierde la rama y el parametro de domiciliario, asi que cambian sus dos llamadores; el `--deploy-check` de la
+    T21 y los cortes viejos de las pruebas de la 026 necesitan la regla vieja como REFERENCIA de comparacion, que
+    pasa a una copia local rotulada; la guarda de la 026 exigia el nombre viejo en `verify-026.js`)
   * Accion: borrar `computeDriverCashSummary` y la rama `driver` vieja de `settlementTotals`; los casos de
     prueba que la ejercitaban se reescriben contra la nueva con un comentario del porque de cada cifra que
     cambia (ninguno se borra sin motivo); los dos scripts de verificacion pasan a la regla nueva y a
