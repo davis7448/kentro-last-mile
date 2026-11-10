@@ -206,6 +206,13 @@ nunca a Firestore.
   - *Hallazgo al margen:* las tres zonas (`zone-center`, `zone-north`, `zone-south`) tienen 9.000 / 9.000 para el
     domiciliario, y ganan a `settings/global`. Desde el 2026-10-11 solo un pedido con zona (`ord-knt-007112`,
     9.000) uso esa tarifa. Si "solo DANDA tiene un valor diferente", las zonas tambien estan mal configuradas.
+  - *Decision del responsable (2026-11-10): "Si, 8.000".* Aplicado a las 18:16:07 UTC con
+    `scripts/fix-028-zone-driver-pay.js`. Las tres zonas pasan de 9.000 / 9.000 a 8.000 / 8.000. Se escribio con
+    precondicion `lastUpdateTime` y queda en la auditoria (`7uKCdYUhyC4YyTPMuoL0`).
+    - Vale para los pedidos que se cierren desde ahora. El de `ord-knt-007112` (9.000, corte conciliado) se deja.
+    - **Riesgo hasta desplegar esta spec:** un admin con la app abierta desde antes guarda las zonas viejas
+      en memoria. Si edita cualquier zona, el autoguardado reescribe las tres con 9.000. Hay que recargar.
+    - Sin tocar: las zonas cobran `fulfillmentFeeCop` 2.500 y `settings/global` 2.000.
 
 ## 8. Definition of Done
 
