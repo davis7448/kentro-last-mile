@@ -1,0 +1,15 @@
+{
+ "at": "2026-11-10T18:22:07.594Z",
+ "url": "next dev local (rama de la 028) contra el Firebase de produccion",
+ "idleMs": 45000,
+ "peticionesAlCanalWrite": 0,
+ "escriturasPorDocumento": {},
+ "callablesAbortadas": [],
+ "consola": [
+  "[Kentro perf] base ligera lista en 6256 ms",
+  "[Kentro perf] emit #1 render 1 ms",
+  "[Kentro perf] emit #2 render 0 ms",
+  "[Kentro perf] emit #3 render 1 ms",
+  "[Kentro perf] emit #4 render 1 ms"
+ ]
+}

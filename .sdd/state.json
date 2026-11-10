@@ -588,7 +588,9 @@
       "p2": "2026-11-10 revisada: 4 pagos de 9.000 sin zona caen todos en huecos entre actualizaciones de settings/global; 4.000 de mas (3 en cortes conciliados, 1 en pendiente); compensacion sin hacer",
       "p2fix": "2026-11-10 17:38Z: #193210 9.000->8.000 y corte pendiente stl-1794233484852 recalculado (+1.000 esperado); los 3.000 en cortes conciliados se dejan (decision del responsable)",
       "zonas": "2026-11-10 18:16Z: las 3 zonas a 8.000/8.000 en pago al domiciliario (decision del responsable)",
-      "pendiente": "plan e implementacion"
+      "plan": "specs/028_plan.md",
+      "implemented": "2026-11-10: planAutosave (src/lib/autosave-plan.ts) + state-store + useAppState; suite 3575/69, tsc raiz y functions limpios, lint 0 errores (3 avisos previos); E2E local contra prod: 0 peticiones al canal Write en 45 s (.sdd/evidence/028/local-con-arreglo-2026-11-10.json)",
+      "pendiente": "desplegar hosting (con permiso), E2E contra prod (RNF_02), settings/global igual antes y despues (DoD 5), 3 dias de onSettingsFloorRaise (RNF_03)"
     },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",

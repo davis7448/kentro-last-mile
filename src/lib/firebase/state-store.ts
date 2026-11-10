@@ -22,6 +22,7 @@ import {
 import { selectUnsettledWalletEntries } from "@/lib/finance";
 import { mergeCommunitySellers, type LoadIssue, type LoadReport } from "../load-status";
 import { emptyState } from "@/lib/seed";
+import { AUTOSAVED_COLLECTIONS, planAutosave, type AutosaveBaseline } from "@/lib/autosave-plan";
 import type { AppState, AuditEvent, CashSnapshot, City, Community, Driver, InventoryItem, Messenger, Order, PickupBatch, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry, Zone } from "@/lib/types";
 import { getFirebaseClient } from "./client";
 import { READ_CHUNK_SIZE, readEachById } from "@/lib/read-each-by-id";
@@ -308,33 +309,21 @@ export async function loadFirestoreState(context?: FirestoreStateContext, option
   };
 }
 
-// Colecciones que el autoguardado del admin persiste, en orden de escritura. `payouts` NO esta:
-// los gestiona el servidor (requestSellerPayout, rejectSellerPayout, createSettlement) y
-// reescribirlos desde el estado del admin pisaria una solicitud creada entre carga y guardado.
-const AUTOSAVED_COLLECTIONS = [
-  "cities",
-  "zones",
-  "sellers",
-  "shopifyStores",
-  "storeWebhookConfigs",
-  "shopifyInstallRequests",
-  "drivers",
-  "messengers",
-  "pickupBatches",
-  "suppliers",
-  "productCatalog",
-  "inventory"
-] as const;
-
-// Ultimo estado que vino del servidor. El autoguardado compara contra esto para escribir solo lo
-// que el admin cambio de verdad: antes reescribia las 12 colecciones enteras en CADA setState
-// (331 operaciones hoy, con pickupBatches creciendo sin techo) y el writeBatch se corta en 500.
-let lastRemoteCollections: Partial<Record<(typeof AUTOSAVED_COLLECTIONS)[number] | "settings", unknown>> | null = null;
+// Ultimo estado que vino del servidor, con las referencias que entrego la suscripcion. El autoguardado
+// compara contra esto para escribir solo lo que el admin cambio de verdad (spec 028, `planAutosave`). Sin
+// linea base no se escribe NADA: antes se escribia "todo", y al entrar como admin eso eran las tarifas de
+// fabrica de `emptyState()` sobre `settings/global`, antes de que llegara el estado del servidor.
+let lastRemoteCollections: AutosaveBaseline | null = null;
 
 function rememberRemoteCollections(state: AppState) {
   const snapshot: Record<string, unknown> = { settings: state.settings };
   for (const name of AUTOSAVED_COLLECTIONS) snapshot[name] = state[name];
-  lastRemoteCollections = snapshot;
+  lastRemoteCollections = snapshot as AutosaveBaseline;
+}
+
+/** Spec 028 RF_08: cada suscripcion empieza sin linea base, para no guardar contra la de otra sesion. */
+function resetRemoteBaseline() {
+  lastRemoteCollections = null;
 }
 
 export async function saveFirestoreState(state: AppState, context?: FirestoreStateContext): Promise<void> {
@@ -358,28 +347,21 @@ export async function saveFirestoreState(state: AppState, context?: FirestoreSta
     return;
   }
 
-  // Sin referencia previa (arranque en frio o base vacia) se escribe todo; con ella, solo lo que
-  // cambio. La comparacion es por identidad de array, que se conserva entre emisiones: el emit
-  // solo rearma las claves marcadas como sucias.
-  const baseline = lastRemoteCollections;
-  const changed = AUTOSAVED_COLLECTIONS.filter((name) => !baseline || state[name] !== baseline[name]);
-  const settingsChanged = !baseline || state.settings !== baseline.settings;
-  if (!settingsChanged && changed.length === 0) return;
-
-  const pendingWrites = changed.reduce((total, name) => total + state[name].length, 0) + (settingsChanged ? 1 : 0);
-  if (pendingWrites > BATCH_WRITE_LIMIT) {
-    throw new Error(`El guardado supera el limite de ${BATCH_WRITE_LIMIT} operaciones por lote (${pendingWrites}).`);
+  const plan = planAutosave(lastRemoteCollections, state);
+  if (plan.writeCount === 0) return;
+  if (plan.writeCount > BATCH_WRITE_LIMIT) {
+    throw new Error(`El guardado supera el limite de ${BATCH_WRITE_LIMIT} operaciones por lote (${plan.writeCount}).`);
   }
 
   const batch = writeBatch(client.db);
-  if (settingsChanged) {
-    batch.set(doc(client.db, ...settingsPath), { ...state.settings, updatedAt: serverTimestamp() }, { merge: true });
+  if (plan.settings) {
+    // Solo los campos que cambiaron (RF_05): un `merge` con `settings` entero rellenaba con valores de
+    // fabrica cualquier campo que faltara en el documento y devolvia el valor viejo de otra sesion.
+    batch.set(doc(client.db, ...settingsPath), { ...plan.settings, updatedAt: serverTimestamp() }, { merge: true });
   }
-  // El tipo del array se pierde al iterar la union de colecciones; `writeEntities` solo usa
-  // `entity.id`, que todas comparten.
-  for (const name of changed) writeEntities(batch, name, state[name] as Array<{ id: string }>);
+  for (const entry of plan.entities) writeEntities(batch, entry.collection, entry.items);
   await batch.commit();
-  perfLog(`autoguardado: ${pendingWrites} escrituras (${changed.join(", ") || "solo settings"})`);
+  perfLog(`autoguardado: ${plan.writeCount} escrituras (${[plan.settings ? "settings" : "", ...plan.entities.map((entry) => `${entry.collection}:${entry.items.length}`)].filter(Boolean).join(", ")})`);
   rememberRemoteCollections(state);
 }
 
@@ -497,6 +479,8 @@ export function subscribeFirestoreState(
 ) {
   const client = getFirebaseClient();
   if (!client) return () => undefined;
+  // Spec 028 RF_08: hasta la primera emision de ESTA suscripcion no hay nada contra que guardar.
+  resetRemoteBaseline();
   const orderRef = collection(client.db, "orders");
   const inventoryRef = collection(client.db, "inventory");
   const shopifyStoreRef = collection(client.db, "shopifyStores");

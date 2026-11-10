@@ -222,6 +222,11 @@ nunca a Firestore.
 3. `e2e/verify-028-writes.mjs` contra produccion, tras desplegar: 0 escrituras en 45 s (RNF_02).
 4. Prueba de HU_02 en produccion: cambiar una tarifa en Ajustes escribe solo ese campo, y se devuelve a su valor.
    Requiere permiso expreso del responsable porque toca `settings/global`.
+   - *Nota de implementacion (2026-11-10):* **la app no tiene editor de `settings/global`**. En Ajustes solo se
+     editan zonas, y van por `saveFirestoreZone` antes de pasar al estado. Todas las escrituras de
+     `settings/global` desde el navegador eran fantasma. HU_02 se cubre con las pruebas de `planAutosave`
+     (RF_05, RF_06): editar una zona escribe solo esa zona. La edicion de punta a punta no se puede probar con
+     las escrituras abortadas, porque la zona espera la confirmacion del servidor antes de pasar al estado.
 5. `settings/global` igual antes y despues del despliegue (comparado campo a campo).
 6. Tres dias de `onSettingsFloorRaise` en Cloud Logging (RNF_03).
 7. El responsable valida el resultado.
@@ -232,3 +237,4 @@ nunca a Firestore.
 |---|---|---|
 | 2026-11-10 | Borrador inicial con la medicion de produccion | Prueba E2E de la 023: 8 escrituras al abrir como admin |
 | 2026-11-10 | Aprobada | "Aprobar spec 028" del responsable |
+| 2026-11-10 | Implementada (plan `specs/028_plan.md`) | `planAutosave` + cableado; 0 escrituras en local contra produccion |
