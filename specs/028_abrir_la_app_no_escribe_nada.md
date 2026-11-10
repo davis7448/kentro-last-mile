@@ -129,6 +129,9 @@ nunca a Firestore.
   memoria).
 - La base de produccion queda vacia (proyecto nuevo o emulador): la app no siembra tarifas. El servidor ya tiene
   sus valores por defecto en `resolveTariffs` (`defaultSettings`).
+- Alta del primer administrador en un proyecto vacio (`needsBootstrap`): antes sembraba `settings/global` con las
+  tarifas de fabrica y `cities/city-cali`; ahora no escribe ninguno de los dos, porque no hay linea base. La
+  ciudad hay que crearla desde Ajustes. En produccion no aplica: el proyecto ya esta inicializado.
 - Otros roles (tienda, logistico, domiciliario, mensajero, lider): ya hoy `saveFirestoreState` sale sin escribir.
   RF_02 se comprueba igual para el admin, que es el unico que escribe.
 - Modo local sin Firebase: `localStorage` sigue funcionando como hoy.
