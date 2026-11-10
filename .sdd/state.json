@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T24",
+  "activeTask": "T25",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -35,7 +35,7 @@
     "T21": { "requirements": ["RF_05b", "RNF_01"], "files": ["specs/038_measure.js", "src/lib/measure-038.test.ts"], "testWritten": true, "done": true },
     "T22": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts", "scripts/verify-026.js", "scripts/verify-027.js", "functions/src/orders.ts", "functions/src/order-corrections-plan.ts", "specs/038_measure.js", "src/lib/cash-outstanding.test.ts", "src/lib/spec-026-guards.test.ts"], "testWritten": true, "done": true },
     "T23": { "requirements": ["RF_09", "RF_12", "RF_05b"], "files": ["src/lib/spec-038-guards.test.ts", "scripts/verify-026.js", "specs/038_measure.js"], "testWritten": true, "done": true },
-    "T24": { "requirements": ["RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.property.test.ts"], "testWritten": false, "done": false },
+    "T24": { "requirements": ["RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.property.test.ts"], "testWritten": true, "done": true },
     "T25": { "requirements": ["RF_01b", "RNF_04"], "files": ["functions/src/orders.ts", "functions/src/driver-ledger-io.ts", "functions/src/order-corrections.ts", "functions/src/order-corrections-plan.ts", "functions/src/cash-outstanding.ts", "scripts/snapshot-038-baseline.js", "scripts/compensate-038.js", "specs/038_measure.js", "scripts/verify-026.js", "src/lib/driver-ledger-io.test.ts", "src/lib/order-corrections-plan.test.ts", "src/lib/cash-outstanding.test.ts", "src/lib/spec-038-guards.test.ts"], "testWritten": false, "done": false },
     "T26": { "requirements": ["RF_11", "RF_11b", "RF_12"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": false, "done": false },
     "T27": { "requirements": ["RF_04", "RF_05b"], "files": ["functions/src/orders.ts", "scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },

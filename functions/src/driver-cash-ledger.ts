@@ -114,12 +114,26 @@ export type OrderOwed = {
 };
 
 /**
- * Por pedido, lo que debe hoy con los asientos vigentes (RF_01, RF_02).
+ * Quien entrego cada pedido: su `driverId` actual (RF_01b). `null` o ausente = no se sabe, y entonces el recaudo
+ * cuenta como hasta ahora (un dato que falta no devuelve dinero).
+ */
+export type DeliveredBy = ReadonlyMap<string, string | null | undefined>;
+
+/** El pedido lo tiene asignado OTRO domiciliario (no nulo): su recaudo no es de este (RF_01b). */
+export function isDeliveredByOther(deliveredBy: DeliveredBy | undefined, orderId: string, driverId: string): boolean {
+  const deliverer = deliveredBy?.get(orderId);
+  return typeof deliverer === "string" && deliverer !== "" && deliverer !== driverId;
+}
+
+/**
+ * Por pedido, lo que debe hoy con los asientos vigentes (RF_01, RF_01b, RF_02).
  *
  * El recaudo se suma de TODAS las tiendas: un pedido que cambio de tienda tiene su recaudo repartido
- * entre dos y el domiciliario lo cobro una sola vez. El pago solo cuenta el de este domiciliario.
+ * entre dos y el domiciliario lo cobro una sola vez. El pago solo cuenta el de este domiciliario. Y el recaudo
+ * solo se le cobra al que entrego (`deliveredBy`): a quien hizo una visita fallida de un pedido que luego entrego
+ * otro solo le queda su pago. Es la UNICA funcion que decide lo debido; las demas le pasan `deliveredBy`.
  */
-export function orderOwedByDriver(entries: readonly WalletEntryDoc[], driverId: string): Map<string, OrderOwed> {
+export function orderOwedByDriver(entries: readonly WalletEntryDoc[], driverId: string, deliveredBy?: DeliveredBy): Map<string, OrderOwed> {
   const owed = new Map<string, OrderOwed>();
   const rowFor = (orderId: string): OrderOwed => {
     let row = owed.get(orderId);
@@ -134,7 +148,8 @@ export function orderOwedByDriver(entries: readonly WalletEntryDoc[], driverId: 
     if (!orderId) continue;
     const amountCop = Number(entry.amountCop) || 0;
     if (entry.ownerType === "seller" && COD_ENTRY_TYPES.has(entry.type)) {
-      rowFor(orderId).codCop += amountCop;
+      const row = rowFor(orderId);
+      if (!isDeliveredByOther(deliveredBy, orderId, driverId)) row.codCop += amountCop;
     } else if (entry.ownerType === "driver" && entry.ownerId === driverId && entry.type === "driver_earning") {
       rowFor(orderId).driverPayCop += amountCop;
     }
@@ -227,6 +242,8 @@ export type DriverCorteInput = {
   receivedCop?: number;
   /** Fecha de creacion y tracking de cada pedido, para repartir lo recibido en el orden de hoy. */
   orderMeta?: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">>;
+  /** Quien entrego cada pedido (RF_01b). Sin el, el recaudo cuenta como hasta ahora. */
+  deliveredBy?: DeliveredBy;
 };
 
 export type DriverCorteFigures = {
@@ -341,7 +358,7 @@ export function computeDriverCorte(input: DriverCorteInput): DriverCorteFigures 
   const orderIdSet = new Set(orderIds);
   const ownEntryIds = new Set(input.ownEntryIds.map(String));
   const relevant = input.entries.filter((entry) => orderIdSet.has(String(entry.orderId ?? "")));
-  const owed = orderOwedByDriver(relevant, context.driverId);
+  const owed = orderOwedByDriver(relevant, context.driverId, input.deliveredBy);
   const registered = registeredByOtherCortes(context, input.settlementId, orderIdSet);
 
   const ownPayByOrder = new Map<string, number>();
@@ -408,7 +425,12 @@ export type PendingDeltaOrder = {
  *
  * `entries` son los asientos de tienda de esos pedidos y los `driver_earning` del domiciliario.
  */
-export function pendingDeltaOrders(input: { entries: readonly WalletEntryDoc[]; context: DriverLedgerContext }): PendingDeltaOrder[] {
+export function pendingDeltaOrders(input: {
+  entries: readonly WalletEntryDoc[];
+  context: DriverLedgerContext;
+  /** Quien entrego cada pedido (RF_01b): un pedido que entrego otro no le vuelve solo a este. */
+  deliveredBy?: DeliveredBy;
+}): PendingDeltaOrder[] {
   const { context } = input;
   const inPending = new Set<string>();
   const seen: string[] = [];
@@ -423,7 +445,8 @@ export function pendingDeltaOrders(input: { entries: readonly WalletEntryDoc[]; 
   const candidateSet = new Set(candidates);
   const owed = orderOwedByDriver(
     input.entries.filter((entry) => candidateSet.has(String(entry.orderId ?? ""))),
-    context.driverId
+    context.driverId,
+    input.deliveredBy
   );
   // Ningun corte se excluye: se compara contra todo lo registrado por el domiciliario.
   const registered = registeredByOtherCortes(context, "", candidateSet);
@@ -463,6 +486,8 @@ export function computeHolds(input: {
   entries: readonly WalletEntryDoc[];
   context: DriverLedgerContext;
   recalculatedAt: ReadonlyMap<string, string>;
+  /** Quien entrego cada pedido (RF_01b), para lo debido visto. */
+  deliveredBy?: DeliveredBy;
 }): DriverCashHold[] {
   const { context } = input;
   const seenUntil = new Map<string, string>();
@@ -489,7 +514,7 @@ export function computeHolds(input: {
     const visible = input.entries.filter(
       (entry) => String(entry.orderId ?? "") === orderId && (!until || String(entry.createdAt ?? "") <= until)
     );
-    const owedSeen = orderOwedByDriver(visible, context.driverId).get(orderId)?.owedCop ?? 0;
+    const owedSeen = orderOwedByDriver(visible, context.driverId, input.deliveredBy).get(orderId)?.owedCop ?? 0;
     const holdCop = (registered.get(orderId) ?? 0) - owedSeen;
     if (holdCop !== 0) holds.push({ orderId, holdCop });
   }
@@ -522,6 +547,8 @@ export function buildDriverLedgerSnapshot(input: {
   entries: readonly WalletEntryDoc[];
   now: string;
   createdBy: string;
+  /** Quien entrego cada pedido (RF_01b): lo usan las retenciones. */
+  deliveredBy?: DeliveredBy;
 }): DriverLedgerSnapshot {
   const { driverId } = input;
   const codByOrder = new Map<string, WalletEntryDoc[]>();
@@ -557,6 +584,7 @@ export function buildDriverLedgerSnapshot(input: {
   const holdRows = computeHolds({
     entries: input.entries,
     context: withoutHolds,
+    deliveredBy: input.deliveredBy,
     recalculatedAt: new Map(input.settlements.map((settlement) => [settlement.id, lastRecalculatedAt(settlement)]))
   });
   const totalHoldCop = holdRows.reduce((total, hold) => total + hold.holdCop, 0);
@@ -576,6 +604,11 @@ export type CompensationRow = {
   releaseCop: number;
   excluded: boolean;
   excludedReason?: string;
+  /**
+   * El pedido lo tiene asignado otro domiciliario (RF_01b, spec §5): se lista aparte y no se devuelve. Solo
+   * aparece cuando es `true`, para que la huella de los planes sin estos casos no cambie.
+   */
+  otherDriver?: true;
   /** "next": entra al siguiente corte (RF_07); "pending:<id>": lo absorbe ese corte al recalcularse. */
   entersVia: string;
 };
@@ -589,6 +622,9 @@ export type CompensationPlan = {
   /** Huella determinista de las filas: aplicar exige la misma (RF_14). */
   fingerprint: string;
 };
+
+/** Motivo con que se aparta, sin devolverlo, un pedido que tiene asignado otro domiciliario (spec §5). */
+export const OTHER_DRIVER_REASON = "lo tiene asignado otro domiciliario: revisar a mano (spec 038 §5)";
 
 /** FNV-1a de 32 bits: huella estable sin dependencias y sin `crypto` (el modulo es puro). */
 function fnv1a(text: string): string {
@@ -609,18 +645,21 @@ export function planDriverCompensation(input: {
   entries: readonly WalletEntryDoc[];
   context: DriverLedgerContext;
   exclude?: ReadonlyMap<string, string>;
+  /** Quien entrego cada pedido (RF_01b). */
+  deliveredBy?: DeliveredBy;
 }): CompensationPlan {
   const { context } = input;
   const active = (context.holds?.holds ?? []).filter((hold) => !hold.releasedAt && hold.holdCop !== 0);
   const registered = registeredByAllCortes(context);
-  const owed = orderOwedByDriver(input.entries, context.driverId);
+  const owed = orderOwedByDriver(input.entries, context.driverId, input.deliveredBy);
   const pendingByOrder = new Map<string, string>();
   for (const settlement of context.settlements) {
     if (settlement.status !== "pending") continue;
     for (const orderId of (settlement.orderIds ?? []).map(String)) pendingByOrder.set(orderId, settlement.id);
   }
   const rows = active.map((hold): CompensationRow => {
-    const reason = input.exclude?.get(hold.orderId);
+    const otherDriver = isDeliveredByOther(input.deliveredBy, hold.orderId, context.driverId);
+    const reason = input.exclude?.get(hold.orderId) ?? (otherDriver ? OTHER_DRIVER_REASON : undefined);
     const pending = pendingByOrder.get(hold.orderId);
     return {
       orderId: hold.orderId,
@@ -629,6 +668,7 @@ export function planDriverCompensation(input: {
       releaseCop: hold.holdCop,
       excluded: reason !== undefined,
       ...(reason !== undefined ? { excludedReason: reason } : {}),
+      ...(otherDriver ? { otherDriver: true as const } : {}),
       entersVia: pending ? `pending:${pending}` : "next"
     };
   });
@@ -712,10 +752,11 @@ export function applyCompensationPlan(
 export function driverCorteOrderIdsAtCreation(
   ownEntries: readonly WalletEntryDoc[],
   entries: readonly WalletEntryDoc[],
-  context: DriverLedgerContext
+  context: DriverLedgerContext,
+  deliveredBy?: DeliveredBy
 ): string[] {
   const own = ownEntries.map((entry) => String(entry.orderId ?? "")).filter(Boolean);
-  const returning = pendingDeltaOrders({ entries, context }).map((row) => row.orderId);
+  const returning = pendingDeltaOrders({ entries, context, deliveredBy }).map((row) => row.orderId);
   return Array.from(new Set([...own, ...returning]));
 }
 

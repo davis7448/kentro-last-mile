@@ -50,6 +50,8 @@ type Sim = {
   holds: DriverCashHolds | null;
   clock: number;
   nextId: number;
+  /** Spec 038 T24 (RF_01b): quien tiene asignado cada pedido. Vacio = el propio domiciliario o sin dato. */
+  deliveredBy: Map<string, string>;
 };
 
 function iso(sim: Sim): string {
@@ -83,7 +85,8 @@ function calculate(sim: Sim, settlement: SimSettlement) {
     ownEntryIds: settlement.ownEntryIds,
     entries: sim.entries,
     context: context(sim),
-    receivedCop: settlement.receivedCop
+    receivedCop: settlement.receivedCop,
+    deliveredBy: sim.deliveredBy
   });
   settlement.cashCharges = figures.charges;
   settlement.creditInCop = figures.creditInCop;
@@ -98,7 +101,7 @@ function calculate(sim: Sim, settlement: SimSettlement) {
 }
 
 function assertCharged(sim: Sim, orderIds: readonly string[]) {
-  const owed = orderOwedByDriver(sim.entries, DRIVER);
+  const owed = orderOwedByDriver(sim.entries, DRIVER, sim.deliveredBy);
   for (const orderId of new Set(orderIds)) {
     const charged = sim.settlements.reduce((sum, s) => {
       if (!s.orderIds.includes(orderId)) return sum;
@@ -112,7 +115,7 @@ function assertCharged(sim: Sim, orderIds: readonly string[]) {
 function createCorte(sim: Sim) {
   const own = Array.from(sim.unsettledOwn);
   const ownOrders = own.map((id) => sim.entries.find((e) => e.id === id)!.orderId);
-  const deltas = pendingDeltaOrders({ entries: sim.entries, context: context(sim) }).map((d) => d.orderId);
+  const deltas = pendingDeltaOrders({ entries: sim.entries, context: context(sim), deliveredBy: sim.deliveredBy }).map((d) => d.orderId);
   const orderIds = Array.from(new Set([...ownOrders, ...deltas]));
   if (orderIds.length === 0) return;
   const settlement: SimSettlement = { id: `s${sim.nextId++}`, status: "pending", orderIds, ownEntryIds: own, receivedCop: 0 };
@@ -130,7 +133,8 @@ function seed(rand: ReturnType<typeof lcg>): Sim {
     baseline: { driverId: DRIVER, createdAt: "", createdBy: "test", measuredDiffCop: 0, settlements: {} },
     holds: null,
     clock: 0,
-    nextId: 0
+    nextId: 0,
+    deliveredBy: new Map()
   };
   const oldOrders = ["o0", "o1", "o2"];
   for (const orderId of oldOrders) {
@@ -157,7 +161,7 @@ function step(sim: Sim, rand: ReturnType<typeof lcg>) {
   const orderId = `o${rand.int(8)}`;
   const store = rand.pick(["store-a", "store-b"]);
   const pending = sim.settlements.filter((s) => s.status === "pending");
-  switch (rand.int(10)) {
+  switch (rand.int(11)) {
     case 0: // entrega (o re-entrega)
       addEntry(sim, { ownerType: "seller", ownerId: store, orderId, type: "cod_revenue", amountCop: 30000 + rand.int(8) * 10000 });
       addEntry(sim, { ownerType: "driver", ownerId: DRIVER, orderId, type: "driver_earning", amountCop: 8000 });
@@ -196,6 +200,10 @@ function step(sim: Sim, rand: ReturnType<typeof lcg>) {
     case 8: // cierre (pagado o conciliado): congela sus cifras
       if (pending.length) rand.pick(pending).status = rand.pick(["paid", "reconciled"]);
       break;
+    case 10: // RF_01b: el pedido pasa a otro domiciliario (lo entrega otro) o vuelve a este
+      if (sim.deliveredBy.has(orderId)) sim.deliveredBy.delete(orderId);
+      else sim.deliveredBy.set(orderId, rand.pick(["OTRO", DRIVER]));
+      break;
     case 9: { // liberar una retencion (compensacion aprobada)
       const active = (sim.holds?.holds ?? []).filter((h) => !h.releasedAt);
       if (active.length) {
@@ -213,7 +221,7 @@ function settleAll(sim: Sim) {
   for (const s of sim.settlements.filter((x) => x.status === "pending")) calculate(sim, s);
   createCorte(sim);
   for (const s of sim.settlements.filter((x) => x.status === "pending")) s.status = "reconciled";
-  expect(pendingDeltaOrders({ entries: sim.entries, context: context(sim) })).toEqual([]);
+  expect(pendingDeltaOrders({ entries: sim.entries, context: context(sim), deliveredBy: sim.deliveredBy })).toEqual([]);
   const everyOrder = sim.settlements.flatMap((s) => s.orderIds);
   assertCharged(sim, everyOrder);
 }

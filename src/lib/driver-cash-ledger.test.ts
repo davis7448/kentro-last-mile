@@ -660,3 +660,80 @@ describe("spec 038 · T19 · buildDriverLedgerSnapshot", () => {
     expect(snapshot.totalHoldCop).toBe(0);
   });
 });
+
+/**
+ * Spec 038 · T24 (RF_01b; hallazgo H1 de la verificacion): el recaudo de un pedido solo se le cobra al domiciliario
+ * que lo entrego, el `driverId` actual del pedido (`deliveredBy`). Si el pedido tiene OTRO domiciliario, a este solo
+ * se le cuenta su pago; sin dato o con `driverId` nulo, como hoy (un dato que falta no devuelve dinero).
+ */
+describe("spec 038 · T24 · el recaudo solo al que entrega (RF_01b)", () => {
+  type LedgerModule = typeof import("../../functions/src/driver-cash-ledger");
+  const load = () => import("../../functions/src/driver-cash-ledger") as Promise<LedgerModule & Record<string, unknown>>;
+  const at = (day: number) => `2026-12-${String(day).padStart(2, "0")}T00:00:00.000Z`;
+  const codOf = (id: string, orderId: string, amountCop: number, day: number) =>
+    ({ id, ownerType: "seller", ownerId: "s1", orderId, type: "cod_revenue", amountCop, description: "", createdAt: at(day) }) as WalletEntryDoc;
+  const payOf = (id: string, orderId: string, amountCop: number, ownerId: string, day: number, settlementId?: string) =>
+    ({ id, ownerType: "driver", ownerId, orderId, type: "driver_earning", amountCop, description: "", createdAt: at(day), ...(settlementId ? { settlementId } : {}) }) as WalletEntryDoc;
+  // D1 hizo la visita fallida (5.000, en su corte X1 ya pagado, que registro -5.000); D2 entrego (100.000, gana 9.000).
+  const entries = [payOf("p1", "o", 5000, "D1", 1, "X1"), codOf("c", "o", 100000, 5), payOf("p2", "o", 9000, "D2", 5)];
+  const contextD1 = () => ({
+    driverId: "D1",
+    settlements: [{ id: "X1", status: "paid", orderIds: ["o"], cashCharges: [{ orderId: "o", codCop: 0, driverPayCop: 5000, chargedCop: -5000, codSeenCop: 0 }] }],
+    baseline: { driverId: "D1", createdAt: "", createdBy: "t", measuredDiffCop: 0, settlements: {} },
+    holds: null
+  });
+  const contextD2 = () => ({ driverId: "D2", settlements: [], baseline: { driverId: "D2", createdAt: "", createdBy: "t", measuredDiffCop: 0, settlements: {} }, holds: null });
+  const deliveredBy = new Map([["o", "D2"]]);
+
+  it("orderOwedByDriver: con otro domiciliario solo cuenta el pago; nulo, ausente o el mismo, como hoy", async () => {
+    const { orderOwedByDriver } = await load();
+    const owed = (driverId: string, map?: Map<string, string | null>) =>
+      (orderOwedByDriver as (e: WalletEntryDoc[], d: string, m?: Map<string, string | null>) => Map<string, { codCop: number; owedCop: number }>)(entries, driverId, map).get("o");
+    expect(owed("D1", deliveredBy)).toMatchObject({ codCop: 0, owedCop: -5000 });
+    expect(owed("D2", deliveredBy)).toMatchObject({ codCop: 100000, owedCop: 91000 });
+    expect(owed("D1", new Map([["o", null]]))).toMatchObject({ codCop: 100000, owedCop: 95000 });
+    expect(owed("D1")).toMatchObject({ codCop: 100000, owedCop: 95000 });
+  });
+
+  it("el escenario H1: a D1 no le vuelve el pedido ni se le cobra; a D2 si, una vez", async () => {
+    const { pendingDeltaOrders, computeDriverCorte, driverCorteOrderIdsAtCreation } = await load();
+    expect(pendingDeltaOrders({ entries, context: contextD1(), deliveredBy } as never)).toEqual([]);
+    expect(driverCorteOrderIdsAtCreation([], entries, contextD1(), deliveredBy as never)).toEqual([]);
+    const d1 = computeDriverCorte({ settlementId: "N1", orderIds: ["o"], ownEntryIds: [], entries, context: contextD1(), deliveredBy } as never);
+    expect(d1.chargedTotalCop).toBe(0);
+    const d2 = computeDriverCorte({ settlementId: "N2", orderIds: ["o"], ownEntryIds: ["p2"], entries, context: contextD2(), deliveredBy } as never);
+    expect(d2.cashExpectedCop).toBe(91000);
+    // Sin el dato, la regla sigue como hoy: es el comportamiento conservador, no una devolucion.
+    expect(pendingDeltaOrders({ entries, context: contextD1() }).map((row) => row.deltaCop)).toEqual([100000]);
+  });
+
+  it("buildDriverSettlementFields lo pasa a la regla (lo usan las callables)", async () => {
+    const { buildDriverSettlementFields } = await load();
+    const fields = buildDriverSettlementFields({ settlementId: "N1", orderIds: ["o"], ownEntryIds: [], entries, context: contextD1(), receivedCop: 0, deliveredBy } as never);
+    expect(fields.cashCharges).toEqual([expect.objectContaining({ orderId: "o", chargedCop: 0 })]);
+  });
+
+  it("retenciones y foto: lo debido visto tampoco le cuenta el recaudo de otro", async () => {
+    const { computeHolds, buildDriverLedgerSnapshot } = await load();
+    // D1 entrego primero y X le cobro 100.000 - 5.000; luego se corrigio y lo entrego D2 (recaudo de D1 revertido).
+    const history = [
+      codOf("c1", "o", 100000, 1), payOf("p1", "o", 5000, "D1", 1, "X"), codOf("r1", "o", -100000, 3), codOf("c2", "o", 100000, 4), payOf("p2", "o", 9000, "D2", 4)
+    ];
+    const oldCorte = { id: "X", kind: "driver", ownerId: "D1", status: "reconciled", orderIds: ["o"], createdAt: at(2), reconciledAt: at(2),
+      cashExpectedCop: 95000, cashAllocations: [{ orderId: "o", expectedCop: 95000, receivedCop: 95000, covered: true }] } as unknown as SettlementDoc;
+    const snapshot = buildDriverLedgerSnapshot({ driverId: "D1", settlements: [oldCorte], entries: history, now: at(10), createdBy: "t", deliveredBy } as never);
+    // Cobrado 95.000; debe hoy -5.000 (solo su pago de la primera visita): 100.000 retenidos, no 0.
+    expect(snapshot.holds.holds).toEqual([{ orderId: "o", holdCop: 100000 }]);
+    const sinDato = computeHolds({ entries: history, context: { ...snapshot.context, holds: null }, recalculatedAt: new Map([["X", at(2)]]) });
+    expect(sinDato).toEqual([]);
+  });
+
+  it("compensacion: el pedido que entrego otro se lista aparte y no suma al total", async () => {
+    const { planDriverCompensation } = await load();
+    const context = { ...contextD1(), holds: { driverId: "D1", createdAt: "", holds: [{ orderId: "o", holdCop: 100000 }] } };
+    const plan = planDriverCompensation({ entries, context, deliveredBy } as never);
+    expect(plan.totalCop).toBe(0);
+    expect(plan.rows).toEqual([expect.objectContaining({ orderId: "o", excluded: true, otherDriver: true })]);
+    expect(plan.excludedCop).toBe(100000);
+  });
+});

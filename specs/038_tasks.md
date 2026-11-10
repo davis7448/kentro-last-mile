@@ -288,7 +288,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 
 ## Enmienda tras la verificacion (2026-11-10)
 
-- [ ] **T24: El recaudo solo al que entrega, en el nucleo**
+- [x] **T24: El recaudo solo al que entrega, en el nucleo**
   * Requisitos cubiertos: RF_01b
   * Archivos: functions/src/driver-cash-ledger.ts, src/lib/driver-cash-ledger.test.ts, src/lib/driver-cash-ledger.property.test.ts
   * Accion: `orderOwedByDriver` con `deliveredBy` (plan §7.1) y su paso por `computeDriverCorte`,
