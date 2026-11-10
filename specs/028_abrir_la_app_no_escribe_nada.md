@@ -148,6 +148,10 @@ nunca a Firestore.
 
 - **P1:** En `settings/global`, ¿son correctos `driverDeliveredPayCop = 8.000`, `driverFailedPayCop = 8.000` y
   `sellerFailedFeeCop = 9.000`? La spec no los cambia. Si alguno no es el que quieres, se fija aparte.
+  - *Respuesta parcial (2026-11-10):* "a la tienda se le cobra 12". Ya es asi: `resolveSellerCharges` fija el
+    fallido de tienda en `SELLER_FAILED_FEE_FIXED_COP = 12000` e ignora el 9.000 de `settings/global` (62 de 63
+    `failed_fee` desde el 2026-10-11 son de 12.000). Ese 9.000 es un valor muerto que confunde; corregirlo es
+    cosa aparte. Falta confirmar las dos tarifas del domiciliario.
 - **P2:** ¿Se revisan ahora los 4 pagos de 9.000 al domiciliario en pedidos sin zona, o se dejan para despues
   de arreglar esto?
 
