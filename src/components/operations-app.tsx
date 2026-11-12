@@ -66,6 +66,8 @@ import { CONFIRM_ORDER_TOTAL_COP, MAX_ORDER_TOTAL_COP, checkOrderTotalCop, forma
 import { NO_AMOUNT_LABEL, UNAVAILABLE_ORDER_LABEL, buildDriverSettlementDetailGroups, settlementDetailNotice, settlementStatusLabel, buildDriverSettlementExportRows, driverSettlementExportColumns, flattenDriverSettlementDetail, formatDetailCop } from "@/lib/driver-settlement-export";
 import type { DriverSettlementDetailGroup } from "@/lib/driver-settlement-export";
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
+import { recordEvidenceTiming } from "@/lib/firebase/evidence-timing-store";
+import { errorTag, nowMs, type EvidenceTrace } from "@/lib/evidence-timing";
 import { enqueueEvidence, markQueuedEvidenceError, pruneOrphanPhotos, queuedEvidenceToFile, readEvidenceQueue, readQueuedPhoto, removeQueuedEvidence, type QueuedEvidence } from "@/lib/evidence-queue";
 import {
   advanceOrder,
@@ -2492,6 +2494,8 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
     const item = queued[queued.length - 1];
     syncingRef.current = item.id;
     setSyncingId(item.id);
+    let trace: EvidenceTrace | null = null;
+    let closing = false;
     try {
       const dataUrl = readQueuedPhoto(item.id);
       if (!dataUrl) {
@@ -2500,7 +2504,10 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
         return;
       }
       const file = await queuedEvidenceToFile(item, dataUrl);
-      const evidence = await uploadEvidenceImage(item.orderId, file, { onProgress: setSyncProgress });
+      trace = { source: "queue", outcome: item.outcome, orderId: item.orderId, attempts: 1 };
+      const evidence = await uploadEvidenceImage(item.orderId, file, { onProgress: setSyncProgress, trace });
+      const closeStartedAt = nowMs();
+      closing = true;
       const result = await closeFirebaseOrder({
         orderId: item.orderId,
         outcome: item.outcome,
@@ -2513,6 +2520,9 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
         scheduledDate: item.scheduledDate,
         scheduledWindow: item.scheduledWindow
       });
+      trace.closeMs = nowMs() - closeStartedAt;
+      trace.result = "closed";
+      recordEvidenceTiming(trace);
       const remaining = removeQueuedEvidence(item.id);
       const current = stateRef.current;
       setState({
@@ -2522,6 +2532,12 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
       });
       setItems(remaining);
     } catch (error) {
+      // Sin red la cola reintenta cada 30 s: medir cada fallo offline solo llenaria la coleccion.
+      if (trace && navigator.onLine) {
+        if (closing) trace.closeError = errorTag(error);
+        trace.result = closing ? "close_error" : "upload_error";
+        recordEvidenceTiming(trace);
+      }
       setItems(markQueuedEvidenceError(item.id, readableError(error, "No se pudo sincronizar.")));
     } finally {
       syncingRef.current = "";
@@ -2576,6 +2592,9 @@ function useEvidenceUpload(orderId: string) {
   const abortRef = useRef<AbortController | null>(null);
   const previewRef = useRef<string | null>(null);
   const failedRef = useRef(false);
+  // Medicion de esta foto (evidence-timing.ts). Nace al elegirla y se escribe al confirmar.
+  const traceRef = useRef<EvidenceTrace | null>(null);
+  const selectedAtRef = useRef(0);
 
   const discard = () => {
     abortRef.current?.abort();
@@ -2596,8 +2615,10 @@ function useEvidenceUpload(orderId: string) {
     setStatus("preparing");
     setProgress(null);
     failedRef.current = false;
+    const trace = traceRef.current;
+    if (trace) trace.attempts = (trace.attempts ?? 0) + 1;
     const task = (async () => {
-      const prepared = await prepareEvidenceImage(nextFile);
+      const prepared = await prepareEvidenceImage(nextFile, trace ?? undefined);
       preparedRef.current = prepared;
       if (controller.signal.aborted) throw new Error("Subida cancelada.");
       setStatus("uploading");
@@ -2605,7 +2626,8 @@ function useEvidenceUpload(orderId: string) {
         onProgress: (percent) => {
           if (!controller.signal.aborted) setProgress(percent);
         },
-        signal: controller.signal
+        signal: controller.signal,
+        trace: trace ?? undefined
       });
       if (!controller.signal.aborted) setStatus("ready");
       return evidence;
@@ -2629,6 +2651,8 @@ function useEvidenceUpload(orderId: string) {
       setProgress(null);
       return;
     }
+    traceRef.current = { source: "form", orderId, attempts: 0 };
+    selectedAtRef.current = nowMs();
     // El preview sale ANTES de comprimir: el domiciliario ve que la foto quedo bien de inmediato.
     const url = URL.createObjectURL(nextFile);
     previewRef.current = url;
@@ -2649,6 +2673,16 @@ function useEvidenceUpload(orderId: string) {
     return uploadRef.current;
   };
 
+  /** La medicion de la foto actual, sellada con el momento del clic. Siempre devuelve un objeto. */
+  const beginSubmit = (outcome: "delivered" | "failed"): EvidenceTrace => {
+    const trace = traceRef.current ?? { source: "form", orderId, attempts: 0 };
+    traceRef.current = trace;
+    trace.outcome = outcome;
+    trace.stateAtSubmit = status;
+    if (selectedAtRef.current) trace.selectToSubmitMs = nowMs() - selectedAtRef.current;
+    return trace;
+  };
+
   const reset = () => {
     discard();
     setFile(null);
@@ -2657,7 +2691,7 @@ function useEvidenceUpload(orderId: string) {
     setProgress(null);
   };
 
-  return { file, previewUrl, status, progress, selectFile, ready, reset, preparedFile: preparedRef };
+  return { file, previewUrl, status, progress, selectFile, ready, beginSubmit, reset, preparedFile: preparedRef };
 }
 
 function evidenceStatusLabel(status: EvidenceUploadStatus, progress: number | null) {
@@ -2770,15 +2804,24 @@ function DeliveredEvidenceForm({
         setError(null);
         void (async () => {
           let evidence: Awaited<ReturnType<typeof uploadEvidenceImage>>;
+          const trace = upload.beginSubmit("delivered");
+          const waitStartedAt = nowMs();
           try {
             evidence = await upload.ready();
+            trace.submitWaitMs = nowMs() - waitStartedAt;
           } catch (uploadError) {
+            trace.submitWaitMs = nowMs() - waitStartedAt;
+            trace.uploadError ??= errorTag(uploadError);
             if (firebaseEnabled() && shouldQueueEvidence(uploadError)) {
+              trace.result = "queued";
+              recordEvidenceTiming(trace);
               // Ya comprimida: encolar el original volveria a decodificar la foto entera.
               await enqueueEvidence({ orderId: order.id, outcome: "delivered", note, file: upload.preparedFile.current ?? file });
               setError("No hubo senal suficiente. La evidencia quedo en cola y se reintentara automaticamente.");
               return;
             }
+            trace.result = "upload_error";
+            recordEvidenceTiming(trace);
             setError(readableError(uploadError, "No se pudo subir la evidencia."));
             return;
           }
@@ -2791,7 +2834,20 @@ function DeliveredEvidenceForm({
               storagePath: evidence.path
             };
             if (firebaseEnabled()) {
-              const result = await closeFirebaseOrder({ orderId: order.id, outcome: "delivered", ...payload });
+              const closeStartedAt = nowMs();
+              let result: Awaited<ReturnType<typeof closeFirebaseOrder>>;
+              try {
+                result = await closeFirebaseOrder({ orderId: order.id, outcome: "delivered", ...payload });
+              } catch (closeError) {
+                trace.closeMs = nowMs() - closeStartedAt;
+                trace.closeError = errorTag(closeError);
+                trace.result = "close_error";
+                recordEvidenceTiming(trace);
+                throw closeError;
+              }
+              trace.closeMs = nowMs() - closeStartedAt;
+              trace.result = "closed";
+              recordEvidenceTiming(trace);
               onServerCommit(result.order, result.walletEntries);
             } else {
               onCommit(closeDelivered(state, order.id, payload));
@@ -2859,10 +2915,17 @@ function FailedEvidenceForm({
         setError(null);
         void (async () => {
           let evidence: Awaited<ReturnType<typeof uploadEvidenceImage>>;
+          const trace = upload.beginSubmit("failed");
+          const waitStartedAt = nowMs();
           try {
             evidence = await upload.ready();
+            trace.submitWaitMs = nowMs() - waitStartedAt;
           } catch (uploadError) {
+            trace.submitWaitMs = nowMs() - waitStartedAt;
+            trace.uploadError ??= errorTag(uploadError);
             if (firebaseEnabled() && shouldQueueEvidence(uploadError)) {
+              trace.result = "queued";
+              recordEvidenceTiming(trace);
               await enqueueEvidence({
                 orderId: order.id,
                 outcome: "failed",
@@ -2876,6 +2939,8 @@ function FailedEvidenceForm({
               setError("No hubo senal suficiente. La evidencia quedo en cola y se reintentara automaticamente.");
               return;
             }
+            trace.result = "upload_error";
+            recordEvidenceTiming(trace);
             setError(readableError(uploadError, "No se pudo subir la evidencia."));
             return;
           }
@@ -2892,7 +2957,20 @@ function FailedEvidenceForm({
               scheduledWindow: isVisitRescheduled ? scheduledWindow : undefined
             };
             if (firebaseEnabled()) {
-              const result = await closeFirebaseOrder({ orderId: order.id, outcome: "failed", ...payload });
+              const closeStartedAt = nowMs();
+              let result: Awaited<ReturnType<typeof closeFirebaseOrder>>;
+              try {
+                result = await closeFirebaseOrder({ orderId: order.id, outcome: "failed", ...payload });
+              } catch (closeError) {
+                trace.closeMs = nowMs() - closeStartedAt;
+                trace.closeError = errorTag(closeError);
+                trace.result = "close_error";
+                recordEvidenceTiming(trace);
+                throw closeError;
+              }
+              trace.closeMs = nowMs() - closeStartedAt;
+              trace.result = "closed";
+              recordEvidenceTiming(trace);
               onServerCommit(result.order, result.walletEntries);
             } else {
               onCommit(closeFailed(state, order.id, payload));

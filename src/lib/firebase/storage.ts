@@ -2,6 +2,7 @@
 
 import { type User } from "firebase/auth";
 import { type FirebaseStorage, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { errorTag, nowMs, type EvidenceTrace } from "@/lib/evidence-timing";
 import { getFirebaseClient } from "./client";
 
 const maxStorageBytes = 7.5 * 1024 * 1024;
@@ -62,7 +63,7 @@ function cleanFileName(fileName: string) {
     .toLowerCase();
 }
 
-type DecodedImage = { source: CanvasImageSource; width: number; height: number; release: () => void };
+type DecodedImage = { kind: "bitmap" | "img"; source: CanvasImageSource; width: number; height: number; release: () => void };
 
 /**
  * Decodifica con `createImageBitmap` y, si no se puede, con un `<img>`.
@@ -74,7 +75,7 @@ type DecodedImage = { source: CanvasImageSource; width: number; height: number; 
 async function decodeImage(file: File): Promise<DecodedImage | null> {
   if (typeof createImageBitmap === "function") {
     const bitmap = await createImageBitmap(file).catch(() => null);
-    if (bitmap) return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+    if (bitmap) return { kind: "bitmap", source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
   }
   const url = URL.createObjectURL(file);
   const image = await new Promise<HTMLImageElement | null>((resolve) => {
@@ -87,20 +88,45 @@ async function decodeImage(file: File): Promise<DecodedImage | null> {
     URL.revokeObjectURL(url);
     return null;
   }
-  return { source: image, width: image.naturalWidth, height: image.naturalHeight, release: () => URL.revokeObjectURL(url) };
+  return { kind: "img", source: image, width: image.naturalWidth, height: image.naturalHeight, release: () => URL.revokeObjectURL(url) };
 }
 
 function tooHeavy(file: File) {
   return file.size > maxStorageBytes;
 }
 
-export async function prepareEvidenceImage(file: File): Promise<File> {
+/**
+ * Comprime la foto. Con `trace`, anota tamanos, decodificador y cuanto tardo (ver evidence-timing.ts).
+ */
+export async function prepareEvidenceImage(file: File, trace?: EvidenceTrace): Promise<File> {
+  const startedAt = nowMs();
+  if (trace) {
+    trace.originalBytes = file.size;
+    trace.originalType = file.type;
+  }
+  const prepared = await compressEvidenceImage(file, trace);
+  if (trace) {
+    trace.prepareMs = nowMs() - startedAt;
+    trace.preparedBytes = prepared.size;
+  }
+  return prepared;
+}
+
+async function compressEvidenceImage(file: File, trace?: EvidenceTrace): Promise<File> {
   if (!file.type.startsWith("image/")) {
     throw new Error("La evidencia debe ser una imagen.");
   }
-  if (file.size <= skipCompressionBytes) return file;
+  if (file.size <= skipCompressionBytes) {
+    if (trace) trace.decoder = "skipped";
+    return file;
+  }
 
   const decoded = await decodeImage(file);
+  if (trace) {
+    trace.decoder = decoded?.kind ?? "none";
+    trace.width = decoded?.width;
+    trace.height = decoded?.height;
+  }
   if (!decoded) {
     if (tooHeavy(file)) {
       throw new Error("La imagen es muy pesada. Toma una foto en menor resolucion o envia una captura comprimida.");
@@ -147,6 +173,8 @@ export type UploadEvidenceOptions = {
   onProgress?: (percent: number) => void;
   /** Aborta la subida en vuelo cuando el usuario reemplaza la foto. */
   signal?: AbortSignal;
+  /** Medicion de tiempos (evidence-timing.ts). Solo se escribe en el, nunca cambia el flujo. */
+  trace?: EvidenceTrace;
 };
 
 function isUnauthorized(error: unknown) {
@@ -208,7 +236,18 @@ export async function uploadEvidenceImage(orderId: string, file: File, options: 
     throw new Error("Debes iniciar sesion para subir evidencia.");
   }
 
-  const uploadFile = await prepareEvidenceImage(file);
+  const trace = options.trace;
+  let uploadFile: File;
+  if (trace && trace.prepareMs === undefined) {
+    // Camino de la cola offline: esta es la unica preparacion, asi que es la que se mide.
+    uploadFile = await prepareEvidenceImage(file, trace);
+  } else {
+    // Ya preparada por el formulario. Deberia salir sin decodificar (<= 400 KB); si no, se paga
+    // una segunda decodificacion y se mide aparte para verla.
+    const reprepareStartedAt = nowMs();
+    uploadFile = await prepareEvidenceImage(file);
+    if (trace) trace.reprepareMs = nowMs() - reprepareStartedAt;
+  }
   if (uploadFile.size > maxStorageBytes) {
     throw new Error("La imagen supera el limite permitido. Toma una foto en menor resolucion.");
   }
@@ -218,15 +257,32 @@ export async function uploadEvidenceImage(orderId: string, file: File, options: 
 
   let path = evidencePath();
   let url: string;
+  const uploadStartedAt = nowMs();
   try {
     url = await runUpload(client.storage, path, uploadFile, options);
   } catch (error) {
+    if (!isUnauthorized(error) || options.signal?.aborted) {
+      if (trace) {
+        trace.uploadMs = nowMs() - uploadStartedAt;
+        trace.uploadError = errorTag(error);
+      }
+      throw error;
+    }
+    if (trace) trace.tokenRetry = true;
     // Unica razon por la que el token viejo importa: las reglas leen `request.auth.token.role` y
     // el claim puede acabar de asignarse. Se refresca aqui, una vez, en vez de en cada entrega.
-    if (!isUnauthorized(error) || options.signal?.aborted) throw error;
-    await refreshIdToken(user);
-    path = evidencePath();
-    url = await runUpload(client.storage, path, uploadFile, options);
+    try {
+      await refreshIdToken(user);
+      path = evidencePath();
+      url = await runUpload(client.storage, path, uploadFile, options);
+    } catch (retryError) {
+      if (trace) {
+        trace.uploadMs = nowMs() - uploadStartedAt;
+        trace.uploadError = errorTag(retryError);
+      }
+      throw retryError;
+    }
   }
+  if (trace) trace.uploadMs = nowMs() - uploadStartedAt;
   return { label: file.name || safeName, path, url };
 }
