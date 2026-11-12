@@ -338,10 +338,11 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: con los asientos que produce el planificador de correcciones, borrar-y-recrear, reversa y
     cambio de tienda dan recibido; re-entrega con otro monto y B5 no
 
-- [ ] **T30: Las vistas parciales completan los asientos (RF_12, hallazgo R2)**
+- [x] **T30: Las vistas parciales completan los asientos (RF_12, hallazgo R2)**
   * Requisitos cubiertos: RF_12
-  * Archivos: functions/src/seller-ledger.ts, functions/src/seller-balance-api.ts, functions/src/store-api.ts,
-    functions/src/store-api-orders.ts, src/lib/seller-ledger.test.ts, src/lib/spec-038-guards.test.ts
+  * Archivos: functions/src/seller-ledger.ts, functions/src/seller-ledger-io.ts (nuevo), functions/src/seller-balance.ts,
+    functions/src/seller-balance-api.ts, functions/src/store-api.ts, src/lib/seller-ledger.test.ts,
+    src/lib/spec-038-guards.test.ts (store-api-orders.ts no hizo falta: ver plan §7.5)
   * Accion: plan §7.5 (T30)
   * Verificacion: un cambio de tienda da lo mismo desde la tienda vieja, la nueva y la liquidacion
 

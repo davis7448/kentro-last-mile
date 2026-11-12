@@ -7,7 +7,7 @@
  * paga a una tienda, y ya estaba duplicada entre la UI, store-api.ts y createSettlement.
  */
 
-import { COD_ENTRY_TYPES, lastRecalculatedAt } from "./driver-cash-ledger";
+import { COD_ENTRY_TYPES } from "./driver-cash-ledger";
 import { isDriverSettlementCashSettled, type SettlementDoc as MathSettlementDoc } from "./settlement-math";
 
 export type OrderDoc = Record<string, any>;
@@ -47,28 +47,60 @@ export function buildCodReceivedSet(settlements: SettlementDoc[], codByOrder?: R
       for (const orderId of settlement.orderIds ?? []) codReceived.add(String(orderId));
     }
   }
-  const inNewCortes = new Set<string>();
-  for (const settlement of settlements) {
-    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
-    for (const charge of settlement.cashCharges) if (charge?.orderId) inNewCortes.add(String(charge.orderId));
-  }
+  const inNewCortes = ordersInNewCortes(settlements);
   // Spec 038 RF_11b (hallazgo H3): la parte nueva se SUMA a la regla de hoy. Un pedido con una asignacion sin
   // cubrir en un corte viejo (sin `cashCharges`) que no esta saldado en total sigue sin efectivo recibido, aunque
   // un corte nuevo saldado lo tenga.
-  const uncoveredInOpenOldCorte = new Set<string>();
-  for (const settlement of settlements) {
-    if (settlement.kind !== "driver" || Array.isArray(settlement.cashCharges)) continue;
-    if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) continue;
-    for (const allocation of settlement.cashAllocations ?? []) {
-      if (allocation?.orderId && !allocation.covered) uncoveredInOpenOldCorte.add(String(allocation.orderId));
-    }
-  }
+  const uncoveredInOpenOldCorte = uncoveredInOpenOldCortes(settlements);
   for (const orderId of inNewCortes) {
     const codEntries = codByOrder?.get(orderId);
     if (!codEntries || uncoveredInOpenOldCorte.has(orderId) || !isOrderCodSettled(orderId, settlements, codEntries)) codReceived.delete(orderId);
     else codReceived.add(orderId);
   }
   return codReceived;
+}
+
+/** Pedidos que algun corte de domiciliario calculado con la 038 (con `cashCharges`) tiene. */
+function ordersInNewCortes(settlements: SettlementDoc[]): Set<string> {
+  const ids = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
+    for (const charge of settlement.cashCharges) if (charge?.orderId) ids.add(String(charge.orderId));
+  }
+  return ids;
+}
+
+/** RF_11b: pedidos con una asignacion sin cubrir en un corte viejo (sin `cashCharges`) no saldado en total. */
+function uncoveredInOpenOldCortes(settlements: SettlementDoc[]): Set<string> {
+  const ids = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || Array.isArray(settlement.cashCharges)) continue;
+    if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) continue;
+    for (const allocation of settlement.cashAllocations ?? []) {
+      if (allocation?.orderId && !allocation.covered) ids.add(String(allocation.orderId));
+    }
+  }
+  return ids;
+}
+
+/**
+ * Spec 038 RF_12 (T30; hallazgo R2 de T28): de los pedidos que una vista PARCIAL tiene (los asientos de una
+ * tienda, o solo los sin cortar), los que esa vista no da por recibidos y que mas asientos si podrian cambiar:
+ * su efectivo ya llego y el ultimo corte saldado existe, pero el neto que ve la vista no es el que vio el corte.
+ * El llamador lee los asientos completos de esos pedidos (`completeCodEntries`) y vuelve a decidir. A un pedido
+ * que ya cuadra no se le leen mas: con todos sus asientos solo dejaria de cuadrar por un dato duplicado, y entonces
+ * el domiciliario debe esa diferencia y el corte que la cobre lo bloquea (RF_11, primera condicion). En regimen
+ * normal la lista sale vacia.
+ */
+export function codOrdersToComplete(settlements: SettlementDoc[], codByOrder: ReadonlyMap<string, readonly CodEntryLike[]>): string[] {
+  const inNewCortes = ordersInNewCortes(settlements);
+  const uncovered = uncoveredInOpenOldCortes(settlements);
+  const ids: string[] = [];
+  for (const [orderId, codEntries] of codByOrder) {
+    if (!inNewCortes.has(orderId) || uncovered.has(orderId)) continue;
+    if (codSettlementState(orderId, settlements, codEntries) === "net_mismatch") ids.push(orderId);
+  }
+  return ids.sort();
 }
 
 /**
@@ -130,6 +162,14 @@ function ledgerComputedAt(settlement: SettlementDoc): string {
  * que devolvio, y vio 0.
  */
 export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): boolean {
+  return codSettlementState(orderId, settlements, codEntries) === "settled";
+}
+
+/**
+ * La decision de `isOrderCodSettled` con su motivo: `cash_missing` (falta efectivo o no hay corte nuevo saldado:
+ * mas asientos no lo cambian) o `net_mismatch` (el neto no es el que vio el ultimo corte saldado: lo cambian).
+ */
+function codSettlementState(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): "settled" | "cash_missing" | "net_mismatch" {
   let governing: { computedAt: string; createdAt: string; codSeenCop: number } | null = null;
   for (const settlement of settlements) {
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
@@ -140,16 +180,16 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
     const settled = Number(charge.chargedCop) > 0
       ? isOrderCashSettledInCorte(settlement, orderId)
       : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
-    if (Number(charge.chargedCop) > 0 && !settled) return false;
+    if (Number(charge.chargedCop) > 0 && !settled) return "cash_missing";
     if (!settled) continue;
     const candidate = { computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""), codSeenCop: Number(charge.codSeenCop) || 0 };
     if (!governing || candidate.computedAt > governing.computedAt || (candidate.computedAt === governing.computedAt && candidate.createdAt > governing.createdAt)) {
       governing = candidate;
     }
   }
-  if (!governing) return false;
+  if (!governing) return "cash_missing";
   const netCop = codEntries.reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
-  return netCop === governing.codSeenCop;
+  return netCop === governing.codSeenCop ? "settled" : "net_mismatch";
 }
 
 /**

@@ -430,4 +430,14 @@ aplica) leen para esos pedidos `walletEntries where orderId in [≤30]` (la cons
 sin indice nuevo) y recalculan. En regimen normal la lista esta vacia: lecturas extra solo tras correcciones o
 cambios de tienda. El cliente y el informe 026 se revisan en T30 y, si leen una parte, se documenta.
 
+**Hecho en T30:** `codOrdersToComplete` en `seller-ledger.ts`; la lectura, en un archivo nuevo
+`seller-ledger-io.ts` (`completeCodEntries`), para que `seller-ledger.ts` siga puro; `buildSellerBalanceInput`
+acepta el `codByOrder` ya completado. Lo usan `seller-balance-api.ts` (que es tambien la puerta del corte de
+tienda y de la solicitud de liquidacion) y `store-api.ts` (en `orders`, `settlements` y `resumen`).
+`store-api-orders.ts` no hace falta: su lectura dirigida ya trae los asientos del pedido de cualquier dueno. El
+informe de la 026 lee los asientos del pedido de cualquier dueno. **Queda como limite conocido el cliente**
+(`operations-app.tsx`): una tienda no puede leer asientos de otra (reglas), asi que en un cambio de tienda su
+pantalla puede mostrar un pedido como no recibido que la liquidacion si paga. Solo es pantalla, y siempre por
+el lado estricto; el dinero lo decide el servidor, que ya completa.
+
 **T31 — medir y revisar otra vez** (como T28).

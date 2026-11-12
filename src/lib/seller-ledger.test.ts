@@ -541,3 +541,83 @@ describe("spec 038 · T29 · recibido con los asientos reales de una correccion"
     expect(received(entries, [aLate, b])).toBe(false);
   });
 });
+
+/**
+ * Spec 038 · T30 (RF_12; hallazgo R2 de T28): una vista parcial (los asientos de una tienda, o solo los sin cortar)
+ * completa los asientos de recaudo de los pedidos que su parte no da por recibidos y que mas asientos SI podrian
+ * cambiar, antes de decidir. Asi el saldo de tienda y la API dan lo mismo que la liquidacion.
+ */
+describe("spec 038 · T30 · las vistas parciales completan los asientos", async () => {
+  const { codOrdersToComplete } = await import("../../functions/src/seller-ledger");
+  const { completeCodEntries } = await import("../../functions/src/seller-ledger-io");
+  const corteX = {
+    id: "X", kind: "driver", status: "reconciled", createdAt: "2026-12-01T00:00:00.000Z", paidAt: "2026-12-01T12:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
+    orderIds: ["o"], cashCharges: [{ orderId: "o", codCop: 100000, driverPayCop: 8000, chargedCop: 92000, codSeenCop: 100000 }],
+    cashExpectedCop: 92000, cashReceivedCop: 92000, cashPendingCop: 0, cashAllocations: [{ orderId: "o", expectedCop: 92000, receivedCop: 92000, covered: true }]
+  };
+  const pendiente = { ...corteX, id: "P", status: "pending", paidAt: undefined, reconciledAt: undefined, orderIds: ["p"], cashReceivedCop: 0, cashPendingCop: 50000,
+    cashCharges: [{ orderId: "p", codCop: 50000, driverPayCop: 0, chargedCop: 50000, codSeenCop: 50000 }],
+    cashAllocations: [{ orderId: "p", expectedCop: 50000, receivedCop: 0, covered: false }] };
+  const entry = (id: string, ownerId: string, orderId: string, type: string, amountCop: number, createdAt: string, settlementId = "") =>
+    ({ id, ownerType: "seller", ownerId, orderId, type, amountCop, createdAt, settlementId, description: "" });
+  // Cambio de tienda despues del corte saldado: A cobro y se le revierte; B recibe el recaudo.
+  const all = [
+    entry("we-o-cod", "sA", "o", "cod_revenue", 100000, "2026-11-30T00:00:00.000Z", "S"),
+    entry("we-o-cod-rev", "sA", "o", "cod_remittance", -100000, "2026-12-03T00:00:00.000Z"),
+    entry("we-o-cod-b", "sB", "o", "cod_revenue", 100000, "2026-12-03T00:00:01.000Z"),
+    { id: "we-o-pay", ownerType: "driver", ownerId: "d1", orderId: "o", type: "driver_earning", amountCop: 8000, createdAt: "2026-11-30T00:00:00.000Z", settlementId: "X" }
+  ];
+  const fakeDb = (docs: Record<string, unknown>[], calls: string[][]) => ({
+    collection: (name: string) => ({
+      where: (field: string, op: string, ids: string[]) => {
+        expect([name, field, op]).toEqual(["walletEntries", "orderId", "in"]);
+        expect(ids.length).toBeLessThanOrEqual(30);
+        calls.push(ids);
+        return { get: async () => ({ docs: docs.filter((doc) => ids.includes(String(doc.orderId))).map((doc) => ({ id: String(doc.id), data: () => doc })) }) };
+      }
+    })
+  });
+
+  it("solo pide completar lo que mas asientos pueden cambiar: ni lo recibido, ni lo pendiente de cobrar, ni lo ajeno", () => {
+    const viewA = codEntriesByOrder(all.filter((e) => e.ownerId === "sA" && !e.settlementId) as never); // saldo de A: solo sin cortar
+    expect(codOrdersToComplete([corteX], viewA)).toEqual(["o"]);
+    const viewB = codEntriesByOrder(all.filter((e) => e.ownerId === "sB") as never);
+    expect(codOrdersToComplete([corteX], viewB)).toEqual([]); // B ya cuadra: nada que leer
+    const viewP = new Map([["p", [{ amountCop: 50000, createdAt: "2026-11-30T00:00:00.000Z" }]]]);
+    expect(codOrdersToComplete([pendiente], viewP)).toEqual([]); // le falta el efectivo, no asientos
+  });
+
+  it("completa con la consulta de un campo (orderId in, de 30 en 30) y sustituye la lista del pedido, sin duplicar", async () => {
+    const calls: string[][] = [];
+    const partial = codEntriesByOrder(all.filter((e) => e.ownerId === "sA" && !e.settlementId) as never);
+    const completed = await completeCodEntries(fakeDb(all, calls) as never, partial, ["o"]);
+    expect(calls).toEqual([["o"]]);
+    expect(completed.get("o")!.map((e) => e.amountCop).sort()).toEqual([-100000, 100000, 100000]);
+    const many = Array.from({ length: 61 }, (_, i) => `x${i}`);
+    const callsMany: string[][] = [];
+    await completeCodEntries(fakeDb([], callsMany) as never, new Map(), many);
+    expect(callsMany.map((ids) => ids.length)).toEqual([30, 30, 1]);
+    const none: string[][] = [];
+    expect(await completeCodEntries(fakeDb(all, none) as never, partial, [])).toBe(partial);
+    expect(none).toEqual([]); // en regimen normal no lee nada
+  });
+
+  it("el cambio de tienda da lo mismo desde la tienda vieja, la nueva y la liquidacion", async () => {
+    const liquidacion = buildCodReceivedSet([corteX], codEntriesByOrder(all as never)).has("o");
+    const verdict = async (view: Map<string, unknown[]>) => {
+      const completed = await completeCodEntries(fakeDb(all, []) as never, view as never, codOrdersToComplete([corteX], view as never));
+      return buildCodReceivedSet([corteX], completed).has("o");
+    };
+    const viewA = codEntriesByOrder(all.filter((e) => e.ownerId === "sA" && !e.settlementId) as never);
+    const viewB = codEntriesByOrder(all.filter((e) => e.ownerId === "sB") as never);
+    expect([liquidacion, await verdict(viewA), await verdict(viewB)]).toEqual([true, true, true]);
+  });
+
+  it("el saldo de tienda acepta el recaudo ya completado (no lo vuelve a derivar de su vista parcial)", async () => {
+    const { buildSellerBalanceInput } = await import("../../functions/src/seller-balance");
+    const open = all.filter((e) => e.ownerId === "sA" && !e.settlementId);
+    const base = { sellerId: "sA", wallet: open as never, orders: [], settlements: [corteX], settings: {}, zones: [], now: "2026-12-05T00:00:00.000Z" };
+    expect(buildSellerBalanceInput(base).codReceived.has("o")).toBe(false);
+    expect(buildSellerBalanceInput({ ...base, codByOrder: codEntriesByOrder(all as never) }).codReceived.has("o")).toBe(true);
+  });
+});

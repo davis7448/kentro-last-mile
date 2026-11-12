@@ -209,3 +209,13 @@ describe("spec 038 · T25 · todo llamador de la regla pasa quien entrego (RF_01
     expect(inner).toEqual([]);
   });
 });
+
+// Spec 038 T30 (RF_12): los llamadores de servidor que leen solo una parte de los asientos completan antes de decidir.
+describe("spec 038 · T30 · las vistas parciales completan el recaudo", () => {
+  it("el saldo de tienda y la API de tiendas llaman a completeCodEntries con codOrdersToComplete", () => {
+    for (const file of ["functions/src/seller-balance-api.ts", "functions/src/store-api.ts"]) {
+      const text = code(file);
+      expect({ file, completes: /completeCodEntries\(/.test(text) && /codOrdersToComplete\(/.test(text) }).toEqual({ file, completes: true });
+    }
+  });
+});

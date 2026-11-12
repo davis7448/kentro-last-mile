@@ -7,11 +7,13 @@ import { buildSellerBalanceInput, computeSellerBalance } from "./seller-balance"
 import {
   buildCodReceivedSet,
   codEntriesByOrder,
+  codOrdersToComplete,
   isSellerEntryEligible,
   type OrderDoc,
   type SettlementDoc,
   type WalletEntryDoc
 } from "./seller-ledger";
+import { completeCodEntries } from "./seller-ledger-io";
 import { resolveStoreCredentials } from "./store-api-auth";
 import { buildStoreApiIndexAdditions } from "./store-api-history";
 import { computeKpis, inRange } from "./store-api-orders";
@@ -288,7 +290,10 @@ export async function handleStoreApiRequest(
     const sellerEntries = entriesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc);
     const allSettlements = settlementsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
     const settlementsById = new Map(allSettlements.map((settlement) => [String(settlement.id), settlement]));
-    const codReceived = buildCodReceivedSet(allSettlements, codEntriesByOrder(sellerEntries));
+    // Spec 038 RF_12 (T30): estos son solo los asientos de esta tienda; un pedido que cambio de tienda se completa.
+    const partialCod = codEntriesByOrder(sellerEntries);
+    const codByOrder = await completeCodEntries(db, partialCod, codOrdersToComplete(allSettlements, partialCod));
+    const codReceived = buildCodReceivedSet(allSettlements, codByOrder);
 
     if (resource === "resumen") {
       const sellerSettlements = allSettlements.filter((s) => s.kind === "seller" && s.ownerId === sellerId);
@@ -302,6 +307,7 @@ export async function handleStoreApiRequest(
       const balance = computeSellerBalance(buildSellerBalanceInput({
         sellerId,
         wallet: sellerEntries,
+        codByOrder,
         orders: allOrders,
         settlements: allSettlements,
         settings: (settingsSnap.data() ?? {}) as Record<string, unknown>,
