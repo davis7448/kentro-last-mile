@@ -413,6 +413,10 @@ function useAppState(session: Session | null, historyStart?: string) {
   const [reloadToken, setReloadToken] = useState(0);
   const retryLoad = useCallback(() => setReloadToken((token) => token + 1), []);
   const applyingRemote = useRef(false);
+  // Spec 028 RF_01: si la sesion remota ya recibio su primer estado del servidor. NO es `hydrated`: en la
+  // pantalla de entrada se hidrata desde `localStorage` con `emptyState()`, y al llegar la sesion `hydrated`
+  // seguia en `true`, asi que el autoguardado escribia las tarifas de fabrica antes de leer nada.
+  const remoteReady = useRef(false);
   // Lo que la suscripcion sabe hacer bajo demanda. Va en una ref, no en estado, porque cambiarla no
   // tiene que repintar nada. Una ref vieja tras resuscribir es inocua: la clausura muerta choca con
   // el `stopped` de la suscripcion anterior y no hace nada.
@@ -435,6 +439,7 @@ function useAppState(session: Session | null, historyStart?: string) {
       ? { role: session.role, profileId: session.profileId, communityId: session.ledCommunityId, historyStart }
       : undefined;
     if (session && canUseFirestoreStore()) {
+      remoteReady.current = false;
       setRemoteEnabled(true);
       // Un reintento arranca limpio: si no se borrara el fallo anterior, el aviso seguiria en
       // pantalla aunque esta vez la carga funcione.
@@ -446,13 +451,15 @@ function useAppState(session: Session | null, historyStart?: string) {
         context,
         (remoteState, report) => {
           applyingRemote.current = true;
+          remoteReady.current = true;
           setState(withoutLegacyDemo(remoteState));
           setLoadReport(report);
           setLoadFailed(false);
           setHydrated(true);
         },
         () => {
-          void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
+          // Spec 028 RF_03/RF_07: una base vacia NO se "inicializa" desde el navegador. Aqui se guardaba el
+          // `state` de la clausura, que es el de fabrica (`emptyState()`), sobre `settings/global`.
           setHydrated(true);
         },
         (error) => {
@@ -500,6 +507,7 @@ function useAppState(session: Session | null, historyStart?: string) {
     }
     if (remoteEnabled) {
       if (session?.role !== "admin") return;
+      if (!remoteReady.current) return;
       const context = session ? { role: session.role, profileId: session.profileId } : undefined;
       void saveFirestoreState(state, context).catch((error) => console.error("No se pudo guardar el estado remoto.", error));
       return;

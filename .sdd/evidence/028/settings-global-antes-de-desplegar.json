@@ -1,0 +1,20 @@
+{
+ "leidoEn": "2026-11-10T18:25:27.890Z",
+ "updateTime": "2026-11-10T18:25:27.106Z",
+ "data": {
+  "fulfillmentFeeCop": 2000,
+  "debtBlockDays": 7,
+  "sellerDeliveredFeeCop": 12000,
+  "payoutDays": [
+   "Martes",
+   "Viernes"
+  ],
+  "pendingReserveCop": 9000,
+  "failedRateAlertPercent": 80,
+  "activeCityId": "city-cali",
+  "driverFailedPayCop": 8000,
+  "driverDeliveredPayCop": 8000,
+  "sellerFailedFeeCop": 9000,
+  "updatedAt": "2026-11-10T18:25:27.081Z"
+ }
+}

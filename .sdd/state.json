@@ -578,6 +578,22 @@
       "status": "borrador",
       "origen": "analyze de la 026 (2026-10-02): 36 pedidos / 29 cortes saldados en neto que buildCodReceivedSet deja sin cubrir"
     },
+    "028": {
+      "file": "specs/028_abrir_la_app_no_escribe_nada.md",
+      "status": "aprobada",
+      "approved": "2026-11-10 (\"Aprobar spec 028\" del responsable)",
+      "origen": "2026-11-10: E2E de la 023 aborta 8 escrituras al abrir como admin; medido con e2e/verify-028-writes.mjs: settings/global (tarifas de fabrica) + cities/city-cali a los ~600 ms, antes de la base",
+      "evidence": ".sdd/evidence/028/admin-abre-sin-tocar-2026-11-10.json",
+      "p1": "2026-11-10 cerrada: domiciliario 8.000/8.000; fallido de tienda 12.000 (fijo en codigo)",
+      "p2": "2026-11-10 revisada: 4 pagos de 9.000 sin zona caen todos en huecos entre actualizaciones de settings/global; 4.000 de mas (3 en cortes conciliados, 1 en pendiente); compensacion sin hacer",
+      "p2fix": "2026-11-10 17:38Z: #193210 9.000->8.000 y corte pendiente stl-1794233484852 recalculado (+1.000 esperado); los 3.000 en cortes conciliados se dejan (decision del responsable)",
+      "zonas": "2026-11-10 18:16Z: las 3 zonas a 8.000/8.000 en pago al domiciliario (decision del responsable)",
+      "plan": "specs/028_plan.md",
+      "implemented": "2026-11-10: planAutosave (src/lib/autosave-plan.ts) + state-store + useAppState; suite 3575/69, tsc raiz y functions limpios, lint 0 errores (3 avisos previos); E2E local contra prod: 0 peticiones al canal Write en 45 s (.sdd/evidence/028/local-con-arreglo-2026-11-10.json)",
+      "hostingDeployed": "2026-11-10 ~18:30Z, rebasada sobre claude/023-no-relee-historico-ef385f (PR #9 abierto) para no quitar la 023 de produccion",
+      "verify": "2026-11-10: E2E contra prod 0 peticiones al canal Write en 45 s (.sdd/evidence/028/produccion-tras-desplegar-2026-11-10.json); settings/global mismos valores antes y despues (DoD 5); 0 static{ en los chunks de portada",
+      "pendiente": "3 dias de onSettingsFloorRaise (RNF_03; hubo 4 escrituras 18:28-18:31Z, probablemente pestanas abiertas con el bundle viejo); validacion del responsable (DoD 7); PR apilado sobre #9"
+    },
     "029": {
       "file": "specs/029_store_api_confirma_y_corrige_pedidos.md",
       "status": "aprobada",

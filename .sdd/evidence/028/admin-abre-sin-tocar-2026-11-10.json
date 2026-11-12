@@ -1,0 +1,732 @@
+{
+ "at": "2026-11-10T16:49:36.669Z",
+ "url": "https://kentro-last-mile.web.app",
+ "idleMs": 45000,
+ "peticionesAlCanalWrite": 28,
+ "callablesAbortadas": [],
+ "escriturasPorDocumento": {
+  "settings/global": 14,
+  "cities/city-cali": 14
+ },
+ "lotes": [
+  {
+   "msTrasEntrar": 596,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 602,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 8541,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 8970,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 9058,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 20417,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 21152,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 21156,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 27848,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 28205,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 28210,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 35052,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 35327,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  },
+  {
+   "msTrasEntrar": 35334,
+   "docs": [
+    {
+     "doc": "settings/global",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "activeCityId",
+      "debtBlockDays",
+      "driverDeliveredPayCop",
+      "driverFailedPayCop",
+      "failedRateAlertPercent",
+      "fulfillmentFeeCop",
+      "payoutDays",
+      "pendingReserveCop",
+      "sellerDeliveredFeeCop",
+      "sellerFailedFeeCop"
+     ],
+     "transforms": [
+      "updatedAt"
+     ],
+     "values": {
+      "activeCityId": "city-cali",
+      "sellerDeliveredFeeCop": 12000,
+      "sellerFailedFeeCop": 12000,
+      "fulfillmentFeeCop": 2000,
+      "driverDeliveredPayCop": 9000,
+      "driverFailedPayCop": 9000,
+      "pendingReserveCop": 9000,
+      "debtBlockDays": 7,
+      "failedRateAlertPercent": 80,
+      "payoutDays": [
+       "Martes",
+       "Viernes"
+      ]
+     }
+    },
+    {
+     "doc": "cities/city-cali",
+     "kind": "set",
+     "merge": true,
+     "mask": [
+      "active",
+      "id",
+      "name"
+     ],
+     "transforms": []
+    }
+   ]
+  }
+ ],
+ "consola": [
+  "[Kentro perf] base ligera lista en 1582 ms",
+  "[Kentro perf] emit #1 render 0 ms",
+  "[Kentro perf] emit #2 render 0 ms"
+ ]
+}
