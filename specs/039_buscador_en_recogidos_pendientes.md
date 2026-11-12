@@ -4,6 +4,7 @@
 - **Aprobada por:** el dueño, 2026-11-12 («Aprobar spec 039»), con las propuestas de P1 (toda la recogida,
   con el numero en el boton) y P2 (si, «Seleccionar los que coinciden»).
 - **Autor:** Claude, 2026-11-12
+- **Enmienda 1:** 2026-11-12, orden del dueño («haz lo mismo en «Asignados a mensajero»»). Ver §7.
 - **Origen:** mensaje de WhatsApp de un lider de mensajeros, reenviado por el dueño el 2026-11-12:
   «los knt salen en desorden y toca ponerse a buscar pagina por pagina, 1 x 1… se pierde demasiado
   tiempo». Dice que lo pidio hace tiempo.
@@ -91,3 +92,32 @@ con la lista ordenada por KNT, sin perder lo que ya marco.
   4. busqueda sin resultados;
   5. tras asignar: salen los 6 marcados aunque la busqueda no mostrara ninguno, quedan 16.
 - No probado contra produccion: no se ha desplegado. El despliegue es solo hosting y lo decide el dueño.
+
+## 7. Enmienda 1 — «Asignados a mensajero» (2026-11-12)
+
+Orden del dueño, tras desplegar lo anterior: «haz lo mismo en «Asignados a mensajero»». La tarjeta
+`ReassignMessengerOrdersPanel` tiene la misma forma y el mismo problema: lista en desorden, de 8 en 8,
+sin buscador. Sus pedidos tambien estan ya cargados (`messengerReassignable`, activos de la flota).
+
+- **RF_11** — RF_01 a RF_08 y RF_10 aplican tambien a «Asignados a mensajero», con «Reasignar
+  seleccionados» y «Devolver a pendientes» en el papel de «Asignar seleccionados»: actuan sobre
+  **todos** los marcados, esten o no visibles, y muestran cuantos son.
+- **RF_12** — En esta tarjeta la busqueda tambien encuentra por **nombre del mensajero** asignado
+  (p. ej. «VD» para ver lo que lleva «Mensajero VD»), y cada fila muestra la tienda ademas del cliente,
+  el mensajero y el estado.
+- **RNF_04** — El campo de busqueda y la linea de seleccion son un solo componente compartido por las
+  dos tarjetas, para que no diverjan.
+- RNF_02 sigue igual: cero lecturas nuevas, solo hosting.
+
+### Verificacion de la enmienda 1 (2026-11-12)
+
+- Pruebas: `pending-pickup-search.test.ts` (14, una nueva para el mensajero) y `spec-039-guards.test.ts`
+  (13, cinco nuevas). Suite completa: 3683 pruebas en verde. `tsc` limpio; `lint` sin errores.
+- Interfaz en modo local (`e2e/shots-039-local.cjs`, 12 pedidos asignados en desorden), a 375 y 1280
+  px, sin errores de pagina. Evidencia `039-e1-*` en la misma carpeta:
+  1. orden por KNT (`KNT-008575`, `-008577`, `-008581`…), con tienda y mensajero en cada fila;
+  2. un pedido marcado y busqueda «sur»: solo los de «Mensajero Sur»;
+  3. busqueda `8612` + «Seleccionar el que coincide»: «Reasignar seleccionados (2)» y
+     «Devolver a pendientes (2)»;
+  4. «Devolver a pendientes» devuelve los 2 aunque solo se viera uno: la recogida pasa de 22 a 24.
+- La tarjeta de recogidos se comporta igual que antes (mismas cifras: 6 asignados, quedan 16).

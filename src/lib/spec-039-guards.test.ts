@@ -14,13 +14,17 @@ const sliceFn = (source: string, name: string) => {
   return source.slice(start, next === -1 ? undefined : next);
 };
 const panel = sliceFn(app, "AssignPickedUpOrdersPanel");
+const reassign = sliceFn(app, "ReassignMessengerOrdersPanel");
+const picker = sliceFn(app, "OrderPickerSearch");
+const emptyText = sliceFn(app, "orderPickerEmptyText");
 
 describe("spec 039 — tarjeta de recogidos pendientes", () => {
   it("RF_01/RF_02/RF_04: ordena y filtra con el modulo puro, sobre toda la lista", () => {
     expect(panel).toMatch(/sortPendingPickup\(orders\)/);
     expect(panel).toMatch(/filterPendingPickup\(sortedOrders, search, sellerNameById\)/);
     expect(panel).toMatch(/<PaginatedList[\s\S]*items=\{visibleOrders\}/);
-    expect(panel).toMatch(/placeholder="KNT, cliente o tienda"/);
+    expect(panel).toMatch(/<OrderPickerSearch /);
+    expect(picker).toMatch(/placeholder = "KNT, cliente o tienda"/);
   });
 
   it("RF_05: cambiar la busqueda vuelve a la primera pagina", () => {
@@ -33,13 +37,14 @@ describe("spec 039 — tarjeta de recogidos pendientes", () => {
   });
 
   it("RF_07/RF_10: cuenta lo oculto, quita la seleccion y selecciona lo que coincide", () => {
-    expect(panel).toMatch(/fuera de esta busqueda/);
-    expect(panel).toMatch(/Quitar seleccion/);
-    expect(panel).toMatch(/que coinciden/);
+    expect(picker).toMatch(/fuera de esta busqueda/);
+    expect(picker).toMatch(/Quitar seleccion/);
+    expect(picker).toMatch(/que coinciden/);
   });
 
   it("RF_08: sin coincidencias lo dice", () => {
-    expect(panel).toMatch(/Ningun pedido coincide con/);
+    expect(panel).toMatch(/orderPickerEmptyText\(search, orders\.length,/);
+    expect(emptyText).toMatch(/Ningun pedido coincide con/);
   });
 
   it("RF_09: «Asignar toda la recogida» sigue siendo toda, con su numero", () => {
@@ -53,5 +58,36 @@ describe("spec 039 — tarjeta de recogidos pendientes", () => {
 
   it("la tienda llega desde la vista del lider", () => {
     expect(app).toMatch(/<AssignPickedUpOrdersPanel\s+orders=\{pendingMessenger\}\s+messengers=\{messengers\}\s+sellers=\{state\.sellers\}/);
+  });
+});
+
+describe("spec 039 enmienda 1 — tarjeta «Asignados a mensajero»", () => {
+  it("RF_11: mismo orden, busqueda y vuelta a la pagina 1", () => {
+    expect(reassign).toMatch(/sortPendingPickup\(orders\)/);
+    expect(reassign).toMatch(/filterPendingPickup\(sortedOrders, search, sellerNameById, messengerNameById\)/);
+    expect(reassign).toMatch(/<PaginatedList\s+key=\{search\.trim\(\)\}\s+items=\{visibleOrders\}/);
+    expect(reassign).toMatch(/orderPickerEmptyText\(search, orders\.length,/);
+  });
+
+  it("RF_11: reasignar y devolver actuan sobre todo lo marcado y dicen cuantos son", () => {
+    expect(reassign).toMatch(/const selectedOrders = orders\.filter\(\(order\) => selectedIds\.includes\(order\.id\)\)/);
+    expect(reassign).toMatch(/orderIds: selectedOrders\.map/);
+    expect(reassign).toMatch(/Reasignar seleccionados\{selectedCountLabel\}/);
+    expect(reassign).toMatch(/Devolver a pendientes\{selectedCountLabel\}/);
+  });
+
+  it("RF_12: busca por mensajero y la fila muestra la tienda", () => {
+    expect(reassign).toMatch(/placeholder="KNT, cliente, tienda o mensajero"/);
+    expect(reassign).toMatch(/\[order\.customerName, storeName, messengerName, statusLabel\(order\.status\)\]/);
+  });
+
+  it("RNF_04: las dos tarjetas usan el mismo buscador", () => {
+    expect(panel).toMatch(/<OrderPickerSearch /);
+    expect(reassign).toMatch(/<OrderPickerSearch /);
+  });
+
+  it("RNF_02: tampoco lee de Firestore", () => {
+    expect(reassign).not.toMatch(/getDocs|onSnapshot|getDoc\(|collection\(/);
+    expect(app).toMatch(/<ReassignMessengerOrdersPanel\s+orders=\{messengerReassignable\}\s+messengers=\{messengers\}\s+sellers=\{state\.sellers\}/);
   });
 });

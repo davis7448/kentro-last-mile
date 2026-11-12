@@ -86,6 +86,19 @@ describe("spec 039 · busqueda (RF_02, RF_03)", () => {
     expect(filterPendingPickup(many, "40").map((item) => item.id)).toEqual(["o39"]);
   });
 
+  it("RF_12: con mensajeros, encuentra por el nombre del asignado", () => {
+    const orders = [
+      { ...order("v", "KNT-1", "Ana"), messengerId: "m-vd" },
+      { ...order("s", "KNT-2", "Luis"), messengerId: "m-sur" },
+      order("n", "KNT-3", "Pedro Sin Asignar")
+    ];
+    const messengers = new Map([["m-vd", "Mensajero VD"], ["m-sur", "Mensajero Sur"]]);
+    expect(filterPendingPickup(orders, "vd", new Map(), messengers).map((item) => item.id)).toEqual(["v"]);
+    expect(filterPendingPickup(orders, "mensajero", new Map(), messengers).map((item) => item.id)).toEqual(["v", "s"]);
+    // Sin el mapa de mensajeros (tarjeta de recogidos), el nombre del mensajero no cuenta.
+    expect(filterPendingPickup(orders, "vd")).toEqual([]);
+  });
+
   it("sin coincidencias devuelve lista vacia", () => {
     expect(filterPendingPickup(fromScreenshot, "zzz")).toEqual([]);
   });
