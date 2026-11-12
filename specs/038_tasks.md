@@ -323,13 +323,32 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: conciliar un corte viejo pagado no cambia el orden de sus asignaciones; la foto se niega si no
     cabe en un lote
 
-- [ ] **T28: Medir otra vez y volver a verificar (solo lectura)**
+- [x] **T28: Medir otra vez y volver a verificar (solo lectura)** — hecha el 2026-11-12: cifras iguales; la revision encontro R1 (bloqueante) y R2-R5 -> T29-T31
   * Requisitos cubiertos: RNF_01, RF_05b, RF_17
   * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/
   * Accion: `038_measure.js --check --deploy-check`, foto en seco y compensacion previsualizada contra produccion;
     el revisor independiente vuelve a leer el diff de T24-T27
   * Verificacion: las cifras de hoy (686.200, 16 retenciones, opcion A 632.200, diferencia 0) o la diferencia
     explicada pedido a pedido; ningun hallazgo nuevo sin resolver
+
+- [ ] **T29: Recibido = el neto que vio el ultimo corte saldado (RF_11, hallazgo R1)**
+  * Requisitos cubiertos: RF_11
+  * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
+  * Accion: plan §7.5 (T29)
+  * Verificacion: con los asientos que produce el planificador de correcciones, borrar-y-recrear, reversa y
+    cambio de tienda dan recibido; re-entrega con otro monto y B5 no
+
+- [ ] **T30: Las vistas parciales completan los asientos (RF_12, hallazgo R2)**
+  * Requisitos cubiertos: RF_12
+  * Archivos: functions/src/seller-ledger.ts, functions/src/seller-balance-api.ts, functions/src/store-api.ts,
+    functions/src/store-api-orders.ts, src/lib/seller-ledger.test.ts, src/lib/spec-038-guards.test.ts
+  * Accion: plan §7.5 (T30)
+  * Verificacion: un cambio de tienda da lo mismo desde la tienda vieja, la nueva y la liquidacion
+
+- [ ] **T31: Medir otra vez y revision independiente (solo lectura)**
+  * Requisitos cubiertos: RNF_01, RF_11, RF_12
+  * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/
+  * Verificacion: cifras de T28 o diferencia explicada; ningun hallazgo bloqueante
 
 ## Cobertura de requisitos
 
@@ -349,9 +368,9 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
 | RF_09b | T3, T4, T10, T17 |
 | RF_10 | T14 |
 | RF_01b | T24, T25 |
-| RF_11 | T9, T16, T17, T26 |
+| RF_11 | T9, T16, T17, T26, T29 |
 | RF_11b | T26 |
-| RF_12 | T9, T15, T16, T22, T23 |
+| RF_12 | T9, T15, T16, T22, T23, T30 |
 | RF_13 | T8, T20 |
 | RF_14 | T8, T20 |
 | RF_15 | T8, T20 |

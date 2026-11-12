@@ -411,3 +411,23 @@ ademas no tiene una asignacion sin cubrir en un corte viejo (sin `cashCharges`) 
   domiciliarios = 500 escrituras); si no cabe, se niega en vez de escribir a medias.
 - Quedan fuera, anotados: la contencion de leer todos los asientos de tienda en cada abono (rendimiento, no
   dinero) y la precondicion sobre las retenciones en las correcciones (el siguiente corte lo corrige solo).
+
+### 7.5 Segunda enmienda: el neto contra lo que vio el corte (RF_11, RF_12; R1, R2 de T28)
+
+**T29 — la regla (`seller-ledger.ts`).** `isOrderCodSettled`, tras comprobar como hoy que todo cargo positivo
+en un corte nuevo esta saldado: elige el corte nuevo saldado para el pedido calculado mas tarde
+(`ledgerComputedAt`: `createdAt`, `paidAt` y los `cashReceipts` recibidos hasta `paidAt`; no `reconciledAt` ni un
+abono a un corte ya pagado, que no recalculan) y exige `Σ recaudo del pedido == codSeenCop` de ese corte. Las
+pruebas usan los asientos que produce de verdad `order-corrections-plan.ts` (se generan con el planificador, no
+a mano): borrar y recrear, reversa, re-entrega con otro monto y cambio de tienda.
+
+**T30 — las vistas parciales (RF_12).** `buildCodReceivedSet` sigue pura. Nueva funcion pura
+`codOrdersToComplete(settlements, codByOrder)`: los pedidos de cortes nuevos que la vista parcial NO da por
+recibidos (solo esos pueden cambiar con mas asientos; con todos los asientos de un pedido que ya cuadra, uno de
+mas solo existe por un dato duplicado, y entonces el domiciliario debe y el siguiente corte lo bloquea). Los
+llamadores de servidor que leen una parte (`seller-balance-api.ts`, `store-api.ts`, `store-api-orders.ts` si
+aplica) leen para esos pedidos `walletEntries where orderId in [≤30]` (la consulta que ya usa `createSettlement`,
+sin indice nuevo) y recalculan. En regimen normal la lista esta vacia: lecturas extra solo tras correcciones o
+cambios de tienda. El cliente y el informe 026 se revisan en T30 y, si leen una parte, se documenta.
+
+**T31 — medir y revisar otra vez** (como T28).
