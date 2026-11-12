@@ -206,6 +206,9 @@ nunca a Firestore.
     Antes de escribir, el calculo sin la correccion reprodujo exactamente el corte guardado. La escritura se hizo
     con precondiciones `lastUpdateTime`. Los otros 3.000, en cortes conciliados, se quedan asi por decision del
     responsable.
+  - *Decision final del dueno (2026-11-12): "dejaselos".* Lo pagado de mas que queda en cortes conciliados se
+    le deja al domiciliario: **no se escribe compensacion ni contraasiento**. El de #193210 ya estaba corregido
+    en su corte pendiente, asi que lo que queda a su favor son 3.000. Caso cerrado.
   - *Hallazgo al margen:* las tres zonas (`zone-center`, `zone-north`, `zone-south`) tienen 9.000 / 9.000 para el
     domiciliario, y ganan a `settings/global`. Desde el 2026-10-11 solo un pedido con zona (`ord-knt-007112`,
     9.000) uso esa tarifa. Si "solo DANDA tiene un valor diferente", las zonas tambien estan mal configuradas.
@@ -242,3 +245,5 @@ nunca a Firestore.
 | 2026-11-10 | Aprobada | "Aprobar spec 028" del responsable |
 | 2026-11-10 | Implementada (plan `specs/028_plan.md`) | `planAutosave` + cableado; 0 escrituras en local contra produccion |
 | 2026-11-10 | Hosting desplegado, sobre la rama de la 023 | E2E contra produccion: 0 peticiones al canal Write en 45 s; `settings/global` sin cambios de valor; 0 `static{` |
+| 2026-11-12 | Mergeada a main (PR #10, tras el #9 de la 023) | Pedido del responsable |
+| 2026-11-12 | Los pagos de mas en cortes conciliados se le dejan al domiciliario | "dejaselos" del dueno: sin compensacion ni contraasiento |
