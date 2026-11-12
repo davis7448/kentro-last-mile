@@ -1,0 +1,78 @@
+┌─────────┬───────────────────────────────────────────────────────────────────────────┬───────────┬─────────────────────────────────────────┐
+│ (index) │ comprobacion                                                              │ resultado │ detalle                                 │
+├─────────┼───────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────────────────┤
+│ 0       │ 'Por pagar: asientos abiertos'                                            │ 'igual'   │ '4995 asientos'                         │
+│ 1       │ 'Por pagar: asientos de tienda de los pedidos de domiciliario pendientes' │ 'igual'   │ '97 pedidos'                            │
+│ 2       │ 'Por pagar: saldo de cada tienda (spec 018)'                              │ 'igual'   │ '35 tiendas, 0 distintas'               │
+│ 3       │ 'Cortes cerrados: asientos de cada corte y de sus pedidos'                │ 'igual'   │ '110 cortes en 11 paginas, 0 distintos' │
+│ 4       │ 'Cortes cerrados: los asientos we-{pedido}-... son de ese pedido'         │ 'igual'   │ '0 excepciones'                         │
+│ 5       │ 'Resumen del periodo: asientos del rango'                                 │ 'igual'   │ '4 rangos'                              │
+│ 6       │ 'Posicion: sumas (gemelo en memoria) contra lectura completa'             │ 'igual'   │ ''                                      │
+│ 7       │ 'Posicion: sumas de Firestore contra lectura completa (cifras de dinero)' │ 'igual'   │ ''                                      │
+└─────────┴───────────────────────────────────────────────────────────────────────────┴───────────┴─────────────────────────────────────────┘
+{
+  "at": "2026-11-10T16:02:51.863Z",
+  "libroEntero": 19479,
+  "lecturas": {
+    "abrirLaAppAntes": 19479,
+    "abrirLaAppAhora": 1151,
+    "liquidacionesPorPagar": 4503,
+    "cortesCerradosPorPagina": [
+      2972,
+      2382,
+      2051,
+      3385,
+      2603,
+      2783,
+      1741,
+      1241,
+      3049,
+      2924,
+      1583
+    ],
+    "periodoCuatroRangos": 6255
+  },
+  "posicion": "nombres de proveedor: antes [sup-1781914882801=ADMA LABORATORIO, sup-1781914554522=ADMA COMPANY], ahora [sup-1781914882801=ADMA LABORATORIO, sup-1781914554522=ADMA COMPANY]",
+  "results": [
+    {
+      "comprobacion": "Por pagar: asientos abiertos",
+      "resultado": "igual",
+      "detalle": "4995 asientos"
+    },
+    {
+      "comprobacion": "Por pagar: asientos de tienda de los pedidos de domiciliario pendientes",
+      "resultado": "igual",
+      "detalle": "97 pedidos"
+    },
+    {
+      "comprobacion": "Por pagar: saldo de cada tienda (spec 018)",
+      "resultado": "igual",
+      "detalle": "35 tiendas, 0 distintas"
+    },
+    {
+      "comprobacion": "Cortes cerrados: asientos de cada corte y de sus pedidos",
+      "resultado": "igual",
+      "detalle": "110 cortes en 11 paginas, 0 distintos"
+    },
+    {
+      "comprobacion": "Cortes cerrados: los asientos we-{pedido}-... son de ese pedido",
+      "resultado": "igual",
+      "detalle": "0 excepciones"
+    },
+    {
+      "comprobacion": "Resumen del periodo: asientos del rango",
+      "resultado": "igual",
+      "detalle": "4 rangos"
+    },
+    {
+      "comprobacion": "Posicion: sumas (gemelo en memoria) contra lectura completa",
+      "resultado": "igual",
+      "detalle": ""
+    },
+    {
+      "comprobacion": "Posicion: sumas de Firestore contra lectura completa (cifras de dinero)",
+      "resultado": "igual",
+      "detalle": ""
+    }
+  ]
+}

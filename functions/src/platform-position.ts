@@ -24,6 +24,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { computeDriverReceivable } from "./driver-receivable";
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 import { groupWithheldBySupplier } from "./supplier-withheld";
+import { composePlatformPosition, loadPositionSums, PositionSumsError } from "./platform-position-sums";
 
 export type PlatformPosition = {
   cashCop: number;
@@ -105,19 +106,29 @@ export function computePlatformPosition(wallet: WalletEntryDoc[], settlements: S
   };
 }
 
+/**
+ * Spec 023 RF_01: ya no lee el libro de caja. Las cifras salen de sumas de Firestore (`platform-position-sums.ts`)
+ * y de los cortes. Si una suma no se puede confiar (asientos sin indicador, decimales, proveedor desconocido),
+ * responde `failed-precondition` con el motivo: la pantalla muestra el error, nunca una cifra a medias (RF_04).
+ */
 export const getPlatformPosition = onCall({ memory: "512MiB" }, async (request) => {
   if (!request.auth || request.auth.token.role !== "admin") {
     throw new HttpsError("permission-denied", "Solo un administrador puede consultar la posicion de la plataforma.");
   }
 
   const db = getFirestore();
-  const [walletSnapshot, settlementSnapshot] = await Promise.all([
-    db.collection("walletEntries").get(),
-    db.collection("settlements").get()
+  const [settlementSnapshot, supplierSnapshot] = await Promise.all([
+    db.collection("settlements").get(),
+    db.collection("suppliers").get()
   ]);
-
-  const wallet = walletSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc);
   const settlements = settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
+  const suppliers = supplierSnapshot.docs.map((doc) => ({ id: doc.id, name: typeof doc.get("name") === "string" ? String(doc.get("name")) : undefined }));
 
-  return computePlatformPosition(wallet, settlements);
+  try {
+    const sums = await loadPositionSums(db, settlements, suppliers);
+    return { ...composePlatformPosition(sums, settlements), computedAt: new Date().toISOString() };
+  } catch (error) {
+    if (error instanceof PositionSumsError) throw new HttpsError("failed-precondition", error.message);
+    throw error;
+  }
 });

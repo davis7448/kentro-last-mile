@@ -147,7 +147,10 @@ export function communityStoresState(input: {
 }
 
 /** Que parte de la carga base falto. Una caida no implica las demas (plan §2). */
-export type LoadIssue = "community_sellers";
+export type LoadIssue =
+  | "community_sellers"
+  // Spec 023 RF_04: el listener de lo sin liquidar cayo; las cifras de dinero del admin no son fiables.
+  | "wallet_unavailable";
 export type LoadReport = { issues: readonly LoadIssue[] };
 
 /**
