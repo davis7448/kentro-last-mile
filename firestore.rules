@@ -388,6 +388,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Medicion de tiempos de la evidencia en el telefono (src/lib/evidence-timing.ts). Solo crear,
+    // solo el propio domiciliario o mensajero, con la lista cerrada de campos de
+    // EVIDENCE_TIMING_FIELDS (evidence-timing.test.ts compara las dos). Nadie lo lee desde el
+    // cliente; caduca por la politica TTL sobre `expiresAt`.
+    match /evidenceTimings/{timingId} {
+      allow create: if signedIn()
+        && (role() == "driver" || role() == "messenger")
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == role()
+        && request.resource.data.keys().hasOnly([
+          "uid", "role", "source", "outcome", "orderId", "result",
+          "originalBytes", "originalType", "preparedBytes", "decoder", "width", "height",
+          "prepareMs", "uploadMs", "reprepareMs", "attempts", "tokenRetry", "uploadError",
+          "selectToSubmitMs", "stateAtSubmit", "submitWaitMs", "closeMs", "closeError",
+          "userAgent", "online", "netType", "netDownlink", "netRtt", "netSaveData",
+          "clientAt", "createdAt", "expiresAt"
+        ])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt < request.time + duration.value(15, 'd')
+        && (!("userAgent" in request.resource.data) || request.resource.data.userAgent.size() <= 300);
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
