@@ -14,6 +14,8 @@
 import { communityChargeAtClose, type CashbackBreakdown, type FrozenPricing } from "./community-pricing";
 import { defaultSettings, resolveSellerCharges } from "./seller-charges";
 import type { WalletEntryDoc } from "./settlement-math";
+// La regla linea -> producto vive en catalog-match.ts para que la impresion por proveedor (spec 040) use la misma.
+import { matchCatalogForLine } from "./catalog-match";
 
 // Las tarifas y la regla de cobro a la tienda viven en seller-charges.ts (la unica copia). Se
 // reexportan aqui, el mismo objeto y no una copia, para no romper a los importadores de siempre.
@@ -22,16 +24,6 @@ export { defaultSettings, dandaDeliveredFeeCop, resolveTariffs, tariffFields } f
 // Entregado consume stock; fallido definitivo solo libera la reserva; reagendado no toca nada
 // (la reserva sigue viva porque el pedido sigue abierto). Solo actua si el pedido reservo.
 
-function normalizeProductName(value?: string) {
-  return (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
 export type ProductCostLine = {
   productId: string;
   productName: string;
@@ -39,25 +31,6 @@ export type ProductCostLine = {
   supplierName?: string;
   totalCostCop: number;
 };
-
-function matchCatalogForLine(
-  catalog: Record<string, any>[],
-  sellerId: string,
-  options: { sku?: string; productName?: string; productId?: string }
-): Record<string, any> | null {
-  const normalizedSku = typeof options.sku === "string" ? options.sku.trim().toUpperCase() : "";
-  const normalizedName = normalizeProductName(typeof options.productName === "string" ? options.productName : "");
-  const byId = options.productId
-    ? catalog.find((item) => item.id === options.productId && item.sellerId === sellerId && item.active !== false)
-    : undefined;
-  const bySku = normalizedSku
-    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && typeof item.sku === "string" && item.sku.trim().toUpperCase() === normalizedSku)
-    : undefined;
-  const byName = normalizedName
-    ? catalog.find((item) => item.sellerId === sellerId && item.active !== false && !item.sku && item.normalizedProductName === normalizedName)
-    : undefined;
-  return byId ?? bySku ?? byName ?? null;
-}
 
 // Costo por linea/SKU: una entrada por producto del catalogo (costo unitario x cantidad).
 // Si el pedido trae lineItems se calcula por linea (combos + productos adicionales); si no,

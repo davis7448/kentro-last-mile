@@ -84,6 +84,7 @@ import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, d
 import type { DriverFinancialSummary, SellerAbonoRow } from "@/lib/finance";
 import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
+import { NO_SUPPLIER, groupBatchBySupplier, ordersForSupplier, packageUnits, splitOrderIntoPackages, supplierOptionsForCatalog, type BatchGroup, type OrderPackage } from "../../functions/src/supplier-packages";
 import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
 import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
 import { orderAddressLines } from "@/lib/order-address-lines";
@@ -950,29 +951,101 @@ function orderLookupUrl(order: Order) {
   return `${origin}/?order=${encodeURIComponent(code)}`;
 }
 
-async function printOrderLabels(orders: Order[], state: AppState, title = "Rotulos Kentro") {
+/** Lineas de producto que caben en un rotulo de 100x150 mm; el resto se resume en "+N mas" (spec 040, RNF_04). */
+const LABEL_MAX_PRODUCT_LINES = 4;
+
+type PrintLabelsOptions = {
+  /** Tanda del admin: agrupa por proveedor y abre cada grupo con su hoja de tanda (spec 040, RF_05). */
+  batchSheets?: boolean;
+  /** Solo los paquetes de este proveedor (`NO_SUPPLIER` = sin proveedor). Solo admin (RF_06, RF_10). */
+  onlySupplierKey?: string;
+};
+
+function supplierDisplayName(supplierKey: string, supplierName?: string) {
+  if (supplierKey === NO_SUPPLIER) return "Sin proveedor asignado";
+  return supplierName;
+}
+
+function batchSheetHtml(group: BatchGroup, ordersById: Map<string, Order>) {
+  const name = supplierDisplayName(group.supplierKey, group.supplierName) ?? "Proveedor";
+  const printedAt = new Date().toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
+  const elsewhere = group.ordersWithPackagesElsewhere
+    .map((orderId) => ordersById.get(orderId))
+    .filter((order): order is Order => Boolean(order))
+    .map((order) => escapeHtml(order.trackingCode ?? order.shopifyOrderId));
+  return `
+      <article class="label sheet-cover">
+        <div>
+          <p class="eyebrow">KENTRO · HOJA DE TANDA</p>
+          <h1>${escapeHtml(name)}</h1>
+          <p>${escapeHtml(printedAt)}</p>
+        </div>
+        <section class="cover-count">
+          <p class="key">Rotulos en esta tanda</p>
+          <p class="qty">${group.packages.length}</p>
+        </section>
+        <section>
+          <p class="key">Unidades por producto</p>
+          <ul class="cover-lines">
+            ${group.unitsByProduct.map((line) => `<li><span>${escapeHtml(line.label)}</span><strong>x${escapeHtml(line.quantity)}</strong></li>`).join("")}
+          </ul>
+        </section>
+        ${group.supplierKey === NO_SUPPLIER ? `<p class="warn">Estos productos no tienen proveedor en el catalogo. Revisa el catalogo antes de despachar.</p>` : ""}
+        ${elsewhere.length > 0 ? `<p class="warn">Tienen otro paquete en otra bodega, que no sale en esta impresion: ${elsewhere.join(", ")}</p>` : ""}
+      </article>
+    `;
+}
+
+async function printOrderLabels(orders: Order[], state: AppState, title = "Rotulos Kentro", options: PrintLabelsOptions = {}) {
   if (orders.length === 0) return false;
   const popup = window.open("", "_blank", "width=900,height=700");
   if (!popup) return false;
-  const labels = await Promise.all(orders.map(async (order) => {
+  // QRCode se carga aqui: solo hace falta al imprimir un rotulo, no al arrancar la app.
+  const { default: QRCode } = await import("qrcode");
+  // Paquetes por proveedor (spec 040). La tienda no lee `suppliers`: le llega vacio y el rotulo sale sin nombre.
+  const catalog = state.productCatalog ?? [];
+  const suppliers = state.suppliers ?? [];
+  const ordersById = new Map(orders.map((order) => [order.id, order]));
+  const sections: Array<{ cover?: BatchGroup; packages: OrderPackage[] }> = options.batchSheets
+    ? groupBatchBySupplier(orders, catalog, suppliers, { onlySupplierKey: options.onlySupplierKey }).map((group) => ({ cover: group, packages: group.packages }))
+    : [{ packages: orders.flatMap((order) => splitOrderIntoPackages(order, catalog, suppliers)) }];
+  // El QR y las barras son del pedido (mismo codigo KNT en todos sus paquetes): se generan una vez.
+  const scanCache = new Map<string, Promise<{ qrDataUrl: string; barcodeSvg: string }>>();
+  const scanFor = (order: Order) => {
+    const cached = scanCache.get(order.id);
+    if (cached) return cached;
+    const code = order.trackingCode ?? order.shopifyOrderId;
+    const pending = QRCode.toDataURL(orderLookupUrl(order), { errorCorrectionLevel: "M", margin: 1, width: 180 }).then((qrDataUrl: string) => {
+      // El map corre dentro de un Promise.all: si un codigo raro no fuera codificable en Code128,
+      // el throw tumbaria la impresion del lote entero. Sin barras, pero con QR, mejor que sin rotulo.
+      let barcodeSvg = "";
+      try {
+        barcodeSvg = renderCode128Svg(code);
+      } catch {
+        barcodeSvg = "";
+      }
+      return { qrDataUrl, barcodeSvg };
+    });
+    scanCache.set(order.id, pending);
+    return pending;
+  };
+  const renderPackage = async (pkg: OrderPackage) => {
+    const order = ordersById.get(pkg.orderId)!;
     const seller = state.sellers.find((item) => item.id === order.sellerId);
     const zone = state.zones.find((item) => item.id === order.zoneId);
     const code = order.trackingCode ?? order.shopifyOrderId;
     // Las lineas de direccion salen del modulo puro; la guia no decide que direccion imprime (spec 013, RNF_02).
     const addressLines = orderAddressLines(order);
-    const codText = order.paymentMethod === "cod" ? `COBRAR ${formatCop(order.totalCop)}` : "PAGADO";
-    const lookupUrl = orderLookupUrl(order);
-    // QRCode se carga aqui: solo hace falta al imprimir un rotulo, no al arrancar la app.
-    const { default: QRCode } = await import("qrcode");
-    const qrDataUrl = await QRCode.toDataURL(lookupUrl, { errorCorrectionLevel: "M", margin: 1, width: 180 });
-    // El map corre dentro de un Promise.all: si un codigo raro no fuera codificable en Code128,
-    // el throw tumbaria la impresion del lote entero. Sin barras, pero con QR, mejor que sin rotulo.
-    let barcodeSvg = "";
-    try {
-      barcodeSvg = renderCode128Svg(code);
-    } catch {
-      barcodeSvg = "";
-    }
+    // Spec 040, D3: el cobro va solo en el paquete 1; un pedido de un paquete se ve como siempre.
+    const codText = !pkg.collectsPayment
+      ? "SIN COBRO"
+      : order.paymentMethod === "cod" ? `COBRAR ${formatCop(order.totalCop)}` : "PAGADO";
+    const { qrDataUrl, barcodeSvg } = await scanFor(order);
+    const supplierName = supplierDisplayName(pkg.supplierKey, pkg.supplierName);
+    const packageText = pkg.total > 1 ? `Paquete ${pkg.index} de ${pkg.total}` : "";
+    const supplierBand = [supplierName, packageText].filter(Boolean).join(" · ");
+    const shownLines = pkg.lines.slice(0, LABEL_MAX_PRODUCT_LINES);
+    const hiddenLines = pkg.lines.length - shownLines.length;
     return `
       <article class="label">
         <div class="top">
@@ -982,6 +1055,8 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
           </div>
           <div class="pay">${escapeHtml(codText)}</div>
         </div>
+        ${supplierBand ? `<p class="supplier">${escapeHtml(supplierBand)}</p>` : ""}
+        ${!pkg.collectsPayment ? `<p class="no-charge">Sin cobro — va con el paquete 1</p>` : ""}
         <section class="scan">
           <img src="${qrDataUrl}" alt="QR ${escapeHtml(code)}" />
           <div>
@@ -1014,13 +1089,16 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
         </section>
         <section class="product-grid">
           <div class="product-block">
-            <p class="key">Producto</p>
-            <p class="product-name">${escapeHtml(order.productName ?? "Producto")}</p>
-            <p class="sku">${order.sku ? `SKU ${escapeHtml(order.sku)}` : "Sin SKU"}</p>
+            <p class="key">${pkg.lines.length === 1 ? "Producto" : "Productos"}</p>
+            ${shownLines.map((line) => `
+              <p class="product-name">${escapeHtml(line.label)}${pkg.lines.length > 1 ? ` <strong>x${escapeHtml(line.quantity)}</strong>` : ""}</p>
+              <p class="sku">${line.sku ? `SKU ${escapeHtml(line.sku)}` : "Sin SKU"}</p>
+            `).join("")}
+            ${hiddenLines > 0 ? `<p class="sku">+${hiddenLines} mas</p>` : ""}
           </div>
           <div class="qty-block">
             <p class="key">Cantidad</p>
-            <p class="qty">${escapeHtml(order.quantity ?? 1)}</p>
+            <p class="qty">${escapeHtml(packageUnits(pkg))}</p>
             <p>${escapeHtml(zone?.name ?? "Sin zona")}</p>
           </div>
         </section>
@@ -1030,7 +1108,13 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
         </footer>
       </article>
     `;
-  }));
+  };
+  const labels = (await Promise.all(sections.map(async (section) => {
+    const rendered = await Promise.all(section.packages.map(renderPackage));
+    return [section.cover ? batchSheetHtml(section.cover, ordersById) : "", ...rendered].join("");
+  })));
+  const labelCount = sections.reduce((sum, section) => sum + section.packages.length, 0);
+  const printedOrderCount = new Set(sections.flatMap((section) => section.packages.map((pkg) => pkg.orderId))).size;
   popup.document.open();
   popup.document.write(`
     <!doctype html>
@@ -1066,6 +1150,14 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
           .qty-block { text-align: right; }
           .qty { font-size: 25px; font-weight: 900; line-height: 1; text-align: right; }
           footer { border-top: 1px solid #111; padding-top: 6px; font-size: 10px; font-weight: 700; }
+          .supplier { border-radius: 6px; background: #111; color: #fff; padding: 4px 6px; font-size: 12px; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
+          .no-charge { font-size: 11px; font-weight: 800; }
+          .product-block .product-name { -webkit-line-clamp: 2; max-height: 12mm; }
+          .sheet-cover { grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+          .cover-count { display: flex; justify-content: space-between; align-items: end; border: 2px solid #111; border-radius: 7px; padding: 6px; }
+          .cover-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+          .cover-lines li { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+          .warn { border: 2px dashed #111; border-radius: 6px; padding: 5px; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
           @media print {
             .toolbar { display: none; }
             .sheet { padding: 0; }
@@ -1075,7 +1167,7 @@ async function printOrderLabels(orders: Order[], state: AppState, title = "Rotul
       </head>
       <body>
         <div class="toolbar">
-          <strong>${escapeHtml(title)} · ${orders.length} pedido${orders.length === 1 ? "" : "s"}</strong>
+          <strong>${escapeHtml(title)} · ${printedOrderCount} pedido${printedOrderCount === 1 ? "" : "s"} · ${labelCount} rotulo${labelCount === 1 ? "" : "s"}</strong>
           <button onclick="window.print()">Imprimir</button>
         </div>
         <main class="sheet">${labels.join("")}</main>
@@ -5472,6 +5564,15 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
     [adminOrderTab, adminFailedCategoryFilter, visibleFailedBaseOrders, visibleOperationOrders]
   );
   const reprintableVisibleOrders = useMemo(() => visibleOrders.filter((order) => Boolean(order.labelPrintedAt)), [visibleOrders]);
+  // Spec 040 (RF_06, RF_10): las tres tandas del admin se pueden imprimir de un solo proveedor.
+  // "" = todos. Los contadores de los botones cuentan los pedidos que de verdad salen con el filtro.
+  const [labelSupplierFilter, setLabelSupplierFilter] = useState("");
+  const labelSupplierOptions = useMemo(() => supplierOptionsForCatalog(state.productCatalog ?? [], state.suppliers ?? []), [state.productCatalog, state.suppliers]);
+  const labelSupplierKey = labelSupplierFilter || undefined;
+  const labelPrintOptions = { batchSheets: true, onlySupplierKey: labelSupplierKey };
+  const unprintedOrdersToPrint = useMemo(() => ordersForSupplier(unprintedOrders, state.productCatalog ?? [], labelSupplierKey), [unprintedOrders, state.productCatalog, labelSupplierKey]);
+  const pendingWarehouseLabelOrdersToPrint = useMemo(() => ordersForSupplier(pendingWarehouseLabelOrders, state.productCatalog ?? [], labelSupplierKey), [pendingWarehouseLabelOrders, state.productCatalog, labelSupplierKey]);
+  const reprintableVisibleOrdersToPrint = useMemo(() => ordersForSupplier(reprintableVisibleOrders, state.productCatalog ?? [], labelSupplierKey), [reprintableVisibleOrders, state.productCatalog, labelSupplierKey]);
   const exportableFailedOrders = useMemo(
     () => filterByFailedCategory(visibleFailedBaseOrders, adminFailedCategoryFilter),
     [visibleFailedBaseOrders, adminFailedCategoryFilter]
@@ -5605,10 +5706,10 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           sellers={state.sellers}
           icon={<Printer size={18} />}
           empty="No hay pedidos pendientes de rotulo."
-          actionLabel={`Imprimir pendientes (${unprintedOrders.length})`}
+          actionLabel={`Imprimir pendientes (${unprintedOrdersToPrint.length})`}
           onAction={async () => {
-            const printed = await printOrderLabels(unprintedOrders, state, "Rotulos pendientes");
-            if (printed) setState(markOrdersLabelsPrinted(state, unprintedOrders, "admin"));
+            const printed = await printOrderLabels(unprintedOrdersToPrint, state, "Rotulos pendientes", labelPrintOptions);
+            if (printed) setState(markOrdersLabelsPrinted(state, unprintedOrdersToPrint, "admin"));
           }}
         />
         <AdminOperationalSummary
@@ -5654,18 +5755,33 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
         <section className="grid content-start gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-base font-bold">Operacion en vivo</h2>
-            <button
-              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              type="button"
-              disabled={pendingWarehouseLabelOrders.length === 0}
-              onClick={async () => {
-                const printed = await printOrderLabels(pendingWarehouseLabelOrders, state, "Rotulos bodega pendientes");
-                if (printed) setState(markOrdersLabelsPrinted(state, pendingWarehouseLabelOrders, "admin"));
-              }}
-            >
-              <Printer size={16} />
-              Rotulos pendientes ({pendingWarehouseLabelOrders.length})
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="grid min-w-0 gap-1 text-xs font-semibold text-ink-60 sm:flex sm:items-center sm:gap-2">
+                Rotulos de
+                <select
+                  className="focus-ring w-full min-w-0 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-normal text-fg sm:w-auto"
+                  value={labelSupplierFilter}
+                  onChange={(event) => setLabelSupplierFilter(event.target.value)}
+                  aria-label="Proveedor de los rotulos a imprimir"
+                >
+                  <option value="">Todos los proveedores</option>
+                  {labelSupplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                  <option value={NO_SUPPLIER}>Sin proveedor asignado</option>
+                </select>
+              </label>
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                type="button"
+                disabled={pendingWarehouseLabelOrdersToPrint.length === 0}
+                onClick={async () => {
+                  const printed = await printOrderLabels(pendingWarehouseLabelOrdersToPrint, state, "Rotulos bodega pendientes", labelPrintOptions);
+                  if (printed) setState(markOrdersLabelsPrinted(state, pendingWarehouseLabelOrdersToPrint, "admin"));
+                }}
+              >
+                <Printer size={16} />
+                Rotulos pendientes ({pendingWarehouseLabelOrdersToPrint.length})
+              </button>
+            </div>
           </div>
           <OrderLookupBar value={orderSearch} onChange={onOrderSearchChange} searchingHistory={searchingHistory} />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -5713,14 +5829,14 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           <button
             className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-semibold text-fg disabled:opacity-50"
             type="button"
-            disabled={reprintableVisibleOrders.length === 0}
+            disabled={reprintableVisibleOrdersToPrint.length === 0}
             onClick={async () => {
-              const printed = await printOrderLabels(reprintableVisibleOrders, state, "Reimpresion de rotulos");
-              if (printed) setState(markOrdersLabelsPrinted(state, reprintableVisibleOrders, "admin"));
+              const printed = await printOrderLabels(reprintableVisibleOrdersToPrint, state, "Reimpresion de rotulos", labelPrintOptions);
+              if (printed) setState(markOrdersLabelsPrinted(state, reprintableVisibleOrdersToPrint, "admin"));
             }}
           >
             <Printer size={16} />
-            Reimprimir rotulos visibles ({reprintableVisibleOrders.length})
+            Reimprimir rotulos visibles ({reprintableVisibleOrdersToPrint.length})
           </button>
           {(callRescheduled.length > 0 || deliveryScheduled.length > 0) && (
             <div className="flex flex-wrap gap-2">
