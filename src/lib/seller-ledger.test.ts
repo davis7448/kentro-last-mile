@@ -621,3 +621,46 @@ describe("spec 038 · T30 · las vistas parciales completan los asientos", async
     expect(buildSellerBalanceInput({ ...base, codByOrder: codEntriesByOrder(all as never) }).codReceived.has("o")).toBe(true);
   });
 });
+
+/**
+ * Spec 038 · T32 (RF_11; hallazgo N1 de T31): el corte de un domiciliario que NO entrego el pedido vio 0 de
+ * recaudo porque no le tocaba (RF_01b), no porque el recaudo fuera 0. Ese corte no decide si el recaudo llego:
+ * su cargo queda marcado (`codOtherDriver`) y no gobierna. B5, donde el mismo domiciliario vio 0 porque el
+ * recaudo ya estaba revertido, sigue gobernando y bloqueando.
+ */
+describe("spec 038 · T32 · el corte de quien no entrego no decide el recibido", async () => {
+  const ledger = await import("../../functions/src/driver-cash-ledger");
+  const entries = [
+    { id: "we-o-driver-visit-pay", ownerType: "driver", ownerId: "D1", orderId: "o", type: "driver_earning", amountCop: 5000, description: "", createdAt: "2026-12-01T10:00:00.000Z" },
+    { id: "we-o-cod", ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 100000, description: "", createdAt: "2026-12-02T10:00:00.000Z" },
+    { id: "we-o-driver-delivery-pay", ownerType: "driver", ownerId: "D2", orderId: "o", type: "driver_earning", amountCop: 9000, description: "", createdAt: "2026-12-02T10:00:00.000Z" }
+  ] as never[];
+  const deliveredBy = new Map([["o", "D2"]]);
+  const corte = (id: string, driverId: string, at: string, ownIds: string[]) => {
+    const figures = ledger.computeDriverCorte({
+      settlementId: id, orderIds: ["o"], ownEntryIds: ownIds, entries, receivedCop: 1e9, deliveredBy,
+      context: { driverId, settlements: [], baseline: null, holds: null }
+    });
+    return { id, kind: "driver", ownerId: driverId, status: "paid", createdAt: at, paidAt: at, orderIds: ["o"], walletEntryIds: ownIds,
+      cashCharges: figures.charges, cashExpectedCop: figures.cashExpectedCop, cashReceivedCop: figures.cashExpectedCop, cashPendingCop: 0, cashAllocations: figures.allocations };
+  };
+  const x2 = corte("X2", "D2", "2026-12-02T20:00:00.000Z", ["we-o-driver-delivery-pay"]);
+
+  it("computeDriverCorte marca el cargo de un pedido que entrego otro (y solo ese)", () => {
+    const x1 = corte("X1", "D1", "2026-12-03T20:00:00.000Z", ["we-o-driver-visit-pay"]);
+    expect(x1.cashCharges).toEqual([{ orderId: "o", codCop: 0, driverPayCop: 5000, chargedCop: -5000, codSeenCop: 0, codOtherDriver: true }]);
+    expect(x2.cashCharges[0]).not.toHaveProperty("codOtherDriver");
+  });
+
+  it("un corte de quien no entrego, calculado despues, no bloquea el recaudo que si llego", () => {
+    const x1 = corte("X1", "D1", "2026-12-03T20:00:00.000Z", ["we-o-driver-visit-pay"]);
+    const cod = codEntriesByOrder(entries as never);
+    expect(buildCodReceivedSet([x2] as never, cod).has("o")).toBe(true);
+    expect(buildCodReceivedSet([x2, x1] as never, cod).has("o")).toBe(true);
+  });
+
+  it("solo con el corte de quien no entrego, el recaudo no se da por recibido (no hay quien lo cobrara)", () => {
+    const x1 = corte("X1", "D1", "2026-12-03T20:00:00.000Z", ["we-o-driver-visit-pay"]);
+    expect(buildCodReceivedSet([x1] as never, codEntriesByOrder(entries as never)).has("o")).toBe(false);
+  });
+});

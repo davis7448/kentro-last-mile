@@ -181,7 +181,9 @@ function codSettlementState(orderId: string, settlements: SettlementDoc[], codEn
       ? isOrderCashSettledInCorte(settlement, orderId)
       : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
     if (Number(charge.chargedCop) > 0 && !settled) return "cash_missing";
-    if (!settled) continue;
+    // T32 (hallazgo N1): el corte de un domiciliario que no entrego el pedido no le cobro el recaudo; que viera 0
+    // no dice nada de si llego. No gobierna (sin la marca, un corte suyo calculado mas tarde bloqueaba para siempre).
+    if (!settled || charge.codOtherDriver === true) continue;
     const candidate = { computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""), codSeenCop: Number(charge.codSeenCop) || 0 };
     if (!governing || candidate.computedAt > governing.computedAt || (candidate.computedAt === governing.computedAt && candidate.createdAt > governing.createdAt)) {
       governing = candidate;

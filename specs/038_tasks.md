@@ -346,6 +346,13 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Accion: plan §7.5 (T30)
   * Verificacion: un cambio de tienda da lo mismo desde la tienda vieja, la nueva y la liquidacion
 
+- [x] **T32: El corte de quien no entrego no decide el recibido (RF_11, hallazgo N1 de T31)**
+  * Requisitos cubiertos: RF_11, RF_01b
+  * Archivos: functions/src/driver-cash-ledger.ts, functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
+  * Accion: `computeDriverCorte` marca `codOtherDriver` en el cargo de un pedido que entrego otro; ese cargo no
+    gobierna en `codSettlementState`
+  * Verificacion: D1 (visita) y D2 (entrega), con el corte de D1 calculado despues: recibido; B5 sigue bloqueado
+
 - [ ] **T31: Medir otra vez y revision independiente (solo lectura)**
   * Requisitos cubiertos: RNF_01, RF_11, RF_12
   * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/

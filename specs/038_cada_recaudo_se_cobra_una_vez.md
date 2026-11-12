@@ -189,7 +189,10 @@ reescribir ningun corte cerrado.
   enmienda, 2026-11-10, hallazgo H2, cambio "ningun asiento posterior" por "lo posterior suma cero".)*
   "Ultimo" es el corte cuyas cifras se calcularon mas tarde: su creacion, su pago o un abono mientras estaba
   pendiente; conciliar o abonar a un corte ya pagado no recalcula sus cifras (RF_04) y no lo hace mas reciente.
-  Como `codSeenCop` sigue RF_01b, el corte de un domiciliario que no entrego el pedido vio 0. Nunca se compara el
+  El corte de un domiciliario que no entrego el pedido (RF_01b) no le cobro el recaudo y vio 0 por eso: ese corte
+  no cuenta para elegir el ultimo, porque no dice nada de si el recaudo llego (su cargo lleva `codOtherDriver`).
+  *(Hallazgo N1 de T31, 2026-11-12: sin esto, un corte de la visita fallida de D1 calculado despues del corte
+  saldado de D2 bloqueaba para siempre un recaudo que si llego.)* Nunca se compara el
   recaudo bruto contra lo cobrado neto. En un corte saldado en total (spec
   027 RF_01), cada asignacion cuenta como cobrada entera, cubierta o no. Un pedido que solo esta en cortes
   anteriores a esta spec sigue con la regla de hoy. *(Grill 2, el 2026-11-07, eligio neto contra neto; el

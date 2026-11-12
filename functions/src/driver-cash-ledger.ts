@@ -28,8 +28,14 @@ export type DriverCashCharge = {
   driverPayCop: number;
   /** codCop - driverPayCop, SIN recortar (RF_08). La suma por pedido entre cortes es lo debido. */
   chargedCop: number;
-  /** Recaudo vigente total del pedido al calcular. Solo para auditar (plan §3.7). */
+  /** Recaudo vigente total del pedido al calcular, el que le toca a este domiciliario (RF_01b). Lo usa RF_11. */
   codSeenCop: number;
+  /**
+   * Spec 038 T32 (hallazgo N1): el pedido lo entrego OTRO domiciliario, asi que este corte no le cobro el recaudo
+   * y su `codSeenCop` es 0 por eso, no porque el recaudo fuera 0. Un corte asi no decide si el recaudo llego
+   * (RF_11). Solo se escribe cuando es cierto, para no cambiar la forma de los demas cargos.
+   */
+  codOtherDriver?: true;
 };
 
 /** Campos que la 038 anade a un corte de domiciliario. Los existentes se siguen escribiendo. */
@@ -381,7 +387,9 @@ export function computeDriverCorte(input: DriverCorteInput): DriverCorteFigures 
     const owedRow = owed.get(orderId);
     const chargedCop = (owedRow?.owedCop ?? 0) - (registered.get(orderId) ?? 0) + activeHoldCop(context.holds, orderId);
     const driverPayCop = ownPayByOrder.get(orderId) ?? 0;
-    return { orderId, codCop: chargedCop + driverPayCop, driverPayCop, chargedCop, codSeenCop: owedRow?.codCop ?? 0 };
+    const charge: DriverCashCharge = { orderId, codCop: chargedCop + driverPayCop, driverPayCop, chargedCop, codSeenCop: owedRow?.codCop ?? 0 };
+    if (isDeliveredByOther(input.deliveredBy, orderId, context.driverId)) charge.codOtherDriver = true;
+    return charge;
   });
 
   const feesCop = Math.max(
