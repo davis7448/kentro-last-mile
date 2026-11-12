@@ -287,6 +287,10 @@ reescribir ningun corte cerrado.
   cobrado; se corrige y entrega D2). Mientras D2 no tenga corte, el neto vuelve a ser 100.000 = lo que vio el corte
   de D1, y el pedido cuenta como recibido. Para la tienda la reversa y el recaudo nuevo netean 0, asi que no se le
   paga nada de mas; se acepta (hallazgo R3 de T28, menor).
+- **La misma ventana con la tienda SIN cobrar** (hallazgo M2 de T31, **pendiente del responsable**). Tras pasar la
+  entrega a otro domiciliario y antes del corte que le devuelve a quien entrego antes, el pedido cuenta como
+  recibido: se le puede pagar a la tienda y la plataforma adelanta ese dinero hasta que pague el nuevo
+  domiciliario. Cerrarlo exige leer los pagos del domiciliario desde la tienda y la API (descartado en RF_11).
 - **KNT-005724 y KNT-006347** (pregunta para el responsable). Ambos siguen **entregados** y contraentrega.
   Una correccion del 2026-11-04 los paso de MercadoTienda a ADMA: revirtio el recaudo de $27.000 en la tienda
   vieja y movio el flete, **pero no creo el recaudo en ADMA**. Hoy ese recaudo no esta en el libro de nadie.

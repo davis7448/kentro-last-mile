@@ -360,7 +360,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: devolucion a D2 saldada y D1 sin corte: no recibido; con el corte de D1 saldado, recibido en los
     dos ordenes
 
-- [ ] **T31: Medir otra vez y revision independiente (solo lectura)**
+- [x] **T31: Medir otra vez y revision independiente (solo lectura)** — hecha el 2026-11-12: nada bloqueante tras T32 y T33; M2 pendiente del responsable
   * Requisitos cubiertos: RNF_01, RF_11, RF_12
   * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/
   * Verificacion: cifras de T28 o diferencia explicada; ningun hallazgo bloqueante
