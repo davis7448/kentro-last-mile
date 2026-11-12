@@ -90,6 +90,7 @@ import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopif
 import { StoreWebhookFilterCard } from "@/components/store-webhook-filter-card";
 import { describeFilter, effectiveFilter, hasWebhookConnection, recentFilterDiscards } from "../../functions/src/store-webhook-filter";
 import { emptyState } from "@/lib/seed";
+import { filterPendingPickup, sortPendingPickup } from "@/lib/pending-pickup-search";
 import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
@@ -12413,6 +12414,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
         <AssignPickedUpOrdersPanel
           orders={pendingMessenger}
           messengers={messengers}
+          sellers={state.sellers}
           onAssigned={(orders) => {
             setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
             setAssignmentMessage(`${orders.length} pedido(s) asignados a mensajero.`);
@@ -13150,11 +13152,21 @@ function FleetReportsPanel({ state, driver, financialSummary, historyStart }: { 
   );
 }
 
-function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders: Order[]; messengers: Messenger[]; onAssigned: (orders: Order[]) => void }) {
+function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: { orders: Order[]; messengers: Messenger[]; sellers: Seller[]; onAssigned: (orders: Order[]) => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [messengerId, setMessengerId] = useState("");
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  // Spec 039: orden por KNT y busqueda sobre TODA la recogida ya cargada (cero lecturas nuevas).
+  const sellerNameById = useMemo(() => new Map(sellers.map((seller) => [seller.id, seller.name])), [sellers]);
+  const sortedOrders = useMemo(() => sortPendingPickup(orders), [orders]);
+  const visibleOrders = useMemo(() => filterPendingPickup(sortedOrders, search, sellerNameById), [sortedOrders, search, sellerNameById]);
+  const searching = search.trim().length > 0;
+  // La seleccion vive aparte de la pagina y de la busqueda: se asigna todo lo marcado, se vea o no.
   const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
+  const visibleIdSet = new Set(visibleOrders.map((order) => order.id));
+  const hiddenSelectedCount = selectedOrders.filter((order) => !visibleIdSet.has(order.id)).length;
+  const unselectedMatches = visibleOrders.filter((order) => !selectedIds.includes(order.id));
   const canAssign = messengerId && selectedOrders.length > 0;
 
   useEffect(() => {
@@ -13190,20 +13202,59 @@ function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders:
           {messengers.map((messenger) => <option key={messenger.id} value={messenger.id}>{messenger.name}</option>)}
         </select>
         <button className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={!messengerId || orders.length === 0} onClick={() => void assignSelected(orders)}>
-          Asignar toda la recogida
+          Asignar toda la recogida (<span className="tabular">{orders.length}</span>)
         </button>
         <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={!canAssign} onClick={() => void assignSelected(selectedOrders)}>
-          Asignar seleccionados
+          Asignar seleccionados{selectedOrders.length > 0 ? ` (${selectedOrders.length})` : ""}
         </button>
       </div>
       {message && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
-      <PaginatedList items={orders} pageSize={8} empty={<p className="text-sm text-ink-60">No hay pedidos recogidos pendientes de asignar.</p>}>
+      {orders.length > 0 && (
+        <label className="grid gap-1 text-xs font-semibold text-ink-60">
+          Buscar
+          <input
+            className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg"
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            placeholder="KNT, cliente o tienda"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+      )}
+      {(selectedOrders.length > 0 || (searching && unselectedMatches.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-60" aria-live="polite">
+          {selectedOrders.length > 0 && (
+            <span className="font-semibold text-fg">
+              <span className="tabular">{selectedOrders.length}</span> seleccionado{selectedOrders.length === 1 ? "" : "s"}
+              {hiddenSelectedCount > 0 && <span className="font-normal text-ink-60"> · <span className="tabular">{hiddenSelectedCount}</span> fuera de esta busqueda</span>}
+            </span>
+          )}
+          {searching && unselectedMatches.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => setSelectedIds((current) => [...unselectedMatches.map((order) => order.id), ...current])}>
+              {visibleOrders.length === 1 ? "Seleccionar el que coincide" : <>Seleccionar los <span className="tabular">{visibleOrders.length}</span> que coinciden</>}
+            </button>
+          )}
+          {selectedOrders.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => setSelectedIds([])}>
+              Quitar seleccion
+            </button>
+          )}
+        </div>
+      )}
+      <PaginatedList
+        key={search.trim()}
+        items={visibleOrders}
+        pageSize={8}
+        empty={<p className="text-sm text-ink-60">{searching && orders.length > 0 ? `Ningun pedido coincide con «${search.trim()}».` : "No hay pedidos recogidos pendientes de asignar."}</p>}
+      >
         {(order) => (
           <label key={order.id} className="flex items-start gap-3 rounded-2xl border border-white/10 p-3 text-sm">
             <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [order.id, ...current] : current.filter((id) => id !== order.id))} />
             <span>
               <span className="block font-semibold">{order.trackingCode ?? order.shopifyOrderId}</span>
-              <span className="block text-xs text-ink-60">{order.customerName} · {order.pickupPointName ?? "Punto de recogida"}</span>
+              <span className="block text-xs text-ink-60">{order.customerName} · {order.pickupPointName ?? sellerNameById.get(order.sellerId) ?? "Punto de recogida"}</span>
             </span>
           </label>
         )}
