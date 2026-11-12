@@ -13,7 +13,7 @@
  *
  * Con `--write`, las cifras esperadas son las que la medicion de ese mismo dia imprime
  * (`node specs/038_measure.js`): si las retenciones no suman exactamente eso, aborta sin escribir. Escribe con
- * `create`, en un lote: si ya hay una foto de algun domiciliario, el lote entero falla y no se escribe nada.
+ * `create`, en un solo lote (si no cabe, se niega): si ya hay una foto de algun domiciliario, el lote entero falla y no se escribe nada.
  * La foto se escribe una vez; despues, nadie reconstruye, se lee.
  *
  * Documentos: `driverLedgerBaselines/{driverId}` y `driverCashHolds/{driverId}`, uno de cada por domiciliario
@@ -26,8 +26,8 @@ const LEDGER_LIB = path.resolve(__dirname, "../functions/lib/driver-cash-ledger.
 const COD_TYPES = ["cod_revenue", "cod_remittance"];
 const BASELINES = "driverLedgerBaselines";
 const HOLDS = "driverCashHolds";
-/** Firestore admite 500 escrituras por lote; dos por domiciliario. */
-const MAX_DRIVERS_PER_BATCH = 200;
+/** Firestore admite 500 escrituras por lote; dos por domiciliario. La foto va en UN lote (T27). */
+const MAX_DRIVERS_PER_BATCH = 250;
 
 function loadLedger() {
   try {
@@ -91,19 +91,25 @@ function writeRefusal(plans, args) {
   return null;
 }
 
-/** Escribe con `create` (falla si el documento ya existe). Devuelve cuantos documentos escribio. */
+/**
+ * Escribe con `create` (falla si el documento ya existe), en un solo lote: o entra la foto entera o no entra
+ * nada. Si no cabe en un lote, se niega antes de escribir (varios lotes podrian dejarla a medias). Devuelve
+ * cuantos documentos escribio.
+ */
 async function writeSnapshots(db, plans) {
-  let written = 0;
-  for (let start = 0; start < plans.length; start += MAX_DRIVERS_PER_BATCH) {
-    const batch = db.batch();
-    for (const plan of plans.slice(start, start + MAX_DRIVERS_PER_BATCH)) {
-      batch.create(db.collection(BASELINES).doc(plan.driverId), plan.baseline);
-      batch.create(db.collection(HOLDS).doc(plan.driverId), plan.holds);
-      written += 2;
-    }
-    await batch.commit();
+  if (plans.length > MAX_DRIVERS_PER_BATCH) {
+    throw new Error(
+      `La foto de ${plans.length} domiciliarios no cabe en un solo lote (maximo ${MAX_DRIVERS_PER_BATCH}). ` +
+      "No se escribe nada: escribirla en varios lotes podria dejarla a medias."
+    );
   }
-  return written;
+  const batch = db.batch();
+  for (const plan of plans) {
+    batch.create(db.collection(BASELINES).doc(plan.driverId), plan.baseline);
+    batch.create(db.collection(HOLDS).doc(plan.driverId), plan.holds);
+  }
+  await batch.commit();
+  return plans.length * 2;
 }
 
 const cop = (value) => `$${Math.round(value).toLocaleString("es-CO")}`;

@@ -81,4 +81,19 @@ describe("spec 038 · T19 · script de la foto historica", () => {
     expect(created).toEqual(["driverLedgerBaselines/d1", "driverCashHolds/d1", "driverLedgerBaselines/d2", "driverCashHolds/d2"]);
     expect(commits).toBe(1);
   });
+
+  // T27 (plan §7.4): la foto entra entera o no entra. Si no cabe en un lote, se niega antes de escribir nada.
+  it("si no cabe en un solo lote, se niega y no escribe nada", async () => {
+    const { writeSnapshots } = load();
+    let calls = 0;
+    const db = {
+      collection: (name: string) => ({ doc: (id: string) => ({ path: `${name}/${id}` }) }),
+      batch: () => ({ create: () => { calls += 1; }, commit: async () => { calls += 1; } })
+    };
+    const plans = Array.from({ length: 251 }, (_, index) => ({
+      driverId: `d${index}`, baseline: {}, holds: { holds: [] }, totalHoldCop: 0, settlementCount: 1
+    })) as unknown as SnapshotPlan[];
+    await expect(writeSnapshots(db, plans)).rejects.toThrow(/un solo lote/);
+    expect(calls).toBe(0);
+  });
 });

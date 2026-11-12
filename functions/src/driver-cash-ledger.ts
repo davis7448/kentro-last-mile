@@ -285,14 +285,20 @@ export function creditCarriedIn(context: DriverLedgerContext, settlementId: stri
 function allocateReceived(
   charges: readonly DriverCashCharge[],
   receivedCop: number,
-  orderMeta: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">>
+  orderMeta: ReadonlyMap<string, Pick<SettlementOrderDoc, "createdAt" | "trackingCode">>,
+  storedOrder: readonly string[] = []
 ): DriverCashAllocation[] {
+  // Un corte congelado conserva el orden en que guardo sus asignaciones (T27): sus pedidos van primero, en ese
+  // orden; los que no figuraban, despues, por fecha.
+  const rank = new Map(storedOrder.map((orderId, index) => [orderId, index] as const));
+  const rankOf = (orderId: string) => rank.get(orderId) ?? Number.MAX_SAFE_INTEGER;
   const owing = charges
     .filter((charge) => charge.chargedCop > 0)
     .sort((left, right) => {
       const leftMeta = orderMeta.get(left.orderId);
       const rightMeta = orderMeta.get(right.orderId);
       return (
+        rankOf(left.orderId) - rankOf(right.orderId) ||
         String(leftMeta?.createdAt ?? "").localeCompare(String(rightMeta?.createdAt ?? "")) ||
         String(leftMeta?.trackingCode ?? left.orderId).localeCompare(String(rightMeta?.trackingCode ?? right.orderId))
       );
@@ -817,6 +823,8 @@ export type FrozenReceiptFields = Pick<
  * RF_04: un corte pagado o conciliado NO recalcula sus cifras ni su registro por pedido. Si recibe efectivo
  * (un abono tardio a un corte pagado), solo se actualiza lo recibido y su reparto, sobre lo que el corte ya
  * guardo: `cashCharges` si es de la 038, y si es viejo, sus `cashAllocations`. Nunca con la regla vieja.
+ * El reparto sigue el orden de las `cashAllocations` guardadas (T27): conciliar o abonar tarde no mueve lo
+ * recibido de un pedido a otro, y no hace falta leer los pedidos dentro de la transaccion.
  */
 export function refreshFrozenReceipts(
   frozen: { cashExpectedCop?: number; cashCharges?: readonly DriverCashCharge[]; cashAllocations?: readonly DriverCashAllocation[] },
@@ -840,6 +848,6 @@ export function refreshFrozenReceipts(
     cashPendingCop: pendingCop,
     cashExcessCop: Math.max(0, received - expectedCop),
     cashReceiptStatus: expectedCop === 0 || pendingCop === 0 ? "complete" : received > 0 ? "partial" : "none",
-    cashAllocations: allocateReceived(charges, received, orderMeta)
+    cashAllocations: allocateReceived(charges, received, orderMeta, (frozen.cashAllocations ?? []).map((allocation) => allocation.orderId))
   };
 }

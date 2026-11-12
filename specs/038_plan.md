@@ -401,9 +401,13 @@ ademas no tiene una asignacion sin cubrir en un corte viejo (sin `cashCharges`) 
 
 ### 7.4 Menores de la revision
 
-- El orden de `cashAllocations` al conciliar un corte viejo ya pagado: `updateSettlementStatus` pasa `orderMeta` a
-  `refreshFrozenReceipts`, como el abono.
-- `snapshot-038-baseline.js`: un solo lote mientras quepa (hoy 2 domiciliarios = 4 escrituras); si no cabe, se
-  niega en vez de escribir a medias.
+- El orden de `cashAllocations` al conciliar un corte viejo ya pagado. **Corregido en T27:** la idea era que
+  `updateSettlementStatus` pasara `orderMeta` a `refreshFrozenReceipts`, "como el abono", pero el abono tampoco
+  lo pasaba, y reordenar por fecha seguiria pudiendo diferir del orden que el corte guardo. El arreglo va en
+  `refreshFrozenReceipts`: reparte en el orden de las `cashAllocations` guardadas (los pedidos que no figuraban,
+  despues, por fecha). Sirve para las dos callables, sin leer pedidos dentro de la transaccion; `orders.ts` no
+  cambia.
+- `snapshot-038-baseline.js`: un solo lote mientras quepa (hoy 2 domiciliarios = 4 escrituras; maximo 250
+  domiciliarios = 500 escrituras); si no cabe, se niega en vez de escribir a medias.
 - Quedan fuera, anotados: la contencion de leer todos los asientos de tienda en cada abono (rendimiento, no
   dinero) y la precondicion sobre las retenciones en las correcciones (el siguiente corte lo corrige solo).

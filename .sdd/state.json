@@ -1,7 +1,7 @@
 {
   "version": 2,
   "phase": "implement",
-  "activeTask": "T27",
+  "activeTask": "T28",
   "activeSpec": {
     "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
@@ -38,7 +38,7 @@
     "T24": { "requirements": ["RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.property.test.ts"], "testWritten": true, "done": true },
     "T25": { "requirements": ["RF_01b", "RNF_04"], "files": ["functions/src/orders.ts", "functions/src/driver-ledger-io.ts", "functions/src/order-corrections.ts", "functions/src/order-corrections-plan.ts", "functions/src/cash-outstanding.ts", "scripts/snapshot-038-baseline.js", "scripts/compensate-038.js", "specs/038_measure.js", "scripts/verify-026.js", "src/lib/driver-ledger-io.test.ts", "src/lib/order-corrections-plan.test.ts", "src/lib/cash-outstanding.test.ts", "src/lib/spec-038-guards.test.ts", "functions/src/settlement-math.ts", "specs/038_cada_recaudo_se_cobra_una_vez.md", "specs/038_plan.md"], "testWritten": true, "done": true },
     "T26": { "requirements": ["RF_11", "RF_11b", "RF_12"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
-    "T27": { "requirements": ["RF_04", "RF_05b"], "files": ["functions/src/orders.ts", "scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": false, "done": false },
+    "T27": { "requirements": ["RF_04", "RF_05b"], "files": ["functions/src/driver-cash-ledger.ts", "scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "src/lib/driver-cash-ledger.test.ts"], "scopeNote": "orders.ts sustituido por driver-cash-ledger.ts: el orden guardado se respeta en refreshFrozenReceipts (plan 7.4)", "testWritten": true, "done": true },
     "T28": { "requirements": ["RNF_01", "RF_05b", "RF_17"], "files": [".sdd/evidence/038_cada_recaudo_se_cobra_una_vez/"], "testWritten": false, "done": false }
   },
   "archivedTasks036": {

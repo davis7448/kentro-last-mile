@@ -315,10 +315,10 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: escenarios H2 (cambio de tienda que netea cero: recibido) y H3 (corte viejo pendiente sin
     cubrir: no recibido); B5 sigue sin recibir; las pruebas de la 018 y la 027 sin cambios
 
-- [ ] **T27: Menores de la revision**
+- [x] **T27: Menores de la revision**
   * Requisitos cubiertos: RF_04, RF_05b
-  * Archivos: functions/src/orders.ts, scripts/snapshot-038-baseline.js, src/lib/snapshot-038-baseline.test.ts,
-    src/lib/driver-cash-ledger.test.ts
+  * Archivos: functions/src/driver-cash-ledger.ts (en vez de orders.ts: ver plan §7.4),
+    scripts/snapshot-038-baseline.js, src/lib/snapshot-038-baseline.test.ts, src/lib/driver-cash-ledger.test.ts
   * Accion: plan §7.4
   * Verificacion: conciliar un corte viejo pagado no cambia el orden de sus asignaciones; la foto se niega si no
     cabe en un lote

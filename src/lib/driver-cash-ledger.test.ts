@@ -633,6 +633,38 @@ describe("refreshFrozenReceipts", () => {
       cashAllocations: [{ orderId: "o1", expectedCop: 92000, receivedCop: 50000, covered: false }]
     });
   });
+
+  // T27 (plan §7.4): un corte congelado conserva el orden en que guardo sus asignaciones. Recalcular el orden
+  // al conciliar (o con un abono tardio) moveria lo recibido de un pedido a otro en un corte ya pagado.
+  it("corte viejo congelado: conserva el orden guardado de sus asignaciones, sin datos de los pedidos", () => {
+    const frozen = {
+      cashExpectedCop: 70000,
+      cashAllocations: [
+        { orderId: "o2", expectedCop: 30000, receivedCop: 30000, covered: true },
+        { orderId: "o1", expectedCop: 40000, receivedCop: 40000, covered: true }
+      ]
+    };
+    expect(refreshFrozenReceipts(frozen, 70000).cashAllocations.map((row) => row.orderId)).toEqual(["o2", "o1"]);
+    expect(refreshFrozenReceipts(frozen, 30000).cashAllocations).toEqual([
+      { orderId: "o2", expectedCop: 30000, receivedCop: 30000, covered: true },
+      { orderId: "o1", expectedCop: 40000, receivedCop: 0, covered: false }
+    ]);
+  });
+
+  it("el orden guardado manda sobre las fechas de los pedidos, tambien en un corte de la 038", () => {
+    const frozen = {
+      cashExpectedCop: 70000,
+      cashCharges: [
+        { orderId: "o1", codCop: 40000, driverPayCop: 0, chargedCop: 40000, codSeenCop: 40000 },
+        { orderId: "o2", codCop: 30000, driverPayCop: 0, chargedCop: 30000, codSeenCop: 30000 }
+      ],
+      cashAllocations: [
+        { orderId: "o2", expectedCop: 30000, receivedCop: 0, covered: false },
+        { orderId: "o1", expectedCop: 40000, receivedCop: 0, covered: false }
+      ]
+    };
+    expect(refreshFrozenReceipts(frozen, 70000, meta).cashAllocations.map((row) => row.orderId)).toEqual(["o2", "o1"]);
+  });
 });
 
 describe("spec 038 · T19 · buildDriverLedgerSnapshot", () => {
