@@ -3,7 +3,7 @@ import type { Order } from "./types";
 // Spec 039: busqueda y orden de la tarjeta «Recogidos pendientes de mensajero».
 // Todo trabaja sobre los pedidos ya cargados en el navegador: cero lecturas nuevas.
 
-type SearchableOrder = Pick<Order, "id" | "trackingCode" | "shopifyOrderId" | "customerName" | "pickupPointName" | "sellerId">;
+type SearchableOrder = Pick<Order, "id" | "trackingCode" | "shopifyOrderId" | "customerName" | "pickupPointName" | "sellerId" | "messengerId">;
 
 function normalizeText(value: string): string {
   return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -35,8 +35,16 @@ export function sortPendingPickup<T extends SearchableOrder>(orders: T[]): T[] {
   });
 }
 
-/** RF_02 y RF_03: busca en toda la lista por KNT, Shopify, cliente, punto de recogida y tienda. */
-export function filterPendingPickup<T extends SearchableOrder>(orders: T[], query: string, sellerNameById: ReadonlyMap<string, string> = new Map()): T[] {
+/**
+ * RF_02 y RF_03: busca en toda la lista por KNT, Shopify, cliente, punto de recogida y tienda.
+ * RF_12 (enmienda 1): con `messengerNameById`, tambien por el mensajero asignado.
+ */
+export function filterPendingPickup<T extends SearchableOrder>(
+  orders: T[],
+  query: string,
+  sellerNameById: ReadonlyMap<string, string> = new Map(),
+  messengerNameById: ReadonlyMap<string, string> = new Map()
+): T[] {
   const needle = normalizeText(query);
   if (!needle) return orders;
   const digitsOnly = /^\d+$/.test(needle) ? Number(needle) : null;
@@ -47,7 +55,8 @@ export function filterPendingPickup<T extends SearchableOrder>(orders: T[], quer
       order.shopifyOrderId,
       order.customerName,
       order.pickupPointName,
-      sellerNameById.get(order.sellerId)
+      sellerNameById.get(order.sellerId),
+      order.messengerId ? messengerNameById.get(order.messengerId) : undefined
     ].some((entry) => entry && normalizeText(String(entry)).includes(needle));
   });
 }

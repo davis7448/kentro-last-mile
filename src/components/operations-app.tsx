@@ -12423,6 +12423,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
         <ReassignMessengerOrdersPanel
           orders={messengerReassignable}
           messengers={messengers}
+          sellers={state.sellers}
           onUpdated={(orders, summary) => {
             setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
             setAssignmentMessage(summary);
@@ -13152,6 +13153,66 @@ function FleetReportsPanel({ state, driver, financialSummary, historyStart }: { 
   );
 }
 
+/**
+ * Spec 039: buscador y linea de seleccion de las tarjetas de asignacion del lider. Compartido por
+ * «Recogidos pendientes de mensajero» y «Asignados a mensajero» (RNF_04) para que no diverjan.
+ */
+function OrderPickerSearch({ search, onSearchChange, visibleOrders, selectedIds, onSelectedIdsChange, placeholder = "KNT, cliente o tienda" }: {
+  search: string;
+  placeholder?: string;
+  onSearchChange: (value: string) => void;
+  visibleOrders: Order[];
+  selectedIds: string[];
+  onSelectedIdsChange: (ids: string[]) => void;
+}) {
+  const searching = search.trim().length > 0;
+  const visibleIdSet = new Set(visibleOrders.map((order) => order.id));
+  const hiddenSelectedCount = selectedIds.filter((id) => !visibleIdSet.has(id)).length;
+  const unselectedMatches = visibleOrders.filter((order) => !selectedIds.includes(order.id));
+  return (
+    <>
+      <label className="grid gap-1 text-xs font-semibold text-ink-60">
+        Buscar
+        <input
+          className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg"
+          type="search"
+          inputMode="search"
+          autoComplete="off"
+          placeholder={placeholder}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+      </label>
+      {(selectedIds.length > 0 || (searching && unselectedMatches.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-60" aria-live="polite">
+          {selectedIds.length > 0 && (
+            <span className="font-semibold text-fg">
+              <span className="tabular">{selectedIds.length}</span> seleccionado{selectedIds.length === 1 ? "" : "s"}
+              {hiddenSelectedCount > 0 && <span className="font-normal text-ink-60"> · <span className="tabular">{hiddenSelectedCount}</span> fuera de esta busqueda</span>}
+            </span>
+          )}
+          {searching && unselectedMatches.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => onSelectedIdsChange([...unselectedMatches.map((order) => order.id), ...selectedIds])}>
+              {visibleOrders.length === 1 ? "Seleccionar el que coincide" : <>Seleccionar los <span className="tabular">{visibleOrders.length}</span> que coinciden</>}
+            </button>
+          )}
+          {selectedIds.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => onSelectedIdsChange([])}>
+              Quitar seleccion
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Mensaje de lista vacia: distingue «no hay nada» de «la busqueda no encontro nada» (RF_08). */
+function orderPickerEmptyText(search: string, totalOrders: number, emptyText: string) {
+  const query = search.trim();
+  return query && totalOrders > 0 ? `Ningun pedido coincide con «${query}».` : emptyText;
+}
+
 function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: { orders: Order[]; messengers: Messenger[]; sellers: Seller[]; onAssigned: (orders: Order[]) => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [messengerId, setMessengerId] = useState("");
@@ -13161,12 +13222,8 @@ function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: 
   const sellerNameById = useMemo(() => new Map(sellers.map((seller) => [seller.id, seller.name])), [sellers]);
   const sortedOrders = useMemo(() => sortPendingPickup(orders), [orders]);
   const visibleOrders = useMemo(() => filterPendingPickup(sortedOrders, search, sellerNameById), [sortedOrders, search, sellerNameById]);
-  const searching = search.trim().length > 0;
   // La seleccion vive aparte de la pagina y de la busqueda: se asigna todo lo marcado, se vea o no.
   const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
-  const visibleIdSet = new Set(visibleOrders.map((order) => order.id));
-  const hiddenSelectedCount = selectedOrders.filter((order) => !visibleIdSet.has(order.id)).length;
-  const unselectedMatches = visibleOrders.filter((order) => !selectedIds.includes(order.id));
   const canAssign = messengerId && selectedOrders.length > 0;
 
   useEffect(() => {
@@ -13210,44 +13267,13 @@ function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: 
       </div>
       {message && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
       {orders.length > 0 && (
-        <label className="grid gap-1 text-xs font-semibold text-ink-60">
-          Buscar
-          <input
-            className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg"
-            type="search"
-            inputMode="search"
-            autoComplete="off"
-            placeholder="KNT, cliente o tienda"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-      )}
-      {(selectedOrders.length > 0 || (searching && unselectedMatches.length > 0)) && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-60" aria-live="polite">
-          {selectedOrders.length > 0 && (
-            <span className="font-semibold text-fg">
-              <span className="tabular">{selectedOrders.length}</span> seleccionado{selectedOrders.length === 1 ? "" : "s"}
-              {hiddenSelectedCount > 0 && <span className="font-normal text-ink-60"> · <span className="tabular">{hiddenSelectedCount}</span> fuera de esta busqueda</span>}
-            </span>
-          )}
-          {searching && unselectedMatches.length > 0 && (
-            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => setSelectedIds((current) => [...unselectedMatches.map((order) => order.id), ...current])}>
-              {visibleOrders.length === 1 ? "Seleccionar el que coincide" : <>Seleccionar los <span className="tabular">{visibleOrders.length}</span> que coinciden</>}
-            </button>
-          )}
-          {selectedOrders.length > 0 && (
-            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => setSelectedIds([])}>
-              Quitar seleccion
-            </button>
-          )}
-        </div>
+        <OrderPickerSearch search={search} onSearchChange={setSearch} visibleOrders={visibleOrders} selectedIds={selectedOrders.map((order) => order.id)} onSelectedIdsChange={setSelectedIds} />
       )}
       <PaginatedList
         key={search.trim()}
         items={visibleOrders}
         pageSize={8}
-        empty={<p className="text-sm text-ink-60">{searching && orders.length > 0 ? `Ningun pedido coincide con «${search.trim()}».` : "No hay pedidos recogidos pendientes de asignar."}</p>}
+        empty={<p className="text-sm text-ink-60">{orderPickerEmptyText(search, orders.length, "No hay pedidos recogidos pendientes de asignar.")}</p>}
       >
         {(order) => (
           <label key={order.id} className="flex items-start gap-3 rounded-2xl border border-white/10 p-3 text-sm">
@@ -13263,12 +13289,20 @@ function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: 
   );
 }
 
-function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { orders: Order[]; messengers: Messenger[]; onUpdated: (orders: Order[], summary: string) => void }) {
+function ReassignMessengerOrdersPanel({ orders, messengers, sellers, onUpdated }: { orders: Order[]; messengers: Messenger[]; sellers: Seller[]; onUpdated: (orders: Order[], summary: string) => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [messengerId, setMessengerId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  // Spec 039, enmienda 1: mismo orden y busqueda que la recogida, y ademas por mensajero (RF_12).
+  const sellerNameById = useMemo(() => new Map(sellers.map((seller) => [seller.id, seller.name])), [sellers]);
+  const messengerNameById = useMemo(() => new Map(messengers.map((messenger) => [messenger.id, messenger.name])), [messengers]);
+  const sortedOrders = useMemo(() => sortPendingPickup(orders), [orders]);
+  const visibleOrders = useMemo(() => filterPendingPickup(sortedOrders, search, sellerNameById, messengerNameById), [sortedOrders, search, sellerNameById, messengerNameById]);
+  // Reasignar y devolver actuan sobre todo lo marcado, se vea o no con la busqueda (RF_11).
   const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
+  const selectedCountLabel = selectedOrders.length > 0 ? ` (${selectedOrders.length})` : "";
 
   useEffect(() => {
     if (!messengerId && messengers[0]) setMessengerId(messengers[0].id);
@@ -13326,22 +13360,31 @@ function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { order
           {messengers.map((messenger) => <option key={messenger.id} value={messenger.id}>{messenger.name}</option>)}
         </select>
         <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={!messengerId || selectedOrders.length === 0 || busy} onClick={() => void reassignSelected()}>
-          Reasignar seleccionados
+          Reasignar seleccionados{selectedCountLabel}
         </button>
         <button className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={selectedOrders.length === 0 || busy} onClick={() => void unassignSelected()}>
-          Devolver a pendientes
+          Devolver a pendientes{selectedCountLabel}
         </button>
       </div>
       {message && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
-      <PaginatedList items={orders} pageSize={8} empty={<p className="text-sm text-ink-60">No hay pedidos activos asignados a mensajeros.</p>}>
+      {orders.length > 0 && (
+        <OrderPickerSearch search={search} onSearchChange={setSearch} visibleOrders={visibleOrders} selectedIds={selectedOrders.map((order) => order.id)} onSelectedIdsChange={setSelectedIds} placeholder="KNT, cliente, tienda o mensajero" />
+      )}
+      <PaginatedList
+        key={search.trim()}
+        items={visibleOrders}
+        pageSize={8}
+        empty={<p className="text-sm text-ink-60">{orderPickerEmptyText(search, orders.length, "No hay pedidos activos asignados a mensajeros.")}</p>}
+      >
         {(order) => {
-          const messenger = messengers.find((item) => item.id === order.messengerId);
+          const messengerName = order.messengerId ? messengerNameById.get(order.messengerId) ?? order.messengerId : "";
+          const storeName = order.pickupPointName ?? sellerNameById.get(order.sellerId);
           return (
             <label key={order.id} className="flex items-start gap-3 rounded-2xl border border-white/10 p-3 text-sm">
               <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [order.id, ...current] : current.filter((id) => id !== order.id))} />
               <span>
                 <span className="block font-semibold">{order.trackingCode ?? order.shopifyOrderId}</span>
-                <span className="block text-xs text-ink-60">{order.customerName} · {messenger?.name ?? order.messengerId} · {statusLabel(order.status)}</span>
+                <span className="block text-xs text-ink-60">{[order.customerName, storeName, messengerName, statusLabel(order.status)].filter(Boolean).join(" · ")}</span>
               </span>
             </label>
           );
