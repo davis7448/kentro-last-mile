@@ -1,0 +1,16 @@
+# Spec 038 T33 — measure --check --deploy-check (solo lectura), 2026-11-12
+domiciliario | cortes | pedidos | cobrado | debido | diferencia | suma por pedido | cortes sin cuadrar
+driver-1778271901513 | 61 | 4998 | 426.298.303 | 425.612.101 | 686.202 | 686.200 | 0
+driver-1784251215977 | 2 | 19 | 3.608.100 | 3.608.100 | 0 | 0 | 0
+
+Riesgo buildCodReceivedSet (COD nuevo tras corte saldado): 0 pedido(s)
+
+--check: 63 cortes, 0 problema(s)
+--check EN VERDE
+
+--deploy-check (RNF_01), 2026-11-12T04:42:28.752Z: esperado regla vieja -> regla nueva con las retenciones de la foto
+  driver-1778271901513 pendiente stl-1794412139738-driver-driver-1778271901513: 3.545.070 -> 3.545.070 (diferencia 0)
+  driver-1778271901513 siguiente corte: 42 -> 42 pedidos, 3.464.210 -> 3.464.210 (diferencia 0)
+  driver-1784251215977 siguiente corte: 0 -> 0 pedidos, 0 -> 0 (diferencia 0)
+  recibidos: 0 pasan a recibido, 0 dejan de estarlo
+--deploy-check EN VERDE: desplegar no cambia ningun esperado ni ningun recibido

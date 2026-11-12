@@ -192,7 +192,10 @@ reescribir ningun corte cerrado.
   El corte de un domiciliario que no entrego el pedido (RF_01b) no le cobro el recaudo y vio 0 por eso: ese corte
   no cuenta para elegir el ultimo, porque no dice nada de si el recaudo llego (su cargo lleva `codOtherDriver`).
   *(Hallazgo N1 de T31, 2026-11-12: sin esto, un corte de la visita fallida de D1 calculado despues del corte
-  saldado de D2 bloqueaba para siempre un recaudo que si llego.)* Nunca se compara el
+  saldado de D2 bloqueaba para siempre un recaudo que si llego.)* Y si el corte mas reciente de un domiciliario
+  lleva esa marca, ninguno de sus cortes cuenta: el pedido ya no es suyo y su corte viejo no dice nada del recaudo
+  de hoy. *(Hallazgo M1, 2026-11-12: con la entrega pasada de D2 a D1 y la devolucion a D2 saldada, el corte viejo
+  de D2 lo daba por recibido antes de que D1 entregara nada.)* Nunca se compara el
   recaudo bruto contra lo cobrado neto. En un corte saldado en total (spec
   027 RF_01), cada asignacion cuenta como cobrada entera, cubierta o no. Un pedido que solo esta en cortes
   anteriores a esta spec sigue con la regla de hoy. *(Grill 2, el 2026-11-07, eligio neto contra neto; el

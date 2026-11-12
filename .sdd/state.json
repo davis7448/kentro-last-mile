@@ -43,6 +43,7 @@
     "T29": { "requirements": ["RF_11"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
     "T30": { "requirements": ["RF_12"], "files": ["functions/src/seller-ledger.ts", "functions/src/seller-ledger-io.ts", "functions/src/seller-balance.ts", "functions/src/seller-balance-api.ts", "functions/src/store-api.ts", "src/lib/seller-ledger.test.ts", "src/lib/spec-038-guards.test.ts"], "scopeNote": "store-api-orders.ts no hizo falta; seller-ledger-io.ts y seller-balance.ts anadidos (plan 7.5)", "testWritten": true, "done": true },
     "T32": { "requirements": ["RF_11", "RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T33": { "requirements": ["RF_11", "RF_01b"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
     "T31": { "requirements": ["RNF_01", "RF_11", "RF_12"], "files": [".sdd/evidence/038_cada_recaudo_se_cobra_una_vez/"], "testWritten": false, "done": false }
   },
   "archivedTasks036": {

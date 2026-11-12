@@ -664,3 +664,42 @@ describe("spec 038 · T32 · el corte de quien no entrego no decide el recibido"
     expect(buildCodReceivedSet([x1] as never, codEntriesByOrder(entries as never)).has("o")).toBe(false);
   });
 });
+
+/**
+ * Spec 038 · T33 (RF_11; hallazgo M1 de la revision de T32): la marca `codOtherDriver` dice que, al calcular ese
+ * corte, el pedido ya era de otro domiciliario. Si el corte MAS RECIENTE de un domiciliario lleva la marca, ninguno
+ * de sus cortes decide: su corte viejo, saldado cuando si lo entrego, ya no dice nada del recaudo de hoy.
+ */
+describe("spec 038 · T33 · un domiciliario que ya no entrego el pedido no decide con su corte viejo", async () => {
+  const ledger = await import("../../functions/src/driver-cash-ledger");
+  // D2 entrego y su corte X2 se pago; una correccion paso la entrega a D1 (tienda sin cobrar: recaudo recreado).
+  const entries = [
+    { id: "we-o-cod", ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 100000, description: "", createdAt: "2026-12-04T00:00:00.000Z" },
+    { id: "we-o-driver-delivery-pay", ownerType: "driver", ownerId: "D1", orderId: "o", type: "driver_earning", amountCop: 9000, description: "", createdAt: "2026-12-04T00:00:00.000Z" }
+  ] as never[];
+  const deliveredBy = new Map([["o", "D1"]]);
+  const x2 = { id: "X2", kind: "driver", ownerId: "D2", status: "paid", createdAt: "2026-12-01T00:00:00.000Z", paidAt: "2026-12-01T01:00:00.000Z", orderIds: ["o"],
+    cashCharges: [{ orderId: "o", codCop: 100000, driverPayCop: 9000, chargedCop: 91000, codSeenCop: 100000 }],
+    cashExpectedCop: 91000, cashReceivedCop: 91000, cashPendingCop: 0, cashAllocations: [{ orderId: "o", expectedCop: 91000, receivedCop: 91000, covered: true }] };
+  const compute = (id: string, driverId: string, own: string[], settlements: unknown[]) =>
+    ledger.computeDriverCorte({ settlementId: id, orderIds: ["o"], ownEntryIds: own, entries, receivedCop: 0, deliveredBy,
+      context: { driverId, settlements: settlements as never, baseline: null, holds: null } });
+  const paid = (id: string, driverId: string, at: string, figures: ReturnType<typeof compute>) => ({
+    id, kind: "driver", ownerId: driverId, status: "paid", createdAt: at, paidAt: at, orderIds: ["o"], cashCharges: figures.charges,
+    cashExpectedCop: figures.cashExpectedCop, cashReceivedCop: figures.cashExpectedCop, cashPendingCop: 0,
+    cashAllocations: figures.allocations.map((row) => ({ ...row, receivedCop: row.expectedCop, covered: true }))
+  });
+  const devolucion = (at: string) => paid("X2b", "D2", at, compute("X2b", "D2", [], [x2]));
+  const corteD1 = (at: string) => paid("X1", "D1", at, compute("X1", "D1", ["we-o-driver-delivery-pay"], []));
+  const received = (settlements: unknown[]) => buildCodReceivedSet(settlements as never, codEntriesByOrder(entries as never)).has("o");
+
+  it("la devolucion a D2 esta saldada y D1 aun no tiene corte: NO es recibido (nadie ha entregado el efectivo)", () => {
+    expect(devolucion("2026-12-05T00:00:00.000Z").cashCharges[0]).toMatchObject({ chargedCop: -91000, codOtherDriver: true });
+    expect(received([x2, devolucion("2026-12-05T00:00:00.000Z")])).toBe(false);
+  });
+
+  it("cuando el corte de D1 se salda, es recibido, se calcule antes o despues de la devolucion a D2", () => {
+    expect(received([x2, devolucion("2026-12-05T00:00:00.000Z"), corteD1("2026-12-06T00:00:00.000Z")])).toBe(true);
+    expect(received([x2, corteD1("2026-12-05T00:00:00.000Z"), devolucion("2026-12-06T00:00:00.000Z")])).toBe(true);
+  });
+});

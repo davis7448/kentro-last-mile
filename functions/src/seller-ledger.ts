@@ -170,7 +170,9 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
  * mas asientos no lo cambian) o `net_mismatch` (el neto no es el que vio el ultimo corte saldado: lo cambian).
  */
 function codSettlementState(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): "settled" | "cash_missing" | "net_mismatch" {
-  let governing: { computedAt: string; createdAt: string; codSeenCop: number } | null = null;
+  type Row = { ownerId: string; computedAt: string; createdAt: string; settled: boolean; otherDriver: boolean; codSeenCop: number };
+  const later = (left: Row, right: Row) => left.computedAt > right.computedAt || (left.computedAt === right.computedAt && left.createdAt > right.createdAt);
+  const rows: Row[] = [];
   for (const settlement of settlements) {
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
     const charge = settlement.cashCharges.find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
@@ -181,13 +183,25 @@ function codSettlementState(orderId: string, settlements: SettlementDoc[], codEn
       ? isOrderCashSettledInCorte(settlement, orderId)
       : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
     if (Number(charge.chargedCop) > 0 && !settled) return "cash_missing";
-    // T32 (hallazgo N1): el corte de un domiciliario que no entrego el pedido no le cobro el recaudo; que viera 0
-    // no dice nada de si llego. No gobierna (sin la marca, un corte suyo calculado mas tarde bloqueaba para siempre).
-    if (!settled || charge.codOtherDriver === true) continue;
-    const candidate = { computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""), codSeenCop: Number(charge.codSeenCop) || 0 };
-    if (!governing || candidate.computedAt > governing.computedAt || (candidate.computedAt === governing.computedAt && candidate.createdAt > governing.createdAt)) {
-      governing = candidate;
-    }
+    rows.push({
+      ownerId: String(settlement.ownerId ?? ""), computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""),
+      settled, otherDriver: charge.codOtherDriver === true, codSeenCop: Number(charge.codSeenCop) || 0
+    });
+  }
+  // T32/T33 (hallazgos N1 y M1): `codOtherDriver` dice que, al calcular ese corte, el pedido era de otro
+  // domiciliario. Si el corte mas reciente de un domiciliario lleva la marca, ninguno de sus cortes decide: no le
+  // cobro el recaudo de hoy (N1: su visita fallida, calculada despues, bloqueaba para siempre) y su corte viejo,
+  // saldado cuando si lo entrego, ya no dice nada de el (M1: con la entrega pasada a otro, lo daba por recibido
+  // antes de que nadie entregara el efectivo).
+  const latestByDriver = new Map<string, Row>();
+  for (const row of rows) {
+    const current = latestByDriver.get(row.ownerId);
+    if (!current || later(row, current)) latestByDriver.set(row.ownerId, row);
+  }
+  let governing: Row | null = null;
+  for (const row of rows) {
+    if (!row.settled || row.otherDriver || latestByDriver.get(row.ownerId)?.otherDriver) continue;
+    if (!governing || later(row, governing)) governing = row;
   }
   if (!governing) return "cash_missing";
   const netCop = codEntries.reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);

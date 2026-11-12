@@ -353,6 +353,13 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
     gobierna en `codSettlementState`
   * Verificacion: D1 (visita) y D2 (entrega), con el corte de D1 calculado despues: recibido; B5 sigue bloqueado
 
+- [x] **T33: Un domiciliario que ya no entrego el pedido no decide con su corte viejo (RF_11, hallazgo M1)**
+  * Requisitos cubiertos: RF_11, RF_01b
+  * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
+  * Accion: si el corte mas reciente de un domiciliario lleva `codOtherDriver`, ninguno de sus cortes gobierna
+  * Verificacion: devolucion a D2 saldada y D1 sin corte: no recibido; con el corte de D1 saldado, recibido en los
+    dos ordenes
+
 - [ ] **T31: Medir otra vez y revision independiente (solo lectura)**
   * Requisitos cubiertos: RNF_01, RF_11, RF_12
   * Archivos: .sdd/evidence/038_cada_recaudo_se_cobra_una_vez/

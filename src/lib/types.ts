@@ -431,7 +431,7 @@ export type Settlement = {
    * Spec 038: lo que el corte de domiciliario cobro por pedido, guardado por el servidor (un elemento por
    * pedido, con los ceros y los negativos). Si esta, las cifras del corte se leen, no se recalculan.
    */
-  cashCharges?: Array<{ orderId: string; codCop: number; driverPayCop: number; chargedCop: number; codSeenCop: number }>;
+  cashCharges?: Array<{ orderId: string; codCop: number; driverPayCop: number; chargedCop: number; codSeenCop: number; codOtherDriver?: true }>;
   /** Spec 038: saldo que el corte recibio de los demas (positivo a favor, negativo deuda). */
   creditInCop?: number;
   /** Spec 038: saldo a favor que el corte deja para el siguiente (nunca se transfiere). */
