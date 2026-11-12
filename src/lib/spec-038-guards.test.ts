@@ -41,6 +41,8 @@ function productionFiles(): string[] {
 const MIXES_COD_AND_DRIVER_PAY_ALLOWED: Record<string, string> = {
   "functions/src/driver-cash-ledger.ts": "ES la regla: lo que cobra cada corte de domiciliario.",
   "functions/src/driver-receivable.ts": "Posicion de plataforma (por cobrar a la flota, spec 026); no fija la cifra de ningun corte.",
+  "functions/src/platform-position-sums.ts":
+    "Posicion de plataforma por sumas en servidor (spec 023, fase B), gemela de driver-receivable; no fija la cifra de ningun corte.",
   "functions/src/cash-outstanding-api.ts": "Solo lee: consultas de los asientos que necesita el informe de la 026.",
   "functions/src/order-corrections-plan.ts": "Reescribe los asientos de un pedido corregido; el corte lo recalcula computeDriverCorteSummary.",
   "functions/src/settlement-math.ts": "Tipos de asiento y totales de tienda/proveedor/lider; la rama de domiciliario se retiro en la T22.",

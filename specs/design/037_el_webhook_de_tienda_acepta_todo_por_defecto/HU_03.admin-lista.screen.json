@@ -1,0 +1,21 @@
+{
+  "story": "HU_03",
+  "route": null,
+  "viewport": { "width": 1280, "height": 800 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "heading", "name": "Webhooks Shopify por tienda" },
+    { "role": "table", "name": "Webhooks Shopify por tienda" },
+    { "role": "columnheader", "name": "Tienda" },
+    { "role": "columnheader", "name": "Filtro de productos" },
+    { "role": "columnheader", "name": "Descartados 7 dias" },
+    { "role": "columnheader", "name": "URL del webhook" },
+    { "role": "cell", "name": "Entran todos tus productos. Solo se descartan pedidos fuera de Cali." },
+    { "role": "cell", "name": "153 descartados esta semana" },
+    { "role": "textbox", "name": "URL del webhook de Infinito" },
+    { "role": "button", "name": "Copiar URL de Infinito" },
+    { "role": "button", "name": "Copiar URL de Nambu" },
+    { "role": "button", "name": "Copiar URL de Kovia" }
+  ],
+  "threshold": { "missing": 0 }
+}

@@ -18,6 +18,13 @@ import { resolveStoreCredentials } from "./store-api-auth";
 import { buildStoreApiIndexAdditions } from "./store-api-history";
 import { computeKpis, inRange } from "./store-api-orders";
 import {
+  canQueryByRange,
+  loadSellerEntriesForOrders,
+  loadSellerEntriesFull,
+  loadStoreOrdersFull,
+  loadStoreOrdersInRange
+} from "./store-api-range";
+import {
   isValidShopifyOrderId,
   routeStoreApiRequest,
   type StoreApiNewRoute,
@@ -267,9 +274,12 @@ export async function handleStoreApiRequest(
     return;
   }
 
-  // Pedidos de la tienda (scoping duro por sellerId).
-  const ordersSnap = await db.collection("orders").where("sellerId", "==", sellerId).get();
-  const allOrders = ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as OrderDoc);
+  // Spec 023 RF_09: /kpis y /orders leen solo los pedidos del rango; /resumen y /settlements necesitan
+  // la tienda entera (el saldo depende del historico, spec 018). Scoping duro por sellerId en las dos.
+  const needsWholeStore = resource === "resumen" || resource === "settlements";
+  const allOrders = needsWholeStore
+    ? await loadStoreOrdersFull(db, sellerId)
+    : await loadStoreOrdersInRange(db, sellerId, from, to);
   const rangeOrders = allOrders.filter((order) => inRange(order, from, to));
 
   if (resource === "kpis") {
@@ -283,11 +293,22 @@ export async function handleStoreApiRequest(
   }
 
   if (resource === "orders" || resource === "settlements" || resource === "resumen") {
-    const [entriesSnap, settlementsSnap] = await Promise.all([
-      db.collection("walletEntries").where("ownerType", "==", "seller").where("ownerId", "==", sellerId).get(),
+    // Spec 023 RF_10: /orders pide solo los asientos de los pedidos que devuelve. Los cortes van enteros
+    // (~110 documentos): `buildCodReceivedSet` necesita los de domiciliario y son pocos.
+    const listedOrders = resource === "orders"
+      ? rangeOrders
+          .filter((order) => !statusFilter || order.status === statusFilter)
+          .sort((left, right) => String(right.createdAt || right.updatedAt).localeCompare(String(left.createdAt || left.updatedAt)))
+          .slice(0, limit)
+      : [];
+    const [sellerEntries, settlementsSnap] = await Promise.all([
+      // Sin rango los pedidos ya son la tienda entera, y pedir sus asientos por lotes lee MAS que la
+      // consulta de la tienda (asientos de todos los duenos): se queda la de antes.
+      resource === "orders" && canQueryByRange(from, to)
+        ? loadSellerEntriesForOrders(db, sellerId, listedOrders.map((order) => String(order.id)))
+        : loadSellerEntriesFull(db, sellerId),
       db.collection("settlements").get()
     ]);
-    const sellerEntries = entriesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as WalletEntryDoc);
     const allSettlements = settlementsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as SettlementDoc);
     const settlementsById = new Map(allSettlements.map((settlement) => [String(settlement.id), settlement]));
     // Spec 038 RF_12 (T30): estos son solo los asientos de esta tienda; un pedido que cambio de tienda se completa.
@@ -329,10 +350,7 @@ export async function handleStoreApiRequest(
     }
 
     if (resource === "orders") {
-      const filtered = rangeOrders
-        .filter((order) => !statusFilter || order.status === statusFilter)
-        .sort((left, right) => String(right.createdAt || right.updatedAt).localeCompare(String(left.createdAt || left.updatedAt)))
-        .slice(0, limit);
+      const filtered = listedOrders;
       response.status(200).json({
         ok: true,
         tienda: sellerName,

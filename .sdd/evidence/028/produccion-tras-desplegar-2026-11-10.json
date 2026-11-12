@@ -1,0 +1,13 @@
+{
+ "at": "2026-11-10T18:38:59.460Z",
+ "url": "https://kentro-last-mile.web.app",
+ "idleMs": 45000,
+ "peticionesAlCanalWrite": 0,
+ "escriturasPorDocumento": {},
+ "callablesAbortadas": [],
+ "consola": [
+  "[Kentro perf] base ligera lista en 2280 ms",
+  "[Kentro perf] emit #1 render 2 ms",
+  "[Kentro perf] emit #2 render 0 ms"
+ ]
+}

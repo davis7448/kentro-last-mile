@@ -1,0 +1,16 @@
+# Spec 038 — tras unir origin/main: verify-018 compare (solo lectura), 2026-11-12
+# Spec 018 — T13 compare (2026-11-12T04:50:49.140Z)
+
+- Bella Mujer: disponible 1.049.720 · efectivo con domiciliario 207.880 · retenido 55.970 (1 pedidos; 1 en la calle, teorica 12.000) · total 1.313.570 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~453
+- DANDA: disponible 79.200 · efectivo con domiciliario 6.450.000 · retenido 0 (0 pedidos; 134 en la calle, teorica 0) · total 6.529.200 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~1442
+- Kovia: disponible 1.516.721 · efectivo con domiciliario 0 · retenido 61.200 (1 pedidos; 3 en la calle, teorica 36.000) · total 1.577.921 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~286
+- Nambu: disponible 196.200 · efectivo con domiciliario 0 · retenido 0 (0 pedidos; 0 en la calle, teorica 0) · total 196.200 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~12
+- ADMA COMERCIAL: disponible 33.000 · efectivo con domiciliario -167.998 · retenido 0 (0 pedidos; 0 en la calle, teorica 0) · total -134.998 · ilegibles 0
+  - servidor == admin: si, al peso · invariante: cuadra · documentos leidos (sin cortes ni ajustes): ~27
+
+Cortes de domiciliario leidos por llamada: 63
+Resultado: COINCIDEN

@@ -48,7 +48,7 @@ import {
   updateFirebaseOrderAdjustments,
   updateFirebaseSettlementStatus
 } from "@/lib/firebase/auth";
-import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
+import { createCommunityLeader, grantCommunityLeadership, disableCommunitySignupsInRange, dismissMassSignupAlert, fetchCommunityStats, fetchMyStoreTariff, getFirebaseOrderStats, getFirebasePlatformPosition, reassignSellerCommunity, setCommunityLeaderStatus, setCommunityLinkStatus, setCommunityLogo } from "@/lib/firebase/auth";
 import { BULK_DISABLE_FAILURE_LABELS, BULK_DISABLE_SKIP_LABELS, ZONE_BASE_NOTICE, brandFor, communityBadgeFor, roleLabel, shouldOpenCommunitiesPanel, buildAdminCommunityList, buildBulkSignupDisableView, buildCommunityLeaderLiquidationRows, buildEmptyCommunityView, communityCashbackOwedCop, communityCashbackPaidCop, communityInvitePath, validateCommunityGrantForm, validateCommunityLeaderForm, type BulkSignupDisableOutcome, type CommunityGrantFormInput, type CommunityLeaderFormInput, type BulkSignupDisableView, type CommunityLeaderLiquidationRow } from "@/lib/community-view";
 import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type SessionClaims } from "@/lib/session-hats";
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
@@ -58,8 +58,10 @@ import { buildCodReceivedSet, codEntriesByOrder, isSellerEntryEligible } from ".
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
-import { canUseFirestoreStore, fetchOrdersByIds, fetchWalletHistoryPage, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
+import { canUseFirestoreStore, countSellerEntriesWithoutSettlementFlags, fetchOrdersByIds, fetchWalletEntriesByIds, fetchWalletEntriesByOrderIds, fetchWalletEntriesByType, fetchWalletEntriesInRange, fetchWalletHistoryPage, subscribeSupplierPendingCosts, findFirestoreOrders, loadFirestoreState, saveFirestoreCashSnapshot, saveFirestoreInventoryItem, saveFirestoreOrder, saveFirestoreOrderLabelPrint, saveFirestorePaysInCash, saveFirestoreProductCatalogItem, saveFirestoreShopifyInstallRequest, saveFirestoreState, saveFirestoreSupplier, saveFirestoreWalletEntries, saveFirestoreZone, subscribeFirestoreState } from "@/lib/firebase/state-store";
 import type { FirestoreStateControls, PinOrdersResult } from "@/lib/firebase/state-store";
+import { useEntriesByIds, useEntriesByOrderIds, useWalletRead, useWalletSubscription } from "./use-wallet-supplement";
+import { combineStatus, driverPendingOrderIds, mergePreferringLive, orderIdsOfEntries, settlementSupplementIds, settlementsSignature } from "@/lib/wallet-supplement";
 import { CONFIRM_ORDER_TOTAL_COP, MAX_ORDER_TOTAL_COP, checkOrderTotalCop, formatAmountCop, needsAmountConfirmation } from "@/lib/order-amount";
 import { NO_AMOUNT_LABEL, UNAVAILABLE_ORDER_LABEL, buildDriverSettlementDetailGroups, settlementDetailNotice, settlementStatusLabel, buildDriverSettlementExportRows, driverSettlementExportColumns, flattenDriverSettlementDetail, formatDetailCop } from "@/lib/driver-settlement-export";
 import type { DriverSettlementDetailGroup } from "@/lib/driver-settlement-export";
@@ -76,7 +78,7 @@ import {
   rescheduleCustomerCall,
   resolveAddress
 } from "@/lib/actions";
-import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerAbonoRows, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
+import { calculateDriverFinancialSummary, calculateDriverSettlementFinancials, driverCashReceiptRows, calculatePlatformPosition, type PlatformPosition, entriesForClosedOrder, formatCop, isChargeableFailedOrder, gmfForPayout, isOrderEligibleForSellerSettlement, mergeWalletEntries, netAfterGmf, normalizeProductName, selectOpenWalletEntries, sellerAbonoRows, summarizeWalletPeriod, sellerDeliveredFeeForOrder, weeklyFailedRate } from "@/lib/finance";
 import type { DriverFinancialSummary, SellerAbonoRow } from "@/lib/finance";
 import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
@@ -85,7 +87,10 @@ import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWal
 import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
 import { getSellerShopifyConnection, normalizeShopifyDomain } from "@/lib/shopify/connection";
+import { StoreWebhookFilterCard } from "@/components/store-webhook-filter-card";
+import { describeFilter, effectiveFilter, hasWebhookConnection, recentFilterDiscards } from "../../functions/src/store-webhook-filter";
 import { emptyState } from "@/lib/seed";
+import { filterPendingPickup, sortPendingPickup } from "@/lib/pending-pickup-search";
 import type { AppState, CashSnapshot, Community, Driver, Evidence, FailedCategory, FulfillmentMode, InventoryItem, Messenger, Order, OrderCorrectionKind, OrderCorrectionPlan, PaymentMethod, PayoutRequest, ProductCatalogItem, Role, Seller, Settlement, ShopifyInstallRequest, ShopifyStore, ShopifySyncIssue, StoreWebhookConfig, Supplier, WalletEntry } from "@/lib/types";
 
 const storageKey = "ultima-milla-mvp-state";
@@ -409,6 +414,10 @@ function useAppState(session: Session | null, historyStart?: string) {
   const [reloadToken, setReloadToken] = useState(0);
   const retryLoad = useCallback(() => setReloadToken((token) => token + 1), []);
   const applyingRemote = useRef(false);
+  // Spec 028 RF_01: si la sesion remota ya recibio su primer estado del servidor. NO es `hydrated`: en la
+  // pantalla de entrada se hidrata desde `localStorage` con `emptyState()`, y al llegar la sesion `hydrated`
+  // seguia en `true`, asi que el autoguardado escribia las tarifas de fabrica antes de leer nada.
+  const remoteReady = useRef(false);
   // Lo que la suscripcion sabe hacer bajo demanda. Va en una ref, no en estado, porque cambiarla no
   // tiene que repintar nada. Una ref vieja tras resuscribir es inocua: la clausura muerta choca con
   // el `stopped` de la suscripcion anterior y no hace nada.
@@ -431,6 +440,7 @@ function useAppState(session: Session | null, historyStart?: string) {
       ? { role: session.role, profileId: session.profileId, communityId: session.ledCommunityId, historyStart }
       : undefined;
     if (session && canUseFirestoreStore()) {
+      remoteReady.current = false;
       setRemoteEnabled(true);
       // Un reintento arranca limpio: si no se borrara el fallo anterior, el aviso seguiria en
       // pantalla aunque esta vez la carga funcione.
@@ -442,13 +452,15 @@ function useAppState(session: Session | null, historyStart?: string) {
         context,
         (remoteState, report) => {
           applyingRemote.current = true;
+          remoteReady.current = true;
           setState(withoutLegacyDemo(remoteState));
           setLoadReport(report);
           setLoadFailed(false);
           setHydrated(true);
         },
         () => {
-          void saveFirestoreState(state, context).catch((error) => console.error("No se pudo inicializar el estado remoto.", error));
+          // Spec 028 RF_03/RF_07: una base vacia NO se "inicializa" desde el navegador. Aqui se guardaba el
+          // `state` de la clausura, que es el de fabrica (`emptyState()`), sobre `settings/global`.
           setHydrated(true);
         },
         (error) => {
@@ -496,6 +508,7 @@ function useAppState(session: Session | null, historyStart?: string) {
     }
     if (remoteEnabled) {
       if (session?.role !== "admin") return;
+      if (!remoteReady.current) return;
       const context = session ? { role: session.role, profileId: session.profileId } : undefined;
       void saveFirestoreState(state, context).catch((error) => console.error("No se pudo guardar el estado remoto.", error));
       return;
@@ -4689,11 +4702,21 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
    * en este repo por un fallo que llego a produccion: un `useMemo` tras un return solo reventaba
    * (React #310) en el primer render sin cache, o sea solo en movil.
    */
+  // Spec 023: `state.wallet` ya solo trae lo sin liquidar, y lo CAUSADO incluye lo ya liquidado. Se leen
+  // todos los `community_cashback` (uno por pedido cerrado de una comunidad) y lo vivo gana. Mientras no
+  // lleguen, la cifra no se pinta (RF_04).
+  const remoteWallet = firebaseEnabled();
+  const cashbackRead = useWalletRead(remoteWallet ? `community-cashback|${state.settlements.length}` : null, () => fetchWalletEntriesByType("community_cashback"));
+  const cashbackEntries = useMemo(
+    () => (remoteWallet ? mergePreferringLive(state.wallet, cashbackRead.entries) : state.wallet),
+    [remoteWallet, state.wallet, cashbackRead.entries]
+  );
+  const cashbackReady = cashbackRead.status === "ready";
   const communityRows = useMemo(() => {
     const rows = buildAdminCommunityList({
       communities: state.communities,
       sellers: state.sellers,
-      entries: state.wallet,
+      entries: cashbackEntries,
       settings: state.settings,
       // El nucleo no inventa el reloj: con el instante decide que programadas ya vencieron.
       nowIso: new Date().toISOString()
@@ -4705,7 +4728,7 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
       const community = byId.get(row.communityId);
       return community ? [{ row, community }] : [];
     });
-  }, [state.communities, state.sellers, state.wallet, state.settings]);
+  }, [state.communities, state.sellers, cashbackEntries, state.settings]);
 
   // El informe viene con ids: sin nombre, el administrador no sabe a por cual ir.
   const sellerName = (sellerId: string) =>
@@ -4853,7 +4876,12 @@ function AdminCommunitiesPanel({ state, session }: { state: AppState; session: S
                 caja. Fundirlas le diria al admin que ya giro un dinero que todavia debe.
               */}
               <p className="mt-1 text-xs text-ink-60">
-                Cashback causado <span className="tabular font-semibold text-fg">{formatCop(row.cashbackAccruedCop)}</span> ·
+                Cashback causado{" "}
+                {cashbackReady ? (
+                  <span className="tabular font-semibold text-fg">{formatCop(row.cashbackAccruedCop)}</span>
+                ) : (
+                  <span title={cashbackRead.error ?? undefined}>{cashbackRead.status === "failed" ? "no disponible" : "..."}</span>
+                )} ·
                 pagado <span className="tabular font-semibold text-fg">{formatCop(cashbackPaidCop)}</span>
               </p>
               {pendingAlert && (
@@ -5418,7 +5446,7 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
               onImported={(order) => setState({ ...state, orders: [order, ...state.orders.filter((item) => item.id !== order.id)] })}
             />
           </CollapsiblePanel>
-          <CollapsiblePanel flush title="Webhooks de tienda" summary={`${(state.storeWebhookConfigs ?? []).length} configurados`}>
+          <CollapsiblePanel flush title="Webhooks de tienda" summary={`${(state.storeWebhookConfigs ?? []).filter((config) => config.status === "active" && hasWebhookConnection(config)).length} configurados`}>
             <StoreWebhookConfigsPanel configs={state.storeWebhookConfigs ?? []} sellers={state.sellers} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Confirmacion por UChat" summary="Confirmacion automatica por WhatsApp">
@@ -5514,12 +5542,12 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
           helper="Incluye listos sin lider y asignados a lider que aun no han sido recogidos."
           actionLabel={`Exportar pendientes (${pickupReadyOrders.length})`}
           actionIcon={<FileDown size={16} />}
-          onAction={() => downloadOrdersXlsx(
+          onAction={() => exportWithOrderEntries(
             // Del mas antiguo al mas reciente: la cola vieja es lo que hay que desatascar,
             // asi que abre el archivo en vez de quedar sepultada al final.
             [...pickupReadyOrders].sort(compareOrdersByPickupWaitAsc),
             state,
-            `pendientes-recoger-${new Date().toISOString().slice(0, 10)}.xlsx`
+            (orders, exportState) => downloadOrdersXlsx(orders, exportState, `pendientes-recoger-${new Date().toISOString().slice(0, 10)}.xlsx`)
           )}
         />
       </div>
@@ -5584,7 +5612,7 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
                 className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-semibold text-fg disabled:opacity-50"
                 type="button"
                 disabled={visibleOrders.length === 0}
-                onClick={() => void downloadOrdersXlsx(visibleOrders, state, adminExcelFilename)}
+                onClick={() => void exportWithOrderEntries(visibleOrders, state, (orders, exportState) => downloadOrdersXlsx(orders, exportState, adminExcelFilename))}
               >
                 <FileDown size={16} />
                 Descargar Excel visibles ({visibleOrders.length})
@@ -5593,7 +5621,7 @@ function AdminView({ state, setState, session, onNavigate, orderSearch, onOrderS
                 className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-panel px-3 py-2 text-sm font-semibold text-fg disabled:opacity-50"
                 type="button"
                 disabled={exportableFailedOrders.length === 0}
-                onClick={() => downloadFailedOrdersCsv(exportableFailedOrders, state, startDate, endDate, sellerFilter)}
+                onClick={() => void exportWithOrderEntries(exportableFailedOrders, state, (orders, exportState) => downloadFailedOrdersCsv(orders, exportState, startDate, endDate, sellerFilter))}
               >
                 <FileDown size={16} />
                 Descargar fallidos visibles ({exportableFailedOrders.length})
@@ -6680,28 +6708,38 @@ function SupplierProductAdminPanel({ state, setState }: { state: AppState; setSt
       setMessage("Ya existe una asociacion para ese producto en esta tienda.");
       return;
     }
-    const productCostEntries = buildMissingProductCostEntries(state, item);
-    const nextState = {
-      ...state,
-      productCatalog: editingProductId ? state.productCatalog.map((product) => product.id === item.id ? item : product) : [item, ...state.productCatalog],
-      wallet: [...productCostEntries, ...state.wallet]
-    };
-    setSaving(true);
     const combinedSkuWarning = item.sku?.includes(" + ") ? " Ojo: ese parece un SKU combinado; el costo se cobra por SKU individual — asocia cada SKU por separado." : "";
-    const commit = () => {
-      setState(nextState);
+    const commit = (productCostEntries: WalletEntry[]) => {
+      setState({
+        ...state,
+        productCatalog: editingProductId ? state.productCatalog.map((product) => product.id === item.id ? item : product) : [item, ...state.productCatalog],
+        wallet: [...productCostEntries, ...state.wallet]
+      });
       setMessage(`${item.name} guardado.${productCostEntries.length > 0 ? ` Se agrego costo producto a ${productCostEntries.length} pedido(s) sin liquidar.` : ""}${combinedSkuWarning}`);
       resetProduct();
     };
+    setSaving(true);
     if (firebaseEnabled()) {
-      void saveFirestoreProductCatalogItem(item)
-        .then(() => saveFirestoreWalletEntries(productCostEntries))
-        .then(commit)
-        .catch(() => setMessage("No se pudo guardar el producto en Live."))
+      // Spec 023: decidir que pedidos cobrar exige saber si YA tienen costo o si estan en un corte de tienda,
+      // y esos asientos pueden estar liquidados (fuera de `state.wallet`). Se leen los de los candidatos
+      // antes de construir. Si la lectura falla no se escribe nada: sin ella se volveria a cobrar el costo de
+      // pedidos ya liquidados y se pisarian sus asientos (mismo id determinista).
+      const candidateOrderIds = item.productCostConfigured
+        ? state.orders.filter((order) => order.status === "delivered" && order.sellerId === item.sellerId).map((order) => order.id)
+        : [];
+      void fetchWalletEntriesByOrderIds(candidateOrderIds)
+        .then((orderEntries) => {
+          const productCostEntries = buildMissingProductCostEntries({ ...state, wallet: mergePreferringLive(state.wallet, orderEntries) }, item);
+          return saveFirestoreProductCatalogItem(item)
+            .then(() => saveFirestoreWalletEntries(productCostEntries))
+            .then(() => commit(productCostEntries))
+            .catch(() => setMessage("No se pudo guardar el producto en Live."));
+        })
+        .catch(() => setMessage("No se guardo nada: no se pudieron leer los movimientos de los pedidos para saber cuales ya tienen costo cobrado. Reintenta."))
         .finally(() => setSaving(false));
       return;
     }
-    commit();
+    commit(buildMissingProductCostEntries(state, item));
     setSaving(false);
   };
 
@@ -7192,11 +7230,14 @@ function WalletPage({ state, session }: { state: AppState; session: Session }) {
   };
 
   const walletSource = useMemo(() => {
+    // Spec 023: la wallet del admin trae, ademas de lo sin liquidar, los cobros de manejo ya liquidados (los
+    // necesita el saldo de cada tienda). Aqui "por defecto, lo pendiente" tiene que ser solo lo pendiente.
+    const pending = session.role === "admin" ? state.wallet.filter((entry) => !entry.settlementId) : state.wallet;
     const relevantHistory = historyLoadedFor === scopeKey ? historyEntries : [];
-    if (relevantHistory.length === 0) return state.wallet;
-    const known = new Set(state.wallet.map((entry) => entry.id));
-    return [...state.wallet, ...relevantHistory.filter((entry) => !known.has(entry.id))];
-  }, [state.wallet, historyEntries, historyLoadedFor, scopeKey]);
+    if (relevantHistory.length === 0) return pending;
+    const known = new Set(pending.map((entry) => entry.id));
+    return [...pending, ...relevantHistory.filter((entry) => !known.has(entry.id))];
+  }, [state.wallet, session.role, historyEntries, historyLoadedFor, scopeKey]);
 
   const visibleEntries = useMemo(() => walletSource
     .filter((entry) => {
@@ -7702,6 +7743,24 @@ function csvValue(value: unknown) {
   return `"${text.replaceAll("\"", "\"\"")}"`;
 }
 
+/**
+ * Spec 023: el export del admin trae por pedido lo cobrado y recaudado, y eso sale de asientos que pueden
+ * estar ya liquidados (y por tanto fuera de `state.wallet`). Se leen al pulsar, solo los de esos pedidos.
+ * Si la lectura falla el archivo NO sale: con las columnas de dinero vacias pareceria que no se cobro nada.
+ */
+async function exportWithOrderEntries(orders: Order[], state: AppState, download: (orders: Order[], state: AppState) => unknown) {
+  if (!firebaseEnabled()) {
+    await download(orders, state);
+    return;
+  }
+  try {
+    const entries = await fetchWalletEntriesByOrderIds(orders.map((order) => order.id));
+    await download(orders, { ...state, wallet: mergePreferringLive(state.wallet, entries) });
+  } catch (error) {
+    window.alert(`No se pudo generar el archivo: no se leyeron los movimientos de los pedidos. ${error instanceof Error ? error.message : ""}`.trim());
+  }
+}
+
 function downloadFailedOrdersCsv(orders: Order[], state: AppState, startDate: string, endDate: string, sellerFilter: string) {
   const rows = buildOrderExportRows(orders, state).map((row) => orderExportColumns.map((column) => row[column]));
   const header = [...orderExportColumns];
@@ -7894,13 +7953,52 @@ const LIQUIDATION_TABS = [
 ];
 type LiquidationTab = (typeof LIQUIDATION_TABS)[number]["id"];
 
-function LiquidationsPage({ state, setState, uid }: { state: AppState; setState: (state: AppState) => void; uid: string }) {
+function LiquidationsPage({ state, setState, uid, walletLive = true }: { state: AppState; setState: (state: AppState) => void; uid: string; walletLive?: boolean }) {
   // "Ver efectivo sin llegar" (tarjeta de Operacion) entra directamente a su pestana.
   const [liqTab, setLiqTab] = useState<LiquidationTab>(() => (isCashOutstandingTabRequested() ? "cash" : "payable"));
   const today = dateValue(new Date());
   const weekAgo = dateValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
+
+  // Spec 023, fase B. `state.wallet` ya no es el libro entero: es lo SIN liquidar (en vivo) mas los cobros
+  // de manejo. Esta pagina pide lo demas que necesita, y no pinta una cifra hasta tenerlo todo (RF_04):
+  //  - los costos de producto aun sin pagar al proveedor (pueden estar ya liquidados con la tienda), en vivo;
+  //  - los asientos de tienda de los pedidos de "Domiciliarios por cortar" (pueden estar ya liquidados);
+  //  - en "Resumen del periodo", los asientos del rango.
+  // En modo local (sin Firebase) el estado trae la wallet completa y no se pide nada.
+  const remoteWallet = firebaseEnabled();
+  const { position: platformPosition, refresh: refreshPlatformPosition } = usePlatformPosition(state);
+  const settledSignature = useMemo(() => settlementsSignature(state.settlements), [state.settlements]);
+  const supplierPending = useWalletSubscription(remoteWallet, subscribeSupplierPendingCosts);
+  const relatedOrderIds = useMemo(() => (remoteWallet ? driverPendingOrderIds(state.wallet) : null), [remoteWallet, state.wallet]);
+  const relatedSupplement = useEntriesByOrderIds(relatedOrderIds, settledSignature, fetchWalletEntriesByOrderIds);
+  const liveWallet = useMemo(() => mergePreferringLive(state.wallet, supplierPending.entries), [state.wallet, supplierPending.entries]);
+  // Solo para sumas POR PEDIDO de las filas de domiciliario: lo pendiente sale de `liveWallet`.
+  const relatedWallet = useMemo(() => mergePreferringLive(liveWallet, relatedSupplement.entries), [liveWallet, relatedSupplement.entries]);
+  // Un asiento sin `settlementId` no entra en la suscripcion de lo sin liquidar: seria dinero pendiente que esta
+  // pagina no ve. Se cuentan (unas decenas de lecturas) y, si hay alguno, no se pinta ninguna cifra.
+  const flagCheck = useWalletRead(remoteWallet ? `flags|${settledSignature}` : null, async () => {
+    const missing = await countSellerEntriesWithoutSettlementFlags();
+    if (missing.settlement > 0 || missing.supplier > 0) {
+      throw new Error(`Hay ${missing.settlement + missing.supplier} movimiento(s) de tienda sin marca de liquidacion; las cifras saldrian incompletas. Hay que correr scripts/backfill-wallet-settlement-flag.js.`);
+    }
+    return [];
+  });
+  const payableStatus = walletLive ? combineStatus(supplierPending.status, relatedSupplement.status, flagCheck.status) : "failed";
+  const payableError = !walletLive
+    ? "Se perdio la conexion con los movimientos sin liquidar."
+    : flagCheck.error ?? supplierPending.error ?? relatedSupplement.error;
+  const retryPayable = () => {
+    supplierPending.retry();
+    relatedSupplement.retry();
+    flagCheck.retry();
+  };
+  const payableReady = payableStatus === "ready";
+
+  const periodKey = remoteWallet && liqTab === "period" ? `${startDate}|${endDate}` : null;
+  const periodSupplement = useWalletRead(periodKey, () => fetchWalletEntriesInRange(startDate, endDate));
+  const periodReady = !remoteWallet || (walletLive && periodSupplement.status === "ready");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cashReceiptTarget, setCashReceiptTarget] = useState<{ settlement: Settlement; pendingCop: number } | null>(null);
@@ -7928,7 +8026,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
   // estar ya liquidado con la tienda y seguir pendiente con el proveedor, asi que el segundo caso
   // no se puede derivar del primero.
   const { rows, sellerRows, driverRows, storeRows, supplierRows, communityLeaderRows, blockedSellerAudits, openAudits } = useMemo(() => {
-    const openEntries = selectOpenWalletEntries(state.wallet);
+    const openEntries = selectOpenWalletEntries(liveWallet);
     const audits = buildLiquidationOrderAudits(state, openEntries);
     // Spec 018: la elegibilidad de tienda es la del servidor (seller-ledger.ts), no una copia local.
     const ordersById = new Map(state.orders.map((order) => [order.id, order]));
@@ -7953,17 +8051,17 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
     // La fila se construye con los asientos que el corte cerraria (pedidos completos, sin pasar del
     // disponible), asi lo que el admin ve es exactamente lo que se corta.
     const balanceNow = new Date().toISOString();
-    const sellerBalances = new Map(state.sellers.map((seller) => [seller.id, sellerBalanceFromState(state, seller.id, balanceNow)]));
+    const sellerBalances = new Map(state.sellers.map((seller) => [seller.id, sellerBalanceFromState({ ...state, wallet: liveWallet }, seller.id, balanceNow)]));
     const selectedEntryIds = new Set(
       [...sellerBalances.values()].flatMap((balance) => (balance.unreadableEntryIds.length > 0 ? [] : balance.selection.entryIds))
     );
     const selectedSellerEntries = eligiblePendingSellerEntries.filter((entry) => selectedEntryIds.has(entry.id));
 
-    const driverLiquidationRows = buildLiquidationRows(state, pendingEntries.filter((entry) => entry.ownerType === "driver"), state.wallet, audits).filter((row) => row.role === "driver");
+    const driverLiquidationRows = buildLiquidationRows(state, pendingEntries.filter((entry) => entry.ownerType === "driver"), relatedWallet, audits).filter((row) => row.role === "driver");
     const sellersWithSomethingPending = new Set(
       [...sellerBalances].filter(([, balance]) => balance.heldCop !== 0 || balance.codPendingCop !== 0 || balance.unreadableEntryIds.length > 0).map(([sellerId]) => sellerId)
     );
-    const sellerLiquidationRows = buildLiquidationRows(state, selectedSellerEntries, state.wallet, audits, sellersWithSomethingPending)
+    const sellerLiquidationRows = buildLiquidationRows(state, selectedSellerEntries, relatedWallet, audits, sellersWithSomethingPending)
       .filter((row) => row.role === "seller")
       .map((row) => {
         const balance = sellerBalances.get(row.id);
@@ -7991,7 +8089,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
     // y cada recalculo cuesta ~169 ms medidos. Con el ledger completo cargado eso encadenaba
     // recalculos hasta congelar la pestana.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.wallet, state.orders, state.sellers, state.drivers, state.settlements, state.suppliers, state.communities, state.shopifyStores, state.zones, state.settings]);
+  }, [liveWallet, relatedWallet, state.orders, state.sellers, state.drivers, state.settlements, state.suppliers, state.communities, state.shopifyStores, state.zones, state.settings]);
 
   // El rango de fechas SOLO alimenta el resumen del periodo; no toca lo pendiente.
   //
@@ -8000,14 +8098,16 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
   // en memoria. Tampoco se aplica aqui la compuerta de elegibilidad de pago: esto es "cuanto se
   // movio en el periodo", no "cuanto se puede pagar hoy" (eso son las filas de arriba).
   const { periodSummary, rangeStoreRows } = useMemo(() => {
-    const rangeEntries = state.wallet.filter((entry) => isEntryInRange(entry, startDate, endDate));
+    // Lo vivo gana sobre lo leido: un asiento de hoy que llego despues de la lectura del rango tambien entra.
+    const rangeSource = remoteWallet ? mergePreferringLive(liveWallet, periodSupplement.entries) : state.wallet;
+    const rangeEntries = rangeSource.filter((entry) => isEntryInRange(entry, startDate, endDate));
     const ordersById = new Map(state.orders.map((order) => [order.id, order]));
     return {
       periodSummary: summarizeWalletPeriod(rangeEntries, ordersById),
       rangeStoreRows: buildStoreLiquidationRows(state, rangeEntries.filter((entry) => entry.ownerType === "seller"))
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.wallet, state.orders, state.sellers, state.shopifyStores, startDate, endDate]);
+  }, [remoteWallet, liveWallet, periodSupplement.entries, state.wallet, state.orders, state.sellers, state.shopifyStores, startDate, endDate]);
 
   const closedSettlements = useMemo(
     () => [...state.settlements].sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0)),
@@ -8273,7 +8373,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
         <button
           className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
           type="button"
-          disabled={rows.length === 0}
+          disabled={!payableReady || rows.length === 0}
           onClick={() => downloadLiquidationsCsv(rows, storeRows, openAudits, blockedSellerAudits, startDate, endDate)}
         >
           <FileDown size={16} />
@@ -8342,7 +8442,8 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
 
       {/* Cifra heroe: la pregunta que trae a alguien a esta pantalla es cuanto dinero hay sin
           conciliar. Antes era una tarjeta mas entre nueve, a media pagina de scroll. */}
-      <div className="grid gap-3 lg:grid-cols-[auto_1fr]">
+      {!payableReady && <WalletLoadNotice status={payableStatus} error={payableError} onRetry={retryPayable} what="lo pendiente por liquidar" />}
+      {payableReady && <div className="grid gap-3 lg:grid-cols-[auto_1fr]">
         <div className="glass-acid flex min-w-[240px] flex-col justify-center rounded-3xl p-5">
           <p className="text-xs font-semibold uppercase text-deep/70">Pendiente total por conciliar</p>
           <p className="tabular mt-1 text-3xl font-extrabold text-deep">{formatCop(totalPending)}</p>
@@ -8369,7 +8470,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
             <p className={`tabular text-lg font-bold ${totalBlockedSellerPayable > 0 ? "text-rust" : ""}`}>{formatCop(totalBlockedSellerPayable)}</p>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Tres destinos en vez de una pagina de siete tablas seguidas: lo que hay que pagar hoy,
           lo que ya se cerro, y las cifras de un rango de fechas. Son tres preguntas distintas y
@@ -8398,11 +8499,12 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
               grandes de posicion y conciliacion abrian la pantalla y empujaban las tablas de
               pago fuera de la vista. */}
           <CollapsiblePanel flush title="Posicion de la plataforma" summary="Caja, activos, pasivos y utilidad acumulada">
-            <PlatformPositionCard state={state} />
+            <PlatformPositionCard positionState={platformPosition} onRefresh={refreshPlatformPosition} />
           </CollapsiblePanel>
           <CollapsiblePanel flush title="Conciliacion de caja" summary="Efectivo recibido contra lo esperado">
-            <CashReconciliationCard state={state} setState={setState} />
+            <CashReconciliationCard state={state} setState={setState} positionState={platformPosition} onRefresh={refreshPlatformPosition} />
           </CollapsiblePanel>
+          {payableReady && <>
           <Metric icon={<CreditCard size={20} />} label="Saldo a pagar domiciliarios" value={formatCop(totalDriverReceivable)} />
           <LiquidationTable
             title="Tiendas disponibles para pagar"
@@ -8438,6 +8540,7 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
           <CollapsiblePanel flush title="Registro por tienda" summary={`${storeRows.length} tiendas · consulta antes de cerrar`}>
             <StoreLiquidationTable rows={storeRows} />
           </CollapsiblePanel>
+          </>}
         </>
       )}
 
@@ -8480,6 +8583,8 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
             </div>
           </Card>
 
+          {!periodReady && <WalletLoadNotice status={walletLive ? periodSupplement.status : "failed"} error={walletLive ? periodSupplement.error : "Se perdio la conexion con los movimientos sin liquidar."} onRetry={periodSupplement.retry} what={startDate ? "los movimientos del periodo" : "todos los movimientos (el historial completo, puede tardar)"} />}
+          {periodReady && <>
           <div className="grid gap-3 md:grid-cols-4">
             <Metric icon={<CreditCard size={20} />} label="COD recibido" value={formatCop(totalCod)} />
             <Metric icon={<Wallet size={20} />} label="Cobros operativos tiendas" value={formatCop(totalSellerFees)} />
@@ -8520,9 +8625,29 @@ function LiquidationsPage({ state, setState, uid }: { state: AppState; setState:
           </Card>
 
           <StoreLiquidationSummary rows={rangeStoreRows} />
+          </>}
         </>
       )}
     </main>
+  );
+}
+
+/** Spec 023 RF_04: lo que se pinta en lugar de una cifra de dinero cuando sus datos no estan completos. */
+function WalletLoadNotice({ status, error, onRetry, what }: { status: "loading" | "ready" | "failed"; error: string | null; onRetry: () => void; what: string }) {
+  if (status === "ready") return null;
+  if (status === "loading") {
+    return (
+      <div aria-live="polite" className="rounded-3xl border border-white/[0.06] bg-panel p-4 text-sm text-ink-60">
+        Cargando {what}...
+      </div>
+    );
+  }
+  return (
+    <div role="alert" className="grid gap-2 rounded-3xl bg-rust/10 p-4 text-sm text-rust">
+      <p className="font-semibold">No se pudo cargar {what}, asi que no se muestra ninguna cifra para no dar un total incompleto.</p>
+      {error && <p className="text-xs">{error}</p>}
+      <button className="focus-ring justify-self-start rounded-full border border-rust/40 px-3 py-1 text-xs font-semibold" type="button" onClick={onRetry}>Reintentar</button>
+    </div>
   );
 }
 
@@ -9803,9 +9928,65 @@ function settlementKindLabel(kind: Settlement["kind"]) {
 // Foto acumulada de la plataforma (no filtrada por rango). Existe porque la tabla de
 // liquidaciones mostraba el cobro bruto como si fuera margen y hacia parecer que quedaba
 // mucho mas dinero del que hay.
-function PlatformPositionCard({ state }: { state: AppState }) {
-  const position = useMemo(() => calculatePlatformPosition(state), [state]);
+type PlatformPositionState =
+  | { status: "loading" }
+  | { status: "failed"; message: string }
+  | { status: "ready"; position: PlatformPosition; computedAt?: string };
+
+/**
+ * Spec 023 RF_01: la posicion de la plataforma sale del servidor (`getPlatformPosition`, por sumas de
+ * Firestore). El admin ya no baja el libro de caja para calcularla. Se vuelve a pedir cuando cambian los
+ * cortes (pagar o cerrar uno la mueve) y con el boton de actualizar. Sin Firebase (modo local) el estado
+ * trae la wallet completa y se calcula aqui, como siempre.
+ */
+function usePlatformPosition(state: AppState): { position: PlatformPositionState; refresh: () => void } {
+  const [position, setPosition] = useState<PlatformPositionState>({ status: "loading" });
+  const [token, setToken] = useState(0);
+  const local = !firebaseEnabled();
+  const localPosition = useMemo(() => (local ? calculatePlatformPosition(state) : null), [local, state]);
+  useEffect(() => {
+    if (local) return;
+    let cancelled = false;
+    setPosition((current) => (current.status === "ready" ? current : { status: "loading" }));
+    void getFirebasePlatformPosition()
+      .then((result) => {
+        if (!cancelled) setPosition({ status: "ready", position: result, computedAt: result.computedAt });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPosition({ status: "failed", message: error instanceof Error ? error.message : "No se pudo calcular la posicion de la plataforma." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [local, state.settlements, token]);
+  const refresh = useCallback(() => setToken((value) => value + 1), []);
+  if (localPosition) return { position: { status: "ready", position: localPosition }, refresh };
+  return { position, refresh };
+}
+
+function PlatformPositionUnavailable({ state, onRetry }: { state: Exclude<PlatformPositionState, { status: "ready" }>; onRetry: () => void }) {
+  return state.status === "loading" ? (
+    <p className="text-sm text-ink-60">Calculando la posicion de la plataforma...</p>
+  ) : (
+    <div className="grid gap-2 rounded-2xl bg-rust/10 px-3 py-2 text-sm text-rust">
+      <p className="font-semibold">No se pudo calcular la posicion de la plataforma, asi que no se muestra ninguna cifra.</p>
+      <p className="text-xs">{state.message}</p>
+      <button className="focus-ring justify-self-start rounded-full border border-rust/40 px-3 py-1 text-xs font-semibold" type="button" onClick={onRetry}>Reintentar</button>
+    </div>
+  );
+}
+
+function PlatformPositionCard({ positionState, onRefresh }: { positionState: PlatformPositionState; onRefresh: () => void }) {
   const tone = (value: number) => (value < 0 ? "text-rust" : "text-mint");
+  if (positionState.status !== "ready") {
+    return (
+      <Card>
+        <h2 className="mb-3 font-bold">Resultado de la plataforma</h2>
+        <PlatformPositionUnavailable state={positionState} onRetry={onRefresh} />
+      </Card>
+    );
+  }
+  const { position, computedAt } = positionState;
   return (
     <Card>
       <div className="mb-3">
@@ -9814,6 +9995,12 @@ function PlatformPositionCard({ state }: { state: AppState }) {
           Posicion acumulada de toda la operacion (no depende del rango de fechas). La utilidad es lo cobrado a tiendas
           menos lo pagado a domiciliarios; el costo de producto retenido no es utilidad.
         </p>
+        {computedAt && (
+          <p className="mt-1 text-xs text-ink-60">
+            Calculada a las {new Date(computedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })} ·{" "}
+            <button className="focus-ring font-semibold underline" type="button" onClick={onRefresh}>Actualizar</button>
+          </p>
+        )}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded-2xl bg-field p-3">
@@ -9847,8 +10034,21 @@ function PlatformPositionCard({ state }: { state: AppState }) {
 // Cuadre de caja: contrasta el saldo REAL de las cuentas de la operacion contra el
 // teorico. Existe porque un desfase de $8,8M tardo tres meses en detectarse: la
 // plataforma sabia cuanto debia haber, pero nadie comparaba contra el banco.
-function CashReconciliationCard({ state, setState }: { state: AppState; setState: (state: AppState) => void }) {
-  const position = useMemo(() => calculatePlatformPosition(state), [state]);
+function CashReconciliationCard({ state, setState, positionState, onRefresh }: { state: AppState; setState: (state: AppState) => void; positionState: PlatformPositionState; onRefresh: () => void }) {
+  if (positionState.status !== "ready") {
+    // RF_04: sin la posicion no hay "deberia haber", y guardar un cuadre contra un teorico inventado
+    // dejaria un desfase falso en el historial.
+    return (
+      <Card>
+        <h2 className="mb-3 font-bold">Cuadre de caja</h2>
+        <PlatformPositionUnavailable state={positionState} onRetry={onRefresh} />
+      </Card>
+    );
+  }
+  return <CashReconciliationForm state={state} setState={setState} position={positionState.position} />;
+}
+
+function CashReconciliationForm({ state, setState, position }: { state: AppState; setState: (state: AppState) => void; position: PlatformPosition }) {
   const [balance, setBalance] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -10193,15 +10393,33 @@ function SettlementsTable({
     };
   }, [expandedId, settlements, state.orders]);
 
-  // Estado con los pedidos del corte abierto anadidos, para que los calculos de la tabla sigan
-  // leyendo un unico `state` en vez de ramificarse.
+  // Spec 023 RF_02: los asientos de un corte cerrado ya no estan en `state.wallet` (solo trae lo sin
+  // liquidar). Se piden los de los cortes de ESTA pagina: todos los de sus pedidos (de cualquier dueno: el
+  // neto de un corte de domiciliario y el margen de uno de tienda salen de ahi) y por id los que no son de un
+  // pedido (abonos, 4x1000). Hasta tenerlos todos, la fila no pinta importes (RF_04).
+  const remoteWallet = firebaseEnabled();
+  const settledSignature = useMemo(() => settlementsSignature(state.settlements), [state.settlements]);
+  const pageIds = useMemo(() => (remoteWallet ? settlementSupplementIds(visibleItems) : null), [remoteWallet, visibleItems]);
+  const pageEntries = useEntriesByIds(pageIds ? pageIds.entryIds : null, settledSignature, fetchWalletEntriesByIds);
+  // Cortes viejos sin `orderIds`: sus pedidos se sacan de sus asientos, en cuanto llegan.
+  const pageOrderIds = useMemo(
+    () => (pageIds ? [...new Set([...pageIds.orderIds, ...orderIdsOfEntries(pageEntries.entries)])] : null),
+    [pageIds, pageEntries.entries]
+  );
+  const pageOrderEntries = useEntriesByOrderIds(pageOrderIds, settledSignature, fetchWalletEntriesByOrderIds);
+  const detailStatus = combineStatus(pageEntries.status, pageOrderEntries.status);
+  const detailReady = detailStatus === "ready";
+
+  // Estado con los pedidos del corte abierto y los asientos de la pagina anadidos, para que los
+  // calculos de la tabla sigan leyendo un unico `state` en vez de ramificarse.
   const stateWithDetail = useMemo(() => {
     const extra = Object.values(detailOrders);
-    if (extra.length === 0) return state;
     const known = new Set(state.orders.map((order) => order.id));
     const merged = extra.filter((order) => !known.has(order.id));
-    return merged.length === 0 ? state : { ...state, orders: [...state.orders, ...merged] };
-  }, [state, detailOrders]);
+    const wallet = remoteWallet ? mergePreferringLive(state.wallet, pageEntries.entries, pageOrderEntries.entries) : state.wallet;
+    if (merged.length === 0 && wallet === state.wallet) return state;
+    return { ...state, orders: merged.length === 0 ? state.orders : [...state.orders, ...merged], wallet };
+  }, [state, detailOrders, remoteWallet, pageEntries.entries, pageOrderEntries.entries]);
 
   // Una sola auditoria para toda la tabla: antes cada fila reconstruia la suya.
   const audits = useMemo(() => buildLiquidationOrderAudits(stateWithDetail, stateWithDetail.wallet), [stateWithDetail]);
@@ -10240,6 +10458,19 @@ function SettlementsTable({
         <span className="text-sm text-ink-60">{settlements.length} cortes</span>
       </div>
       {actionError && <p className="mb-3 rounded-2xl bg-rust/10 px-3 py-2 text-sm text-rust">{actionError}</p>}
+      {settlements.length > 0 && !detailReady && (
+        <div className="mb-3">
+          <WalletLoadNotice
+            status={detailStatus}
+            error={pageEntries.error ?? pageOrderEntries.error}
+            onRetry={() => {
+              pageEntries.retry();
+              pageOrderEntries.retry();
+            }}
+            what="los movimientos de los cortes de esta pagina"
+          />
+        </div>
+      )}
       {settlements.length === 0 ? (
         <p className="text-sm text-ink-60">Todavia no hay liquidaciones cerradas.</p>
       ) : (
@@ -10279,28 +10510,32 @@ function SettlementsTable({
                       <td className="py-3 pr-3">{settlement.startDate} a {settlement.endDate}</td>
                       <td className="py-3 pr-3 whitespace-nowrap">
                         <span className="tabular">{settlement.orderIds.length}</span>
-                        {detailRow && <span className="text-ink-60"> · {detailRow.deliveredOrders}/{detailRow.failedOrders}</span>}
+                        {detailReady && detailRow && <span className="text-ink-60"> · {detailRow.deliveredOrders}/{detailRow.failedOrders}</span>}
                       </td>
                       {/* Recibido contra esperado en una sola celda: por separado ninguno de los
                           dos numeros dice nada. */}
                       <td className="py-3 pr-3 whitespace-nowrap">
                         {settlement.kind === "driver" ? (
-                          <>
-                            <span className="tabular font-bold text-mint">{formatCop(receiptTotal)}</span>
-                            <span className="tabular text-ink-60"> / {formatCop(displayCashToReturnCop)}</span>
-                          </>
+                          detailReady ? (
+                            <>
+                              <span className="tabular font-bold text-mint">{formatCop(receiptTotal)}</span>
+                              <span className="tabular text-ink-60"> / {formatCop(displayCashToReturnCop)}</span>
+                            </>
+                          ) : <span className="text-ink-60">...</span>
                         ) : "-"}
                       </td>
                       {/* Un corte de tienda ya abonado durante la semana cierra en $0: sin el
                           bruto debajo, la fila parece vacia y hay que abrir el detalle para saber
                           cuanto valio. */}
                       <td className="py-3 pr-3 whitespace-nowrap">
+                        {!detailReady ? <span className="text-ink-60">...</span> : <>
                         <span className={`tabular font-bold ${view.netCop < 0 ? "text-rust" : "text-mint"}`}>{formatCop(view.netCop)}</span>
                         {view.advancesCop > 0 && (
                           <p className="text-xs font-semibold text-ink-60">
                             bruto <span className="tabular">{formatCop(view.grossPayableCop)}</span> · abonado <span className="tabular">{formatCop(view.advancesCop)}</span>
                           </p>
                         )}
+                        </>}
                       </td>
                       <td className="py-3 pr-3">
                         <span className={`rounded-2xl px-2 py-1 text-xs font-semibold ${settlement.status === "pending" ? "bg-rust/10 text-rust" : "bg-mint/10 text-mint"}`}>
@@ -10316,6 +10551,9 @@ function SettlementsTable({
                           >
                             {expanded ? "Ocultar" : "Detalle"}
                           </button>
+                          {/* Las acciones dependen del efectivo pendiente, que sale de los asientos: sin ellos
+                              completos no se ofrece cobrar ni cerrar nada (RF_04). */}
+                          {detailReady && <>
                           {settlement.kind === "driver" && cashPendingCop > 0 && (
                             <button
                               className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
@@ -10358,6 +10596,7 @@ function SettlementsTable({
                               {busyId === `${settlement.id}-reconciled` ? "Guardando..." : "Conciliar"}
                             </button>
                           )}
+                          </>}
                         </div>
                         {settlement.kind === "driver" && cashPendingCop > 0 && settlement.status === "paid" && (
                           <p className="mt-2 text-xs font-semibold text-rust">Registra el recaudo pendiente antes de conciliar.</p>
@@ -10367,7 +10606,7 @@ function SettlementsTable({
                     {expanded && (
                       <tr className="border-b border-white/5">
                         <td colSpan={7} className="bg-field/60 px-3 py-3">
-                          {loadingDetail ? <p className="text-sm text-ink-60">Cargando pedidos del corte...</p> : <ClosedSettlementDetail state={stateWithDetail} settlement={settlement} detailRow={detailRow} />}
+                          {loadingDetail || !detailReady ? <p className="text-sm text-ink-60">Cargando pedidos del corte...</p> : <ClosedSettlementDetail state={stateWithDetail} settlement={settlement} detailRow={detailRow} />}
                         </td>
                       </tr>
                     )}
@@ -10880,33 +11119,97 @@ function UchatConfigsAdminPanel({ configs, sellers }: { configs: StoreWebhookCon
 }
 
 function StoreWebhookConfigsPanel({ configs, sellers }: { configs: StoreWebhookConfig[]; sellers: Seller[] }) {
-  const activeConfigs = [...configs].filter((config) => config.status === "active").sort((left, right) => left.sellerName.localeCompare(right.sellerName));
+  // Spec 037 (HU_03): por tienda, la frase del filtro que aplica el servidor y los pedidos de su ciudad
+  // que el filtro tiro esta semana. Asi se ve una tienda mal conectada antes de que se queje (Infinito
+  // estuvo un mes asi). Tabla en escritorio, tarjetas en movil.
+  const now = new Date();
+  const rows = [...configs]
+    // Sin clave no hay conexion: es el documento que deja la config de ChatBy (revision 037, R3-RF_03-1).
+    .filter((config) => config.status === "active" && hasWebhookConnection(config))
+    .sort((left, right) => left.sellerName.localeCompare(right.sellerName))
+    .map((config) => {
+      const filter = effectiveFilter(config);
+      const hasSavedFilter = typeof config.skuContains === "string" && config.skuContains.trim() !== "";
+      return {
+        config,
+        name: sellers.find((item) => item.id === config.sellerId)?.name ?? config.sellerName,
+        url: `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(config.sellerId)}&key=${encodeURIComponent(config.webhookKey)}`,
+        phrase: describeFilter(filter, config.cityAllowlist ?? []),
+        legacyNote: hasSavedFilter ? "" : `Sin filtro guardado: aplica ${filter.skuContains}, el valor antiguo.`,
+        discarded: recentFilterDiscards(config.filterDiscards, now),
+        lastSeen: `${config.shopDomain || "Sin dominio"} · ${config.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(config.lastWebhookAt)}` : "Sin webhooks recibidos"}`
+      };
+    });
+  const withDiscards = rows.filter((row) => row.discarded > 0).length;
+  const { page, setPage, totalPages, visibleItems } = usePaginatedItems(rows, 8);
+  const discardedLabel = (count: number) => `${count} descartados esta semana`;
+  const copyButton = (row: (typeof rows)[number]) => (
+    <button aria-label={`Copiar URL de ${row.name}`} className="focus-ring min-h-11 justify-self-start rounded-full bg-field px-4 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(row.url)}>
+      Copiar URL
+    </button>
+  );
   return (
     <Card>
-      <h2 className="mb-3 font-bold">Webhooks Shopify por tienda</h2>
-      <PaginatedList items={activeConfigs} pageSize={8} empty={<p className="text-sm text-ink-60">No hay webhooks generados.</p>}>
-        {(config) => {
-          const seller = sellers.find((item) => item.id === config.sellerId);
-          const url = `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(config.sellerId)}&key=${encodeURIComponent(config.webhookKey)}`;
-          return (
-            <div key={config.id} className="grid gap-2 rounded-2xl border border-white/10 p-3 text-sm">
-              <div>
-                <p className="font-semibold">{seller?.name ?? config.sellerName}</p>
-                <p className="text-xs text-ink-60">{config.shopDomain || "Sin dominio"} · {config.lastWebhookAt ? `Ultimo webhook: ${formatDateTime(config.lastWebhookAt)}` : "Sin webhooks recibidos"}</p>
-              </div>
-              <input className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={url} />
-              <div className="flex flex-wrap gap-2">
-                <button className="focus-ring rounded-full bg-field px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(url)}>
-                  Copiar URL
-                </button>
-                <span className="rounded-2xl bg-field px-3 py-2 text-xs font-semibold">SKU {config.skuContains || "ADMA"}</span>
-                <span className="rounded-2xl bg-field px-3 py-2 text-xs font-semibold">Etiqueta {config.tagContains || "ADMA"}</span>
-              </div>
-              <p className="text-xs text-ink-60">Configurar esta URL en Order creation y Order update. Para pedidos viejos, agregar etiqueta {config.tagContains || "ADMA"} en Shopify.</p>
-            </div>
-          );
-        }}
-      </PaginatedList>
+      <h2 id="store-webhooks-heading" className="mb-1 font-bold">Webhooks Shopify por tienda</h2>
+      <p className="mb-3 text-xs text-ink-60">
+        {withDiscards > 0 ? `${withDiscards} con pedidos descartados esta semana` : "Ninguna tienda con pedidos descartados esta semana"}
+      </p>
+      {rows.length === 0 ? <p className="text-sm text-ink-60">No hay webhooks generados.</p> : (
+        <>
+          <table aria-labelledby="store-webhooks-heading" className="hidden w-full text-left text-sm md:table">
+            <thead className="text-xs text-ink-60">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">Tienda</th>
+                <th className="py-2 pr-3 font-semibold">Filtro de productos</th>
+                <th className="py-2 pr-3 font-semibold">Descartados 7 dias</th>
+                <th className="py-2 font-semibold">URL del webhook</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((row) => (
+                <tr key={row.config.id} className={`border-t border-white/10 align-top ${row.discarded > 0 ? "bg-rust/5" : ""}`}>
+                  <td className="py-3 pr-3">
+                    <h3 className="font-semibold">{row.name}</h3>
+                    <p className="text-xs text-ink-60">{row.lastSeen}</p>
+                  </td>
+                  <td className="py-3 pr-3">
+                    <p>{row.phrase}</p>
+                    {row.legacyNote && <p className="text-xs text-ink-60">{row.legacyNote}</p>}
+                  </td>
+                  <td className="py-3 pr-3">
+                    {row.discarded > 0 ? <span role="status" className="font-semibold text-rust">{discardedLabel(row.discarded)}</span> : <span className="text-ink-60">Ninguno</span>}
+                  </td>
+                  <td className="py-3">
+                    <div className="grid gap-2">
+                      <input aria-label={`URL del webhook de ${row.name}`} className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={row.url} />
+                      {copyButton(row)}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul aria-labelledby="store-webhooks-heading" className="grid gap-2 md:hidden">
+            {visibleItems.map((row) => (
+              <li key={row.config.id} className="grid gap-2 rounded-2xl border border-white/10 p-3 text-sm">
+                <div>
+                  <h3 className="font-semibold">{row.name}</h3>
+                  <p className="text-xs text-ink-60">{row.lastSeen}</p>
+                </div>
+                <p>{row.phrase}</p>
+                {row.legacyNote && <p className="text-xs text-ink-60">{row.legacyNote}</p>}
+                {row.discarded > 0
+                  ? <p role="status" className="justify-self-start rounded-full bg-rust/10 px-3 py-1 text-xs font-semibold text-rust">{discardedLabel(row.discarded)}</p>
+                  : <p className="text-xs text-ink-60">Sin descartados esta semana</p>}
+                <input aria-label={`URL del webhook de ${row.name}`} className="rounded-2xl border border-white/10 bg-field px-3 py-2 text-xs" readOnly value={row.url} />
+                {copyButton(row)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-60">Configurar la URL en Order creation y Order update de Shopify.</p>
+        </>
+      )}
+      <PaginationControls page={page} totalPages={totalPages} totalItems={rows.length} onPageChange={setPage} />
     </Card>
   );
 }
@@ -11149,7 +11452,10 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
   const [message, setMessage] = useState("");
   const [webhookBusy, setWebhookBusy] = useState(false);
   const primaryStore = stores[0];
-  const webhookConfig = (state.storeWebhookConfigs ?? []).find((config) => config.sellerId === seller.id && config.status === "active");
+  // El mismo documento guarda la config de ChatBy, que puede existir sin webhook: sin clave no hay conexion
+  // y la tienda debe ver "Generar webhook", no una URL con key=undefined (revision 037, R1-RF_03-1).
+  const storeConfig = (state.storeWebhookConfigs ?? []).find((config) => config.sellerId === seller.id && config.status === "active");
+  const webhookConfig = hasWebhookConnection(storeConfig) ? storeConfig : undefined;
   const webhookUrl = webhookConfig ? `https://us-central1-kentro-last-mile.cloudfunctions.net/storeOrderWebhook?sellerId=${encodeURIComponent(webhookConfig.sellerId)}&key=${encodeURIComponent(webhookConfig.webhookKey)}` : "";
   const shopify = getSellerShopifyConnection(seller.id, seller.shopDomain, primaryStore);
   const normalizedShop = shop.trim() ? normalizeShopifyDomain(shop) : "";
@@ -11181,22 +11487,25 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
     setMessage("Solicitud enviada. Kentro generara el enlace privado de instalacion y aparecera aqui.");
   }
 
-  async function createWebhookConfig() {
+  // Spec 037: sin `filter`, el servidor decide (conexion nueva = todos los productos; existente =
+  // conserva el suyo). Antes aqui se mandaba un filtro de relleno que pisaba el guardado.
+  async function createWebhookConfig(filter?: { filterMode: "all" | "sku"; skuContains?: string }) {
     setWebhookBusy(true);
     setMessage("");
     try {
       const result = await createFirebaseStoreWebhookConfig({
         sellerId: seller.id,
         shopDomain: normalizedShop || seller.shopDomain || undefined,
-        skuContains: orderSkuContains.trim() || "ADMA",
-        tagContains: "ADMA"
+        ...filter
       });
       setState({
         ...state,
         storeWebhookConfigs: [result.config, ...(state.storeWebhookConfigs ?? []).filter((item) => item.id !== result.config.id)]
       });
-      setMessage("Webhook generado. Configura Order creation y Order update con la misma URL.");
+      setMessage(filter ? "Filtro guardado. La URL del webhook no cambia." : "Webhook generado. Configura Order creation y Order update con la misma URL.");
     } catch (error) {
+      // Al guardar el filtro, el error lo muestra el propio bloque junto al formulario.
+      if (filter) throw error;
       setMessage(error instanceof Error ? error.message : "No se pudo generar el webhook.");
     } finally {
       setWebhookBusy(false);
@@ -11210,37 +11519,30 @@ function ShopifyConnectionPanel({ seller, stores, requests, state, setState }: {
         <div className="grid gap-2 rounded-2xl bg-field p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="font-semibold">Webhook de sincronizacion</p>
+              <h3 className="font-semibold">Webhook de sincronizacion</h3>
               <p className="text-xs text-ink-60">Configura la misma URL en Shopify para Order creation y Order update.</p>
             </div>
-            <button
-              className="focus-ring rounded-full bg-acid px-3 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
-              type="button"
-              disabled={webhookBusy}
-              onClick={() => void createWebhookConfig()}
-            >
-              {webhookConfig ? "Actualizar webhook" : webhookBusy ? "Generando..." : "Generar webhook"}
-            </button>
+            {!webhookConfig && (
+              <button
+                className="focus-ring min-h-11 rounded-full bg-acid px-4 py-2 text-xs font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed"
+                type="button"
+                disabled={webhookBusy}
+                onClick={() => void createWebhookConfig()}
+              >
+                {webhookBusy ? "Generando..." : "Generar webhook"}
+              </button>
+            )}
           </div>
           {webhookConfig && (
-            <div className="grid gap-2">
-              <input className="rounded-2xl border border-white/10 bg-panel px-3 py-2 text-xs text-fg" readOnly value={webhookUrl} />
-              <div className="flex flex-wrap gap-2">
-                <button className="focus-ring rounded-full bg-panel px-3 py-2 text-xs font-semibold" type="button" onClick={() => void navigator.clipboard?.writeText(webhookUrl)}>
-                  Copiar URL
-                </button>
-                <span className="rounded-2xl bg-panel px-3 py-2 text-xs font-semibold text-ink-60">SKU contiene {webhookConfig.skuContains || "ADMA"}</span>
-                <span className="rounded-2xl bg-panel px-3 py-2 text-xs font-semibold text-ink-60">Etiqueta {webhookConfig.tagContains || "ADMA"}</span>
-              </div>
-              <div className="rounded-2xl bg-panel px-3 py-2 text-xs text-ink-60">
-                <p className="font-semibold text-fg">Instrucciones Shopify</p>
-                <p>1. Crear webhook Order creation con esta URL.</p>
-                <p>2. Crear webhook Order update con esta misma URL.</p>
-                <p>3. Para sincronizar un pedido viejo, agrega la etiqueta ADMA al pedido en Shopify y guarda.</p>
-              </div>
-            </div>
+            <StoreWebhookFilterCard
+              config={webhookConfig}
+              webhookUrl={webhookUrl}
+              busy={webhookBusy}
+              onRegenerate={() => void createWebhookConfig()}
+              onSaveFilter={(filter) => createWebhookConfig(filter)}
+            />
           )}
-          <UchatConfigForm sellerId={seller.id} config={webhookConfig} />
+          <UchatConfigForm sellerId={seller.id} config={storeConfig} />
         </div>
         <div>
           <p className="font-semibold">{stores.length > 0 ? `${stores.length} tienda${stores.length === 1 ? "" : "s"} conectada${stores.length === 1 ? "" : "s"}` : "Tiendas Shopify pendientes"}</p>
@@ -12113,6 +12415,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
         <AssignPickedUpOrdersPanel
           orders={pendingMessenger}
           messengers={messengers}
+          sellers={state.sellers}
           onAssigned={(orders) => {
             setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
             setAssignmentMessage(`${orders.length} pedido(s) asignados a mensajero.`);
@@ -12121,6 +12424,7 @@ function DriverView({ state, setState, session, orderSearch, onOrderSearchChange
         <ReassignMessengerOrdersPanel
           orders={messengerReassignable}
           messengers={messengers}
+          sellers={state.sellers}
           onUpdated={(orders, summary) => {
             setState({ ...state, orders: state.orders.map((item) => orders.find((order) => order.id === item.id) ?? item) });
             setAssignmentMessage(summary);
@@ -12860,10 +13164,76 @@ function FleetReportsPanel({ state, driver, financialSummary, historyStart }: { 
   );
 }
 
-function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders: Order[]; messengers: Messenger[]; onAssigned: (orders: Order[]) => void }) {
+/**
+ * Spec 039: buscador y linea de seleccion de las tarjetas de asignacion del lider. Compartido por
+ * «Recogidos pendientes de mensajero» y «Asignados a mensajero» (RNF_04) para que no diverjan.
+ */
+function OrderPickerSearch({ search, onSearchChange, visibleOrders, selectedIds, onSelectedIdsChange, placeholder = "KNT, cliente o tienda" }: {
+  search: string;
+  placeholder?: string;
+  onSearchChange: (value: string) => void;
+  visibleOrders: Order[];
+  selectedIds: string[];
+  onSelectedIdsChange: (ids: string[]) => void;
+}) {
+  const searching = search.trim().length > 0;
+  const visibleIdSet = new Set(visibleOrders.map((order) => order.id));
+  const hiddenSelectedCount = selectedIds.filter((id) => !visibleIdSet.has(id)).length;
+  const unselectedMatches = visibleOrders.filter((order) => !selectedIds.includes(order.id));
+  return (
+    <>
+      <label className="grid gap-1 text-xs font-semibold text-ink-60">
+        Buscar
+        <input
+          className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-normal text-fg"
+          type="search"
+          inputMode="search"
+          autoComplete="off"
+          placeholder={placeholder}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+      </label>
+      {(selectedIds.length > 0 || (searching && unselectedMatches.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-60" aria-live="polite">
+          {selectedIds.length > 0 && (
+            <span className="font-semibold text-fg">
+              <span className="tabular">{selectedIds.length}</span> seleccionado{selectedIds.length === 1 ? "" : "s"}
+              {hiddenSelectedCount > 0 && <span className="font-normal text-ink-60"> · <span className="tabular">{hiddenSelectedCount}</span> fuera de esta busqueda</span>}
+            </span>
+          )}
+          {searching && unselectedMatches.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => onSelectedIdsChange([...unselectedMatches.map((order) => order.id), ...selectedIds])}>
+              {visibleOrders.length === 1 ? "Seleccionar el que coincide" : <>Seleccionar los <span className="tabular">{visibleOrders.length}</span> que coinciden</>}
+            </button>
+          )}
+          {selectedIds.length > 0 && (
+            <button className="focus-ring rounded-full border border-white/10 px-3 py-1 font-semibold text-fg hover:bg-field" type="button" onClick={() => onSelectedIdsChange([])}>
+              Quitar seleccion
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Mensaje de lista vacia: distingue «no hay nada» de «la busqueda no encontro nada» (RF_08). */
+function orderPickerEmptyText(search: string, totalOrders: number, emptyText: string) {
+  const query = search.trim();
+  return query && totalOrders > 0 ? `Ningun pedido coincide con «${query}».` : emptyText;
+}
+
+function AssignPickedUpOrdersPanel({ orders, messengers, sellers, onAssigned }: { orders: Order[]; messengers: Messenger[]; sellers: Seller[]; onAssigned: (orders: Order[]) => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [messengerId, setMessengerId] = useState("");
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  // Spec 039: orden por KNT y busqueda sobre TODA la recogida ya cargada (cero lecturas nuevas).
+  const sellerNameById = useMemo(() => new Map(sellers.map((seller) => [seller.id, seller.name])), [sellers]);
+  const sortedOrders = useMemo(() => sortPendingPickup(orders), [orders]);
+  const visibleOrders = useMemo(() => filterPendingPickup(sortedOrders, search, sellerNameById), [sortedOrders, search, sellerNameById]);
+  // La seleccion vive aparte de la pagina y de la busqueda: se asigna todo lo marcado, se vea o no.
   const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
   const canAssign = messengerId && selectedOrders.length > 0;
 
@@ -12900,20 +13270,28 @@ function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders:
           {messengers.map((messenger) => <option key={messenger.id} value={messenger.id}>{messenger.name}</option>)}
         </select>
         <button className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={!messengerId || orders.length === 0} onClick={() => void assignSelected(orders)}>
-          Asignar toda la recogida
+          Asignar toda la recogida (<span className="tabular">{orders.length}</span>)
         </button>
         <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={!canAssign} onClick={() => void assignSelected(selectedOrders)}>
-          Asignar seleccionados
+          Asignar seleccionados{selectedOrders.length > 0 ? ` (${selectedOrders.length})` : ""}
         </button>
       </div>
       {message && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
-      <PaginatedList items={orders} pageSize={8} empty={<p className="text-sm text-ink-60">No hay pedidos recogidos pendientes de asignar.</p>}>
+      {orders.length > 0 && (
+        <OrderPickerSearch search={search} onSearchChange={setSearch} visibleOrders={visibleOrders} selectedIds={selectedOrders.map((order) => order.id)} onSelectedIdsChange={setSelectedIds} />
+      )}
+      <PaginatedList
+        key={search.trim()}
+        items={visibleOrders}
+        pageSize={8}
+        empty={<p className="text-sm text-ink-60">{orderPickerEmptyText(search, orders.length, "No hay pedidos recogidos pendientes de asignar.")}</p>}
+      >
         {(order) => (
           <label key={order.id} className="flex items-start gap-3 rounded-2xl border border-white/10 p-3 text-sm">
             <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [order.id, ...current] : current.filter((id) => id !== order.id))} />
             <span>
               <span className="block font-semibold">{order.trackingCode ?? order.shopifyOrderId}</span>
-              <span className="block text-xs text-ink-60">{order.customerName} · {order.pickupPointName ?? "Punto de recogida"}</span>
+              <span className="block text-xs text-ink-60">{order.customerName} · {order.pickupPointName ?? sellerNameById.get(order.sellerId) ?? "Punto de recogida"}</span>
             </span>
           </label>
         )}
@@ -12922,12 +13300,20 @@ function AssignPickedUpOrdersPanel({ orders, messengers, onAssigned }: { orders:
   );
 }
 
-function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { orders: Order[]; messengers: Messenger[]; onUpdated: (orders: Order[], summary: string) => void }) {
+function ReassignMessengerOrdersPanel({ orders, messengers, sellers, onUpdated }: { orders: Order[]; messengers: Messenger[]; sellers: Seller[]; onUpdated: (orders: Order[], summary: string) => void }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [messengerId, setMessengerId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  // Spec 039, enmienda 1: mismo orden y busqueda que la recogida, y ademas por mensajero (RF_12).
+  const sellerNameById = useMemo(() => new Map(sellers.map((seller) => [seller.id, seller.name])), [sellers]);
+  const messengerNameById = useMemo(() => new Map(messengers.map((messenger) => [messenger.id, messenger.name])), [messengers]);
+  const sortedOrders = useMemo(() => sortPendingPickup(orders), [orders]);
+  const visibleOrders = useMemo(() => filterPendingPickup(sortedOrders, search, sellerNameById, messengerNameById), [sortedOrders, search, sellerNameById, messengerNameById]);
+  // Reasignar y devolver actuan sobre todo lo marcado, se vea o no con la busqueda (RF_11).
   const selectedOrders = orders.filter((order) => selectedIds.includes(order.id));
+  const selectedCountLabel = selectedOrders.length > 0 ? ` (${selectedOrders.length})` : "";
 
   useEffect(() => {
     if (!messengerId && messengers[0]) setMessengerId(messengers[0].id);
@@ -12985,22 +13371,31 @@ function ReassignMessengerOrdersPanel({ orders, messengers, onUpdated }: { order
           {messengers.map((messenger) => <option key={messenger.id} value={messenger.id}>{messenger.name}</option>)}
         </select>
         <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={!messengerId || selectedOrders.length === 0 || busy} onClick={() => void reassignSelected()}>
-          Reasignar seleccionados
+          Reasignar seleccionados{selectedCountLabel}
         </button>
         <button className="focus-ring rounded-full border border-white/10 px-3 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={selectedOrders.length === 0 || busy} onClick={() => void unassignSelected()}>
-          Devolver a pendientes
+          Devolver a pendientes{selectedCountLabel}
         </button>
       </div>
       {message && <p className="rounded-2xl bg-rust/10 px-3 py-2 text-xs font-semibold text-rust">{message}</p>}
-      <PaginatedList items={orders} pageSize={8} empty={<p className="text-sm text-ink-60">No hay pedidos activos asignados a mensajeros.</p>}>
+      {orders.length > 0 && (
+        <OrderPickerSearch search={search} onSearchChange={setSearch} visibleOrders={visibleOrders} selectedIds={selectedOrders.map((order) => order.id)} onSelectedIdsChange={setSelectedIds} placeholder="KNT, cliente, tienda o mensajero" />
+      )}
+      <PaginatedList
+        key={search.trim()}
+        items={visibleOrders}
+        pageSize={8}
+        empty={<p className="text-sm text-ink-60">{orderPickerEmptyText(search, orders.length, "No hay pedidos activos asignados a mensajeros.")}</p>}
+      >
         {(order) => {
-          const messenger = messengers.find((item) => item.id === order.messengerId);
+          const messengerName = order.messengerId ? messengerNameById.get(order.messengerId) ?? order.messengerId : "";
+          const storeName = order.pickupPointName ?? sellerNameById.get(order.sellerId);
           return (
             <label key={order.id} className="flex items-start gap-3 rounded-2xl border border-white/10 p-3 text-sm">
               <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [order.id, ...current] : current.filter((id) => id !== order.id))} />
               <span>
                 <span className="block font-semibold">{order.trackingCode ?? order.shopifyOrderId}</span>
-                <span className="block text-xs text-ink-60">{order.customerName} · {messenger?.name ?? order.messengerId} · {statusLabel(order.status)}</span>
+                <span className="block text-xs text-ink-60">{[order.customerName, storeName, messengerName, statusLabel(order.status)].filter(Boolean).join(" · ")}</span>
               </span>
             </label>
           );
@@ -13422,7 +13817,7 @@ export function OperationsApp() {
     }
     // Los destinos "dispatch", "finance" e "historico" son exclusivos del lider: los resuelve
     // DriverView mas abajo. Sin esta guarda, otro rol que llegara con esa vista veria su panel.
-    if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={viewState} setState={setState} uid={session.id} />;
+    if (activeView === "liquidations" && session.role === "admin") return <LiquidationsPage state={viewState} setState={setState} uid={session.id} walletLive={!loadReport.issues.includes("wallet_unavailable")} />;
     if (activeView === "inventory" && session.role === "admin") return <InventoryPage state={viewState} setState={setState} />;
     if (session.role === "seller" || session.role === "seller_logistics") return <SellerView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} startDate={orderStartDate} endDate={orderEndDate} statusFilter={orderStatusFilter} historyStart={historyStart} searchingHistory={searchingServer} view={activeView} onStartDate={setOrderStartDateManual} onEndDate={setOrderEndDateManual} onStatusFilter={setOrderStatusFilter} onSelectRange={applyOrderRange} periodStats={periodStats} periodStatsError={periodStatsError} hideFinance={session.role === "seller_logistics"} loadOutcome={loadOutcome} onRetryLoad={retryLoad} />;
     if (session.role === "driver") return <DriverView state={viewState} setState={setState} session={session} orderSearch={orderSearch} onOrderSearchChange={setOrderSearch} view={activeView} historyStart={historyStart} onWidenHistory={widenHistoryWindow} onPinSettlementOrders={pinSettlementOrders} />;

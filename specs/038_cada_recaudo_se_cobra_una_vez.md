@@ -287,7 +287,7 @@ reescribir ningun corte cerrado.
   cobrado; se corrige y entrega D2). Mientras D2 no tenga corte, el neto vuelve a ser 100.000 = lo que vio el corte
   de D1, y el pedido cuenta como recibido. Para la tienda la reversa y el recaudo nuevo netean 0, asi que no se le
   paga nada de mas; se acepta (hallazgo R3 de T28, menor).
-- **La misma ventana con la tienda SIN cobrar** (hallazgo M2 de T31, **pendiente del responsable**). Tras pasar la
+- **La misma ventana con la tienda SIN cobrar** (hallazgo M2 de T31; **aceptado por el responsable el 2026-11-12**). Tras pasar la
   entrega a otro domiciliario y antes del corte que le devuelve a quien entrego antes, el pedido cuenta como
   recibido: se le puede pagar a la tienda y la plataforma adelanta ese dinero hasta que pague el nuevo
   domiciliario. Cerrarlo exige leer los pagos del domiciliario desde la tienda y la API (descartado en RF_11).
@@ -341,6 +341,7 @@ reescribir ningun corte cerrado.
 | 2026-11-09 | Analyze: RNF_02 cuenta la retencion de RF_17; RF_08 admite saldo negativo y arrastra (no transfiere) un corte a favor; RNF_04 lista las lecturas extra | Hallazgos M9 y M10 del auditor independiente; aprobados por el responsable |
 | 2026-11-10 | Enmienda tras la verificacion: RF_01b (el recaudo solo al que entrega), RF_11 (lo posterior debe sumar cero), RF_11b (la regla de hoy no se sustituye) | Tres defectos de la revision independiente (H1-H3), reproducidos; aprobada por el responsable |
 | 2026-11-12 | Segunda enmienda de RF_11 (recaudo neto = el que vio el ultimo corte saldado) y RF_12 (con los asientos completos) | Hallazgos R1 y R2 de la revision de T28, reproducidos; aprobada por el responsable |
+| 2026-11-12 | T32/T33: el corte de quien no entrego no decide el recibido; M2 (ventana en una reasignacion con la tienda sin cobrar) aceptado | Hallazgos N1 y M1 (bloqueantes, corregidos) y M2 (menor) de la revision de T31; decidido por el responsable |
 | 2026-11-08 | Grill: registro sin recortar + saldo a favor (RF_08), neto contra neto (RF_11), regla en todas las cifras (RF_09b), rechazo de recalculos cruzados (RF_04b), historico congelado hasta aprobar (RF_17), modulo puro + foto (RF_05b) | Seis preguntas del revisor en contexto limpio, respondidas por el responsable |
 
 ## 9. Propuesta de compensacion (para decidir, no se aplica sola)

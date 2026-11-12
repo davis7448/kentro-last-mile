@@ -1,0 +1,19 @@
+{
+  "story": "HU_03",
+  "route": null,
+  "viewport": { "width": 375, "height": 812 },
+  "expect": [
+    { "role": "heading", "name": "Integraciones" },
+    { "role": "heading", "name": "Webhooks Shopify por tienda" },
+    { "role": "list", "name": "Webhooks Shopify por tienda" },
+    { "role": "heading", "name": "Infinito" },
+    { "role": "heading", "name": "Nambu" },
+    { "role": "heading", "name": "Kovia" },
+    { "role": "status", "name": "153 descartados esta semana" },
+    { "role": "textbox", "name": "URL del webhook de Nambu" },
+    { "role": "button", "name": "Copiar URL de Infinito" },
+    { "role": "button", "name": "Copiar URL de Nambu" },
+    { "role": "button", "name": "Copiar URL de Kovia" }
+  ],
+  "threshold": { "missing": 0 }
+}

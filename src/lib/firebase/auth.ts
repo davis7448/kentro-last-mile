@@ -142,6 +142,20 @@ export async function getFirebaseOrderStats(input: { startDate: string; endDate:
   return result.data as OrderPeriodStats;
 }
 
+/**
+ * Spec 023 RF_01: las quince cifras de la plataforma calculadas en el servidor con sumas de Firestore. El
+ * navegador del admin ya no baja el libro de caja para derivarlas. Si el servidor no puede confiar en una
+ * suma, rechaza con su motivo y la pantalla lo muestra en vez de una cifra (RF_04).
+ */
+export async function getFirebasePlatformPosition() {
+  const client = getFirebaseClient();
+  if (!client) throw new Error("Firebase no esta configurado.");
+  const functions = getFunctions(client.app, "us-central1");
+  const callable = httpsCallable(functions, "getPlatformPosition");
+  const result = await callable({});
+  return result.data as import("@/lib/finance").PlatformPosition & { computedAt: string };
+}
+
 export async function repairFirebaseOwnDriverProfile() {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
@@ -468,7 +482,9 @@ export async function closeFirebaseOrder(input: {
   return result.data as { order: Order; walletEntries: WalletEntry[] };
 }
 
-export async function createFirebaseStoreWebhookConfig(input: { sellerId: string; shopDomain?: string; skuContains?: string; tagContains?: string }) {
+// Spec 037: sin filterMode ni filtro, el servidor da "todos los productos" a una conexion nueva y
+// conserva el filtro de una existente. El cliente nunca rellena un filtro por su cuenta.
+export async function createFirebaseStoreWebhookConfig(input: { sellerId: string; shopDomain?: string; filterMode?: "all" | "sku"; skuContains?: string; tagContains?: string }) {
   const client = getFirebaseClient();
   if (!client) throw new Error("Firebase no esta configurado.");
   const functions = getFunctions(client.app, "us-central1");

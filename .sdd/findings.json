@@ -1,5 +1,5 @@
 {
-  "spec": "specs/029_store_api_confirma_y_corrige_pedidos.md",
-  "round": 3,
+  "spec": "specs/037_el_webhook_de_tienda_acepta_todo_por_defecto.md",
+  "round": 4,
   "findings": []
 }

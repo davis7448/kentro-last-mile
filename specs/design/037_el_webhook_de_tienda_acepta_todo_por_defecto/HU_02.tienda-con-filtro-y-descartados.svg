@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="812" viewBox="0 0 375 812">
+  <title>HU_02 - Conexion con filtro ADMA y pedidos descartados en la semana (tienda, movil)</title>
+  <defs>
+    <radialGradient id="ga" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c6f24e" stop-opacity="0.12"/><stop offset="1" stop-color="#c6f24e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gc" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff8b7c" stop-opacity="0.08"/><stop offset="1" stop-color="#ff8b7c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <style>
+    text{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .n{font-variant-numeric:tabular-nums}
+  </style>
+  <rect width="375" height="812" fill="#0e1116"/>
+  <circle cx="60" cy="160" r="200" fill="url(#ga)"/>
+  <circle cx="320" cy="380" r="200" fill="url(#gc)"/>
+
+  <!-- Cabecera -->
+  <rect x="0" y="0" width="375" height="56" fill="#0e1116" fill-opacity="0.92"/>
+  <circle cx="32" cy="28" r="15" fill="#c6f24e"/>
+  <text x="32" y="33" text-anchor="middle" font-size="14" font-weight="800" fill="#10140c">K</text>
+  <text x="56" y="34" font-size="17" font-weight="800" fill="#f4f6f8">Kentro</text>
+  <circle cx="343" cy="28" r="18" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="343" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="#f4f6f8">NB</text>
+
+  <text x="16" y="94" font-size="26" font-weight="800" fill="#f4f6f8" letter-spacing="-0.9">Integraciones</text>
+
+  <rect x="16" y="112" width="343" height="684" rx="24" fill="#191e25" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="32" y="144" font-size="16" font-weight="700" fill="#f4f6f8">Conexion Shopify</text>
+
+  <rect x="28" y="158" width="319" height="626" rx="16" fill="#212832"/>
+  <text x="44" y="186" font-size="15" font-weight="700" fill="#f4f6f8">Webhook de sincronizacion</text>
+  <text x="44" y="206" font-size="12" fill="#9aa5b3">Configura la misma URL en Shopify para Order</text>
+  <text x="44" y="222" font-size="12" fill="#9aa5b3">creation y Order update.</text>
+
+  <!-- Frase del filtro (role=status), tono informativo: filtra, no es un error -->
+  <rect x="44" y="236" width="287" height="100" rx="16" fill="#7cc4ff" fill-opacity="0.06" stroke="#7cc4ff" stroke-opacity="0.4"/>
+  <path d="M56 252 h16 l-6 7 v7 l-4 2 v-9 z" fill="none" stroke="#7cc4ff" stroke-width="1.6" stroke-linejoin="round"/>
+  <text x="82" y="262" font-size="13" fill="#f4f6f8">Solo entran pedidos con un</text>
+  <text x="82" y="280" font-size="13" fill="#f4f6f8">producto cuyo SKU contenga ADMA</text>
+  <text x="82" y="298" font-size="13" fill="#f4f6f8">o con la etiqueta ADMA. Los demas</text>
+  <text x="82" y="316" font-size="13" fill="#f4f6f8">se descartan.</text>
+
+  <!-- Descartados de la semana (role=status) -->
+  <rect x="44" y="346" width="287" height="58" rx="16" fill="#ff8b7c" fill-opacity="0.07" stroke="#ff8b7c" stroke-opacity="0.45"/>
+  <circle cx="64" cy="375" r="9" fill="none" stroke="#ff8b7c" stroke-width="1.8"/>
+  <line x1="58" y1="381" x2="70" y2="369" stroke="#ff8b7c" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="82" y="370" class="n" font-size="13" font-weight="700" fill="#ff8b7c">12 pedidos descartados</text>
+  <text x="82" y="389" font-size="13" font-weight="700" fill="#ff8b7c">por el filtro esta semana</text>
+
+  <!-- Cambiar filtro -->
+  <rect x="44" y="416" width="150" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <path d="M60 432 h14 M62 438 h10 M64 444 h6" stroke="#cbd3dc" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="82" y="443" font-size="14" font-weight="600" fill="#f4f6f8">Cambiar filtro</text>
+
+  <line x1="44" y1="474.5" x2="331" y2="474.5" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <text x="44" y="498" font-size="12" font-weight="600" fill="#9aa5b3">URL del webhook</text>
+  <rect x="44" y="506" width="287" height="44" rx="16" fill="#191e25" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="58" y="533" font-size="12" fill="#cbd3dc">https://us-central1-kentro-last-mile.clo...</text>
+
+  <rect x="44" y="560" width="128" height="44" rx="22" fill="#c6f24e"/>
+  <text x="108" y="587" text-anchor="middle" font-size="14" font-weight="700" fill="#10140c">Copiar URL</text>
+  <rect x="180" y="560" width="151" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="255.5" y="587" text-anchor="middle" font-size="14" font-weight="600" fill="#f4f6f8">Actualizar webhook</text>
+
+  <!-- Instrucciones Shopify (RF_08: con filtro por etiqueta) -->
+  <rect x="44" y="618" width="287" height="154" rx="16" fill="#191e25"/>
+  <text x="58" y="644" font-size="13" font-weight="700" fill="#f4f6f8">Instrucciones Shopify</text>
+  <text x="58" y="668" font-size="12" fill="#9aa5b3">1. Crear webhook Order creation con esta</text>
+  <text x="70" y="685" font-size="12" fill="#9aa5b3">URL.</text>
+  <text x="58" y="707" font-size="12" fill="#9aa5b3">2. Crear webhook Order update con esta</text>
+  <text x="70" y="724" font-size="12" fill="#9aa5b3">misma URL.</text>
+  <text x="58" y="746" font-size="12" fill="#9aa5b3">3. Para traer un pedido viejo, agrega la</text>
+  <text x="70" y="763" font-size="12" fill="#9aa5b3">etiqueta ADMA en Shopify y guardalo.</text>
+</svg>
