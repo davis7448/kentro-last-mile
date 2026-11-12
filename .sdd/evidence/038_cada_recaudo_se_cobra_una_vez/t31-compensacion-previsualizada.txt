@@ -1,0 +1,27 @@
+# Spec 038 T31 — PREVISUALIZACION compensacion opcion A (solo lectura), 2026-11-12
+Spec 038 · compensacion de driver-1778271901513 · 2026-11-12T04:29:56.784Z
+AVISO: la foto aun no esta escrita; las retenciones se derivan en memoria como las escribiria el script de la foto ahora. Solo previsualizacion.
+
+pedido         |    cobrado |     debido | diferencia | entra por            | estado
+KNT-000262     |   $109.900 |         $0 |   $109.900 | next                 | a compensar
+KNT-002682     |   $187.800 |    $93.900 |    $93.900 | next                 | a compensar
+KNT-007828     |    $73.900 |    $-8.000 |    $81.900 | next                 | a compensar
+KNT-003259     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003837     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003827     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-004540     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-006258     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-005724     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (por aclarar)
+KNT-006347     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (por aclarar)
+KNT-002965     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-003316     |   $113.900 |   $121.900 |    $-8.000 | next                 | a compensar
+KNT-003387     |    $65.900 |    $73.900 |    $-8.000 | next                 | a compensar
+KNT-003493     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-006650     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+KNT-006722     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+
+A compensar: $632.200 (positivo = a favor del domiciliario) · excluido y pendiente: $54.000
+Huella: 743cbbb8
+Para aplicar (solo con aprobacion): driver-1778271901513 --exclude KNT-005724,KNT-006347 --exclude-reason "por aclarar" --apply --approved-by "<nombre>" --reason "<motivo>" --fingerprint 743cbbb8
+
+Previsualizacion: no se escribe nada (anade --apply con aprobacion para aplicar).

@@ -59,7 +59,8 @@ describe("T1 · verify-026 es de solo lectura", () => {
 
   it("mide los cortes de domiciliario sin cashPendingCop y con pendiente distinto del recalculado (hallazgo B)", () => {
     expect(source()).toMatch(/cashPendingCop/);
-    expect(source()).toMatch(/computeDriverCashSummary/);
+    // Spec 038 T22: el recalculado sale de la regla nueva; la vieja (computeDriverCashSummary) se retiro.
+    expect(source()).toMatch(/computeDriverCorte/);
   });
 
   it("contrasta la compensacion con la cifra de referencia 29 / 36 / $1.151.997 (compuerta 5.4)", () => {

@@ -1,0 +1,29 @@
+# Spec 038 T21 — node specs/038_measure.js --check --deploy-check contra produccion (solo lectura), 2026-11-10
+domiciliario | cortes | pedidos | cobrado | debido | diferencia | suma por pedido | cortes sin cuadrar
+driver-1778271901513 | 59 | 4821 | 411.313.573 | 410.627.371 | 686.202 | 686.200 | 0
+driver-1784251215977 | 2 | 19 | 3.608.100 | 3.608.100 | 0 | 0 | 0
+
+Riesgo buildCodReceivedSet (COD nuevo tras corte saldado): 0 pedido(s)
+
+--check: 61 cortes, 0 problema(s)
+--check EN VERDE
+
+--deploy-check (RNF_01), 2026-11-10T00:24:02.210Z: esperado regla vieja -> regla nueva con las retenciones de la foto
+  driver-1778271901513 pendiente stl-1794233484852-driver-driver-1778271901513: 6.032.440 -> 6.032.440 (diferencia 0)
+  driver-1778271901513 siguiente corte: 75 -> 75 pedidos, 6.547.910 -> 6.547.910 (diferencia 0)
+  driver-1784251215977 siguiente corte: 0 -> 0 pedidos, 0 -> 0 (diferencia 0)
+  recibidos: 0 pasan a recibido, 1 dejan de estarlo (KNT-007828)
+--deploy-check CON DIFERENCIAS: la cifra la aprueba el responsable antes de desplegar
+
+# Nota sobre 'recibidos: 1 deja de estarlo (KNT-007828)':
+# KNT-007828 esta FALLIDO (cod). Tras desplegar su unico corte nuevo seria el pendiente stl-1794233484852, con cargo 0 (retencion de 81.900):
+# RF_11 no lo da por recibido hasta que ese corte se salde. No mueve dinero: isSellerEntryEligible deja pasar los asientos de
+# pedidos no entregados sin mirar 'recibido', y su unico asiento abierto de tienda (failed_fee -12.000) sigue siendo pagable.
+# Asientos del pedido (lectura del mismo dia):
+#   pedido KNT-007828 failed cod seller seller-1782496969817
+#   2026-11-04T16:17:20 driver driver_earning 8000 settlementId=stl-1793811839776-driver-driver-1778271901513
+#   2026-11-07T14:04:26 driver driver_earning -8000 settlementId=stl-1794233484852-driver-driver-1778271901513
+#   2026-11-07T14:04:26 driver driver_earning 8000 settlementId=stl-1794233484852-driver-driver-1778271901513
+#   2026-11-07T14:04:26 seller failed_fee -12000 settlementId=
+#   corte stl-1793811839776-driver-driver-1778271901513 driver reconciled alloc [{"orderId":"shopify-7806443880737","expectedCop":81900,"receivedCop":81900,"covered":true}]
+#   corte stl-1794233484852-driver-driver-1778271901513 driver pending alloc []

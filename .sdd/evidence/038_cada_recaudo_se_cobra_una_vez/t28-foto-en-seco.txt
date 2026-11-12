@@ -1,0 +1,29 @@
+# Spec 038 T28 — scripts/snapshot-038-baseline.js en seco (solo lectura), 2026-11-12
+(node:1997266) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Spec 038 · foto historica · 2026-11-12T03:40:10.481Z
+Cortes de domiciliario leidos: 63; asientos: 9906
+
+driver-1778271901513: 61 cortes (61 en la foto, 5013 filas) · 16 retenciones · $686.200
+    KNT-000262       $109.900
+    KNT-002682        $93.900
+    KNT-007828        $81.900
+    KNT-003259        $78.900
+    KNT-003837        $78.900
+    KNT-003827        $78.900
+    KNT-004540        $78.900
+    KNT-006258        $78.900
+    KNT-005724        $27.000
+    KNT-006347        $27.000
+    KNT-002965        $-8.000
+    KNT-003316        $-8.000
+    KNT-003387        $-8.000
+    KNT-003493        $-8.000
+    KNT-006650        $-8.000
+    KNT-006722        $-8.000
+driver-1784251215977: 2 cortes (2 en la foto, 19 filas) · 0 retenciones · $0
+
+Total: 2 domiciliarios · 16 retenciones · $686.200
+Para escribir (solo con aprobacion): --write --approved-by "<nombre>" --expect-total 686200 --expect-orders 16
+
+En seco: no se escribe nada (anade --write con aprobacion para escribir).

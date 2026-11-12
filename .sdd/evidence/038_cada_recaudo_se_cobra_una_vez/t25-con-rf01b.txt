@@ -1,0 +1,74 @@
+# Spec 038 T25 — con RF_01b (el recaudo solo al que entrega), corridas de SOLO LECTURA contra produccion, 2026-11-10
+
+## node specs/038_measure.js --check --deploy-check
+domiciliario | cortes | pedidos | cobrado | debido | diferencia | suma por pedido | cortes sin cuadrar
+driver-1778271901513 | 59 | 4821 | 411.313.573 | 410.627.371 | 686.202 | 686.200 | 0
+driver-1784251215977 | 2 | 19 | 3.608.100 | 3.608.100 | 0 | 0 | 0
+
+Riesgo buildCodReceivedSet (COD nuevo tras corte saldado): 0 pedido(s)
+
+--check: 61 cortes, 0 problema(s)
+--check EN VERDE
+
+--deploy-check (RNF_01), 2026-11-10T02:30:08.919Z: esperado regla vieja -> regla nueva con las retenciones de la foto
+  driver-1778271901513 pendiente stl-1794233484852-driver-driver-1778271901513: 6.032.440 -> 6.032.440 (diferencia 0)
+  driver-1778271901513 siguiente corte: 75 -> 75 pedidos, 6.547.910 -> 6.547.910 (diferencia 0)
+  driver-1784251215977 siguiente corte: 0 -> 0 pedidos, 0 -> 0 (diferencia 0)
+  recibidos: 0 pasan a recibido, 1 dejan de estarlo (KNT-007828)
+--deploy-check CON DIFERENCIAS: la cifra la aprueba el responsable antes de desplegar
+
+## node scripts/snapshot-038-baseline.js (en seco)
+Spec 038 · foto historica · 2026-11-10T02:30:17.194Z
+Cortes de domiciliario leidos: 61; asientos: 9626
+
+driver-1778271901513: 59 cortes (59 en la foto, 4836 filas) · 16 retenciones · $686.200
+    KNT-000262       $109.900
+    KNT-002682        $93.900
+    KNT-007828        $81.900
+    KNT-003259        $78.900
+    KNT-003837        $78.900
+    KNT-003827        $78.900
+    KNT-004540        $78.900
+    KNT-006258        $78.900
+    KNT-005724        $27.000
+    KNT-006347        $27.000
+    KNT-002965        $-8.000
+    KNT-003316        $-8.000
+    KNT-003387        $-8.000
+    KNT-003493        $-8.000
+    KNT-006650        $-8.000
+    KNT-006722        $-8.000
+driver-1784251215977: 2 cortes (2 en la foto, 19 filas) · 0 retenciones · $0
+
+Total: 2 domiciliarios · 16 retenciones · $686.200
+Para escribir (solo con aprobacion): --write --approved-by "<nombre>" --expect-total 686200 --expect-orders 16
+
+En seco: no se escribe nada (anade --write con aprobacion para escribir).
+
+## node scripts/compensate-038.js driver-1778271901513 --exclude KNT-005724,KNT-006347 (previsualizacion)
+Spec 038 · compensacion de driver-1778271901513 · 2026-11-10T02:30:26.891Z
+AVISO: la foto aun no esta escrita; las retenciones se derivan en memoria como las escribiria el script de la foto ahora. Solo previsualizacion.
+
+pedido         |    cobrado |     debido | diferencia | entra por            | estado
+KNT-000262     |   $109.900 |         $0 |   $109.900 | next                 | a compensar
+KNT-002682     |   $187.800 |    $93.900 |    $93.900 | next                 | a compensar
+KNT-007828     |    $73.900 |    $-8.000 |    $81.900 | pending:stl-1794233484852-driver-driver-1778271901513 | a compensar
+KNT-003259     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003837     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-003827     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-004540     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-006258     |    $78.900 |         $0 |    $78.900 | next                 | a compensar
+KNT-005724     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (pendiente de aclarar si paso a prepago (spec §5))
+KNT-006347     |    $19.000 |    $-8.000 |    $27.000 | next                 | PENDIENTE (pendiente de aclarar si paso a prepago (spec §5))
+KNT-002965     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-003316     |   $113.900 |   $121.900 |    $-8.000 | next                 | a compensar
+KNT-003387     |    $65.900 |    $73.900 |    $-8.000 | next                 | a compensar
+KNT-003493     |   $-24.000 |   $-16.000 |    $-8.000 | next                 | a compensar
+KNT-006650     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+KNT-006722     |    $73.900 |    $81.900 |    $-8.000 | next                 | a compensar
+
+A compensar: $632.200 (positivo = a favor del domiciliario) · excluido y pendiente: $54.000
+Huella: fd1c3b81
+Para aplicar (solo con aprobacion): driver-1778271901513 --exclude KNT-005724,KNT-006347 --exclude-reason "pendiente de aclarar si paso a prepago (spec §5)" --apply --approved-by "<nombre>" --reason "<motivo>" --fingerprint fd1c3b81
+
+Previsualizacion: no se escribe nada (anade --apply con aprobacion para aplicar).

@@ -482,6 +482,8 @@ const CAUSE_LABEL: Record<ReconciliationCause, string> = {
   settlement_cash_pending_stale: "Corte con pendiente guardado desactualizado",
   settlement_cash_pending_missing: "Corte sin pendiente guardado",
   settlement_later_correction: "Correccion posterior al corte",
+  settlement_credit_in: "Saldo a favor (o deuda) que el corte recibe de otros cortes",
+  settlement_orders_no_cash_here: "Pedido sin efectivo que cobrar en este corte (devolucion o ya cobrado en otro)",
   settlement_orders_received: "Pedidos del corte ya recibidos",
   settlement_orders_covered_by_netting: "Pedidos cubiertos por compensacion",
   settlement_orders_outside_universe: "Pedidos del corte que no estan en la lista",

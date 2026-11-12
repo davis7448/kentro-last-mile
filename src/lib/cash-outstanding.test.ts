@@ -7,8 +7,16 @@
  * El modulo se carga con `import()` dentro de cada prueba para que, mientras no exista, cada caso
  * falle con su propio mensaje en vez de tumbar el archivo entero.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCodReceivedSet, isSellerEntryEligible } from "../../functions/src/seller-ledger";
+import {
+  computeHolds,
+  type DriverLedgerContext,
+  lastRecalculatedAt,
+  rebuildHistoricalCharges
+} from "../../functions/src/driver-cash-ledger";
 
 type CashOutstandingModule = typeof import("../../functions/src/cash-outstanding");
 type ReportInput = Parameters<CashOutstandingModule["buildCashOutstandingReport"]>[0];
@@ -1397,16 +1405,47 @@ type T9Reconciliation = import("../../functions/src/cash-outstanding").PositionR
 type T9ReconcileFn = (input: ReportInput, listed: { rows: T9Row[]; nettedRows: T9Row[] }) => T9Reconciliation;
 type T9Entry = ReturnType<typeof codEntry> | ReturnType<typeof payEntry>;
 
+type T9CashInputs = { sellerEntries: T9Entry[]; driverEntries: T9Entry[]; orderMeta: Map<string, unknown> };
+type T9LegacySummary = { expectedCop: number; allocations: Array<{ orderId: string; expectedCop: number; receivedCop: number; covered: boolean }> };
+
 type T9Math = {
-  computeDriverCashSummary: typeof import("../../functions/src/settlement-math").computeDriverCashSummary;
+  /**
+   * Spec 038 T22: la regla vieja (`computeDriverCashSummary`) se retiro de functions/. Estas pruebas la necesitan
+   * para FABRICAR cortes viejos tal como los guardaba produccion antes de la 038 (es lo que hay en la base hoy);
+   * no para cobrar nada. Copia de referencia, rotulada, de su `expectedCop` y sus asignaciones.
+   */
+  legacyCashSummary: (inputs: T9CashInputs, orderIds: string[], receivedCop: number) => T9LegacySummary;
   computeDriverReceivable: typeof import("../../functions/src/driver-receivable").computeDriverReceivable;
 };
 
+function t9LegacyCashSummary(inputs: T9CashInputs, orderIds: string[], receivedCop: number): T9LegacySummary {
+  const ids = Array.from(new Set(orderIds));
+  const byOrder = (list: T9Entry[], keep: (entry: T9Entry) => boolean) => {
+    const totals = new Map<string, number>();
+    for (const entry of list) if (ids.includes(entry.orderId) && keep(entry)) totals.set(entry.orderId, (totals.get(entry.orderId) ?? 0) + entry.amountCop);
+    return totals;
+  };
+  const cod = byOrder(inputs.sellerEntries, (entry) => entry.type === "cod_revenue" || entry.type === "cod_remittance");
+  const pay = byOrder(inputs.driverEntries, (entry) => entry.type === "driver_earning");
+  const owedOf = (orderId: string) => Math.max(0, (cod.get(orderId) ?? 0) - (pay.get(orderId) ?? 0));
+  let remaining = Math.max(0, receivedCop);
+  const allocations = ids
+    .filter((orderId) => owedOf(orderId) > 0)
+    .sort((left, right) => left.localeCompare(right))
+    .map((orderId) => {
+      const expectedCop = owedOf(orderId);
+      const received = Math.min(expectedCop, remaining);
+      remaining -= received;
+      return { orderId, expectedCop, receivedCop: received, covered: received >= expectedCop };
+    });
+  const total = (values: Map<string, number>) => Array.from(values.values()).reduce((sum, value) => sum + value, 0);
+  return { expectedCop: ids.length === 0 ? 0 : Math.max(0, total(cod) - total(pay)), allocations };
+}
+
 async function t9LoadMath(): Promise<T9Math> {
-  const settlementMath = await import("../../functions/src/settlement-math");
   const receivable = await import("../../functions/src/driver-receivable");
   return {
-    computeDriverCashSummary: settlementMath.computeDriverCashSummary,
+    legacyCashSummary: t9LegacyCashSummary,
     computeDriverReceivable: receivable.computeDriverReceivable
   };
 }
@@ -1426,7 +1465,47 @@ function t9Reconcile(core: CashOutstandingModule): T9ReconcileFn {
 
 const T9_SCOPE = { kind: "admin" as const, includeReconciliation: true };
 
-type T9World = { orders: OrderFixture[]; entries: T9Entry[]; settlements: SettlementFixture[]; unreadable: string[] };
+/**
+ * `unheldOrderIds` (spec 038): pedidos cuya correccion ocurrio DESPUES de la foto historica, asi que no tienen
+ * retencion. Sin el campo, la conciliacion deriva el contexto como lo haria la foto hoy, y RF_17 congela
+ * toda diferencia historica: un corte viejo se recalcula igual a lo que guardo. Con el, esas diferencias son
+ * correcciones posteriores al despliegue, que es lo que las pruebas de la T26 quieren ejercitar.
+ */
+type T9World = { orders: OrderFixture[]; entries: T9Entry[]; settlements: SettlementFixture[]; unreadable: string[]; unheldOrderIds?: string[] };
+
+/** El contexto que la foto habria dejado ANTES de las correcciones de `unheldOrderIds`. */
+function t9PostSnapshotLedgers(world: T9World): Map<string, DriverLedgerContext> {
+  const unheld = new Set(world.unheldOrderIds ?? []);
+  const codByOrder = new Map<string, T9Entry[]>();
+  const payByOrder = new Map<string, T9Entry[]>();
+  for (const entry of world.entries) {
+    const target = entry.ownerType === "seller" ? codByOrder : payByOrder;
+    target.set(entry.orderId, [...(target.get(entry.orderId) ?? []), entry]);
+  }
+  const ledgers = new Map<string, DriverLedgerContext>();
+  for (const driverId of new Set(world.settlements.map((item) => item.ownerId))) {
+    const own = world.settlements.filter((item) => item.ownerId === driverId);
+    const withoutHolds: DriverLedgerContext = {
+      driverId,
+      settlements: own.map((item) => ({ id: item.id, status: item.status, orderIds: item.orderIds })),
+      baseline: {
+        driverId,
+        createdAt: "",
+        createdBy: "test",
+        measuredDiffCop: 0,
+        settlements: Object.fromEntries(own.map((item) => [item.id, rebuildHistoricalCharges(item as never, codByOrder as never, payByOrder as never)]))
+      },
+      holds: null
+    };
+    const holds = computeHolds({
+      entries: world.entries as never,
+      context: withoutHolds,
+      recalculatedAt: new Map(own.map((item) => [item.id, lastRecalculatedAt(item as never)]))
+    }).filter((hold) => !unheld.has(hold.orderId));
+    ledgers.set(driverId, { ...withoutHolds, holds: { driverId, createdAt: "", holds } });
+  }
+  return ledgers;
+}
 
 function t9Input(world: T9World, overrides: Partial<ReportInput> = {}): ReportInput {
   return input({
@@ -1436,6 +1515,7 @@ function t9Input(world: T9World, overrides: Partial<ReportInput> = {}): ReportIn
     unreadableOrderIds: world.unreadable,
     scope: T9_SCOPE,
     coverage: "full",
+    ...(world.unheldOrderIds?.length ? { driverLedgers: t9PostSnapshotLedgers(world) } : {}),
     ...overrides
   });
 }
@@ -1445,7 +1525,8 @@ function t9Merge(...worlds: T9World[]): T9World {
     orders: worlds.flatMap((world) => world.orders),
     entries: worlds.flatMap((world) => world.entries),
     settlements: worlds.flatMap((world) => world.settlements),
-    unreadable: worlds.flatMap((world) => world.unreadable)
+    unreadable: worlds.flatMap((world) => world.unreadable),
+    unheldOrderIds: worlds.flatMap((world) => world.unheldOrderIds ?? [])
   };
 }
 
@@ -1477,8 +1558,9 @@ type T9SettlementOptions = {
 };
 
 /**
- * Corte de domiciliario COHERENTE por construccion: esperado, asignaciones y pendiente salen de
- * `computeDriverCashSummary` sobre los mismos asientos que recibe el informe.
+ * Corte de domiciliario COHERENTE por construccion: esperado, asignaciones y pendiente salen de la regla
+ * vieja (`legacyCashSummary`, como los guardaba produccion antes de la 038) sobre los mismos asientos que
+ * recibe el informe.
  */
 function t9Settlement(math: T9Math, id: string, entries: T9Entry[], options: T9SettlementOptions): SettlementFixture {
   const cashInputs = {
@@ -1486,9 +1568,9 @@ function t9Settlement(math: T9Math, id: string, entries: T9Entry[], options: T9S
     driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
     orderMeta: new Map()
   };
-  const expectedCop = math.computeDriverCashSummary(cashInputs as never, options.orderIds, 0).expectedCop;
+  const expectedCop = math.legacyCashSummary(cashInputs, options.orderIds, 0).expectedCop;
   const receivedCop = options.received === "expected" ? expectedCop : options.received;
-  const summary = math.computeDriverCashSummary(cashInputs as never, options.orderIds, receivedCop);
+  const summary = math.legacyCashSummary(cashInputs, options.orderIds, receivedCop);
   const recalculatedPending = Math.max(0, summary.expectedCop - receivedCop);
   const built = settlement(id, {
     status: options.status,
@@ -1512,7 +1594,7 @@ function t9RecalculatedPending(math: T9Math, entries: T9Entry[], stored: Settlem
     driverEntries: entries.filter((entry) => entry.ownerType === "driver"),
     orderMeta: new Map()
   };
-  const expectedCop = math.computeDriverCashSummary(cashInputs as never, stored.orderIds, 0).expectedCop;
+  const expectedCop = math.legacyCashSummary(cashInputs, stored.orderIds, 0).expectedCop;
   return Math.max(0, expectedCop - (stored.cashReceivedCop ?? 0));
 }
 
@@ -1643,7 +1725,9 @@ const T9_SCENARIOS: T9Scenario[] = [
         { orderId: `${p}a`, expectedCop: 45_000, receivedCop: 45_000, covered: true },
         { orderId: `${p}b`, expectedCop: 45_000, receivedCop: 45_000, covered: false }
       ];
-      return { orders: [order(`${p}a`), order(`${p}b`)], entries, settlements: [stale], unreadable: [] };
+      // Spec 038: la correccion de `b` es posterior a la foto (sin retencion); si fuera anterior, RF_17 la
+      // congelaria y el corte se recalcularia igual a lo guardado.
+      return { orders: [order(`${p}a`), order(`${p}b`)], entries, settlements: [stale], unreadable: [], unheldOrderIds: [`${p}a`, `${p}b`] };
     }
   },
   {
@@ -1679,7 +1763,10 @@ const T9_SCENARIOS: T9Scenario[] = [
   {
     // El tipo medido (29 cortes): conciliado, recibido = esperado, pendiente 0, una asignacion sin cubrir.
     cause: "settlement_orders_covered_by_netting",
-    amountCop: 45_000,
+    // Spec 038: `n` estaba en el corte sin asignacion, asi que no aporto recaudo (RF_05: min(0, ...)). Su
+    // diferencia historica (+45.000) queda congelada como retencion hasta aprobar la compensacion (RF_17):
+    // en este corte aporta 0. Antes de la 038 eran 45.000.
+    amountCop: 0,
     settlementId: (p) => `${p}s`,
     orderId: (p) => `${p}n`,
     build: (math, p) => {
@@ -2124,7 +2211,10 @@ describe("T9 · conciliacion por causas sin residuo (RNF_02, RF_09)", () => {
         orders: ["lb-a", "lb-b", "lb-c", "lb-d", "lb-one", "lb-out1", "lb-out2"].map((id) => order(id)),
         entries: [...firstEntries, ...secondEntries, ...outsideEntries],
         settlements: [first, second],
-        unreadable: []
+        unreadable: [],
+        // Spec 038: se ejercita la linea base del 2026-10-02 como si sus correcciones fueran posteriores a la
+        // foto; si no, RF_17 congela esas diferencias y no hay correccion posterior que reportar.
+        unheldOrderIds: ["lb-a", "lb-b", "lb-c", "lb-d", "lb-one"]
       };
     }
 
@@ -2557,10 +2647,15 @@ describe("T26 · caso tipo mayo: pedido en el corte pero fuera de sus totales, c
     expect(rec.staleSettlementsCop).toBe(0);
   });
 
-  it("la diferencia (−79.900) va a settlement_later_correction con el id del corte M", async () => {
+  // Spec 038 (2026-11-09): antes la diferencia (−79.900) iba a settlement_later_correction del corte M. Era un
+  // efecto del parche por fechas de T25: recalculaba M con los asientos de `n` anteriores a M, como si M lo
+  // hubiera cobrado. Con la regla nueva lo cobrado por cada corte sale de su registro: M no cobro `n` (tiene
+  // asignaciones y `n` no figura, RF_05) y M2 lo absorbio. M se recalcula igual a lo guardado: el
+  // domiciliario no debe nada, que es lo que dice el caso.
+  it("spec 038: M se recalcula igual a lo guardado (no cobro `n`); ninguna correccion posterior", async () => {
     const math = await t9LoadMath();
     const { rec } = await t9Run(mayWorld(math));
-    expect(t26Pairs(rec, "settlement_later_correction")).toEqual([["t26m-M", -79_900]]);
+    expect(t26Pairs(rec, "settlement_later_correction")).toEqual([]);
   });
 
   it("unexplainedCop 0 y la identidad exacta", async () => {
@@ -2584,7 +2679,8 @@ describe("T26 · un corte que no cuadra consigo mismo es stale por exactamente e
       { orderId: "t26x-a", expectedCop: 45_000, receivedCop: 45_000, covered: true },
       { orderId: "t26x-b", expectedCop: 45_000, receivedCop: 15_000, covered: false }
     ];
-    return { orders: [order("t26x-a"), order("t26x-b")], entries, settlements: [stored], unreadable: [] };
+    // Spec 038: correccion posterior a la foto (ver T9World.unheldOrderIds).
+    return { orders: [order("t26x-a"), order("t26x-b")], entries, settlements: [stored], unreadable: [], unheldOrderIds: ["t26x-a", "t26x-b"] };
   }
 
   it("precondicion: R = 159.900", async () => {
@@ -2659,5 +2755,115 @@ describe(`T26 · propiedad: reparto stale / correccion posterior (semilla ${T9_S
       expect(rec.staleSettlementsCop).toBe(t9Sum(expected.map((item) => item.stale)));
     }
     expect(splitSeen).toBeGreaterThan(10);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Spec 038 T15
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Con la regla de la 038, cada corte de domiciliario se recalcula con lo que los DEMAS ya registraron
+ * (`cashCharges` o la foto historica), sin el parche por fechas de T25. La identidad de la 026 se reescribe
+ * con eso: el neto de un pedido "en este corte" es su cargo en este corte, el tope del esperado es el saldo
+ * a favor de salida, y el saldo que el corte recibe de los demas es una causa propia.
+ */
+describe("spec 038 T15 · la identidad de la 026 con cortes calculados por la regla nueva", () => {
+  const BEFORE = "2026-09-18T15:00:00.000Z";
+  const A_AT = "2026-09-20T10:00:00.000Z";
+  const CORRECTION_AT = "2026-09-24T15:00:00.000Z";
+  const B_AT = "2026-09-26T10:00:00.000Z";
+  const at = <T extends { createdAt: string }>(entry: T, createdAt: string): T => ({ ...entry, createdAt });
+  const charge = (orderId: string, chargedCop: number, driverPayCop = 0) => ({ orderId, codCop: chargedCop + driverPayCop, driverPayCop, chargedCop, codSeenCop: 0 });
+
+  /** Entregado y cobrado en A; despues corregido a fallido; B (pendiente) le devuelve lo cobrado. */
+  function refundWorld(): T9World {
+    const cod = at(codEntry("t38-o1", 78_900), BEFORE);
+    const pay = at(payEntry("t38-o1", 8_000), BEFORE);
+    const reverseCod = at(codEntry("t38-o1", -78_900, "cod_remittance"), CORRECTION_AT);
+    const reversePay = at(payEntry("t38-o1", -8_000), CORRECTION_AT);
+    const a = settlement("t38-A", {
+      status: "reconciled",
+      orderIds: ["t38-o1"],
+      walletEntryIds: [pay.id],
+      createdAt: A_AT,
+      reconciledAt: A_AT,
+      cashExpectedCop: 70_900,
+      cashReceivedCop: 70_900,
+      cashPendingCop: 0,
+      cashAllocations: [{ orderId: "t38-o1", expectedCop: 70_900, receivedCop: 70_900, covered: true }],
+      cashCharges: [charge("t38-o1", 70_900, 8_000)],
+      creditInCop: 0,
+      creditOutCop: 0
+    } as Partial<SettlementFixture>);
+    const b = settlement("t38-B", {
+      status: "pending",
+      orderIds: ["t38-o1"],
+      walletEntryIds: [reversePay.id],
+      createdAt: B_AT,
+      cashExpectedCop: 0,
+      cashReceivedCop: 0,
+      cashPendingCop: 0,
+      cashAllocations: [],
+      cashCharges: [charge("t38-o1", -70_900, -8_000)],
+      creditInCop: 0,
+      creditOutCop: 70_900
+    } as Partial<SettlementFixture>);
+    return { orders: [order("t38-o1", { status: "failed" })], entries: [cod, pay, reverseCod, reversePay], settlements: [b, a], unreadable: [] };
+  }
+
+  it("la identidad cierra, A no se marca stale ni corregida y la devolucion de B aparece como saldo a favor", async () => {
+    const { rec } = await t9Run(refundWorld());
+    expect(rec.unexplainedCop).toBe(0);
+    expect(rec.unexplainedOrderIds).toEqual([]);
+    expect(rec.staleSettlementsCop).toBe(0);
+    const ofA = rec.causes.filter((item) => item.settlementId === "t38-A" && item.amountCop !== 0);
+    expect(ofA.filter((item) => item.cause === "settlement_later_correction" || item.cause === "settlement_cash_pending_stale")).toEqual([]);
+    expect(t9CausesOf(rec, "settlement_expected_clamp").filter((item) => item.settlementId === "t38-B").map((item) => item.amountCop)).toEqual([70_900]);
+  });
+
+  it("el saldo que un corte recibe de los demas es una causa propia y la identidad sigue cerrando", async () => {
+    const world = refundWorld();
+    const cod2 = at(codEntry("t38-o2", 50_000), B_AT);
+    const pay2 = at(payEntry("t38-o2", 8_000), B_AT);
+    const c = settlement("t38-C", {
+      status: "pending",
+      orderIds: ["t38-o2"],
+      walletEntryIds: [pay2.id],
+      createdAt: "2026-09-28T10:00:00.000Z",
+      cashExpectedCop: 0,
+      cashReceivedCop: 0,
+      cashPendingCop: 0,
+      cashCharges: [charge("t38-o2", 42_000, 8_000)],
+      creditInCop: 70_900,
+      creditOutCop: 28_900
+    } as Partial<SettlementFixture>);
+    const { rec } = await t9Run({ ...world, orders: [...world.orders, order("t38-o2")], entries: [...world.entries, cod2, pay2], settlements: [...world.settlements, c] });
+    expect(rec.unexplainedCop).toBe(0);
+    expect(t9CausesOf(rec, "settlement_credit_in").filter((item) => item.settlementId === "t38-C").map((item) => item.amountCop)).toEqual([-70_900]);
+  });
+
+  it("el informe ya no lleva el parche por fechas de T25", () => {
+    const source = readFileSync(resolve(__dirname, "../../functions/src/cash-outstanding.ts"), "utf8");
+    expect(source).not.toMatch(/belongsHere/);
+    expect(source).not.toMatch(/computeDriverCashSummary\(/);
+  });
+});
+
+describe("spec 038 · T16 · el informe pasa el recaudo por pedido a la regla de recibido", () => {
+  it("un pedido cobrado y saldado en un corte nuevo no se lista como efectivo sin llegar", async () => {
+    const { buildCashOutstandingReport } = await loadCore();
+    const cod = codEntry("n1", 42_000);
+    const corte = {
+      ...settlement("A", {
+        status: "reconciled", orderIds: ["n1"], walletEntryIds: [cod.id], codCop: 42_000, netCop: -42_000,
+        cashExpectedCop: 42_000, cashReceivedCop: 42_000, cashPendingCop: 0,
+        cashAllocations: [{ orderId: "n1", expectedCop: 42_000, receivedCop: 42_000, covered: true }]
+      }),
+      reconciledAt: "2026-09-30T10:00:00.000Z",
+      cashCharges: [{ orderId: "n1", codCop: 42_000, driverPayCop: 0, chargedCop: 42_000, codSeenCop: 42_000 }]
+    };
+    const report = buildCashOutstandingReport(input({ orders: [order("n1")], settlements: [corte] as never, receivableEntries: [cod] }));
+    expect(listedIds(report)).toEqual([]);
   });
 });

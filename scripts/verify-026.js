@@ -17,8 +17,10 @@
  *     { over30Days, coveredByNetting, rows } — T18 compara contra estos ids (plan 5.3, hallazgo D).
  *
  * Usa ADC con las librerias de functions/node_modules y la logica COMPILADA de functions/lib
- * (buildCodReceivedSet, computeDriverCashSummary, settlementCashReceivedCop,
+ * (buildCodReceivedSet, computeDriverCorte + buildDriverLedgerSnapshot, settlementCashReceivedCop,
  * computePlatformPosition): nada de esa aritmetica se copia aqui. Requiere `cd functions && npm run build`.
+ * Spec 038 T22: el "pendiente recalculado" de cada corte sale de la regla nueva con el contexto del
+ * domiciliario (la foto escrita si existe; si no, la que escribiria el script de la foto ahora).
  *
  * Nota para quien lo edite: la guarda de T1 (src/lib/spec-026-guards.test.ts) prohibe en el fuente
  * los literales de las llamadas de escritura de Firestore, incluidos Map/Set/hash con esos mismos
@@ -32,8 +34,15 @@ const admin = require(path.join(__dirname, "../functions/node_modules/firebase-a
 if (admin.apps.length === 0) admin.initializeApp({ projectId: "kentro-last-mile" });
 const db = admin.firestore();
 
-const { buildCodReceivedSet } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
-const { computeDriverCashSummary, settlementCashReceivedCop } = require(path.join(__dirname, "../functions/lib/settlement-math"));
+const { buildCodReceivedSet, codEntriesByOrder } = require(path.join(__dirname, "../functions/lib/seller-ledger"));
+/**
+ * Spec 038 (RF_11): sin el recaudo por pedido, `buildCodReceivedSet` no da por recibido ningun pedido de un corte
+ * nuevo. Los prefiltros que aun no leyeron asientos lo pasan VACIO a proposito, igual que la API de la 026: leen
+ * de mas, nunca de menos.
+ */
+const STRICT_WITHOUT_COD = new Map();
+const { settlementCashReceivedCop } = require(path.join(__dirname, "../functions/lib/settlement-math"));
+const { buildDriverLedgerSnapshot, computeDriverCorte } = require(path.join(__dirname, "../functions/lib/driver-cash-ledger"));
 const { computePlatformPosition } = require(path.join(__dirname, "../functions/lib/platform-position"));
 
 const EVIDENCE_DIR = path.join(__dirname, "../.sdd/evidence/026_efectivo_que_no_llega_a_un_corte");
@@ -154,7 +163,7 @@ async function baseline() {
     db.collection("walletEntries").where("type", "in", ["cod_revenue", "cod_remittance", "driver_earning"])
   );
 
-  const received = buildCodReceivedSet(settlements);
+  const received = buildCodReceivedSet(settlements, codEntriesByOrder(receivableEntries));
   const ordersById = new Map(orders.map((order) => [order.id, order]));
   const candidates = orders.filter((order) => !received.has(order.id));
 
@@ -254,11 +263,37 @@ async function baseline() {
 
   // ---- Cortes: pendiente ausente y pendiente distinto del recalculado (plan 4.4, hallazgo B) ----
   const orderMeta = new Map(orders.map((order) => [order.id, { paymentMethod: order.paymentMethod, status: order.status, createdAt: order.createdAt, trackingCode: order.trackingCode }]));
-  const cashInputs = { sellerEntries, driverEntries, orderMeta };
+  // Spec 038: el contexto de cada domiciliario (sus cortes, foto y retenciones). Solo lecturas.
+  const ledgerEntries = [...sellerEntries, ...driverEntries];
+  // RF_01b: quien tiene asignado cada pedido del universo (los demas cuentan como hasta ahora).
+  const deliveredBy = new Map(orders.map((order) => [order.id, order.driverId || null]));
+  const contextByDriver = new Map(
+    await Promise.all(
+      [...new Set(settlements.map((s) => s.ownerId))].map(async (driverId) => {
+        const own = settlements.filter((s) => s.ownerId === driverId);
+        const derived = buildDriverLedgerSnapshot({ driverId, settlements: own, entries: ledgerEntries, now: now.toISOString(), createdBy: "verify-026", deliveredBy }).context;
+        const [baselineSnap, holdsSnap] = await Promise.all([
+          db.collection("driverLedgerBaselines").doc(driverId).get(),
+          db.collection("driverCashHolds").doc(driverId).get()
+        ]);
+        const context = baselineSnap.exists ? { ...derived, baseline: baselineSnap.data(), holds: holdsSnap.exists ? holdsSnap.data() : null } : derived;
+        return [driverId, context];
+      })
+    )
+  );
   const settlementChecks = settlements.map((s) => {
     const receivedCop = settlementCashReceivedCop(s);
-    const summary = computeDriverCashSummary(cashInputs, s.orderIds ?? [], receivedCop);
-    const recalculatedPendingCop = Math.max(0, summary.expectedCop - receivedCop);
+    const figures = computeDriverCorte({
+      settlementId: s.id,
+      orderIds: s.orderIds ?? [],
+      ownEntryIds: s.walletEntryIds ?? [],
+      entries: ledgerEntries,
+      context: contextByDriver.get(s.ownerId),
+      receivedCop,
+      orderMeta,
+      deliveredBy
+    });
+    const recalculatedPendingCop = Math.max(0, figures.cashExpectedCop - receivedCop);
     const hasField = typeof s.cashPendingCop === "number";
     return {
       id: s.id,
@@ -287,7 +322,7 @@ async function baseline() {
   // ---- Evidencia legible ----
   say(`Spec 026 · T1 · linea base contra produccion (SOLO LECTURA)`);
   say(`Generado: ${now.toISOString()}  ·  comando: node scripts/verify-026.js baseline`);
-  say(`Logica: functions/lib (buildCodReceivedSet, computeDriverCashSummary, settlementCashReceivedCop, computePlatformPosition);`);
+  say(`Logica: functions/lib (buildCodReceivedSet, computeDriverCorte con buildDriverLedgerSnapshot, settlementCashReceivedCop, computePlatformPosition);`);
   say(`        isDriverSettlementCashSettled reproducido localmente hasta que T4 lo cree (plan 2.9).`);
   say();
   say(`1. Universo`);
@@ -348,7 +383,7 @@ async function baseline() {
   }
   for (const id of onlyInPlan) {
     const row = nettedRows.find((r) => r.orderId === id);
-    // computeDriverCashSummary solo asigna a pedidos con efectivo esperado > 0: uno con neto <= 0 no
+    // La regla del corte solo asigna a pedidos con efectivo esperado > 0: uno con neto <= 0 no
     // tiene asignacion, asi que no esta en a) pero tampoco en buildCodReceivedSet.
     const reason = row.expectedCashCop === 0 ? "efectivo esperado 0 (neto <= 0): sin asignacion en cashAllocations, nunca 'covered'" : "con asignacion cubierta en otro corte o sin asignacion";
     say(`       ${id}: recaudo ${cop(row.collectedCop)}, esperado ${cop(row.expectedCashCop)} — ${reason}`);
@@ -357,7 +392,7 @@ async function baseline() {
   say(`6. Cortes de domiciliario (${settlements.length}; ${Object.entries(countBy(settlements, (s) => s.status)).map(([k, v]) => `${k} ${v}`).join(", ")})`);
   say(`  Sin cashPendingCop (hallazgo B): ${missingPending.length}; recalculado ${cop(sumBy(missingPending, (c) => c.recalculatedPendingCop))}`);
   for (const c of missingPending) say(`    ${c.id} · ${c.status} · ${c.ownerName || "-"} · ${String(c.createdAt || "").slice(0, 10)} · recalculado ${cop(c.recalculatedPendingCop)}`);
-  say(`  Con cashPendingCop distinto del recalculado (computeDriverCashSummary): ${stalePending.length}; guardado ${cop(sumBy(stalePending, (c) => c.storedPendingCop))} vs recalculado ${cop(sumBy(stalePending, (c) => c.recalculatedPendingCop))}`);
+  say(`  Con cashPendingCop distinto del recalculado (computeDriverCorte, regla 038): ${stalePending.length}; guardado ${cop(sumBy(stalePending, (c) => c.storedPendingCop))} vs recalculado ${cop(sumBy(stalePending, (c) => c.recalculatedPendingCop))}`);
   for (const c of stalePending) say(`    ${c.id} · ${c.status} · ${c.ownerName || "-"} · guardado ${cop(c.storedPendingCop)} · recalculado ${cop(c.recalculatedPendingCop)}`);
   say(`  Asientos driver_earning sin settlementId: ${driverEntriesWithoutSettlement.length} (${cop(sumBy(driverEntriesWithoutSettlement, (e) => e.amountCop))})`);
   say(`  driverReceivableCop de la posicion (computePlatformPosition con los mismos asientos): ${cop(position.driverReceivableCop)}`);
@@ -448,7 +483,8 @@ async function loadLikeTheLoader(scope) {
     db.collection("settings").doc("cashAlerts").get().then((snap) => log.push({ label: "settings/cashAlerts", docs: snap.exists ? 1 : 0, ms: 0 })),
     ...nameCollections.map((collection) => timedRead(log, `${collection} (nombres)`, qcNames(collection)))
   ]);
-  const received = buildCodReceivedSet(settlements);
+  // Igual que cash-outstanding-api.ts: el prefiltro aun no tiene asientos.
+  const received = buildCodReceivedSet(settlements, STRICT_WITHOUT_COD);
   const candidateIds = orders.filter((order) => !received.has(order.id)).map((order) => order.id);
   const isFull = scope.kind === "admin" && scope.includeReconciliation;
   const lots = chunks(candidateIds, IN_BATCH);
@@ -512,7 +548,8 @@ async function queryCheck() {
   );
   const leader = leaderCounts.sort((a, b) => b.count - a.count)[0];
   const driverSettlements = (await db.collection("settlements").where("kind", "==", "driver").get()).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const receivedNow = buildCodReceivedSet(driverSettlements);
+  // Muestra de candidatos: con el prefiltro estricto, un superconjunto de los no recibidos.
+  const receivedNow = buildCodReceivedSet(driverSettlements, STRICT_WITHOUT_COD);
   const sampleIds = (await qcCodOrders().select().get()).docs.map((doc) => doc.id).filter((id) => !receivedNow.has(id)).slice(0, IN_BATCH);
 
   // ---- 1. Cada consulta del cargador con limit(1): pide indice? ----
@@ -710,8 +747,8 @@ function readBaselineIds() {
 }
 
 /** Universo (contraentregas entregadas) y recibidos segun la regla compilada, para dar motivo a los cambios. */
-function evidenceFrom(orderIds, settlements) {
-  return { universeOrderIds: orderIds, receivedOrderIds: [...buildCodReceivedSet(settlements)] };
+function evidenceFrom(orderIds, settlements, codEntries) {
+  return { universeOrderIds: orderIds, receivedOrderIds: [...buildCodReceivedSet(settlements, codEntriesByOrder(codEntries))] };
 }
 
 /**
@@ -738,7 +775,7 @@ async function loadCompareLocal() {
     source: "local (functions/lib compilado + ADC, solo lectura)",
     report,
     position,
-    evidence: evidenceFrom(input.orders.map((order) => order.id), input.settlements),
+    evidence: evidenceFrom(input.orders.map((order) => order.id), input.settlements, input.receivableEntries),
     readCounts: `walletEntries ${walletSnapshot.size}, settlements ${settlementSnapshot.size} (posicion); pedidos del universo ${input.orders.length}`
   };
 }
@@ -775,11 +812,12 @@ async function loadCompareDeployed(credentials) {
     body: JSON.stringify({ email: credentials.email, password: credentials.password, returnSecureToken: true })
   }).then((response) => response.json());
   if (!signIn.idToken) throw new Error(`signInWithPassword fallo: ${JSON.stringify(signIn.error ?? signIn)}`);
-  const [report, position, orderSnapshot, settlementSnapshot] = await Promise.all([
+  const [report, position, orderSnapshot, settlementSnapshot, codSnapshot] = await Promise.all([
     callCallable("getCashOutstanding", signIn.idToken, { includeReconciliation: true }),
     callCallable("getPlatformPosition", signIn.idToken, null),
     db.collection("orders").where("paymentMethod", "==", "cod").where("status", "in", ["delivered", "liquidated"]).select().get(),
-    db.collection("settlements").where("kind", "==", "driver").get()
+    db.collection("settlements").where("kind", "==", "driver").get(),
+    db.collection("walletEntries").where("ownerType", "==", "seller").where("type", "in", ["cod_revenue", "cod_remittance"]).get()
   ]);
   return {
     source: `desplegado (callables getCashOutstanding y getPlatformPosition con sesion de ${credentials.email})`,
@@ -787,7 +825,8 @@ async function loadCompareDeployed(credentials) {
     position,
     evidence: evidenceFrom(
       orderSnapshot.docs.map((doc) => doc.id),
-      settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      settlementSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      codSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
     ),
     readCounts: `pedidos del universo ${orderSnapshot.size}, cortes de domiciliario ${settlementSnapshot.size} (ADC, solo para motivos)`
   };

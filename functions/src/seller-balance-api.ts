@@ -9,6 +9,8 @@
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { buildSellerBalanceInput, computeSellerBalance, type SellerBalanceInput } from "./seller-balance";
+import { codEntriesByOrder, codOrdersToComplete } from "./seller-ledger";
+import { completeCodEntries } from "./seller-ledger-io";
 import type { OrderDoc, SettlementDoc, WalletEntryDoc } from "./seller-ledger";
 
 /** Estados abiertos que pueden estar en la calle. `imported` nunca lleva marca de recogida (medido en T1). */
@@ -47,11 +49,19 @@ export async function loadSellerBalanceInput(db: Firestore, sellerId: string, no
   // Solo hace falta que el asiento de manejo EXISTA; si ademas esta abierto ya viene en openEntries.
   const fulfillmentEntries = fulfillmentSnaps.filter((snap) => snap.exists).map((snap) => ({ ...withId<WalletEntryDoc>(snap), settlementId: "charged" }));
 
+  const wallet = [...openEntries, ...fulfillmentEntries];
+  const settlements = settlementsSnap.docs.map((doc) => withId<SettlementDoc>(doc));
+  // Spec 038 RF_12 (T30): aqui solo estan los asientos SIN CORTAR de esta tienda. Los pedidos que esa vista no da
+  // por recibidos y que mas asientos podrian cambiar (cambio de tienda, recaudo ya cortado) se completan antes.
+  const partialCod = codEntriesByOrder(wallet);
+  const codByOrder = await completeCodEntries(db, partialCod, codOrdersToComplete(settlements, partialCod));
+
   return buildSellerBalanceInput({
     sellerId,
-    wallet: [...openEntries, ...fulfillmentEntries],
+    wallet,
+    codByOrder,
     orders,
-    settlements: settlementsSnap.docs.map((doc) => withId<SettlementDoc>(doc)),
+    settlements,
     settings: (settingsSnap.data() ?? {}) as Record<string, unknown>,
     zones: zoneSnaps.filter((snap) => snap.exists).map((snap) => withId<Record<string, unknown>>(snap)),
     now

@@ -7,6 +7,7 @@
  * paga a una tienda, y ya estaba duplicada entre la UI, store-api.ts y createSettlement.
  */
 
+import { COD_ENTRY_TYPES } from "./driver-cash-ledger";
 import { isDriverSettlementCashSettled, type SettlementDoc as MathSettlementDoc } from "./settlement-math";
 
 export type OrderDoc = Record<string, any>;
@@ -25,8 +26,13 @@ export type SettlementDoc = Record<string, any>;
  * exactamente lo esperado, los ultimos pedidos quedaban "sin cubrir" aunque el efectivo entro entero.
  * Solo se recorren las asignaciones (RF_01b): un pedido que estaba en el corte sin deber efectivo no
  * entra por el. Con faltante real (RF_03) siguen contando solo las cubiertas.
+ *
+ * Spec 038 (RF_11, RF_12): un pedido que ya entro en un corte calculado con la regla nueva (con
+ * `cashCharges`) ademas tiene que pasar `isOrderCodSettled`. `codByOrder` son sus asientos de recaudo
+ * (`cod_revenue`/`cod_remittance`, cualquier tienda); sin el, ese pedido NO se da por recibido: es mas
+ * estricto, nunca mas laxo. Un pedido que solo esta en cortes viejos sigue exactamente con la regla de hoy.
  */
-export function buildCodReceivedSet(settlements: SettlementDoc[]) {
+export function buildCodReceivedSet(settlements: SettlementDoc[], codByOrder?: ReadonlyMap<string, readonly CodEntryLike[]>) {
   const codReceived = new Set<string>();
   for (const settlement of settlements) {
     if (settlement.kind !== "driver") continue;
@@ -41,7 +47,165 @@ export function buildCodReceivedSet(settlements: SettlementDoc[]) {
       for (const orderId of settlement.orderIds ?? []) codReceived.add(String(orderId));
     }
   }
+  const inNewCortes = ordersInNewCortes(settlements);
+  // Spec 038 RF_11b (hallazgo H3): la parte nueva se SUMA a la regla de hoy. Un pedido con una asignacion sin
+  // cubrir en un corte viejo (sin `cashCharges`) que no esta saldado en total sigue sin efectivo recibido, aunque
+  // un corte nuevo saldado lo tenga.
+  const uncoveredInOpenOldCorte = uncoveredInOpenOldCortes(settlements);
+  for (const orderId of inNewCortes) {
+    const codEntries = codByOrder?.get(orderId);
+    if (!codEntries || uncoveredInOpenOldCorte.has(orderId) || !isOrderCodSettled(orderId, settlements, codEntries)) codReceived.delete(orderId);
+    else codReceived.add(orderId);
+  }
   return codReceived;
+}
+
+/** Pedidos que algun corte de domiciliario calculado con la 038 (con `cashCharges`) tiene. */
+function ordersInNewCortes(settlements: SettlementDoc[]): Set<string> {
+  const ids = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
+    for (const charge of settlement.cashCharges) if (charge?.orderId) ids.add(String(charge.orderId));
+  }
+  return ids;
+}
+
+/** RF_11b: pedidos con una asignacion sin cubrir en un corte viejo (sin `cashCharges`) no saldado en total. */
+function uncoveredInOpenOldCortes(settlements: SettlementDoc[]): Set<string> {
+  const ids = new Set<string>();
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || Array.isArray(settlement.cashCharges)) continue;
+    if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) continue;
+    for (const allocation of settlement.cashAllocations ?? []) {
+      if (allocation?.orderId && !allocation.covered) ids.add(String(allocation.orderId));
+    }
+  }
+  return ids;
+}
+
+/**
+ * Spec 038 RF_12 (T30; hallazgo R2 de T28): de los pedidos que una vista PARCIAL tiene (los asientos de una
+ * tienda, o solo los sin cortar), los que esa vista no da por recibidos y que mas asientos si podrian cambiar:
+ * su efectivo ya llego y el ultimo corte saldado existe, pero el neto que ve la vista no es el que vio el corte.
+ * El llamador lee los asientos completos de esos pedidos (`completeCodEntries`) y vuelve a decidir. A un pedido
+ * que ya cuadra no se le leen mas: con todos sus asientos solo dejaria de cuadrar por un dato duplicado, y entonces
+ * el domiciliario debe esa diferencia y el corte que la cobre lo bloquea (RF_11, primera condicion). En regimen
+ * normal la lista sale vacia.
+ */
+export function codOrdersToComplete(settlements: SettlementDoc[], codByOrder: ReadonlyMap<string, readonly CodEntryLike[]>): string[] {
+  const inNewCortes = ordersInNewCortes(settlements);
+  const uncovered = uncoveredInOpenOldCortes(settlements);
+  const ids: string[] = [];
+  for (const [orderId, codEntries] of codByOrder) {
+    if (!inNewCortes.has(orderId) || uncovered.has(orderId)) continue;
+    if (codSettlementState(orderId, settlements, codEntries) === "net_mismatch") ids.push(orderId);
+  }
+  return ids.sort();
+}
+
+/**
+ * El efectivo de un pedido en UN corte de domiciliario ya llego: su asignacion cubierta, o el corte saldado en
+ * total (spec 027 RF_01). Es la pieza por corte de la regla de recibido; la usan `isOrderCodSettled` y la
+ * conciliacion de la 026, para que no haya dos copias.
+ */
+export function isOrderCashSettledInCorte(settlement: SettlementDoc, orderId: string): boolean {
+  if (isDriverSettlementCashSettled(settlement as MathSettlementDoc)) return true;
+  return (settlement.cashAllocations ?? []).some((row: { orderId?: string; covered?: boolean }) => String(row?.orderId ?? "") === orderId && Boolean(row?.covered));
+}
+
+/** Lo minimo de un asiento de recaudo que necesita la regla de recibido. */
+export type CodEntryLike = { amountCop: number; createdAt?: string };
+
+/**
+ * El `codByOrder` de `buildCodReceivedSet` a partir de los asientos que ya lee el llamador (spec 038 T16): el
+ * recaudo de tienda (`cod_revenue`/`cod_remittance`) por pedido, de cualquier tienda. Lo demas se ignora, asi
+ * que se le puede pasar la lectura entera.
+ */
+export function codEntriesByOrder(entries: readonly WalletEntryDoc[]): Map<string, CodEntryLike[]> {
+  const byOrder = new Map<string, CodEntryLike[]>();
+  for (const entry of entries) {
+    const orderId = String(entry?.orderId ?? "");
+    if (!orderId || entry.ownerType !== "seller" || !COD_ENTRY_TYPES.has(entry.type)) continue;
+    const list = byOrder.get(orderId) ?? [];
+    list.push(entry as CodEntryLike);
+    byOrder.set(orderId, list);
+  }
+  return byOrder;
+}
+
+/**
+ * Cuando se calcularon por ultima vez las cifras (`cashCharges`) de un corte nuevo: al crearlo, al pagarlo y con
+ * cada abono mientras estaba pendiente. Conciliar o abonar a un corte ya pagado NO recalcula (RF_04), asi que no
+ * lo hace mas reciente. (`lastRecalculatedAt` cuenta esas fechas y por eso no sirve aqui.)
+ */
+function ledgerComputedAt(settlement: SettlementDoc): string {
+  const paidAt = String(settlement.paidAt ?? "");
+  const receipts = (Array.isArray(settlement.cashReceipts) ? settlement.cashReceipts : [])
+    .map((receipt: { receivedAt?: string }) => String(receipt?.receivedAt ?? ""))
+    .filter((at: string) => at && (!paidAt || at <= paidAt));
+  return [String(settlement.createdAt ?? ""), paidAt, ...receipts].reduce((latest, at) => (at > latest ? at : latest), "");
+}
+
+/**
+ * La parte nueva de "recibido" (spec 038 RF_11; plan §3.7 y §7.5) para un pedido con algun corte de domiciliario
+ * calculado con la regla nueva:
+ *
+ * 1. todo corte nuevo que le cobro efectivo (`chargedCop > 0`) esta saldado para el pedido: su asignacion
+ *    cubierta (aunque el corte siga pendiente, como hoy), o el corte saldado en total (spec 027 RF_01);
+ * 2. hay al menos un corte nuevo saldado para el pedido que lo tiene en `cashCharges` (un corte que solo
+ *    devuelve cuenta si esta saldado en total), y el recaudo neto vigente del pedido (todos sus asientos, de
+ *    cualquier tienda) es el que vio el ultimo de ellos (`codSeenCop`).
+ *
+ * Segunda enmienda, 2026-11-12 (hallazgo R1 de T28): la primera ("lo posterior suma cero") fallaba cuando la
+ * correccion borra y recrea el recaudo de una tienda que aun no cobro. Comparar con lo que vio el ultimo corte
+ * saldado no depende de como se escribio el cambio. El caso B5 sigue bloqueado: el ultimo corte saldado es el
+ * que devolvio, y vio 0.
+ */
+export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): boolean {
+  return codSettlementState(orderId, settlements, codEntries) === "settled";
+}
+
+/**
+ * La decision de `isOrderCodSettled` con su motivo: `cash_missing` (falta efectivo o no hay corte nuevo saldado:
+ * mas asientos no lo cambian) o `net_mismatch` (el neto no es el que vio el ultimo corte saldado: lo cambian).
+ */
+function codSettlementState(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): "settled" | "cash_missing" | "net_mismatch" {
+  type Row = { ownerId: string; computedAt: string; createdAt: string; settled: boolean; otherDriver: boolean; codSeenCop: number };
+  const later = (left: Row, right: Row) => left.computedAt > right.computedAt || (left.computedAt === right.computedAt && left.createdAt > right.createdAt);
+  const rows: Row[] = [];
+  for (const settlement of settlements) {
+    if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
+    const charge = settlement.cashCharges.find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
+    if (!charge) continue;
+    // Un cargo positivo exige su efectivo: asignacion cubierta (aunque el corte siga pendiente, como hoy en la
+    // 018 RF_04) o corte saldado en total. Un corte que solo devuelve cuenta si esta saldado en total.
+    const settled = Number(charge.chargedCop) > 0
+      ? isOrderCashSettledInCorte(settlement, orderId)
+      : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
+    if (Number(charge.chargedCop) > 0 && !settled) return "cash_missing";
+    rows.push({
+      ownerId: String(settlement.ownerId ?? ""), computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""),
+      settled, otherDriver: charge.codOtherDriver === true, codSeenCop: Number(charge.codSeenCop) || 0
+    });
+  }
+  // T32/T33 (hallazgos N1 y M1): `codOtherDriver` dice que, al calcular ese corte, el pedido era de otro
+  // domiciliario. Si el corte mas reciente de un domiciliario lleva la marca, ninguno de sus cortes decide: no le
+  // cobro el recaudo de hoy (N1: su visita fallida, calculada despues, bloqueaba para siempre) y su corte viejo,
+  // saldado cuando si lo entrego, ya no dice nada de el (M1: con la entrega pasada a otro, lo daba por recibido
+  // antes de que nadie entregara el efectivo).
+  const latestByDriver = new Map<string, Row>();
+  for (const row of rows) {
+    const current = latestByDriver.get(row.ownerId);
+    if (!current || later(row, current)) latestByDriver.set(row.ownerId, row);
+  }
+  let governing: Row | null = null;
+  for (const row of rows) {
+    if (!row.settled || row.otherDriver || latestByDriver.get(row.ownerId)?.otherDriver) continue;
+    if (!governing || later(row, governing)) governing = row;
+  }
+  if (!governing) return "cash_missing";
+  const netCop = codEntries.reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
+  return netCop === governing.codSeenCop ? "settled" : "net_mismatch";
 }
 
 /**
@@ -49,8 +213,8 @@ export function buildCodReceivedSet(settlements: SettlementDoc[]) {
  * RF_01): suma, entre cortes de domiciliario, el `receivedCop` de las asignaciones no cubiertas.
  * La regla de "recibido" es la de buildCodReceivedSet; aqui solo se excluye lo que ella acepta.
  */
-export function codPartialReceivedCop(settlements: SettlementDoc[]): Map<string, number> {
-  const received = buildCodReceivedSet(settlements);
+export function codPartialReceivedCop(settlements: SettlementDoc[], codByOrder?: ReadonlyMap<string, readonly CodEntryLike[]>): Map<string, number> {
+  const received = buildCodReceivedSet(settlements, codByOrder);
   const partial = new Map<string, number>();
   for (const settlement of settlements) {
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashAllocations)) continue;

@@ -5,6 +5,7 @@
  */
 import {
   buildCodReceivedSet,
+  codEntriesByOrder,
   type OrderDoc,
   type SettlementDoc,
   type WalletEntryDoc
@@ -198,6 +199,7 @@ export function loadTargetedPaymentInputs(input: {
     const id = String(settlement.id);
     if (!settlementsById.has(id)) settlementsById.set(id, settlement);
   }
-  const codReceived = buildCodReceivedSet(Array.from(settlementsById.values()));
+  // Spec 038 T16: la lectura dirigida trae los asientos del pedido de cualquier dueno; su recaudo decide.
+  const codReceived = buildCodReceivedSet(Array.from(settlementsById.values()), codEntriesByOrder(input.entries));
   return { sellerEntries, settlementsById, codReceived };
 }

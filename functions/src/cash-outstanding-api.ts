@@ -48,8 +48,13 @@ import {
   type NoticeReportInput
 } from "./cash-overdue-notice";
 import { isReceivableCodEntry, isReceivableDriverPay } from "./driver-receivable";
+import type { DriverCashHolds, DriverLedgerBaseline } from "./driver-cash-ledger";
+import { DRIVER_CASH_HOLDS, DRIVER_LEDGER_BASELINES } from "./driver-ledger-io";
 import { isOpsChannelConfigured, sendOpsNotice, type OpsNoticeResult } from "./ops-notify";
-import { buildCodReceivedSet } from "./seller-ledger";
+import { buildCodReceivedSet, type CodEntryLike } from "./seller-ledger";
+
+/** Sin recaudo por pedido, `buildCodReceivedSet` no da por recibido ningun pedido de un corte nuevo. */
+const STRICT_WITHOUT_COD: ReadonlyMap<string, readonly CodEntryLike[]> = new Map();
 import type { SettlementDoc, WalletEntryDoc } from "./settlement-math";
 
 const opsNoticeWebhookUrl = defineSecret("OPS_NOTICE_WEBHOOK_URL");
@@ -168,7 +173,10 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
   const orders = parsedOrders.map(toCoreOrder);
 
   // Paso 3: la regla de recibido (importada, RF_01) acota que asientos hace falta leer en resumen.
-  const received = buildCodReceivedSet(settlements);
+  // Spec 038 T16: aqui aun no hay asientos, asi que se pasa un recaudo VACIO a proposito: un pedido de un corte
+  // nuevo no sale recibido y sus asientos se leen. Es mas estricto (lee de mas, nunca de menos); el informe
+  // vuelve a aplicar la regla con el recaudo leido.
+  const received = buildCodReceivedSet(settlements, STRICT_WITHOUT_COD);
   const candidateIds = orders.filter((order) => !received.has(order.id)).map((order) => order.id);
   const batches = inBatches(candidateIds, ORDER_ID_IN_BATCH);
 
@@ -184,6 +192,17 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
     const reads = await Promise.all(batches.map((ids) => readDocs(db.collection("walletEntries").where("orderId", "in", ids))));
     rawEntries = reads.flat();
   }
+
+  // Spec 038: la conciliacion recalcula cada corte con la regla nueva, y necesita la foto historica y las
+  // retenciones de cada domiciliario. Dos lecturas de colecciones pequenas (un documento por domiciliario).
+  const driverLedgerDocs = isFull
+    ? await Promise.all([readDocs(db.collection(DRIVER_LEDGER_BASELINES)), readDocs(db.collection(DRIVER_CASH_HOLDS))]).then(
+        ([baselineDocs, holdDocs]) => ({
+          baselines: new Map(baselineDocs.map((doc) => [doc.id, doc as unknown as DriverLedgerBaseline])),
+          holds: new Map(holdDocs.map((doc) => [doc.id, doc as unknown as DriverCashHolds]))
+        })
+      )
+    : undefined;
 
   const { entries: parsedEntries, unreadableEntryIds } = parseWalletEntries(rawEntries);
   const entries = parsedEntries as unknown as WalletEntryDoc[];
@@ -216,7 +235,8 @@ export async function loadCashOutstandingInput(db: Firestore, options: LoadCashO
     now: options.now,
     unreadableOrderIds,
     unreadableSettlementIds,
-    unreadableEntryIds
+    unreadableEntryIds,
+    ...(driverLedgerDocs ? { driverLedgerDocs } : {})
   };
 }
 

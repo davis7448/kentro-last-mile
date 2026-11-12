@@ -54,7 +54,7 @@ import { availableHats, defaultHat, shouldShowHatSelector, type Hat, type Sessio
 import { canBulkDisableCommunitySignups, canEditCommunityBrand, canReassignSellerCommunity, type Actor } from "../../functions/src/community-access";
 import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES } from "../../functions/src/community-pricing";
 import { buildSellerBalanceInput, computeSellerBalance, payoutRejectionMessage, type SellerBalance } from "../../functions/src/seller-balance";
-import { buildCodReceivedSet, isSellerEntryEligible } from "../../functions/src/seller-ledger";
+import { buildCodReceivedSet, codEntriesByOrder, isSellerEntryEligible } from "../../functions/src/seller-ledger";
 import { buildCommunityStats, metricDateSource, type CommunityStats, type RawCommunityAggregates } from "../../functions/src/community-stats-math";
 import { firebaseEnabled } from "@/lib/firebase/client";
 import { communityStoresState, storeProfileState, type LoadOutcome, type LoadReport } from "@/lib/load-status";
@@ -7452,7 +7452,8 @@ function netChargeCop(entries: WalletEntry[], types: WalletEntry["type"][]) {
 function buildLiquidationOrderAudits(state: AppState, entries: WalletEntry[] = state.wallet): LiquidationOrderAudit[] {
   const orderIds = new Set(entries.map((entry) => entry.orderId).filter(Boolean) as string[]);
   // Spec 018 RF_04: la definicion unica de efectivo recibido, la misma del corte.
-  const codReceivedOrderIds = buildCodReceivedSet(state.settlements);
+  // Spec 038 (RF_11): con el recaudo por pedido, para los pedidos de cortes de domiciliario nuevos.
+  const codReceivedOrderIds = buildCodReceivedSet(state.settlements, codEntriesByOrder(state.wallet));
   // Indices por id: antes esta funcion escaneaba TODOS los movimientos por cada pedido
   // (O(pedidos x movimientos) = ~14M iteraciones, ~600 ms por llamada). Con los indices
   // es O(pedidos + movimientos) y baja a milisegundos.
@@ -8029,7 +8030,7 @@ function LiquidationsPage({ state, setState, uid, walletLive = true }: { state: 
     const audits = buildLiquidationOrderAudits(state, openEntries);
     // Spec 018: la elegibilidad de tienda es la del servidor (seller-ledger.ts), no una copia local.
     const ordersById = new Map(state.orders.map((order) => [order.id, order]));
-    const codReceived = buildCodReceivedSet(state.settlements);
+    const codReceived = buildCodReceivedSet(state.settlements, codEntriesByOrder(state.wallet));
 
     const pendingEntries = openEntries.filter((entry) => !entry.settlementId);
     const eligiblePendingSellerEntries = pendingEntries.filter(
@@ -12709,6 +12710,16 @@ function SettlementDetailNotice({ group, loading, skippedByBudget }: { group?: D
       <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
         Detalle <span className="tabular font-semibold text-fg">{formatDetailCop(notice.detailCashCop)}</span> · {formatDetailCop(notice.detailDeltaCop)} de ajuste posterior al corte.
         Se liquida la cifra del corte: <span className="tabular font-semibold text-fg">{formatCop(notice.expectedCashCop)}</span>.
+      </p>
+    );
+  }
+  if (notice.carriedCreditCop !== 0) {
+    // Spec 038: un corte nuevo descuenta (o suma) el saldo que viene de otros cortes del domiciliario.
+    return (
+      <p className="text-[11px] text-ink-60" role="status" aria-live="polite">
+        Detalle <span className="tabular font-semibold text-fg">{formatDetailCop(notice.detailCashCop)}</span> ·{" "}
+        {notice.carriedCreditCop > 0 ? "menos" : "mas"} <span className="tabular font-semibold text-fg">{formatCop(Math.abs(notice.carriedCreditCop))}</span>{" "}
+        {notice.carriedCreditCop > 0 ? "a favor" : "de deuda"} de otros cortes · coincide con el corte.
       </p>
     );
   }

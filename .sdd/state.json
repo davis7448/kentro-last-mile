@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "phase": "audit",
+  "phase": "implement",
   "activeTask": null,
   "activeSpec": {
-    "file": "specs/037_el_webhook_de_tienda_acepta_todo_por_defecto.md",
+    "file": "specs/038_cada_recaudo_se_cobra_una_vez.md",
     "status": "approved"
   },
   "ui": {
@@ -12,14 +12,40 @@
     "at": "2026-10-02T15:12:13Z"
   },
   "tasks": {
-    "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_09", "RNF_01"], "files": ["functions/src/store-webhook-filter.ts", "src/lib/store-webhook-filter.test.ts"], "testWritten": true, "done": true },
-    "T2": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_07", "RF_09", "RNF_01", "RNF_02", "RNF_03"], "files": ["functions/src/store-webhook.ts", "src/lib/types.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
-    "T3": { "requirements": ["RF_04", "RF_05", "RF_07", "RF_08", "RF_09", "RNF_01"], "files": ["src/components/store-webhook-filter-card.tsx", "src/components/operations-app.tsx", "src/lib/firebase/auth.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
-    "T4": { "requirements": ["RF_06", "RF_07"], "files": ["src/components/operations-app.tsx", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true },
-    "T5": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_06"], "files": ["functions/src/store-webhook-filter.ts", "functions/src/store-webhook.ts", "src/components/operations-app.tsx", "src/lib/store-webhook-filter.test.ts", "src/lib/spec-037-guards.test.ts"], "testWritten": true, "done": true, "origen": "revision adversarial ronda 1: R1-RF_01-1, R1-RF_02-1, R1-RF_03-1, R1-RF_04-1" }
+    "T1": { "requirements": ["RF_01", "RF_02"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T2": { "requirements": ["RF_05", "RF_05b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T3": { "requirements": ["RF_02", "RF_03", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T4": { "requirements": ["RF_08", "RF_09b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T5": { "requirements": ["RF_01", "RF_08", "RNF_02"], "files": ["src/lib/driver-cash-ledger.property.test.ts"], "testWritten": true, "done": true },
+    "T6": { "requirements": ["RNF_03", "RF_05", "RF_05b"], "files": ["specs/038_measure.js", "src/lib/fixtures/038-knt-003259.json", "src/lib/fixtures/038-knt-004540.json", "src/lib/fixtures/038-knt-002682.json", "src/lib/fixtures/038-knt-002965.json", "src/lib/fixtures/038-driver-16.json", "src/lib/driver-cash-ledger.cases.test.ts", "functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T7": { "requirements": ["RF_06", "RF_07"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T8": { "requirements": ["RF_13", "RF_14", "RF_15", "RF_16", "RF_17"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T9": { "requirements": ["RF_11", "RF_12"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/seller-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T10": { "requirements": ["RF_09", "RF_09b"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts"], "testWritten": true, "done": true },
+    "T11": { "requirements": ["RF_04b", "RF_05b", "RNF_04"], "files": ["functions/src/driver-ledger-io.ts", "src/lib/driver-ledger-io.test.ts"], "testWritten": true, "done": true },
+    "T12": { "requirements": ["RF_03", "RF_04b", "RF_07", "RF_09"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/orders.ts", "src/lib/driver-cash-ledger.test.ts"], "testWritten": true, "done": true },
+    "T13": { "requirements": ["RF_04", "RF_04b", "RF_09"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/orders.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-ledger-io.test.ts", "functions/src/driver-ledger-io.ts"], "testWritten": true, "done": true },
+    "T14": { "requirements": ["RF_04", "RF_04b", "RF_10"], "files": ["functions/src/order-corrections-plan.ts", "functions/src/order-corrections.ts", "src/lib/order-corrections-plan.test.ts", "functions/src/driver-ledger-io.ts", "src/lib/driver-ledger-io.test.ts"], "testWritten": true, "done": true },
+    "T15": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/cash-outstanding.ts", "functions/src/cash-outstanding-api.ts", "src/lib/cash-outstanding.test.ts", "src/lib/cash-outstanding-loads.test.ts", "src/lib/spec-026-guards.test.ts", "src/lib/cash-outstanding-view.ts", "functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T16": { "requirements": ["RF_11", "RF_12"], "files": ["functions/src/seller-balance.ts", "functions/src/store-api.ts", "functions/src/store-api-orders.ts", "functions/src/cash-outstanding.ts", "functions/src/cash-outstanding-api.ts", "functions/src/orders.ts", "src/lib/store-api-orders.test.ts", "src/lib/seller-balance.test.ts", "src/lib/cash-outstanding-loads.test.ts", "functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts", "src/lib/cash-outstanding.test.ts"], "testWritten": true, "done": true },
+    "T17": { "requirements": ["RF_09b", "RF_11"], "files": ["src/lib/finance.ts", "src/lib/finance.test.ts", "src/components/operations-app.tsx", "src/lib/types.ts", "src/lib/driver-settlement-export.ts"], "testWritten": true, "done": true },
+    "T18": { "requirements": ["RF_05b", "RF_17"], "files": ["firestore.rules", "src/lib/spec-038-rules.test.ts"], "testWritten": true, "done": true },
+    "T19": { "requirements": ["RF_05b", "RF_17"], "files": ["scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.cases.test.ts", "functions/src/cash-outstanding.ts"], "testWritten": true, "done": true },
+    "T20": { "requirements": ["RF_13", "RF_14", "RF_15", "RF_16"], "files": ["scripts/compensate-038.js", "src/lib/driver-cash-ledger.cases.test.ts", "src/lib/compensate-038.test.ts"], "testWritten": true, "done": true },
+    "T21": { "requirements": ["RF_05b", "RNF_01"], "files": ["specs/038_measure.js", "src/lib/measure-038.test.ts"], "testWritten": true, "done": true },
+    "T22": { "requirements": ["RF_09", "RF_12"], "files": ["functions/src/settlement-math.ts", "src/lib/settlement-math.test.ts", "scripts/verify-026.js", "scripts/verify-027.js", "functions/src/orders.ts", "functions/src/order-corrections-plan.ts", "specs/038_measure.js", "src/lib/cash-outstanding.test.ts", "src/lib/spec-026-guards.test.ts"], "testWritten": true, "done": true },
+    "T23": { "requirements": ["RF_09", "RF_12", "RF_05b"], "files": ["src/lib/spec-038-guards.test.ts", "scripts/verify-026.js", "specs/038_measure.js"], "testWritten": true, "done": true },
+    "T24": { "requirements": ["RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "src/lib/driver-cash-ledger.test.ts", "src/lib/driver-cash-ledger.property.test.ts"], "testWritten": true, "done": true },
+    "T25": { "requirements": ["RF_01b", "RNF_04"], "files": ["functions/src/orders.ts", "functions/src/driver-ledger-io.ts", "functions/src/order-corrections.ts", "functions/src/order-corrections-plan.ts", "functions/src/cash-outstanding.ts", "scripts/snapshot-038-baseline.js", "scripts/compensate-038.js", "specs/038_measure.js", "scripts/verify-026.js", "src/lib/driver-ledger-io.test.ts", "src/lib/order-corrections-plan.test.ts", "src/lib/cash-outstanding.test.ts", "src/lib/spec-038-guards.test.ts", "functions/src/settlement-math.ts", "specs/038_cada_recaudo_se_cobra_una_vez.md", "specs/038_plan.md"], "testWritten": true, "done": true },
+    "T26": { "requirements": ["RF_11", "RF_11b", "RF_12"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T27": { "requirements": ["RF_04", "RF_05b"], "files": ["functions/src/driver-cash-ledger.ts", "scripts/snapshot-038-baseline.js", "src/lib/snapshot-038-baseline.test.ts", "src/lib/driver-cash-ledger.test.ts"], "scopeNote": "orders.ts sustituido por driver-cash-ledger.ts: el orden guardado se respeta en refreshFrozenReceipts (plan 7.4)", "testWritten": true, "done": true },
+    "T28": { "requirements": ["RNF_01", "RF_05b", "RF_17"], "files": [".sdd/evidence/038_cada_recaudo_se_cobra_una_vez/"], "testWritten": true, "done": true },
+    "T29": { "requirements": ["RF_11"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T30": { "requirements": ["RF_12"], "files": ["functions/src/seller-ledger.ts", "functions/src/seller-ledger-io.ts", "functions/src/seller-balance.ts", "functions/src/seller-balance-api.ts", "functions/src/store-api.ts", "src/lib/seller-ledger.test.ts", "src/lib/spec-038-guards.test.ts"], "scopeNote": "store-api-orders.ts no hizo falta; seller-ledger-io.ts y seller-balance.ts anadidos (plan 7.5)", "testWritten": true, "done": true },
+    "T32": { "requirements": ["RF_11", "RF_01b"], "files": ["functions/src/driver-cash-ledger.ts", "functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T33": { "requirements": ["RF_11", "RF_01b"], "files": ["functions/src/seller-ledger.ts", "src/lib/seller-ledger.test.ts"], "testWritten": true, "done": true },
+    "T31": { "requirements": ["RNF_01", "RF_11", "RF_12"], "files": [".sdd/evidence/038_cada_recaudo_se_cobra_una_vez/"], "testWritten": true, "done": true }
   },
-  "plan": "specs/037_plan.md",
-  "tasksFile": "specs/037_tasks.md",
   "archivedTasks036": {
     "T1": { "requirements": ["RF_01", "RF_02", "RF_03", "RF_04", "RF_05", "RNF_01", "RNF_02"], "files": ["functions/src/store-summary.ts", "functions/src/store-api.ts", "src/lib/store-summary.test.ts", "src/lib/spec-018-guards.test.ts", "src/lib/spec-036-guards.test.ts"], "testWritten": true, "done": true },
     "T2": { "requirements": ["RF_01", "RF_03", "RNF_01"], "files": [".sdd/evidence/036_la_api_dice_que_se_paga_hoy/verify.txt", "scripts/verify-036.js"], "testWritten": true, "done": true },
@@ -66,6 +92,8 @@
     "T32": { "requirements": ["RF_02", "RF_03"], "files": ["functions/src/store-api-request.ts", "src/lib/store-api-request.test.ts", "src/lib/store-api-write.test.ts", "src/app/api-tiendas/page.tsx"], "testWritten": true, "done": true },
     "T33": { "requirements": ["RF_25"], "files": ["src/lib/store-api-keys-view.ts", "src/lib/store-api-keys-view.test.ts"], "testWritten": true, "done": true }
   },
+  "plan": "specs/038_plan.md",
+  "tasksFile": "specs/038_tasks.md",
   "archivedTasks026": {
     "T1": {
       "requirements": [

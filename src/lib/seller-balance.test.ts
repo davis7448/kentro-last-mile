@@ -378,3 +378,17 @@ describe("spec 018 · RF_16 / RF_24 · payoutRejectionMessage", () => {
     expect(payoutRejectionMessage(base)).toMatch(/No tienes saldo pendiente/);
   });
 });
+
+describe("spec 038 · T16 · buildSellerBalanceInput pasa el recaudo por pedido", () => {
+  it("un pedido cobrado y saldado en un corte nuevo cuenta como recibido", () => {
+    const wallet = [entry({ orderId: "o-n", amountCop: 42000, createdAt: "2026-11-30T10:00:00.000Z" })];
+    const settlements = [{
+      id: "A", kind: "driver", status: "reconciled", createdAt: "2026-12-01T10:00:00.000Z", reconciledAt: "2026-12-02T10:00:00.000Z",
+      orderIds: ["o-n"], cashCharges: [{ orderId: "o-n", codCop: 42000, driverPayCop: 0, chargedCop: 42000, codSeenCop: 42000 }],
+      cashExpectedCop: 42000, cashReceivedCop: 42000, cashPendingCop: 0,
+      cashAllocations: [{ orderId: "o-n", expectedCop: 42000, receivedCop: 42000, covered: true }]
+    }];
+    const built = buildSellerBalanceInput({ sellerId: SELLER, wallet, orders: [order("o-n")], settlements, settings: {}, zones: [], now: NOW });
+    expect(built.codReceived.has("o-n")).toBe(true);
+  });
+});

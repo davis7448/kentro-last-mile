@@ -1,0 +1,875 @@
+{
+  "source": "specs/038_measure.js --fixtures (solo lectura, anonimizado)",
+  "generatedAt": "2026-11-09T15:47:12.358Z",
+  "driverId": "driver-1778271901513",
+  "expected": [
+    {
+      "orderId": "shopify-7412252016929",
+      "trackingCode": "KNT-002682",
+      "chargedCop": 187800,
+      "dueCop": 93900,
+      "excessCop": 93900
+    }
+  ],
+  "orders": [
+    {
+      "id": "shopify-7412252016929",
+      "trackingCode": "KNT-002682",
+      "status": "delivered",
+      "createdAt": "2026-07-27T12:03:18-03:00",
+      "paymentMethod": "cod"
+    }
+  ],
+  "settlements": [
+    {
+      "id": "stl-1785372780712-driver-driver-1778271901513",
+      "kind": "driver",
+      "ownerId": "driver-1778271901513",
+      "ownerName": "",
+      "status": "reconciled",
+      "startDate": "2026-07-27",
+      "endDate": "2026-07-30",
+      "createdAt": "2026-07-30T00:53:00.712Z",
+      "orderIds": [
+        "shopify-7412252016929"
+      ],
+      "walletEntryIds": [],
+      "codCop": 0,
+      "feesCop": 0,
+      "driverPayCop": 0,
+      "platformMarginCop": 0,
+      "netCop": 0,
+      "trimmed": true,
+      "paidAt": "2026-08-05T23:21:46.204Z",
+      "reconciledAt": "2026-08-05T23:23:58.466Z",
+      "cashExpectedCop": 7624911,
+      "cashReceipts": [
+        {
+          "amountCop": 2696800,
+          "receivedAt": "2026-07-30T00:53:46.560Z"
+        },
+        {
+          "amountCop": 1521270,
+          "receivedAt": "2026-07-30T02:02:32.132Z"
+        },
+        {
+          "amountCop": 1471630,
+          "receivedAt": "2026-07-30T17:41:06.964Z"
+        },
+        {
+          "amountCop": 229800,
+          "receivedAt": "2026-07-30T17:42:57.945Z"
+        },
+        {
+          "amountCop": 1698400,
+          "receivedAt": "2026-07-30T17:46:14.240Z"
+        },
+        {
+          "amountCop": 7011,
+          "receivedAt": "2026-08-05T23:21:46.204Z"
+        }
+      ],
+      "cashAllocations": [
+        {
+          "orderId": "shopify-7431262797996",
+          "expectedCop": 91900,
+          "receivedCop": 91900,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002317",
+          "expectedCop": 121900,
+          "receivedCop": 121900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6721431306353",
+          "expectedCop": 88900,
+          "receivedCop": 88900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8009470410902",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8009505439894",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6723006431345",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6723138682993",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8010578657430",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6723629023345",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6723644129393",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8011041570966",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8011437670550",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6725718114417",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6725762383985",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8011890557078",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "onstock-6680167841974",
+          "expectedCop": 81900,
+          "receivedCop": 81900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6725999624305",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726062211185",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726126174321",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726274908273",
+          "expectedCop": 138900,
+          "receivedCop": 138900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726389268593",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8012512067734",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7404759875873",
+          "expectedCop": 81900,
+          "receivedCop": 81900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7405135954209",
+          "expectedCop": 61970,
+          "receivedCop": 61970,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726688211057",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7405448921377",
+          "expectedCop": 46900,
+          "receivedCop": 46900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6726994264177",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8013357056150",
+          "expectedCop": 98900,
+          "receivedCop": 98900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7405742391585",
+          "expectedCop": 51900,
+          "receivedCop": 51900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7405757956385",
+          "expectedCop": 131900,
+          "receivedCop": 131900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8013584924822",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727220625521",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727287668849",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8013867417750",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8014141259926",
+          "expectedCop": 98900,
+          "receivedCop": 98900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727572619377",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727648968817",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727745372273",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8014337343638",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727818575985",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8014472183958",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6727943225457",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728260616305",
+          "expectedCop": 88900,
+          "receivedCop": 88900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015176728726",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728298725489",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015246852246",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015259992214",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015331819670",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015427993750",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7408582066465",
+          "expectedCop": 81970,
+          "receivedCop": 81970,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015636856982",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728631189617",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015850209430",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728807809137",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728867643505",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6728879177841",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016210821270",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016217079958",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6729000779889",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7409646731553",
+          "expectedCop": 51900,
+          "receivedCop": 51900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016372498582",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6729119170673",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016697098390",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016704143510",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6729372991601",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016859299990",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7410889097505",
+          "expectedCop": 46900,
+          "receivedCop": 46900,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002671",
+          "expectedCop": 47000,
+          "receivedCop": 47000,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6729778987121",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8017339252886",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7411997999393",
+          "expectedCop": 51930,
+          "receivedCop": 51930,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7412023165217",
+          "expectedCop": 81970,
+          "receivedCop": 81970,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7412252016929",
+          "expectedCop": 93900,
+          "receivedCop": 93900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7412380336417",
+          "expectedCop": 51930,
+          "receivedCop": 51930,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6730371268721",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7413238530337",
+          "expectedCop": 81970,
+          "receivedCop": 81970,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6730606182513",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8018539282582",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6730816127089",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7414366437665",
+          "expectedCop": 131871,
+          "receivedCop": 131871,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7414404972833",
+          "expectedCop": 145930,
+          "receivedCop": 145930,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002697",
+          "expectedCop": 47000,
+          "receivedCop": 47000,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002705",
+          "expectedCop": 31000,
+          "receivedCop": 31000,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8019564200086",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6731407687793",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "onstock-6686931288246",
+          "expectedCop": 121900,
+          "receivedCop": 121900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7416363909409",
+          "expectedCop": 81970,
+          "receivedCop": 81970,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7417108562209",
+          "expectedCop": 81970,
+          "receivedCop": 81970,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002723",
+          "expectedCop": 32000,
+          "receivedCop": 32000,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002730",
+          "expectedCop": 31000,
+          "receivedCop": 31000,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7418377765153",
+          "expectedCop": 81930,
+          "receivedCop": 930,
+          "covered": false
+        }
+      ]
+    },
+    {
+      "id": "stl-1785460031076-driver-driver-1778271901513",
+      "kind": "driver",
+      "ownerId": "driver-1778271901513",
+      "ownerName": "",
+      "status": "reconciled",
+      "startDate": "2026-07-30",
+      "endDate": "2026-07-30",
+      "createdAt": "2026-07-31T01:07:11.076Z",
+      "orderIds": [
+        "shopify-7412252016929"
+      ],
+      "walletEntryIds": [],
+      "codCop": 0,
+      "feesCop": 0,
+      "driverPayCop": 0,
+      "platformMarginCop": 0,
+      "netCop": 0,
+      "trimmed": true,
+      "paidAt": "2026-08-01T02:04:51.442Z",
+      "reconciledAt": "2026-08-02T00:50:26.535Z",
+      "cashExpectedCop": 2294671,
+      "cashReceipts": [
+        {
+          "amountCop": 378870,
+          "receivedAt": "2026-07-31T01:08:39.688Z"
+        },
+        {
+          "amountCop": 1915801,
+          "receivedAt": "2026-08-01T02:04:51.442Z"
+        }
+      ],
+      "cashAllocations": [
+        {
+          "orderId": "shopify-6725748424817",
+          "expectedCop": 88900,
+          "receivedCop": 88900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8014647099542",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8015364882582",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8016140632214",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7812206624928",
+          "expectedCop": 91900,
+          "receivedCop": 91900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7412252016929",
+          "expectedCop": 93900,
+          "receivedCop": 93900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8018085576854",
+          "expectedCop": 98900,
+          "receivedCop": 98900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8018349883542",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6730739744881",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6730913218673",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8018821775510",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6731428921457",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6731785994353",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6731978178673",
+          "expectedCop": 128900,
+          "receivedCop": 128900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8020314980502",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6732311167089",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8020619722902",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6732366184561",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8020720287894",
+          "expectedCop": 108900,
+          "receivedCop": 108900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7418138853665",
+          "expectedCop": 51900,
+          "receivedCop": 51900,
+          "covered": true
+        },
+        {
+          "orderId": "ord-knt-002736",
+          "expectedCop": 72000,
+          "receivedCop": 72000,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7418554220833",
+          "expectedCop": 81900,
+          "receivedCop": 81900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-6732817203313",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-8021241069718",
+          "expectedCop": 78900,
+          "receivedCop": 78900,
+          "covered": true
+        },
+        {
+          "orderId": "shopify-7421727244577",
+          "expectedCop": 81970,
+          "receivedCop": 73971,
+          "covered": false
+        }
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "id": "we-shopify-7412252016929-driver-failed-pay",
+      "ownerType": "driver",
+      "ownerId": "driver-1778271901513",
+      "orderId": "shopify-7412252016929",
+      "type": "driver_earning",
+      "amountCop": 8000,
+      "description": "",
+      "createdAt": "2026-07-28T13:48:37.312Z",
+      "settlementId": "stl-1785372780712-driver-driver-1778271901513"
+    },
+    {
+      "id": "we-shopify-7412252016929-seller-failed-fee",
+      "ownerType": "seller",
+      "ownerId": "seller-1782496969817",
+      "orderId": "shopify-7412252016929",
+      "type": "failed_fee",
+      "amountCop": -12000,
+      "description": "",
+      "createdAt": "2026-07-28T13:48:37.312Z",
+      "settlementId": "stl-1789051373860-seller-seller-1782496969817"
+    },
+    {
+      "id": "we-shopify-7412252016929-cod",
+      "ownerType": "seller",
+      "ownerId": "seller-1782496969817",
+      "orderId": "shopify-7412252016929",
+      "type": "cod_revenue",
+      "amountCop": 109900,
+      "description": "",
+      "createdAt": "2026-07-30T16:32:35.335Z",
+      "settlementId": "stl-1789051373860-seller-seller-1782496969817"
+    },
+    {
+      "id": "we-shopify-7412252016929-driver-delivery-pay",
+      "ownerType": "driver",
+      "ownerId": "driver-1778271901513",
+      "orderId": "shopify-7412252016929",
+      "type": "driver_earning",
+      "amountCop": 8000,
+      "description": "",
+      "createdAt": "2026-07-30T16:32:35.335Z",
+      "settlementId": "stl-1785460031076-driver-driver-1778271901513"
+    },
+    {
+      "id": "we-shopify-7412252016929-seller-delivery-fee",
+      "ownerType": "seller",
+      "ownerId": "seller-1782496969817",
+      "orderId": "shopify-7412252016929",
+      "type": "delivery_fee",
+      "amountCop": -12000,
+      "description": "",
+      "createdAt": "2026-07-30T16:32:35.335Z",
+      "settlementId": "stl-1789051373860-seller-seller-1782496969817"
+    },
+    {
+      "id": "we-shopify-7412252016929-product-cost",
+      "ownerType": "seller",
+      "ownerId": "seller-1782496969817",
+      "orderId": "shopify-7412252016929",
+      "type": "product_cost",
+      "amountCop": -46000,
+      "description": "",
+      "createdAt": "2026-08-05T20:17:38.395Z",
+      "settlementId": "stl-1789051373860-seller-seller-1782496969817"
+    }
+  ]
+}

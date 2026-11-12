@@ -374,6 +374,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Spec 038 (RF_05b, RF_17): la foto historica de cada domiciliario y sus retenciones deciden cuanto se le
+    // cobra. Solo las escribe el servidor (scripts de la foto y de la compensacion, Admin SDK); desde un
+    // cliente nadie, tampoco el admin, para que un navegador con estado viejo no libere una retencion sin la
+    // aprobacion de RF_14. El admin las lee para auditarlas.
+    match /driverLedgerBaselines/{driverId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /driverCashHolds/{driverId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

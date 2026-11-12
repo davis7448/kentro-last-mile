@@ -1,10 +1,14 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 // Vive en functions/ porque es la misma aritmetica que usan createSettlement,
 // recordDriverCashReceipt y la correccion administrativa de pedidos. Antes estaba dentro de
 // `calculateDriverCashSummary`, que hacia sus propias lecturas y por eso no tenia NINGUNA
-// prueba, pese a ser la funcion que decide cuanto efectivo debe un domiciliario.
+// prueba, pese a ser la funcion que decide cuanto efectivo debe un domiciliario. Spec 038 T22: la regla
+// vieja (`computeDriverCashSummary`) se retiro; sus casos se reescribieron contra la nueva.
 import {
-  computeDriverCashSummary,
+  computeDriverCorteSummary,
   type DriverCashInputs,
   settlementCashReceivedCop,
   type SettlementDoc,
@@ -21,9 +25,25 @@ function inputs(over: Partial<DriverCashInputs> = {}): DriverCashInputs {
   return { sellerEntries: [], driverEntries: [], orderMeta: new Map(), ...over };
 }
 
-describe("computeDriverCashSummary", () => {
+/**
+ * Spec 038 · T22: estos eran los casos de `computeDriverCashSummary`, la regla vieja que se retiro. Se reescriben
+ * contra `computeDriverCorteSummary` (la unica regla) con un domiciliario sin otros cortes, que es donde las dos
+ * coincidian. Ninguno se borra. Las cifras que cambian llevan su porque: el pago al domiciliario es ahora el de
+ * los asientos del PROPIO corte (`ownEntryIds`), y un corte en que el pago supera al recaudo deja ese saldo a su
+ * favor (`creditOutCop`) en vez de perderlo en un max(0, ...).
+ */
+describe("computeDriverCorteSummary: los casos de la regla vieja, reescritos (spec 038 T22)", () => {
+  const emptyContext = {
+    driverId: "owner",
+    settlements: [],
+    baseline: { driverId: "owner", createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: {} },
+    holds: null
+  };
+  const corte = (cashInputs: DriverCashInputs, orderIds: string[], receivedCop: number, ownEntryIds = cashInputs.driverEntries.map((item) => item.id)) =>
+    computeDriverCorteSummary({ inputs: cashInputs, settlementId: "X", orderIds, ownEntryIds, receivedCop, context: emptyContext });
+
   it("espera el COD menos el pago del domiciliario", () => {
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         sellerEntries: [
           entry({ id: "we-o1-cod", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" }),
@@ -43,7 +63,7 @@ describe("computeDriverCashSummary", () => {
 
   it("netea cod_remittance contra cod_revenue: un pedido revertido deja el COD en cero", () => {
     // Es el mecanismo del que dependen los asientos compensatorios de la correccion.
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         sellerEntries: [
           entry({ id: "we-o1-cod", ownerType: "seller", type: "cod_revenue", amountCop: 89900, orderId: "o1" }),
@@ -58,10 +78,12 @@ describe("computeDriverCashSummary", () => {
     // El domiciliario ya no debe efectivo; al contrario, se le debe el pago de la visita.
     expect(summary.expectedCop).toBe(0);
     expect(summary.driverPayCop).toBe(11000);
+    // Cambia (038 RF_08): antes ese pago a favor se perdia en el max(0, ...); ahora queda para el siguiente corte.
+    expect(summary.creditOutCop).toBe(11000);
   });
 
   it("ignora asientos de pedidos que no estan en el corte", () => {
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         sellerEntries: [entry({ id: "we-o9-cod", ownerType: "seller", type: "cod_revenue", amountCop: 50000, orderId: "o9" })]
       }),
@@ -72,7 +94,7 @@ describe("computeDriverCashSummary", () => {
   });
 
   it("imputa lo recibido por antiguedad y marca cubierto solo lo que alcanza", () => {
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         sellerEntries: [
           entry({ id: "we-a-cod", ownerType: "seller", type: "cod_revenue", amountCop: 30000, orderId: "a" }),
@@ -94,7 +116,7 @@ describe("computeDriverCashSummary", () => {
 
   it("desempata por trackingCode cuando la fecha de creacion es la misma", () => {
     const meta = { createdAt: "2026-08-01T10:00:00.000Z" };
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         sellerEntries: [
           entry({ id: "we-x-cod", ownerType: "seller", type: "cod_revenue", amountCop: 10000, orderId: "x" }),
@@ -113,7 +135,7 @@ describe("computeDriverCashSummary", () => {
 
   it("no genera imputacion para pedidos donde el pago supera al recaudo", () => {
     // Un fallido cobrable: el domiciliario cobra y no recauda nada. No debe efectivo.
-    const summary = computeDriverCashSummary(
+    const summary = corte(
       inputs({
         driverEntries: [entry({ id: "we-o1-fp", ownerType: "driver", type: "driver_earning", amountCop: 9000, orderId: "o1" })]
       }),
@@ -122,17 +144,42 @@ describe("computeDriverCashSummary", () => {
     );
     expect(summary.allocations).toEqual([]);
     expect(summary.expectedCop).toBe(0);
+    // Cambia (038 RF_08): el pago de la visita queda a su favor para el siguiente corte.
+    expect(summary.creditOutCop).toBe(9000);
+  });
+
+  it("el pago de OTRO domiciliario por el mismo pedido no se descuenta", () => {
+    // Cambia (038 RF_01): la vieja restaba el `driver_earning` de cualquier domiciliario del pedido (una
+    // reasignacion dejaba el pago del primero restando al segundo). Ahora lo debido es el recaudo menos el pago
+    // de ESTE domiciliario, y el pago del corte son sus asientos propios.
+    const summary = corte(
+      inputs({
+        sellerEntries: [entry({ id: "we-o1-cod", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" })],
+        driverEntries: [entry({ id: "we-o1-pay", ownerType: "driver", ownerId: "otro", type: "driver_earning", amountCop: 9000, orderId: "o1" })]
+      }),
+      ["o1"],
+      0,
+      []
+    );
+    expect(summary.driverPayCop).toBe(0);
+    expect(summary.expectedCop).toBe(100000);
   });
 
   it("devuelve ceros cuando el corte no tiene pedidos", () => {
-    expect(computeDriverCashSummary(inputs(), [], 0)).toEqual({
+    expect(corte(inputs(), [], 0)).toMatchObject({
       codCop: 0,
       feesCop: 0,
       driverPayCop: 0,
       platformMarginCop: 0,
       expectedCop: 0,
-      allocations: []
+      allocations: [],
+      cashCharges: []
     });
+  });
+
+  it("la regla vieja ya no existe: settlement-math no exporta computeDriverCashSummary", async () => {
+    const mod = await import("../../functions/src/settlement-math");
+    expect("computeDriverCashSummary" in mod).toBe(false);
   });
 });
 
@@ -168,23 +215,13 @@ describe("settlementTotals", () => {
     expect(totals.productCostCop).toBe(30000);
   });
 
-  it("en un corte de domiciliario el COD y los fletes salen de los asientos de la tienda", () => {
-    const totals = settlementTotals(
-      "driver",
-      [entry({ id: "pay", ownerType: "driver", type: "driver_earning", amountCop: 9000, orderId: "o1" })],
-      [
-        entry({ id: "cod", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" }),
-        entry({ id: "fee", ownerType: "seller", type: "delivery_fee", amountCop: -12000, orderId: "o1" })
-      ]
-    );
-    expect(totals.codCop).toBe(100000);
-    expect(totals.feesCop).toBe(12000);
-    expect(totals.driverPayCop).toBe(9000);
-    expect(totals.platformMarginCop).toBe(3000);
-    // Negativo: el domiciliario ENTREGA plata, no la recibe. Sin giro no hay 4x1000.
-    expect(totals.grossNetCop).toBe(-91000);
-    expect(totals.gmfCop).toBe(0);
-    expect(totals.netCop).toBe(-91000);
+  it("un corte de domiciliario no pasa por aqui: sus cifras son las de la regla nueva (spec 038 T22)", () => {
+    // Antes era la rama `driver` de settlementTotals (COD - TODO el pago, de los asientos de la tienda). Sus
+    // cifras para un corte normal las cubre "espera el COD menos el pago del domiciliario" de arriba; aqui se
+    // fija que nadie pueda volver a calcular un corte de domiciliario con la rama vieja.
+    expect(() =>
+      settlementTotals("driver" as never, [entry({ id: "pay", ownerType: "driver", type: "driver_earning", amountCop: 9000, orderId: "o1" })])
+    ).toThrow(/038/);
   });
 
   it("en un corte de proveedor el neto es el costo de producto y no hay margen", () => {
@@ -197,7 +234,7 @@ describe("settlementTotals", () => {
   });
 
   it("no retiene 4x1000 cuando la cuenta cobra en efectivo", () => {
-    const totals = settlementTotals("seller", [entry({ id: "a", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" })], [], true);
+    const totals = settlementTotals("seller", [entry({ id: "a", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" })], true);
     expect(totals.gmfCop).toBe(0);
     expect(totals.netCop).toBe(100000);
   });
@@ -284,14 +321,11 @@ describe("T33 · el corte del lider convierte el cashback causado en pagado", ()
     expect(totals.feesCop).toBe(0);
     expect(totals.grossNetCop).toBe(6000);
 
-    // Los asientos de la tienda del mismo pedido no pueden inflar lo que se le paga al lider:
-    // el cashback ya es una fraccion del margen, no el recaudo.
-    const conAsientosDeTienda = settlementTotals("community_leader", soloCashback, [
-      entry({ id: "cod", ownerType: "seller", type: "cod_revenue", amountCop: 180000, orderId: "o1" }),
-      entry({ id: "dp", ownerType: "driver", type: "driver_earning", amountCop: 9000, orderId: "o1" })
-    ]);
-    expect(conAsientosDeTienda.netCop).toBe(totals.netCop);
-    expect(conAsientosDeTienda.codCop).toBe(0);
+    // Los asientos de la tienda del mismo pedido no pueden inflar lo que se le paga al lider: el cashback ya
+    // es una fraccion del margen, no el recaudo. Spec 038 T22: settlementTotals ya no recibe asientos de la
+    // tienda (eran solo de la rama de domiciliario), asi que es imposible por construccion; se fija la firma.
+    expect(settlementTotals.length).toBeLessThanOrEqual(2);
+    expect(totals.codCop).toBe(0);
   });
 });
 
@@ -389,5 +423,87 @@ describe("T4 · isDriverSettlementCashSettled: corte de domiciliario con el efec
         driverSettlement({ cashPendingCop: 1_000, cashAllocations: [{ orderId: "o-1", expectedCop: 1, receivedCop: 1, covered: true }] })
       )
     ).toBe(false);
+  });
+});
+
+// Spec 038 T10: la regla nueva expuesta desde settlement-math, con el contexto OBLIGATORIO.
+describe("computeDriverCorteSummary (spec 038)", () => {
+  const DRIVER = "driver-1";
+  const context = (over: Record<string, unknown> = {}) => ({
+    driverId: DRIVER,
+    settlements: [],
+    baseline: { driverId: DRIVER, createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: {} },
+    holds: null,
+    ...over
+  });
+  const sellerEntries = [
+    entry({ id: "c1", ownerType: "seller", type: "cod_revenue", amountCop: 100000, orderId: "o1" }),
+    entry({ id: "f1", ownerType: "seller", type: "delivery_fee", amountCop: -12000, orderId: "o1" }),
+    entry({ id: "c2", ownerType: "seller", type: "cod_revenue", amountCop: 78900, orderId: "o2" }),
+    entry({ id: "r2", ownerType: "seller", type: "cod_remittance", amountCop: -78900, orderId: "o2" })
+  ];
+  const driverEntries = [
+    entry({ id: "p1", ownerType: "driver", ownerId: DRIVER, type: "driver_earning", amountCop: 8000, orderId: "o1" }),
+    entry({ id: "p2", ownerType: "driver", ownerId: DRIVER, type: "driver_earning", amountCop: 8000, orderId: "o2", settlementId: "A" })
+  ];
+
+  it("devuelve las cifras de la tabla de §3.3 y el registro por pedido", () => {
+    const summary = computeDriverCorteSummary({
+      inputs: inputs({ sellerEntries, driverEntries }),
+      settlementId: "X",
+      orderIds: ["o1", "o2"],
+      ownEntryIds: ["p1"],
+      receivedCop: 0,
+      context: context({ settlements: [{ id: "A", status: "reconciled", orderIds: ["o2"], cashCharges: [{ orderId: "o2", codCop: 78900, driverPayCop: 8000, chargedCop: 70900, codSeenCop: 78900 }] }] })
+    });
+    // o1: 100.000 - 8.000 = 92.000. o2: debe -8.000, A ya cobro 70.900 -> devuelve 78.900.
+    expect(summary).toMatchObject({
+      codCop: 100000 - 78900,
+      driverPayCop: 8000,
+      feesCop: 12000,
+      platformMarginCop: 4000,
+      expectedCop: 92000 - 78900,
+      creditInCop: 0,
+      creditOutCop: 0,
+      netCop: -(92000 - 78900),
+      gmfCop: 0,
+      ledgerVersion: 1
+    });
+    expect(summary.cashCharges.map((c) => [c.orderId, c.chargedCop])).toEqual([["o1", 92000], ["o2", -78900]]);
+    expect(summary.allocations).toEqual([{ orderId: "o1", expectedCop: 92000, receivedCop: 0, covered: false }]);
+  });
+
+  it("sin contexto lanza: ningun llamador puede calcular con la regla vieja por omision", () => {
+    expect(() =>
+      computeDriverCorteSummary({
+        inputs: inputs({ sellerEntries, driverEntries }),
+        settlementId: "X",
+        orderIds: ["o1"],
+        ownEntryIds: ["p1"],
+        receivedCop: 0,
+        context: undefined as never
+      })
+    ).toThrow(/contexto/);
+  });
+});
+
+describe("spec 038 · T22 · los scripts de verificacion usan la regla nueva", () => {
+  const read = (file: string) => readFileSync(resolve(__dirname, "../..", file), "utf8");
+
+  it("verify-026 recalcula los cortes con computeDriverCorte y el contexto del domiciliario, no con la vieja", () => {
+    const source = read("scripts/verify-026.js");
+    expect(source).not.toMatch(/computeDriverCashSummary/);
+    expect(source).toMatch(/computeDriverCorte\(/);
+    expect(source).toMatch(/buildDriverLedgerSnapshot\(/);
+  });
+
+  it("verify-027 pasa el recaudo por pedido a buildCodReceivedSet", () => {
+    expect(read("scripts/verify-027.js")).toMatch(/buildCodReceivedSet\(settlements,\s*codEntriesByOrder\(/);
+  });
+
+  it("los dos scripts son JavaScript valido (node --check)", () => {
+    for (const file of ["scripts/verify-026.js", "scripts/verify-027.js"]) {
+      expect(() => execFileSync(process.execPath, ["--check", resolve(__dirname, "../..", file)])).not.toThrow();
+    }
   });
 });

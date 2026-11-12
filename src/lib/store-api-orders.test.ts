@@ -233,3 +233,17 @@ describe("T9 · instantanea de /orders identica antes y despues de mover", () =>
     }
   });
 });
+
+describe("spec 038 · T16 · loadTargetedPaymentInputs pasa el recaudo por pedido", () => {
+  it("un pedido cobrado y saldado en un corte nuevo cuenta como recibido", async () => {
+    const { loadTargetedPaymentInputs } = await load();
+    const entries = [{ id: "e-n", ownerType: "seller", ownerId: SELLER, orderId: "o-n", type: "cod_revenue", amountCop: 42000, createdAt: "2026-11-30T10:00:00.000Z" }];
+    const settlements = [{
+      id: "A", kind: "driver", status: "reconciled", createdAt: "2026-12-01T10:00:00.000Z", reconciledAt: "2026-12-02T10:00:00.000Z",
+      orderIds: ["o-n"], cashCharges: [{ orderId: "o-n", codCop: 42000, driverPayCop: 0, chargedCop: 42000, codSeenCop: 42000 }],
+      cashExpectedCop: 42000, cashReceivedCop: 42000, cashPendingCop: 0,
+      cashAllocations: [{ orderId: "o-n", expectedCop: 42000, receivedCop: 42000, covered: true }]
+    }];
+    expect(loadTargetedPaymentInputs({ orderId: "o-n", sellerId: SELLER, entries, settlements }).codReceived.has("o-n")).toBe(true);
+  });
+});

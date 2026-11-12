@@ -15,7 +15,7 @@
  * Puro: sin Firestore. Lo importan el servidor y la app. Los tipos son laxos a proposito, porque
  * lo alimentan documentos de Firestore y el estado del navegador.
  */
-import { buildCodReceivedSet, isSellerEntryEligible, SELLER_LIQUIDATION_TYPES, type OrderDoc, type SettlementDoc, type WalletEntryDoc } from "./seller-ledger";
+import { buildCodReceivedSet, codEntriesByOrder, type CodEntryLike, isSellerEntryEligible, SELLER_LIQUIDATION_TYPES, type OrderDoc, type SettlementDoc, type WalletEntryDoc } from "./seller-ledger";
 import { isOrderOnTheStreet, retentionForOrder, type RetentionOrder } from "./seller-retention";
 import { resolveTariffs } from "./seller-charges";
 
@@ -75,6 +75,11 @@ export function buildSellerBalanceInput(docs: {
   settings: Record<string, unknown>;
   zones: Record<string, unknown>[];
   now: string;
+  /**
+   * Spec 038 RF_12 (T30): el recaudo por pedido ya completado por el llamador (`completeCodEntries`). Sin el, se
+   * deriva de `wallet`, que puede ser una vista parcial.
+   */
+  codByOrder?: ReadonlyMap<string, readonly CodEntryLike[]>;
 }): SellerBalanceInput {
   const { sellerId } = docs;
   const openEntries = docs.wallet.filter((entry) => entry.ownerType === "seller" && entry.ownerId === sellerId && !entry.settlementId);
@@ -87,7 +92,8 @@ export function buildSellerBalanceInput(docs: {
     openEntries,
     ordersById: new Map(docs.orders.map((order) => [String(order.id), order])),
     streetCandidates: docs.orders.filter((order) => order.sellerId === sellerId && isOrderOnTheStreet(order as RetentionOrder)) as RetentionOrder[],
-    codReceived: buildCodReceivedSet(docs.settlements),
+    // Spec 038 T16: el recaudo de la tienda por pedido, para los pedidos de cortes de domiciliario nuevos.
+    codReceived: buildCodReceivedSet(docs.settlements, docs.codByOrder ?? codEntriesByOrder(docs.wallet)),
     chargedFulfillmentOrderIds,
     settings: docs.settings,
     zonesById: new Map(docs.zones.map((zone) => [String(zone.id), zone])),

@@ -11,6 +11,7 @@ import {
   type PlanInput
 } from "../../functions/src/order-corrections-plan";
 import type { SettlementDoc, WalletEntryDoc } from "../../functions/src/settlement-math";
+import type { DriverLedgerContext } from "../../functions/src/driver-cash-ledger";
 import { freezeOrderPricing } from "../../functions/src/community-pricing";
 
 const NOW = "2026-08-23T15:00:00.000Z";
@@ -46,11 +47,29 @@ function settlement(over: Partial<SettlementDoc> & Pick<SettlementDoc, "id" | "k
   };
 }
 
+/**
+ * Spec 038: el contexto de cada domiciliario con cortes en la prueba, como lo cargaria la callable. Por
+ * defecto sus cortes son los de `settlementsById` y la foto historica esta vacia (los cortes viejos de estas
+ * pruebas no le cobraron nada al pedido fuera de sus asientos).
+ */
+function ledgersFor(settlementsById: Map<string, SettlementDoc>): Map<string, DriverLedgerContext> {
+  const ledgers = new Map<string, DriverLedgerContext>();
+  for (const item of settlementsById.values()) {
+    if (item.kind !== "driver") continue;
+    const ledger = ledgers.get(item.ownerId) ?? { driverId: item.ownerId, settlements: [], baseline: { driverId: item.ownerId, createdAt: "", createdBy: "", measuredDiffCop: 0, settlements: {} }, holds: null };
+    ledger.settlements.push({ id: item.id, status: item.status, orderIds: item.orderIds ?? [], ...((item as Record<string, any>).cashCharges ? { cashCharges: (item as Record<string, any>).cashCharges } : {}) });
+    ledger.baseline!.settlements[item.id] = (item as Record<string, any>).cashCharges ? [] : (item.orderIds ?? []).map((orderId) => ({ orderId, chargedCop: 0, driverPayCop: 0, source: "rebuilt" as const }));
+    ledgers.set(item.ownerId, ledger);
+  }
+  return ledgers;
+}
+
 function plan(over: Partial<PlanInput> & { request: CorrectionRequest; order: Record<string, any> }) {
   const entries = over.entries ?? [];
   return planOrderCorrection({
     entries,
     settlementsById: new Map(),
+    driverLedgers: ledgersFor(over.settlementsById ?? new Map()),
     cashInputs: {
       sellerEntries: entries.filter((item) => item.ownerType === "seller"),
       driverEntries: entries.filter((item) => item.ownerType === "driver"),
@@ -243,7 +262,11 @@ describe("planOrderCorrection - entregado a fallido", () => {
     expect(recalculated.patch.orderIds).toEqual(["o2"]);
     // Sin recaudo, el domiciliario ya no debe efectivo: solo se le paga la visita.
     expect(recalculated.patch.cashExpectedCop).toBe(0);
-    expect(recalculated.patch.netCop).toBe(8000);
+    // Spec 038 (RF_08, ratificado el 2026-11-09): un corte a favor del domiciliario ya no se transfiere,
+    // se arrastra. Antes netCop era 8.000 (giro); ahora es 0 y los 8.000 quedan como saldo a favor.
+    expect(recalculated.patch.netCop).toBe(0);
+    expect(recalculated.patch.creditOutCop).toBe(8000);
+    expect(recalculated.patch.cashCharges).toEqual([{ orderId: "o2", codCop: 0, driverPayCop: 8000, chargedCop: -8000, codSeenCop: 0 }]);
     expect(recalculated.relatedEntryPatches).toEqual([
       { id: "we-stl-pend-cash-shortage", amountCop: 0, reason: "faltante de recaudo recalculado" }
     ]);
@@ -516,5 +539,100 @@ describe("relabelEvidence", () => {
       expect(result.photoUrl).toBe("https://x/y.jpg");
       expect(result.storagePath).toBe("evidence/o1/y.jpg");
     }
+  });
+});
+
+// Spec 038 T14: las correcciones usan la regla nueva y dicen cuanto se le devuelve al domiciliario (RF_10).
+describe("planOrderCorrection - spec 038", () => {
+  const order = {
+    id: "o5",
+    trackingCode: "KNT-005555",
+    status: "delivered",
+    sellerId: "seller-2",
+    driverId: "driver-2",
+    paymentMethod: "cod",
+    totalCop: 78900,
+    evidence: [{ id: "ev-1", type: "delivery", photoLabel: "Entrega", note: "recibido", createdAt: "2026-08-02T10:00:00.000Z", actorId: "driver-2" }]
+  };
+  const request: CorrectionRequest = { kind: "delivered_to_failed", reason: "El cliente nunca recibio el pedido.", failedCategory: "bad_order_or_no_contact" };
+  const entries = [
+    entry({ id: "we-o5-cod", ownerType: "seller", ownerId: "seller-2", type: "cod_revenue", amountCop: 78900, orderId: "o5", settlementId: "stl-tienda" }),
+    entry({ id: "we-o5-driver-delivery-pay", ownerType: "driver", ownerId: "driver-2", type: "driver_earning", amountCop: 8000, orderId: "o5", settlementId: "stl-dom" })
+  ];
+  const frozenDriver = {
+    ...settlement({ id: "stl-dom", kind: "driver", status: "reconciled", ownerId: "driver-2", ownerName: "Lider", walletEntryIds: ["we-o5-driver-delivery-pay"], orderIds: ["o5"] }),
+    cashCharges: [{ orderId: "o5", codCop: 78900, driverPayCop: 8000, chargedCop: 70900, codSeenCop: 78900 }]
+  } as SettlementDoc;
+  const settlementsById = new Map<string, SettlementDoc>([
+    ["stl-tienda", settlement({ id: "stl-tienda", kind: "seller", status: "paid", ownerId: "seller-2", ownerName: "Tienda" })],
+    ["stl-dom", frozenDriver]
+  ]);
+
+  it("entregado a fallido con el corte del domiciliario conciliado: no lo toca y muestra cuanto le devolvera el siguiente", () => {
+    const result = plan({ order, request, entries, settlementsById });
+    expect(result.blockers).toEqual([]);
+    expect(result.settlementsToRecalculate).toEqual([]);
+    expect(result.frozenSettlements.map((item) => item.id).sort()).toEqual(["stl-dom", "stl-tienda"]);
+    // Debia 70.900 y le cobraron 70.900; tras la correccion debe 0 (reversa del recaudo y del pago):
+    // el siguiente corte le devuelve 70.900, una sola vez.
+    expect(result.driverNextCorte).toEqual([{ driverId: "driver-2", orderId: "o5", deltaCop: -70900, frozenSettlementIds: ["stl-dom"] }]);
+    const warning = result.warnings.find((item) => item.code === "driver_next_corte");
+    expect(warning?.message).toMatch(/devolveran \$70\.900/);
+  });
+
+  it("previsualizar dos veces da exactamente el mismo plan (lo que se ve es lo que se aplica)", () => {
+    expect(plan({ order, request, entries, settlementsById })).toEqual(plan({ order, request, entries, settlementsById }));
+  });
+
+  it("sin el contexto de un domiciliario con cortes afectados, bloquea en vez de calcular a la antigua", () => {
+    const pending = new Map<string, SettlementDoc>([
+      ["stl-dom", settlement({ id: "stl-dom", kind: "driver", status: "pending", ownerId: "driver-2", ownerName: "Lider", walletEntryIds: ["we-o5-driver-delivery-pay"], orderIds: ["o5"] })]
+    ]);
+    const result = plan({ order, request, entries, settlementsById: pending, driverLedgers: new Map() });
+    expect(result.blockers.map((item) => item.code)).toContain("missing_driver_ledger");
+  });
+
+  it("un corte pendiente de domiciliario conserva los pedidos que entraron sin asiento propio (RF_07)", () => {
+    const pending = new Map<string, SettlementDoc>([
+      ["stl-dom", settlement({ id: "stl-dom", kind: "driver", status: "pending", ownerId: "driver-2", ownerName: "Lider", walletEntryIds: ["we-o5-driver-delivery-pay"], orderIds: ["o5", "o-vuelve"] })]
+    ]);
+    const result = plan({ order, request: { ...request, failedCategory: "failed_visit" }, entries, settlementsById: pending });
+    expect(result.settlementsToRecalculate[0].patch.orderIds).toEqual(["o5", "o-vuelve"]);
+  });
+});
+
+// Spec 038 T25 (RF_01b): una correccion que le pasa el pedido a otro domiciliario no le cobra el recaudo al primero.
+describe("planOrderCorrection - spec 038 T25: el recaudo solo al que entrega", () => {
+  const order = {
+    id: "o7",
+    trackingCode: "KNT-007777",
+    status: "failed",
+    sellerId: "seller-1",
+    driverId: "driver-1",
+    paymentMethod: "cod",
+    totalCop: 100000,
+    failedCategory: "failed_visit",
+    evidence: [{ id: "ev-1", type: "failed", photoLabel: "Fachada", note: "nadie abrio", failedCategory: "failed_visit", createdAt: "2026-08-02T10:00:00.000Z", actorId: "driver-1" }]
+  };
+  // La visita fallida de driver-1 ya se le pago en un corte conciliado (registro -5.000).
+  const entries = [entry({ id: "we-o7-driver-failed-pay", ownerType: "driver", ownerId: "driver-1", type: "driver_earning", amountCop: 5000, orderId: "o7", settlementId: "stl-d1" })];
+  const settlementsById = new Map<string, SettlementDoc>([
+    ["stl-d1", {
+      ...settlement({ id: "stl-d1", kind: "driver", status: "reconciled", ownerId: "driver-1", ownerName: "Lider", walletEntryIds: ["we-o7-driver-failed-pay"], orderIds: ["o7"] }),
+      cashCharges: [{ orderId: "o7", codCop: 0, driverPayCop: 5000, chargedCop: -5000, codSeenCop: 0 }]
+    } as SettlementDoc]
+  ]);
+
+  it("fallido a entregado por driver-3: a driver-1 no se le cobran los 100.000 que recaudo driver-3 (solo se le recupera su visita)", () => {
+    const result = plan({ order, request: { kind: "failed_to_delivered", reason: "Lo entrego otro.", driverId: "driver-3" }, entries, settlementsById });
+    expect(result.blockers).toEqual([]);
+    const forDriver1 = result.driverNextCorte.find((item) => item.driverId === "driver-1");
+    // La correccion revierte su pago de la visita fallida (el pedido no fallo: lo entrego driver-3), asi que su
+    // siguiente corte recupera esos 5.000. Lo que NO se le cobra son los 100.000 de recaudo: antes de RF_01b
+    // salian 105.000.
+    expect(forDriver1?.deltaCop).toBe(5000);
+    expect(result.warnings.filter((item) => item.code === "driver_next_corte").map((item) => item.message)).toEqual([
+      "Al domiciliario driver-1 se le cobraran $5.000 por este pedido en su proximo corte."
+    ]);
   });
 });
