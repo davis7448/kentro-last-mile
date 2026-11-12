@@ -102,20 +102,35 @@ export function codEntriesByOrder(entries: readonly WalletEntryDoc[]): Map<strin
 }
 
 /**
- * La parte nueva de "recibido" (spec 038 RF_11; plan §3.7) para un pedido con algun corte de domiciliario
+ * Cuando se calcularon por ultima vez las cifras (`cashCharges`) de un corte nuevo: al crearlo, al pagarlo y con
+ * cada abono mientras estaba pendiente. Conciliar o abonar a un corte ya pagado NO recalcula (RF_04), asi que no
+ * lo hace mas reciente. (`lastRecalculatedAt` cuenta esas fechas y por eso no sirve aqui.)
+ */
+function ledgerComputedAt(settlement: SettlementDoc): string {
+  const paidAt = String(settlement.paidAt ?? "");
+  const receipts = (Array.isArray(settlement.cashReceipts) ? settlement.cashReceipts : [])
+    .map((receipt: { receivedAt?: string }) => String(receipt?.receivedAt ?? ""))
+    .filter((at: string) => at && (!paidAt || at <= paidAt));
+  return [String(settlement.createdAt ?? ""), paidAt, ...receipts].reduce((latest, at) => (at > latest ? at : latest), "");
+}
+
+/**
+ * La parte nueva de "recibido" (spec 038 RF_11; plan §3.7 y §7.5) para un pedido con algun corte de domiciliario
  * calculado con la regla nueva:
  *
  * 1. todo corte nuevo que le cobro efectivo (`chargedCop > 0`) esta saldado para el pedido: su asignacion
  *    cubierta (aunque el corte siga pendiente, como hoy), o el corte saldado en total (spec 027 RF_01);
  * 2. hay al menos un corte nuevo saldado para el pedido que lo tiene en `cashCharges` (un corte que solo
- *    devuelve cuenta si esta saldado en total), y los asientos de recaudo del pedido POSTERIORES al ultimo
- *    recalculo del ultimo de ellos suman cero (enmienda del 2026-11-10, hallazgo H2).
+ *    devuelve cuenta si esta saldado en total), y el recaudo neto vigente del pedido (todos sus asientos, de
+ *    cualquier tienda) es el que vio el ultimo de ellos (`codSeenCop`).
  *
- * Se compara por tiempo, no por monto (analyze B5): con montos, A cobra 78.900, B lo devuelve y se salda, y
- * una re-entrega de 78.900 pasaba por recibida antes de que el domiciliario la entregara.
+ * Segunda enmienda, 2026-11-12 (hallazgo R1 de T28): la primera ("lo posterior suma cero") fallaba cuando la
+ * correccion borra y recrea el recaudo de una tienda que aun no cobro. Comparar con lo que vio el ultimo corte
+ * saldado no depende de como se escribio el cambio. El caso B5 sigue bloqueado: el ultimo corte saldado es el
+ * que devolvio, y vio 0.
  */
 export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[], codEntries: readonly CodEntryLike[]): boolean {
-  let lastSettledAt = "";
+  let governing: { computedAt: string; createdAt: string; codSeenCop: number } | null = null;
   for (const settlement of settlements) {
     if (settlement.kind !== "driver" || !Array.isArray(settlement.cashCharges)) continue;
     const charge = settlement.cashCharges.find((row: { orderId?: string }) => String(row?.orderId ?? "") === orderId);
@@ -126,20 +141,15 @@ export function isOrderCodSettled(orderId: string, settlements: SettlementDoc[],
       ? isOrderCashSettledInCorte(settlement, orderId)
       : isDriverSettlementCashSettled(settlement as MathSettlementDoc);
     if (Number(charge.chargedCop) > 0 && !settled) return false;
-    if (settled) {
-      const at = lastRecalculatedAt(settlement as MathSettlementDoc);
-      if (at > lastSettledAt) lastSettledAt = at;
+    if (!settled) continue;
+    const candidate = { computedAt: ledgerComputedAt(settlement), createdAt: String(settlement.createdAt ?? ""), codSeenCop: Number(charge.codSeenCop) || 0 };
+    if (!governing || candidate.computedAt > governing.computedAt || (candidate.computedAt === governing.computedAt && candidate.createdAt > governing.createdAt)) {
+      governing = candidate;
     }
   }
-  if (!lastSettledAt) return false;
-  // Spec 038 RF_11 enmendado (hallazgo H2): lo posterior al ultimo corte saldado debe SUMAR cero, no estar vacio.
-  // Un cambio que netea cero (cambio de tienda, entregado -> fallido -> entregado) deja el efectivo igual que
-  // cuando se saldo; con "ninguno posterior" el pedido no volvia a ningun corte y la tienda quedaba bloqueada para
-  // siempre. Se sigue mirando por tiempo cuales son posteriores (analyze B5: una re-entrega suma su monto).
-  const laterCop = codEntries
-    .filter((entry) => String(entry.createdAt ?? "") > lastSettledAt)
-    .reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
-  return laterCop === 0;
+  if (!governing) return false;
+  const netCop = codEntries.reduce((sum, entry) => sum + (Number(entry.amountCop) || 0), 0);
+  return netCop === governing.codSeenCop;
 }
 
 /**

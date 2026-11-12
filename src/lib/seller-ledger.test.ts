@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // desde functions/ en vez de duplicarla aqui: es la cifra que se le paga a una tienda y ya estaba
 // triplicada entre la UI, store-api.ts y createSettlement.
 import { computeSellerBalance } from "../../functions/src/seller-balance";
-import { buildCodReceivedSet, isOrderCodSettled, isSellerEntryEligible, isWithinSettlementRange } from "../../functions/src/seller-ledger";
+import { buildCodReceivedSet, codEntriesByOrder, isOrderCodSettled, isSellerEntryEligible, isWithinSettlementRange } from "../../functions/src/seller-ledger";
 
 const orders = new Map<string, Record<string, unknown>>([
   ["o-prepago", { paymentMethod: "prepaid", status: "delivered" }],
@@ -260,7 +260,10 @@ describe("T4 · codPartialReceivedCop: efectivo parcial recibido por pedido no r
 
 // Spec 038 T9 — "recibido" con cortes calculados por la regla nueva (RF_11, RF_12; plan §3.7).
 describe("spec 038: recibido con cortes nuevos (cashCharges)", () => {
-  const charge = (orderId: string, chargedCop: number) => ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop: 0 });
+  // T29: `codSeenCop` es el recaudo que vio el corte (RF_11, segunda enmienda). En estos casos el pago es 8.000, asi
+  // que vio el cargo + 8.000; un corte que solo devuelve vio 0 (el recaudo ya estaba revertido).
+  const charge = (orderId: string, chargedCop: number, codSeenCop = chargedCop > 0 ? chargedCop + 8000 : 0) =>
+    ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop });
   const cod = (amountCop: number, createdAt: string) => ({ type: "cod_revenue", amountCop, createdAt });
   const saldado = (id: string, orderId: string, chargedCop: number, over: Record<string, unknown> = {}) => ({
     id, kind: "driver", status: "reconciled", createdAt: "2026-12-01T10:00:00.000Z", reconciledAt: "2026-12-02T10:00:00.000Z",
@@ -402,7 +405,8 @@ describe("spec 038 · T16: codEntriesByOrder y los llamadores de recibido", () =
 
 /** Spec 038 · T26: los hallazgos H2 y H3 de la verificacion (RF_11 enmendado, RF_11b). */
 describe("spec 038 · T26 · recibido tras la verificacion", () => {
-  const charge = (orderId: string, chargedCop: number) => ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop: 0 });
+  // T29: `codSeenCop` es el recaudo que vio el corte; en estos casos, 100.000.
+  const charge = (orderId: string, chargedCop: number, codSeenCop = 100000) => ({ orderId, codCop: chargedCop, driverPayCop: 0, chargedCop, codSeenCop });
   const codFrom = (ownerId: string, amountCop: number, createdAt: string) => ({ ownerType: "seller", ownerId, type: "cod_revenue", amountCop, createdAt });
   const corteX = {
     id: "X", kind: "driver", status: "reconciled", createdAt: "2026-12-01T00:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
@@ -443,5 +447,97 @@ describe("spec 038 · T26 · recibido tras la verificacion", () => {
       orderIds: ["o"], cashCharges: [charge("o", -5000)], cashExpectedCop: 0, cashReceivedCop: 0, cashPendingCop: 0, cashAllocations: [] };
     const codByOrder = new Map([["o", [codFrom("sA", 100000, "2026-10-30T00:00:00.000Z")]]]);
     expect(buildCodReceivedSet([viejoSaldado, nuevoSaldado], codByOrder).has("o")).toBe(true);
+  });
+});
+
+/**
+ * Spec 038 · T29 (RF_11, segunda enmienda; hallazgo R1 de T28): recibido = el recaudo neto del pedido es el que
+ * vio el ultimo corte saldado. Los asientos NO se escriben a mano: salen del planificador de correcciones, que
+ * es lo que produce produccion (borrar y recrear cuando la tienda aun no cobro; reversa cuando si).
+ */
+describe("spec 038 · T29 · recibido con los asientos reales de una correccion", async () => {
+  const { planOrderCorrection } = await import("../../functions/src/order-corrections-plan");
+  type Entry = import("../../functions/src/settlement-math").WalletEntryDoc;
+  const TARIFFS = { sellerDeliveredFeeCop: 12000, sellerFailedFeeCop: 12000, fulfillmentFeeCop: 2000, driverDeliveredPayCop: 8000, driverFailedPayCop: 8000 };
+  const corteX = {
+    id: "X", kind: "driver", ownerId: "d1", ownerName: "D1", status: "reconciled", startDate: "", endDate: "",
+    createdAt: "2026-12-01T00:00:00.000Z", paidAt: "2026-12-01T12:00:00.000Z", reconciledAt: "2026-12-02T00:00:00.000Z",
+    orderIds: ["o"], walletEntryIds: ["we-o-driver-delivery-pay"], codCop: 100000, feesCop: 0, driverPayCop: 8000, platformMarginCop: 0, netCop: -92000,
+    cashCharges: [{ orderId: "o", codCop: 100000, driverPayCop: 8000, chargedCop: 92000, codSeenCop: 100000 }],
+    cashExpectedCop: 92000, cashReceivedCop: 92000, cashPendingCop: 0,
+    cashAllocations: [{ orderId: "o", expectedCop: 92000, receivedCop: 92000, covered: true }]
+  };
+  const corteTienda = { id: "S", kind: "seller", ownerId: "sA", ownerName: "A", status: "paid", startDate: "", endDate: "", createdAt: "2026-12-01T00:00:00.000Z",
+    orderIds: ["o"], walletEntryIds: ["we-o-cod", "we-o-seller-delivery-fee"], codCop: 100000, feesCop: 12000, driverPayCop: 0, platformMarginCop: 0, netCop: 88000 };
+  const delivered = (storePaid: boolean): Entry[] => [
+    { id: "we-o-cod", ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 100000, description: "", createdAt: "2026-11-30T00:00:00.000Z", settlementId: storePaid ? "S" : "" },
+    { id: "we-o-seller-delivery-fee", ownerType: "seller", ownerId: "sA", orderId: "o", type: "delivery_fee", amountCop: -12000, description: "", createdAt: "2026-11-30T00:00:00.000Z", settlementId: storePaid ? "S" : "" },
+    { id: "we-o-driver-delivery-pay", ownerType: "driver", ownerId: "d1", orderId: "o", type: "driver_earning", amountCop: 8000, description: "", createdAt: "2026-11-30T00:00:00.000Z", settlementId: "X" }
+  ] as Entry[];
+  const order = { id: "o", trackingCode: "KNT-9", status: "delivered", sellerId: "sA", driverId: "d1", paymentMethod: "cod", totalCop: 100000, evidence: [] };
+
+  /** Corre el planificador y aplica su resultado como lo haria la callable. */
+  function correct(entries: Entry[], orderNow: Record<string, unknown>, request: { kind: string; reason: string; failedCategory?: string; failedReason?: string }, now: string): Entry[] {
+    const settlementsById = new Map([["X", corteX], ["S", corteTienda]] as const);
+    const result = planOrderCorrection({
+      order: orderNow, entries, settlementsById: settlementsById as never, request: request as never,
+      driverLedgers: new Map([["d1", { driverId: "d1", settlements: [{ id: "X", status: "reconciled", orderIds: ["o"], cashCharges: corteX.cashCharges }], baseline: null, holds: null }]]) as never,
+      cashInputs: { sellerEntries: entries.filter((e) => e.ownerType === "seller"), driverEntries: entries.filter((e) => e.ownerType === "driver"), orderMeta: new Map() },
+      tariffs: TARIFFS, productCostLines: [], sellerPaysInCash: false, driverExists: true, actorId: "admin", now
+    });
+    expect(result.blockers).toEqual([]);
+    const deleted = new Set(result.entriesToDelete.map((e) => e.id));
+    return [...entries.filter((e) => !deleted.has(e.id)), ...result.entriesToCompensate.map((c) => c.entry), ...result.entriesToCreate];
+  }
+  const roundTrip = (storePaid: boolean, totalCop = 100000) => {
+    const failed = correct(delivered(storePaid), order, { kind: "delivered_to_failed", reason: "no lo recibio", failedCategory: "failed_visit", failedReason: "no contesta" }, "2026-12-03T00:00:00.000Z");
+    return correct(failed, { ...order, status: "failed", totalCop, failedCategory: "failed_visit" }, { kind: "failed_to_delivered", reason: "si lo recibio" }, "2026-12-04T00:00:00.000Z");
+  };
+  const received = (entries: Entry[], settlements: unknown[] = [corteX]) => buildCodReceivedSet(settlements as never, codEntriesByOrder(entries as never)).has("o");
+
+  it("la tienda aun no cobro: la correccion BORRA y RECREA el recaudo, y el pedido sigue recibido (R1)", () => {
+    const after = roundTrip(false);
+    const cod = after.filter((e) => e.ownerType === "seller" && (e.type === "cod_revenue" || e.type === "cod_remittance"));
+    expect(cod.map((e) => [e.amountCop, e.createdAt > corteX.reconciledAt])).toEqual([[100000, true]]); // asi lo deja produccion
+    expect(received(after)).toBe(true);
+  });
+
+  it("la tienda ya cobro: la correccion compensa con reversa, y el pedido sigue recibido", () => {
+    expect(received(roundTrip(true))).toBe(true);
+  });
+
+  it("re-entrega con otro monto (130.000): no es recibido hasta que un corte saldado vea 130.000", () => {
+    // Con la tienda ya cobrada el planificador se niega (`entry_id_collision`): no recrea un recaudo cortado con
+    // otro monto. Por eso solo se puede producir con la tienda aun sin cobrar.
+    expect(received(roundTrip(false, 130000))).toBe(false);
+  });
+
+  it("solo la mitad del camino (entregado -> fallido): el corte vio 100.000 y hoy no hay recaudo, no es recibido", () => {
+    const failed = correct(delivered(true), order, { kind: "delivered_to_failed", reason: "no lo recibio", failedCategory: "failed_visit", failedReason: "no contesta" }, "2026-12-03T00:00:00.000Z");
+    expect(received(failed)).toBe(false);
+  });
+
+  it("cambio de tienda despues del corte saldado: recibido, con el neto de todas las tiendas", () => {
+    const entries = [
+      { ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 100000, createdAt: "2026-11-30T00:00:00.000Z" },
+      { ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_remittance", amountCop: -100000, createdAt: "2026-12-03T00:00:00.000Z" },
+      { ownerType: "seller", ownerId: "sB", orderId: "o", type: "cod_revenue", amountCop: 100000, createdAt: "2026-12-03T00:00:01.000Z" }
+    ] as Entry[];
+    expect(received(entries)).toBe(true);
+  });
+
+  it("analyze B5: el ultimo corte saldado es el que devolvio (vio 0); una re-entrega de 78.900 no es recibida", () => {
+    const a = { ...corteX, id: "A", cashCharges: [{ orderId: "o", codCop: 78900, driverPayCop: 8000, chargedCop: 70900, codSeenCop: 78900 }] };
+    const b = { ...corteX, id: "B", createdAt: "2026-12-05T00:00:00.000Z", paidAt: "2026-12-05T12:00:00.000Z", reconciledAt: "2026-12-06T00:00:00.000Z",
+      cashCharges: [{ orderId: "o", codCop: -78900, driverPayCop: 0, chargedCop: -78900, codSeenCop: 0 }], cashExpectedCop: 0, cashReceivedCop: 0, cashAllocations: [] };
+    const entries = [
+      { ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 78900, createdAt: "2026-11-30T00:00:00.000Z" },
+      { ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_remittance", amountCop: -78900, createdAt: "2026-12-04T00:00:00.000Z" },
+      { ownerType: "seller", ownerId: "sA", orderId: "o", type: "cod_revenue", amountCop: 78900, createdAt: "2026-12-07T00:00:00.000Z" }
+    ] as Entry[];
+    expect(received(entries, [a, b])).toBe(false);
+    // Aunque A se concilie DESPUES de saldarse B: conciliar no recalcula, asi que B sigue siendo el ultimo calculo.
+    const aLate = { ...a, paidAt: "2026-12-01T12:00:00.000Z", reconciledAt: "2026-12-10T00:00:00.000Z" };
+    expect(received(entries, [aLate, b])).toBe(false);
   });
 });

@@ -331,7 +331,7 @@ cerrar **cada** tarea (constitucion §4, analyze B1).
   * Verificacion: las cifras de hoy (686.200, 16 retenciones, opcion A 632.200, diferencia 0) o la diferencia
     explicada pedido a pedido; ningun hallazgo nuevo sin resolver
 
-- [ ] **T29: Recibido = el neto que vio el ultimo corte saldado (RF_11, hallazgo R1)**
+- [x] **T29: Recibido = el neto que vio el ultimo corte saldado (RF_11, hallazgo R1)**
   * Requisitos cubiertos: RF_11
   * Archivos: functions/src/seller-ledger.ts, src/lib/seller-ledger.test.ts
   * Accion: plan §7.5 (T29)
