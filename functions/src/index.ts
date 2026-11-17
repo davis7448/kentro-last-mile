@@ -69,7 +69,12 @@ const shopifyWebhookSchema = z.object({
       city: nullableString,
       country: nullableString
     })
-    .optional(),
+    // `nullish`, no `optional`: Shopify manda `shipping_address: null` (no ausente) cuando el
+    // formulario de la tienda deja la direccion solo en note_attributes. Con `optional` eso era un
+    // 400, y Shopify lo reintenta 9 veces y lo cuenta como fallo de entrega, que es el mecanismo
+    // con el que termina borrando la suscripcion. Sin direccion el pedido sigue y se descarta
+    // como "fuera de Cali o sin ciudad", con 202.
+    .nullish(),
   line_items: z.array(z.object({
     name: nullableString,
     title: nullableString,
@@ -229,7 +234,7 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
   response.json({ ok: true, orderId: docId });
 });
 
-function isCaliAddress(address?: { city?: string | null; address1?: string | null; address2?: string | null; country?: string | null }) {
+function isCaliAddress(address?: { city?: string | null; address1?: string | null; address2?: string | null; country?: string | null } | null) {
   const text = [address?.city, address?.address1, address?.address2]
     .filter(Boolean)
     .join(" ")

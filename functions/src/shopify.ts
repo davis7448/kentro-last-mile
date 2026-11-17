@@ -35,7 +35,9 @@ const shopifyOrderSchema = z.object({
       city: nullableString,
       country: nullableString
     })
-    .optional(),
+    // `nullish`, igual que en el webhook (index.ts): Shopify manda `null`, no ausente. Aqui el
+    // `safeParse` de la sincronizacion historica se tragaba esos pedidos sin contarlos.
+    .nullish(),
   line_items: z.array(z.object({
     name: nullableString,
     title: nullableString,
