@@ -68,7 +68,7 @@ import type { DriverSettlementDetailGroup } from "@/lib/driver-settlement-export
 import { prepareEvidenceImage, uploadEvidenceImage } from "@/lib/firebase/storage";
 import { recordEvidenceTiming } from "@/lib/firebase/evidence-timing-store";
 import { errorTag, nowMs, type EvidenceTrace } from "@/lib/evidence-timing";
-import { enqueueEvidence, markQueuedEvidenceError, pruneOrphanPhotos, queuedEvidenceToFile, readEvidenceQueue, readQueuedPhoto, removeQueuedEvidence, type QueuedEvidence } from "@/lib/evidence-queue";
+import { enqueueEvidence, definitiveCloseRejection, markQueuedEvidenceError, pruneOrphanPhotos, queuedEvidenceToFile, readEvidenceQueue, readQueuedPhoto, removeQueuedEvidence, type QueuedEvidence } from "@/lib/evidence-queue";
 import {
   advanceOrder,
   assignOrder,
@@ -2553,6 +2553,9 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
   const [items, setItems] = useState<QueuedEvidence[]>([]);
   const [syncingId, setSyncingId] = useState("");
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  // Items que el servidor rechazo para siempre (el pedido ya estaba cerrado o ya no es tuyo).
+  // Se sacan de la cola, pero se dice cuales: desaparecer en silencio parece una foto perdida.
+  const [discarded, setDiscarded] = useState<{ id: string; orderId: string; reason: string }[]>([]);
   // El efecto de abajo se monta una sola vez (y debe: registra un listener y un intervalo), asi
   // que captura la PRIMERA instancia de processQueue. Sin estas referencias esa closure escribiria
   // con el `state` del primer render -- vacio -- y el reintento periodico borraba de la pantalla
@@ -2630,6 +2633,15 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
         trace.result = closing ? "close_error" : "upload_error";
         recordEvidenceTiming(trace);
       }
+      const rejection = closing ? definitiveCloseRejection(error) : null;
+      if (rejection) {
+        // Reintentar no cambia nada y, como la cola va del mas antiguo al mas nuevo, este item
+        // bloqueaba todo lo que tuviera detras. La foto que acaba de subir queda huerfana en
+        // Storage: es una por item descartado, no una cada 30 s como hasta ahora.
+        setItems(removeQueuedEvidence(item.id));
+        setDiscarded((current) => [...current, { id: item.id, orderId: item.orderId, reason: rejection }]);
+        return;
+      }
       setItems(markQueuedEvidenceError(item.id, readableError(error, "No se pudo sincronizar.")));
     } finally {
       syncingRef.current = "";
@@ -2638,18 +2650,31 @@ function EvidenceQueuePanel({ state, setState }: { state: AppState; setState: (s
     }
   }
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && discarded.length === 0) return null;
   return (
     <Card className="grid gap-2 border-rust/20">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-bold">Evidencias pendientes</h2>
-          <p className="text-sm text-ink-60">Se guardaron en este dispositivo por baja senal y se subiran cuando haya conexion.</p>
+      {discarded.length > 0 && (
+        <div className="grid gap-2 rounded-2xl border border-white/10 p-2 text-sm">
+          <p className="font-semibold">Se quitaron de la cola porque el pedido ya no admite ese cierre</p>
+          {discarded.map((entry) => (
+            <p key={entry.id} className="text-xs text-ink-60">{entry.orderId} · {entry.reason}</p>
+          ))}
+          <button className="focus-ring justify-self-start rounded-full border border-white/10 px-3 py-2 text-sm font-semibold text-fg hover:bg-field" type="button" onClick={() => setDiscarded([])}>
+            Entendido
+          </button>
         </div>
-        <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={Boolean(syncingId)} onClick={() => void processQueue()}>
-          {syncingId ? `Reintentando${syncProgress === null ? "..." : ` ${syncProgress}%`}` : "Reintentar"}
-        </button>
-      </div>
+      )}
+      {items.length > 0 && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-bold">Evidencias pendientes</h2>
+            <p className="text-sm text-ink-60">Se guardaron en este dispositivo por baja senal y se subiran cuando haya conexion.</p>
+          </div>
+          <button className="focus-ring rounded-full bg-acid px-3 py-2 text-sm font-semibold text-deep disabled:bg-field disabled:text-ink-60 disabled:cursor-not-allowed" type="button" disabled={Boolean(syncingId)} onClick={() => void processQueue()}>
+            {syncingId ? `Reintentando${syncProgress === null ? "..." : ` ${syncProgress}%`}` : "Reintentar"}
+          </button>
+        </div>
+      )}
       {items.map((item) => (
         <div key={item.id} className="rounded-2xl border border-white/10 p-2 text-sm">
           <p className="font-semibold">{item.orderId} · {item.outcome === "delivered" ? "Entrega" : "Novedad"}</p>

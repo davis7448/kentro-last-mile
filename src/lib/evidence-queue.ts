@@ -206,3 +206,28 @@ export function markQueuedEvidenceError(id: string, message: string): QueuedEvid
   writeEvidenceQueue(next);
   return next;
 }
+
+/**
+ * Rechazos de `closeOrder` que ningun reintento va a cambiar: el pedido ya no esta en un estado
+ * cerrable (`failed-precondition`), ya no existe (`not-found`) o ya no es de quien lo cierra
+ * (`permission-denied`). Un item asi se descarta en vez de quedarse en la cola.
+ *
+ * Medido en `evidenceTimings` (nov-2026): un Android llevaba en cola la entrega de un pedido que
+ * ya estaba entregado desde el 4-nov. Cada 30 s volvia a subir la foto y a llamar a `closeOrder`,
+ * que lo rechazaba con `failed-precondition` (16 intentos en dos dias). Como la cola procesa el
+ * item mas antiguo primero, todo lo que entrara detras se quedaba sin subir.
+ *
+ * Los errores de red, de cuota o de servidor (`unavailable`, `internal`, `deadline-exceeded`...)
+ * NO entran: esos si se arreglan reintentando.
+ */
+const DEFINITIVE_CLOSE_REJECTIONS: Record<string, string> = {
+  "functions/failed-precondition": "El pedido ya estaba cerrado o cambio de estado.",
+  "functions/not-found": "El pedido ya no existe.",
+  "functions/permission-denied": "El pedido ya no esta asignado a ti."
+};
+
+/** El motivo, en palabras del domiciliario, si el rechazo es definitivo; `null` si vale reintentar. */
+export function definitiveCloseRejection(error: unknown): string | null {
+  const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
+  return typeof code === "string" && Object.hasOwn(DEFINITIVE_CLOSE_REJECTIONS, code) ? DEFINITIVE_CLOSE_REJECTIONS[code] : null;
+}

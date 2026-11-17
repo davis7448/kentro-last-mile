@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   enqueueEvidence,
+  definitiveCloseRejection,
   markQueuedEvidenceError,
   pruneOrphanPhotos,
   queuedEvidenceToFile,
@@ -84,7 +85,7 @@ describe("evidence queue", () => {
 
     const [item] = readEvidenceQueue();
     expect(item.orderId).toBe("KNT-000001");
-    expect(readQueuedPhoto(item.id)?.startsWith("data:image/jpeg;base64,")).toBe(true);
+    expect(readQueuedPhoto(item.id)?.startsWith("data:image/jpeg;base64,")).toBeTruthy();
   });
 
   it("el indice no crece con el tamano de la foto", async () => {
@@ -186,5 +187,21 @@ describe("evidence queue", () => {
     delete (globalThis as Record<string, unknown>).window;
     expect(readEvidenceQueue()).toEqual([]);
     expect(() => writeEvidenceQueue([] as QueuedEvidence[])).not.toThrow();
+  });
+});
+
+describe("definitiveCloseRejection", () => {
+  it("descarta lo que ningun reintento arregla", () => {
+    expect(definitiveCloseRejection({ code: "functions/failed-precondition" })).toBe("El pedido ya estaba cerrado o cambio de estado.");
+    expect(definitiveCloseRejection({ code: "functions/not-found" })).toBeTruthy();
+    expect(definitiveCloseRejection({ code: "functions/permission-denied" })).toBeTruthy();
+  });
+
+  it("conserva para reintentar los fallos de red, servidor o subida", () => {
+    for (const code of ["functions/unavailable", "functions/internal", "functions/deadline-exceeded", "functions/unauthenticated", "storage/retry-limit-exceeded", "storage/unauthorized"]) {
+      expect(definitiveCloseRejection({ code })).toBeNull();
+    }
+    expect(definitiveCloseRejection(new Error("Failed to fetch"))).toBeNull();
+    expect(definitiveCloseRejection(null)).toBeNull();
   });
 });
