@@ -85,7 +85,7 @@ import type { DriverFinancialSummary, SellerAbonoRow } from "@/lib/finance";
 import { recomputeInventoryReservations } from "@/lib/inventory-movements";
 import { driverFleetClosedOrders, filterDriverHistoryOrders, isDriverActiveOrder, latestClosingEvidence, orderClosedAt, type DriverHistoryFilters } from "@/lib/driver-history";
 import { NO_SUPPLIER, groupBatchBySupplier, ordersForSupplier, packageUnits, splitOrderIntoPackages, supplierOptionsForCatalog, type BatchGroup, type OrderPackage } from "../../functions/src/supplier-packages";
-import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
+import { adminPrintableOrderStatuses, canPrintAdminLabel, canPrintAdminWarehouseLabel, canPrintSellerLabel, pickupLabelBlockReason, shouldShowUnprintedLabelBadge } from "@/lib/order-labels";
 import { buildOrderExportRows, downloadOrdersXlsx, downloadRowsXlsx, downloadWalletXlsx, orderExportColumns } from "@/lib/order-export";
 import { orderAddressLines } from "@/lib/order-address-lines";
 import { buildMissingProductCostEntries, buildUnassociatedProductRows } from "@/lib/product-catalog";
@@ -1813,8 +1813,17 @@ function OrderCard({
         : false;
   const showUnprintedBadge = shouldShowUnprintedLabelBadge(order, state.activeRole === "seller" ? "seller" : "admin", actorProfileId);
   const commitOrderState = (nextState: AppState) => {
-    setState(nextState);
     const updatedOrder = nextState.orders.find((item) => item.id === order.id);
+    // Sin rotulo impreso un pedido no sale a la calle. El servidor lo rechaza igual; se avisa aqui
+    // porque esta via pinta optimista y el rechazo solo llegaba a la consola.
+    if (updatedOrder && (updatedOrder.status === "picked_up" || updatedOrder.status === "in_route") && !order.pickedUpAt) {
+      const labelBlock = pickupLabelBlockReason(order);
+      if (labelBlock) {
+        window.alert(labelBlock);
+        return;
+      }
+    }
+    setState(nextState);
     if (!updatedOrder) return;
     if (firebaseEnabled()) {
       // Las transiciones operativas van por un callable del servidor que valida el estado real
@@ -3908,6 +3917,12 @@ function PickupScanModal({ state, driver, onClose, onCommit }: { state: AppState
     if (selectedIdsRef.current.includes(order.id)) {
       setCode("");
       setMessage(`${order.trackingCode ?? order.shopifyOrderId} ya esta en la recogida.`);
+      return;
+    }
+    const labelBlock = pickupLabelBlockReason(order);
+    if (labelBlock) {
+      setCode("");
+      setMessage(labelBlock);
       return;
     }
     setSelectedIds((current) => {
