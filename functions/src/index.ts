@@ -51,6 +51,7 @@ const shopifyPilotApiSecret = defineSecret("SHOPIFY_PILOT_APP_API_SECRET");
 const shopifyU0jxrmApiSecret = defineSecret("SHOPIFY_U0JXRM_APP_API_SECRET");
 const shopifyN1v0swApiSecret = defineSecret("SHOPIFY_N1V0SW_APP_API_SECRET");
 const shopify02dc9yApiSecret = defineSecret("SHOPIFY_02DC9Y_APP_API_SECRET");
+const shopifyHtzdjwApiSecret = defineSecret("SHOPIFY_HTZDJW_APP_API_SECRET");
 const nullableString = z.string().nullish();
 
 const shopifyWebhookSchema = z.object({
@@ -86,7 +87,7 @@ const shopifyWebhookSchema = z.object({
   })).optional()
 });
 
-export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPilotApiSecret, shopifyU0jxrmApiSecret, shopifyN1v0swApiSecret, shopify02dc9yApiSecret] }, async (request, response) => {
+export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPilotApiSecret, shopifyU0jxrmApiSecret, shopifyN1v0swApiSecret, shopify02dc9yApiSecret, shopifyHtzdjwApiSecret] }, async (request, response) => {
   if (request.method !== "POST") {
     response.status(405).send("Method not allowed");
     return;
@@ -97,10 +98,11 @@ export const shopifyWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPil
   const shopifyU0jxrmSecret = process.env.SHOPIFY_U0JXRM_APP_API_SECRET ?? "";
   const shopifyN1v0swSecret = process.env.SHOPIFY_N1V0SW_APP_API_SECRET ?? "";
   const shopify02dc9ySecret = process.env.SHOPIFY_02DC9Y_APP_API_SECRET ?? "";
+  const shopifyHtzdjwSecret = process.env.SHOPIFY_HTZDJW_APP_API_SECRET ?? "";
   const hmac = String(request.get("x-shopify-hmac-sha256") ?? "");
   const shopDomain = String(request.get("x-shopify-shop-domain") ?? "").toLowerCase();
   const hmacBuffer = Buffer.from(hmac, "utf8");
-  const isValidHmac = [shopifySecret, shopifyPilotSecret, shopifyU0jxrmSecret, shopifyN1v0swSecret, shopify02dc9ySecret].filter(Boolean).some((secret) => {
+  const isValidHmac = [shopifySecret, shopifyPilotSecret, shopifyU0jxrmSecret, shopifyN1v0swSecret, shopify02dc9ySecret, shopifyHtzdjwSecret].filter(Boolean).some((secret) => {
     const digest = crypto.createHmac("sha256", secret).update(request.rawBody).digest("base64");
     const digestBuffer = Buffer.from(digest, "utf8");
     return hmac && digestBuffer.length === hmacBuffer.length && crypto.timingSafeEqual(digestBuffer, hmacBuffer);
