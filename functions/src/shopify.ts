@@ -21,6 +21,9 @@ const shopifyN1v0swApiSecret = defineSecret("SHOPIFY_N1V0SW_APP_API_SECRET");
 // Shopify retiro las apps personalizadas heredadas.
 const shopify02dc9yApiKey = defineSecret("SHOPIFY_02DC9Y_APP_API_KEY");
 const shopify02dc9yApiSecret = defineSecret("SHOPIFY_02DC9Y_APP_API_SECRET");
+// Linfovit (DANDA). Igual que Wowbuy: app propia creada en el Dev Dashboard de la tienda.
+const shopifyHtzdjwApiKey = defineSecret("SHOPIFY_HTZDJW_APP_API_KEY");
+const shopifyHtzdjwApiSecret = defineSecret("SHOPIFY_HTZDJW_APP_API_SECRET");
 const nullableString = z.string().nullish();
 const shopifyOrderSchema = z.object({
   id: z.number(),
@@ -64,7 +67,7 @@ const syncShopifyHistoricalOrdersSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 });
 
-type ShopifyAppKind = "public" | "pilot" | "u0jxrm" | "n1v0sw" | "02dc9y";
+type ShopifyAppKind = "public" | "pilot" | "u0jxrm" | "n1v0sw" | "02dc9y" | "htzdjw";
 
 function config(kind: ShopifyAppKind = "public") {
   const prefix =
@@ -76,7 +79,9 @@ function config(kind: ShopifyAppKind = "public") {
           ? "SHOPIFY_N1V0SW_APP"
           : kind === "02dc9y"
             ? "SHOPIFY_02DC9Y_APP"
-            : "SHOPIFY_APP";
+            : kind === "htzdjw"
+              ? "SHOPIFY_HTZDJW_APP"
+              : "SHOPIFY_APP";
   return {
     apiKey: process.env[`${prefix}_API_KEY`] ?? "",
     apiSecret: process.env[`${prefix}_API_SECRET`] ?? "",
@@ -117,7 +122,7 @@ function timingSafeEqual(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export const shopifyOAuthCallback = onRequest({ secrets: [shopifyApiKey, shopifyApiSecret, shopifyPilotApiKey, shopifyPilotApiSecret, shopifyU0jxrmApiKey, shopifyU0jxrmApiSecret, shopifyN1v0swApiKey, shopifyN1v0swApiSecret, shopify02dc9yApiKey, shopify02dc9yApiSecret] }, async (request, response) => {
+export const shopifyOAuthCallback = onRequest({ secrets: [shopifyApiKey, shopifyApiSecret, shopifyPilotApiKey, shopifyPilotApiSecret, shopifyU0jxrmApiKey, shopifyU0jxrmApiSecret, shopifyN1v0swApiKey, shopifyN1v0swApiSecret, shopify02dc9yApiKey, shopify02dc9yApiSecret, shopifyHtzdjwApiKey, shopifyHtzdjwApiSecret] }, async (request, response) => {
   const query = Object.fromEntries(Object.entries(request.query).map(([key, value]) => [key, String(value)]));
   const shop = normalizeShop(query.shop ?? "");
   const state = query.state ?? "";
@@ -150,7 +155,9 @@ export const shopifyOAuthCallback = onRequest({ secrets: [shopifyApiKey, shopify
           ? "n1v0sw"
           : stateData.appKind === "02dc9y"
             ? "02dc9y"
-            : "public";
+            : stateData.appKind === "htzdjw"
+              ? "htzdjw"
+              : "public";
   const { apiKey, apiSecret, scopes } = config(appKind);
   if (!apiKey || !apiSecret) {
     response.status(501).send("Shopify App no esta configurada.");
@@ -289,7 +296,7 @@ export const shopifyPilotOAuthStart = onRequest({ secrets: [shopifyPilotApiKey, 
   response.redirect(`https://${shop}/admin/oauth/authorize?${params.toString()}`);
 });
 
-export const shopifyTenantOAuthStart = onRequest({ secrets: [shopifyU0jxrmApiKey, shopifyU0jxrmApiSecret, shopifyN1v0swApiKey, shopifyN1v0swApiSecret, shopify02dc9yApiKey, shopify02dc9yApiSecret] }, async (request, response) => {
+export const shopifyTenantOAuthStart = onRequest({ secrets: [shopifyU0jxrmApiKey, shopifyU0jxrmApiSecret, shopifyN1v0swApiKey, shopifyN1v0swApiSecret, shopify02dc9yApiKey, shopify02dc9yApiSecret, shopifyHtzdjwApiKey, shopifyHtzdjwApiSecret] }, async (request, response) => {
   const requestedSellerId = String(request.query.sellerId ?? "unassigned").trim() || "unassigned";
   const shop = normalizeShop(String(request.query.shop ?? ""));
   const appKind = tenantAppKindForShop(shop);
@@ -327,10 +334,11 @@ export const shopifyTenantOAuthStart = onRequest({ secrets: [shopifyU0jxrmApiKey
   response.redirect(`https://${shop}/admin/oauth/authorize?${params.toString()}`);
 });
 
-function tenantAppKindForShop(shop: string): Extract<ShopifyAppKind, "u0jxrm" | "n1v0sw" | "02dc9y"> | null {
+function tenantAppKindForShop(shop: string): Extract<ShopifyAppKind, "u0jxrm" | "n1v0sw" | "02dc9y" | "htzdjw"> | null {
   if (shop === "u0jxrm-tk.myshopify.com") return "u0jxrm";
   if (shop === "n1v0sw-vz.myshopify.com") return "n1v0sw";
   if (shop === "02dc9y-ag.myshopify.com") return "02dc9y";
+  if (shop === "htzdjw-q1.myshopify.com") return "htzdjw";
   return null;
 }
 
@@ -876,8 +884,8 @@ export const shopifyCustomersDataRequest = onRequest({ secrets: [shopifyApiSecre
   response.status(200).send("OK");
 });
 
-export const shopifyComplianceWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPilotApiSecret, shopifyU0jxrmApiSecret, shopifyN1v0swApiSecret, shopify02dc9yApiSecret] }, async (request, response) => {
-  const secrets = [config().apiSecret, config("pilot").apiSecret, config("u0jxrm").apiSecret, config("n1v0sw").apiSecret, config("02dc9y").apiSecret];
+export const shopifyComplianceWebhook = onRequest({ secrets: [shopifyApiSecret, shopifyPilotApiSecret, shopifyU0jxrmApiSecret, shopifyN1v0swApiSecret, shopify02dc9yApiSecret, shopifyHtzdjwApiSecret] }, async (request, response) => {
+  const secrets = [config().apiSecret, config("pilot").apiSecret, config("u0jxrm").apiSecret, config("n1v0sw").apiSecret, config("02dc9y").apiSecret, config("htzdjw").apiSecret];
   if (request.method !== "POST" || !secrets.some((secret) => verifyWebhookHmac(request, secret))) {
     response.status(401).send("Unauthorized");
     return;
