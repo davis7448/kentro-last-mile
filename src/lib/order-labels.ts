@@ -40,3 +40,12 @@ export function shouldShowUnprintedLabelBadge(order: Order, role: "admin" | "sel
   if (order.labelPrintedAt) return false;
   return role === "admin" ? adminPrintableOrderStatuses.has(order.status) : canPrintSellerLabel(order, sellerId);
 }
+
+/**
+ * Por que este pedido no puede entrar a una recogida, o `null` si puede. Es el aviso temprano del
+ * modal de escaneo; la regla que manda es la del servidor (functions/src/pickup-label-gate.ts).
+ */
+export function pickupLabelBlockReason(order: Pick<Order, "labelPrintedAt" | "trackingCode" | "shopifyOrderId">): string | null {
+  if (order.labelPrintedAt) return null;
+  return `${order.trackingCode ?? order.shopifyOrderId} no tiene rotulo impreso. La tienda o el administrador debe imprimirlo en Kentro antes de recogerlo.`;
+}

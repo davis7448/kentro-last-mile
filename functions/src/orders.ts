@@ -13,6 +13,7 @@ import {
   summarizeOrderLines
 } from "./inventory-movements";
 import { gmfForPayout } from "./gmf";
+import { pickupLabelBlockMessage } from "./pickup-label-gate";
 import { buildDriverSettlementFields, driverCorteOrderIdsAtCreation, type DriverLedgerContext, refreshFrozenReceipts } from "./driver-cash-ledger";
 import { assertNoCrossedRecalc, CrossedRecalcError, loadDeliveredBy, loadDriverLedgerContext, MissingBaselineError, recalculateDriverSettlement } from "./driver-ledger-io";
 import { buildCodReceivedSet, codEntriesByOrder, isSellerEntryEligible, isWithinSettlementRange, type WalletEntryDoc as LedgerEntryDoc } from "./seller-ledger";
@@ -875,6 +876,11 @@ export const createOrUpdatePickupBatch = onCall(async (request) => {
       return !snap.exists || (!belongsToLeader && !isFreeReady) || !["assigned", "ready_to_assign"].includes(status);
     });
     if (invalid) throw new HttpsError("failed-precondition", "Only orders assigned to this leader and pending pickup can be collected.");
+
+    // Sin rotulo impreso no hay recogida. Se comprueba DENTRO de la transaccion, con el documento
+    // recien leido: el navegador del lider puede tener el pedido viejo. Ver pickup-label-gate.ts.
+    const labelBlock = pickupLabelBlockMessage(orders.map(({ snap, data }) => ({ ...data, id: snap.id })));
+    if (labelBlock) throw new HttpsError("failed-precondition", labelBlock);
 
     const first = orders[0]?.data ?? {};
     const pickupPointName = String(first.pickupPointName || "Punto de recogida");
@@ -2217,6 +2223,12 @@ export const applyOrderTransition = onCall({ memory: "512MiB" }, async (request)
     // la calle. El boton "confirmar recogido" pasa a `picked_up` sin lote de recogida, que es quien
     // sellaba `pickedUpAt`; sin la marca, al reagendarse dejaba de retener con la mercancia fuera.
     const stampsPickup = (patch.status === "picked_up" || patch.status === "in_route") && !order.pickedUpAt && !patch.pickedUpAt;
+    // Misma regla que la recogida por lote: este boton es la otra via por la que un pedido sale a la
+    // calle, y sin esta comprobacion bastaria usarlo para saltarse el rotulo.
+    if (stampsPickup) {
+      const labelBlock = pickupLabelBlockMessage([{ ...order, id: orderId }]);
+      if (labelBlock) throw new HttpsError("failed-precondition", labelBlock);
+    }
     const clean = stripUndefined({ ...patch, ...(stampsPickup ? { pickedUpAt: now } : {}), updatedAt: now } as Record<string, unknown>);
     transaction.set(ref, clean, { merge: true });
     const auditRef = newAuditRef(db);
